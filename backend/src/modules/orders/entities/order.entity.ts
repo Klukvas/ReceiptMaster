@@ -58,6 +58,6 @@ export class Order {
   })
   items: OrderItem[];
 
-  @OneToMany(() => Receipt, (receipt) => receipt.order, { onDelete: "CASCADE" })
+  @OneToMany("Receipt", "order", { onDelete: "CASCADE" })
   receipts: Receipt[];
 }
