@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/your-repo}/frontend:latest
+    container_name: marketflow-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api/v1}
+      - VITE_API_KEY=${VITE_API_KEY}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/your-repo}/backend:latest
+    container_name: marketflow-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-market_db}
+      - API_PREFIX=api/v1
+      - API_KEY=${API_KEY}
+      - RECEIPT_STORAGE_PATH=/app/receipts
+      - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
+    volumes:
+      - receipts:/app/receipts
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: marketflow-postgres
+    environment:
+      - POSTGRES_DB=${DB_NAME:-market_db}
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: marketflow-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@market.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+volumes:
+  postgres_data:
+  receipts:
+
+networks:
+  marketflow-network:
+    driver: bridge

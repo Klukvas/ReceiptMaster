@@ -201,6 +201,39 @@ http://localhost:3000/docs
 - ✅ **Testing**: E2E tests for API
 - ✅ **Containerization**: Docker for all services
 - ✅ **Documentation**: Complete API and UI documentation
+- ✅ **CI/CD**: Automated testing and deployment with GitHub Actions
+- ✅ **Registry**: Docker images published to GitHub Container Registry
+
+## 🔄 CI/CD Pipeline
+
+### Automated Workflows
+
+The project includes comprehensive GitHub Actions workflows:
+
+- **Testing**: Automated testing on pull requests and pushes
+- **Build & Deploy**: Automatic Docker image building and deployment
+  - Pull requests: Builds images with commit SHA tags
+  - Main branch: Builds images with both SHA and `latest` tags
+
+### Docker Images
+
+Images are automatically built and pushed to GitHub Container Registry:
+
+- **Frontend**: `ghcr.io/{owner}/{repo}/frontend:latest`
+- **Backend**: `ghcr.io/{owner}/{repo}/backend:latest`
+
+### Usage
+
+```bash
+# Pull latest production images
+docker pull ghcr.io/{owner}/{repo}/frontend:latest
+docker pull ghcr.io/{owner}/{repo}/backend:latest
+
+# Run with docker-compose
+docker-compose up -d
+```
+
+For detailed CI/CD setup instructions, see [.github/README.md](.github/README.md).
 
 ## 📝 License
 
