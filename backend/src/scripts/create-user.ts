@@ -20,13 +20,13 @@ async function createUser() {
     }
 
     // Create user directly in database
-    const _hashedPassword = await bcrypt.hash(password, 10);
+    const _hashedPassword = await bcrypt.hash(_password, 10);
 
     // You would need to inject the User repository here
     // For now, let's use the service method
     const _result = await usersService.register({
       email,
-      password,
+      password: _password,
       firstName,
       lastName,
     });

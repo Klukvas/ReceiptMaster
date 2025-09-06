@@ -17,7 +17,7 @@ import { HealthController } from "./health.controller";
     ConfigModule.forRoot({
       isGlobal: true,
       validate: (config) => {
-        const _result = envSchema.safeParse(config);
+        const result = envSchema.safeParse(config);
         if (!result.success) {
           throw new Error(
             `Configuration validation error: ${result.error.message}`,

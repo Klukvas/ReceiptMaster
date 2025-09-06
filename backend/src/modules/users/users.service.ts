@@ -41,7 +41,7 @@ export class UsersService {
     // Создаем нового пользователя
     const user = this.userRepository.create({
       email,
-      password: hashedPassword,
+      password: _hashedPassword,
       firstName,
       lastName,
     });
