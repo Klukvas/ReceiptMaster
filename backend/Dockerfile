@@ -17,7 +17,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Копируем package.json
-COPY package.json ./
+COPY backend/package.json ./
 
 # Устанавливаем зависимости
 RUN yarn install
@@ -26,7 +26,7 @@ RUN yarn install
 RUN yarn global add @nestjs/cli
 
 # Копируем исходный код
-COPY . .
+COPY backend/ .
 
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
