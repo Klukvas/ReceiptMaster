@@ -47,6 +47,10 @@ market/
 
 ## ⚡ Quick Start
 
+### Prerequisites
+- **Node.js**: Version 20 or higher
+- **Yarn**: Version 1.22 or higher
+
 ### 1. Install Dependencies
 ```bash
 # Install all dependencies (root, backend, frontend)

@@ -4,6 +4,10 @@ This guide explains how to set up automated CI/CD for MarketFlow using GitHub Ac
 
 ## Quick Setup
 
+### Prerequisites
+- **Node.js**: Version 20 or higher
+- **Yarn**: Version 1.22 or higher
+
 ### 1. Push to GitHub
 ```bash
 # Initialize git repository (if not already done)
