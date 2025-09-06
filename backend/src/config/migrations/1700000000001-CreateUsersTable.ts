@@ -1,56 +1,56 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from "typeorm";
 
 export class CreateUsersTable1700000000001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({
-        name: 'users',
+        name: "users",
         columns: [
           {
-            name: 'id',
-            type: 'uuid',
+            name: "id",
+            type: "uuid",
             isPrimary: true,
-            generationStrategy: 'uuid',
-            default: 'uuid_generate_v4()',
+            generationStrategy: "uuid",
+            default: "uuid_generate_v4()",
           },
           {
-            name: 'email',
-            type: 'varchar',
+            name: "email",
+            type: "varchar",
             isUnique: true,
             isNullable: false,
           },
           {
-            name: 'password',
-            type: 'varchar',
+            name: "password",
+            type: "varchar",
             isNullable: false,
           },
           {
-            name: 'firstName',
-            type: 'varchar',
+            name: "firstName",
+            type: "varchar",
             isNullable: false,
           },
           {
-            name: 'lastName',
-            type: 'varchar',
+            name: "lastName",
+            type: "varchar",
             isNullable: false,
           },
           {
-            name: 'isActive',
-            type: 'boolean',
+            name: "isActive",
+            type: "boolean",
             default: true,
             isNullable: false,
           },
           {
-            name: 'createdAt',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
+            name: "createdAt",
+            type: "timestamp",
+            default: "CURRENT_TIMESTAMP",
             isNullable: false,
           },
           {
-            name: 'updatedAt',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-            onUpdate: 'CURRENT_TIMESTAMP',
+            name: "updatedAt",
+            type: "timestamp",
+            default: "CURRENT_TIMESTAMP",
+            onUpdate: "CURRENT_TIMESTAMP",
             isNullable: false,
           },
         ],
@@ -60,6 +60,6 @@ export class CreateUsersTable1700000000001 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('users');
+    await queryRunner.dropTable("users");
   }
 }

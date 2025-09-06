@@ -1,14 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
-import { Order, OrderStatus } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity';
-import { Product } from '../products/entities/product.entity';
-import { Recipient } from '../recipients/entities/recipient.entity';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
-import { MoneyUtil } from '../../common/utils/money.util';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
+import { Repository, DataSource, In } from "typeorm";
+import { Order, OrderStatus } from "./entities/order.entity";
+import { OrderItem } from "./entities/order-item.entity";
+import { Product } from "../products/entities/product.entity";
+import { Recipient } from "../recipients/entities/recipient.entity";
+import { CreateOrderDto } from "./dto/create-order.dto";
+import { UpdateOrderDto } from "./dto/update-order.dto";
+// import { MoneyUtil } from "../../common/utils/money.util";
+import { PaginationDto } from "../../common/dto/pagination.dto";
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -39,20 +43,20 @@ export class OrdersService {
         where: { id: createOrderDto.recipientId },
       });
       if (!recipient) {
-        throw new NotFoundException('Recipient not found');
+        throw new NotFoundException("Recipient not found");
       }
 
       // Get products and check their existence
-      const productIds = createOrderDto.items.map(item => item.productId);
+      const productIds = createOrderDto.items.map((item) => item.productId);
       const products = await manager.find(Product, {
         where: { id: In(productIds) },
       });
 
       if (products.length !== productIds.length) {
-        throw new NotFoundException('One or more products not found');
+        throw new NotFoundException("One or more products not found");
       }
 
-      const productMap = new Map(products.map(p => [p.id, p]));
+      const productMap = new Map(products.map((p) => [p.id, p]));
 
       // Calculate amounts before creating order
       let subtotalCents = 0;
@@ -97,49 +101,54 @@ export class OrdersService {
     });
   }
 
-  async findAll(paginationDto: PaginationDto, status?: OrderStatus): Promise<PaginatedResponse<Order>> {
+  async findAll(
+    paginationDto: PaginationDto,
+    status?: OrderStatus,
+  ): Promise<PaginatedResponse<Order>> {
     const { offset = 0, limit = 10 } = paginationDto;
     const skip = offset;
 
     const queryBuilder = this.ordersRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.recipient', 'recipient')
-      .leftJoinAndSelect('order.items', 'items')
-      .leftJoinAndSelect('order.receipts', 'receipts')
-      .orderBy('order.created_at', 'DESC')
+      .createQueryBuilder("order")
+      .leftJoinAndSelect("order.recipient", "recipient")
+      .leftJoinAndSelect("order.items", "items")
+      .leftJoinAndSelect("order.receipts", "receipts")
+      .orderBy("order.created_at", "DESC")
       .skip(skip)
       .take(limit);
 
     if (status) {
-      queryBuilder.andWhere('order.status = :status', { status });
+      queryBuilder.andWhere("order.status = :status", { status });
     }
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
-    return { 
-      data, 
-      total, 
-      offset: skip, 
-      limit: limit 
+    return {
+      data,
+      total,
+      offset: skip,
+      limit: limit,
     };
   }
 
   async findOne(id: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['recipient', 'items', 'receipts'],
+      relations: ["recipient", "items", "receipts"],
     });
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
     return order;
   }
 
   async confirm(id: string): Promise<Order> {
     const order = await this.findOne(id);
-    
+
     if (order.status !== OrderStatus.DRAFT) {
-      throw new BadRequestException('Can only confirm orders in "draft" status');
+      throw new BadRequestException(
+        'Can only confirm orders in "draft" status',
+      );
     }
 
     order.status = OrderStatus.CONFIRMED;
@@ -148,9 +157,9 @@ export class OrdersService {
 
   async cancel(id: string): Promise<Order> {
     const order = await this.findOne(id);
-    
+
     if (order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestException('Order already cancelled');
+      throw new BadRequestException("Order already cancelled");
     }
 
     order.status = OrderStatus.CANCELLED;
@@ -163,11 +172,11 @@ export class OrdersService {
       const order = await manager.findOne(Order, {
         where: { id },
       });
-      
+
       if (!order) {
-        throw new NotFoundException('Order not found');
+        throw new NotFoundException("Order not found");
       }
-      
+
       // Can only edit orders in "draft" status
       if (order.status !== OrderStatus.DRAFT) {
         throw new BadRequestException('Can only edit orders in "draft" status');
@@ -179,7 +188,7 @@ export class OrdersService {
           where: { id: updateOrderDto.recipientId },
         });
         if (!recipient) {
-          throw new NotFoundException('Recipient not found');
+          throw new NotFoundException("Recipient not found");
         }
         order.recipient_id = updateOrderDto.recipientId;
       }
@@ -187,16 +196,16 @@ export class OrdersService {
       // If products are being updated
       if (updateOrderDto.items) {
         // Get products and check their existence
-        const productIds = updateOrderDto.items.map(item => item.productId);
+        const productIds = updateOrderDto.items.map((item) => item.productId);
         const products = await manager.find(Product, {
           where: { id: In(productIds) },
         });
 
         if (products.length !== productIds.length) {
-          throw new NotFoundException('One or more products not found');
+          throw new NotFoundException("One or more products not found");
         }
 
-        const productMap = new Map(products.map(p => [p.id, p]));
+        const productMap = new Map(products.map((p) => [p.id, p]));
 
         // Calculate new amounts
         let subtotalCents = 0;
@@ -241,17 +250,19 @@ export class OrdersService {
       // Return order with full relations
       return manager.findOne(Order, {
         where: { id },
-        relations: ['recipient', 'items', 'receipts'],
+        relations: ["recipient", "items", "receipts"],
       });
     });
   }
 
   async remove(id: string): Promise<void> {
     const order = await this.findOne(id);
-    
+
     // Can only delete orders in "draft" or "cancelled" status
     if (order.status === OrderStatus.CONFIRMED) {
-      throw new BadRequestException('Cannot delete confirmed order. Cancel it first.');
+      throw new BadRequestException(
+        "Cannot delete confirmed order. Cancel it first.",
+      );
     }
 
     // Delete order and related elements in transaction

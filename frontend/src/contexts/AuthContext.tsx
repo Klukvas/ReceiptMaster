@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const response = await authApi.getProfile();
       setUser(response.data);
-    } catch (error) {
+    } catch {
       // Token is invalid, clear it
       localStorage.removeItem('auth_token');
       setToken(null);
@@ -56,17 +56,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (email: string, password: string) => {
-    try {
-      const response = await authApi.login({ email, password });
-      const { access_token, user: userData } = response.data;
-      
-      // Store token and user data
-      localStorage.setItem('auth_token', access_token);
-      setToken(access_token);
-      setUser(userData);
-    } catch (error) {
-      throw error;
-    }
+    const response = await authApi.login({ email, password });
+    const { access_token, user: userData } = response.data;
+    
+    // Store token and user data
+    localStorage.setItem('auth_token', access_token);
+    setToken(access_token);
+    setUser(userData);
   };
 
   const logout = () => {

@@ -5,24 +5,24 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-} from 'typeorm';
-import { Order } from '../../orders/entities/order.entity';
+} from "typeorm";
+import { Order } from "../../orders/entities/order.entity";
 
-@Entity('recipients')
+@Entity("recipients")
 export class Recipient {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: "varchar", length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: "varchar", length: 255, nullable: true })
   email?: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: "varchar", length: 50, nullable: true })
   phone?: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: "text", nullable: true })
   address?: string;
 
   @CreateDateColumn()

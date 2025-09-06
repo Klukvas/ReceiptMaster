@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateTables1700000000000 implements MigrationInterface {
-  name = 'CreateTables1700000000000';
+  name = "CreateTables1700000000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Создание таблицы products
@@ -21,11 +21,17 @@ export class CreateTables1700000000000 implements MigrationInterface {
     `);
 
     // Создание индексов для products
-    await queryRunner.query(`CREATE INDEX "IDX_products_sku" ON "products" ("sku")`);
-    await queryRunner.query(`CREATE INDEX "IDX_products_is_active" ON "products" ("is_active")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_products_sku" ON "products" ("sku")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_products_is_active" ON "products" ("is_active")`,
+    );
 
     // Создание уникального индекса для SKU
-    await queryRunner.query(`CREATE UNIQUE INDEX "IDX_products_sku_unique" ON "products" ("sku") WHERE "sku" IS NOT NULL`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "IDX_products_sku_unique" ON "products" ("sku") WHERE "sku" IS NOT NULL`,
+    );
 
     // Создание таблицы recipients
     await queryRunner.query(`
@@ -58,8 +64,12 @@ export class CreateTables1700000000000 implements MigrationInterface {
     `);
 
     // Создание индексов для orders
-    await queryRunner.query(`CREATE INDEX "IDX_orders_recipient_id" ON "orders" ("recipient_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_orders_created_at" ON "orders" ("created_at")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_orders_recipient_id" ON "orders" ("recipient_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_orders_created_at" ON "orders" ("created_at")`,
+    );
 
     // Создание внешнего ключа для orders
     await queryRunner.query(`
@@ -120,8 +130,12 @@ export class CreateTables1700000000000 implements MigrationInterface {
     `);
 
     // Создание уникальных индексов для receipts
-    await queryRunner.query(`CREATE UNIQUE INDEX "IDX_receipts_order_id_unique" ON "receipts" ("order_id")`);
-    await queryRunner.query(`CREATE UNIQUE INDEX "IDX_receipts_number_unique" ON "receipts" ("number")`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "IDX_receipts_order_id_unique" ON "receipts" ("order_id")`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "IDX_receipts_number_unique" ON "receipts" ("number")`,
+    );
 
     // Создание внешнего ключа для receipts
     await queryRunner.query(`
@@ -133,7 +147,9 @@ export class CreateTables1700000000000 implements MigrationInterface {
     `);
 
     // Создание sequence для номеров чеков
-    await queryRunner.query(`CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START 1`);
+    await queryRunner.query(
+      `CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START 1`,
+    );
 
     // Создание функции для генерации номера чека
     await queryRunner.query(`
@@ -153,8 +169,10 @@ export class CreateTables1700000000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Удаление функции
-    await queryRunner.query(`DROP FUNCTION IF EXISTS generate_receipt_number()`);
-    
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS generate_receipt_number()`,
+    );
+
     // Удаление sequence
     await queryRunner.query(`DROP SEQUENCE IF EXISTS receipt_number_seq`);
 

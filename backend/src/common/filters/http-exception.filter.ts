@@ -5,8 +5,8 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
 
 export interface ErrorResponse {
   error: {
@@ -35,21 +35,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      
-      if (typeof exceptionResponse === 'string') {
+
+      if (typeof exceptionResponse === "string") {
         message = exceptionResponse;
-        code = 'HTTP_EXCEPTION';
+        code = "HTTP_EXCEPTION";
       } else {
         const responseObj = exceptionResponse as any;
         message = responseObj.message || exception.message;
-        code = responseObj.code || 'HTTP_EXCEPTION';
+        code = responseObj.code || "HTTP_EXCEPTION";
         details = responseObj.details;
       }
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = 'Внутренняя ошибка сервера';
-      code = 'INTERNAL_SERVER_ERROR';
-      
+      message = "Внутренняя ошибка сервера";
+      code = "INTERNAL_SERVER_ERROR";
+
       if (exception instanceof Error) {
         message = exception.message;
         this.logger.error(exception.stack);

@@ -4,9 +4,9 @@ export class MoneyUtil {
    */
   static formatCentsToRubles(cents: number): string {
     const rubles = cents / 100;
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
+    return new Intl.NumberFormat("ru-RU", {
+      style: "currency",
+      currency: "RUB",
       minimumFractionDigits: 2,
     }).format(rubles);
   }
@@ -16,8 +16,8 @@ export class MoneyUtil {
    */
   static formatCentsToCurrency(cents: number, currency: string): string {
     const amount = cents / 100;
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
+    return new Intl.NumberFormat("ru-RU", {
+      style: "currency",
       currency: currency,
       minimumFractionDigits: 2,
     }).format(amount);

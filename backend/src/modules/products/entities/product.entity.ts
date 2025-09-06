@@ -5,28 +5,28 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-} from 'typeorm';
-import { OrderItem } from '../../orders/entities/order-item.entity';
+} from "typeorm";
+import { OrderItem } from "../../orders/entities/order-item.entity";
 
 export enum Currency {
-  UAH = 'UAH',
+  UAH = "UAH",
 }
 
-@Entity('products')
+@Entity("products")
 export class Product {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: "varchar", length: 255 })
   name: string;
 
-  @Column({ type: 'integer' })
+  @Column({ type: "integer" })
   purchase_price_cents: number;
 
-  @Column({ type: 'integer' })
+  @Column({ type: "integer" })
   sale_price_cents: number;
 
-  @Column({ type: 'enum', enum: Currency, default: Currency.UAH })
+  @Column({ type: "enum", enum: Currency, default: Currency.UAH })
   currency: Currency;
 
   @CreateDateColumn()

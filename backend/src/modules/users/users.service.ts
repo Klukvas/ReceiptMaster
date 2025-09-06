@@ -1,13 +1,17 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
-import { User } from './entities/user.entity';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { AuthResponseDto } from './dto/auth-response.dto';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import * as bcrypt from "bcrypt";
+import { User } from "./entities/user.entity";
+import { RegisterDto } from "./dto/register.dto";
+import { LoginDto } from "./dto/login.dto";
+import { AuthResponseDto } from "./dto/auth-response.dto";
 
 @Injectable()
 export class UsersService {
@@ -27,12 +31,12 @@ export class UsersService {
     });
 
     if (existingUser) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+      throw new ConflictException("Пользователь с таким email уже существует");
     }
 
     // Хешируем пароль
     const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const _hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Создаем нового пользователя
     const user = this.userRepository.create({
@@ -68,13 +72,13 @@ export class UsersService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException("Неверные учетные данные");
     }
 
     // Проверяем пароль
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException("Неверные учетные данные");
     }
 
     // Генерируем JWT токен
