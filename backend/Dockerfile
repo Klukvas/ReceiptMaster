@@ -31,6 +31,13 @@ COPY backend/ .
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
 
+# Проверяем, что файлы скопированы правильно
+RUN ls -la src/modules/receipts/
+RUN cat src/modules/receipts/receipts.module.ts
+
+# Проверяем, что TypeScript может найти файлы
+RUN npx tsc --noEmit --listFiles | grep receipts
+
 # Собираем приложение
 RUN yarn build
 
