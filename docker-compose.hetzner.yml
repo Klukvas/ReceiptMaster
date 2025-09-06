@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: market_postgres
+    environment:
+      POSTGRES_DB: market_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - market_network
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    container_name: market_api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: market_db
+      API_PREFIX: api/v1
+      RECEIPT_STORAGE_PATH: /app/receipts
+      RECEIPT_BASE_URL: http://${APP_IP}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./receipts:/app/receipts
+    depends_on:
+      - postgres
+    networks:
+      - market_network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: market_frontend
+    environment:
+      VITE_API_URL: http://${APP_IP}/api/v1
+      VITE_API_KEY: ${API_KEY}
+    expose:
+      - "80"
+    depends_on:
+      - api
+    networks:
+      - market_network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: market_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./dist:/opt/market/dist
+    depends_on:
+      - api
+    networks:
+      - market_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  market_network:
+    driver: bridge

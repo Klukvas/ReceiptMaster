@@ -1,0 +1,50 @@
+{
+  "name": "market-service",
+  "version": "1.0.0",
+  "description": "Полнофункциональный торговый сервис с React фронтендом и NestJS бэкендом",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"yarn backend:dev\" \"yarn frontend:dev\"",
+    "build": "yarn backend:build && yarn frontend:build",
+    "start": "concurrently \"yarn backend:start\" \"yarn frontend:start\"",
+    "backend:dev": "cd backend && yarn start:dev",
+    "backend:build": "cd backend && yarn build",
+    "backend:start": "cd backend && yarn start",
+    "backend:test": "cd backend && yarn test",
+    "backend:test:e2e": "cd backend && yarn test:e2e",
+    "backend:migration:run": "cd backend && yarn migration:run",
+    "backend:migration:generate": "cd backend && yarn migration:generate",
+    "frontend:dev": "cd frontend && yarn dev",
+    "frontend:build": "cd frontend && yarn build",
+    "frontend:start": "cd frontend && yarn start",
+    "frontend:test": "cd frontend && yarn test",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build",
+    "install:all": "yarn install && cd backend && yarn install && cd ../frontend && yarn install",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules backend/dist frontend/dist"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.22.0"
+  },
+  "keywords": [
+    "nestjs",
+    "react",
+    "typescript",
+    "postgresql",
+    "docker",
+    "trading",
+    "ecommerce"
+  ],
+  "author": "",
+  "license": "MIT"
+}

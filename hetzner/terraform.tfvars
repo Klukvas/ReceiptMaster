@@ -1,0 +1,6 @@
+hcloud_token  = "shR0HilwOeX1WhUOYFAlZgt2J3LbhMTNQVXtyRMvadB8ZA9cBnCpJDVE0oBQIGDM"
+environment   = "production"
+location      = "nbg1"
+db_password   = "eh0jjvurF0fgBPhXxM63U9gFCbo+OKxdoulMrqFQfis="
+jwt_secret    = "pSPmil4N/FLgTDuIOhrGY17ne5Vk454z4dSa/shpbvQ="
+api_key       = "Z9QQJGzGzlXksx+W6WlPperlqbCxRLE/ekg9YVP/eP4="

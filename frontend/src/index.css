@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* Custom table styles */
+.table {
+  @apply w-full border-collapse;
+}
+
+.table th {
+  @apply px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50;
+}
+
+.table td {
+  @apply px-6 py-4 text-sm text-gray-900 border-b border-gray-100;
+}
+
+.table tbody tr:hover {
+  @apply bg-gray-50;
+}
+
+.table tbody tr:nth-child(even) {
+  @apply bg-gray-50;
+}
