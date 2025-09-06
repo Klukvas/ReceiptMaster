@@ -64,8 +64,7 @@ jobs:
           org.opencontainers.image.description=React frontend for MarketFlow trading service
           org.opencontainers.image.version=${{ github.sha }}
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        no-cache: true
 
     - name: Build and push Backend image
       uses: docker/build-push-action@v5
@@ -81,8 +80,7 @@ jobs:
           org.opencontainers.image.description=NestJS backend for MarketFlow trading service
           org.opencontainers.image.version=${{ github.sha }}
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        no-cache: true
 
     - name: Generate deployment summary
       run: |
