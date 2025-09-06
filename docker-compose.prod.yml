@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/your-repo}/frontend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-klukvas/receiptmaster}/frontend:latest
     container_name: marketflow-frontend
     ports:
       - "80:80"
@@ -16,7 +16,7 @@ services:
       - marketflow-network
 
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/your-repo}/backend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-klukvas/receiptmaster}/backend:latest
     container_name: marketflow-backend
     ports:
       - "3000:3000"
