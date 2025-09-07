@@ -234,6 +234,9 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
+            export DOCKER_CLIENT_TIMEOUT=${DOCKER_CLIENT_TIMEOUT:-600}
+            export COMPOSE_HTTP_TIMEOUT=${COMPOSE_HTTP_TIMEOUT:-600}
+
             sudo mkdir -p /opt/market && sudo chown $USER:$USER /opt/market
             cd /opt/market
             if [ ! -d market ]; then
@@ -242,11 +245,41 @@ jobs:
             cd market
             git fetch --all -q
             git reset --hard origin/main -q
+
+            # Write env
             echo "${{ secrets.ENV_PROD }}" > .env
             echo "GITHUB_REPOSITORY=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> .env
+
+            # Logins
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+              echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            fi
+
+            # Retry helper
+            retry() {
+              local n=0
+              local max=5
+              local delay=10
+              until "$@"; do
+                n=$((n+1))
+                if [ $n -ge $max ]; then
+                  echo "Command failed after $n attempts: $*" >&2
+                  return 1
+                fi
+                echo "Retry $n/$max..."
+                sleep $delay
+              done
+            }
+
+            # Pre-pull postgres to reduce timeouts/rate-limit issues
+            retry docker pull postgres:15-alpine || true
+
+            # Pull and restart services with retries
+            retry docker compose -f docker-compose.prod.yml pull
+            retry docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Health & status
             curl -fsS http://localhost:3000/api/v1/health || true
             docker compose -f docker-compose.prod.yml ps
 
