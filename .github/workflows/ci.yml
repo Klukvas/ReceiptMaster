@@ -159,6 +159,9 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
+            VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/frontend:latest
