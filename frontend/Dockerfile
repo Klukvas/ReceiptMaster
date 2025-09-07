@@ -15,6 +15,12 @@ RUN npm install
 # Копируем исходный код
 COPY . .
 
+# Передаём переменные окружения для Vite во время сборки
+ARG VITE_API_URL
+ARG VITE_API_KEY
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_API_KEY=${VITE_API_KEY}
+
 # Собираем приложение
 RUN vite build
 
