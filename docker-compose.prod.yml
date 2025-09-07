@@ -30,6 +30,7 @@ services:
       - DB_NAME=${DB_NAME:-market_db}
       - API_PREFIX=api/v1
       - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
     volumes:
