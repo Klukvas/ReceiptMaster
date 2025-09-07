@@ -16,8 +16,8 @@ RUN apk add --no-cache \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Копируем package.json
-COPY backend/package.json ./
+# Копируем package.json (контекст билда: ./backend)
+COPY package.json ./
 
 # Устанавливаем зависимости
 RUN yarn install
@@ -25,19 +25,11 @@ RUN yarn install
 # Устанавливаем Nest CLI глобально
 RUN yarn global add @nestjs/cli
 
-# Копируем исходный код
-COPY backend/ .
+# Копируем исходный код (контекст билда: ./backend)
+COPY . .
 
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
-
-# Проверяем, что файлы скопированы правильно
-RUN ls -la src/modules/
-RUN ls -la src/modules/receipts/ || echo "receipts folder not found"
-RUN find . -name "receipts.module.ts" -type f
-
-# Проверяем, что TypeScript может найти файлы
-RUN npx tsc --noEmit --listFiles | grep receipts || echo "No receipts files found by TypeScript"
 
 # Собираем приложение
 RUN yarn build
