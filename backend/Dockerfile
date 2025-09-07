@@ -31,6 +31,14 @@ COPY backend/ .
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
 
+# Проверяем, что файлы скопированы правильно
+RUN ls -la src/modules/
+RUN ls -la src/modules/receipts/ || echo "receipts folder not found"
+RUN find . -name "receipts.module.ts" -type f
+
+# Проверяем, что TypeScript может найти файлы
+RUN npx tsc --noEmit --listFiles | grep receipts || echo "No receipts files found by TypeScript"
+
 # Собираем приложение
 RUN yarn build
 
