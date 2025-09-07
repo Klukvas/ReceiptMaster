@@ -74,6 +74,7 @@ export const OrdersPage = () => {
     mutationFn: receiptsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
       setNotification({ type: 'success', message: 'Receipt successfully created!' });
     },
     onError: (error: any) => {
