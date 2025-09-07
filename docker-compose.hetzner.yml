@@ -8,17 +8,14 @@ services:
       POSTGRES_DB: market_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - market_network
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks: [market_network]
     restart: unless-stopped
 
   api:
-    build: ./backend
+    image: ghcr.io/klukvas/receiptmaster/backend:latest
     container_name: market_api
     environment:
       NODE_ENV: production
@@ -30,45 +27,38 @@ services:
       DB_NAME: market_db
       API_PREFIX: api/v1
       RECEIPT_STORAGE_PATH: /app/receipts
-      RECEIPT_BASE_URL: http://${APP_IP}
+      RECEIPT_BASE_URL: http://${DOMAIN}   # или http://<IP>, см. .env ниже
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "3000:3000"
     volumes:
       - ./receipts:/app/receipts
-    depends_on:
-      - postgres
-    networks:
-      - market_network
+    depends_on: [postgres]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    networks: [market_network]
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/klukvas/receiptmaster/frontend:latest
     container_name: market_frontend
-    environment:
-      VITE_API_URL: http://${APP_IP}/api/v1
-      VITE_API_KEY: ${API_KEY}
     expose:
       - "80"
-    depends_on:
-      - api
-    networks:
-      - market_network
+    depends_on: [api]
+    networks: [market_network]
     restart: unless-stopped
 
   nginx:
     image: nginx:alpine
     container_name: market_nginx
+    depends_on: [api, frontend]
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./dist:/opt/market/dist
-    depends_on:
-      - api
-    networks:
-      - market_network
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [market_network]
     restart: unless-stopped
 
 volumes:
