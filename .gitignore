@@ -107,4 +107,4 @@ receipts/
 *.pdf
 
 # Docker
-.dockerignore
+# .dockerignore - нужен для сборки Docker образов
