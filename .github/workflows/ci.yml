@@ -221,3 +221,32 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build-and-deploy]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            sudo mkdir -p /opt/market && sudo chown $USER:$USER /opt/market
+            cd /opt/market
+            if [ ! -d market ]; then
+              git clone https://github.com/${{ github.repository }}.git market
+            fi
+            cd market
+            git fetch --all -q
+            git reset --hard origin/main -q
+            echo "${{ secrets.ENV_PROD }}" > .env
+            echo "GITHUB_REPOSITORY=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> .env
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            curl -fsS http://localhost:3000/api/v1/health || true
+            docker compose -f docker-compose.prod.yml ps
+
