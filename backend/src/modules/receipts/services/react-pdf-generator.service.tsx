@@ -137,7 +137,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
                 marginBottom: 15 
               }}
             >
-              КВИТАНЦІЯ
+              ФІКСАЛЬНИЙ ЧЕК
             </Text>
             <Text 
               style={{ 
@@ -187,7 +187,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
             style={{ 
               flexDirection: 'row', 
               padding: 12, 
-              border: '1 solid #ddd' 
+              border: '2 solid #000' 
             }}
           >
             <Text style={{ fontWeight: 'bold', width: '50%' }}>Опис товару</Text>
@@ -202,7 +202,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
               style={{ 
                 flexDirection: 'row', 
                 padding: 12, 
-                border: '1 solid #ddd', 
+                border: '2 solid #000', 
                 borderTop: 'none'
               }}
             >
@@ -217,7 +217,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
         {/* Totals */}
         <View 
           style={{ 
-            borderTop: '3 solid #4A90E2', 
+            borderTop: '4 solid #4A90E2', 
             paddingTop: 20, 
             textAlign: 'right' 
           }}
@@ -258,7 +258,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
             textAlign: 'center', 
             fontSize: 9, 
             color: '#666',
-            borderTop: '1 solid #ddd',
+            borderTop: '2 solid #ddd',
             paddingTop: 20
           }}
         >
