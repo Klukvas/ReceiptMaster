@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Param, Res, UseGuards, Query } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Res,
+  UseGuards,
+  Query,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from "@nestjs/swagger";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
@@ -76,13 +84,17 @@ export class ReceiptsController {
 
   @Post(":id/print")
   @ApiOperation({ summary: "Отправить чек на печать" })
-  @ApiQuery({ name: "printer", required: false, description: "Имя принтера (по умолчанию системный)" })
+  @ApiQuery({
+    name: "printer",
+    required: false,
+    description: "Имя принтера (по умолчанию системный)",
+  })
   @ApiResponse({ status: 200, description: "Чек отправлен на печать" })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при печати" })
   async printReceipt(
     @Param("id") id: string,
-    @Query("printer") printer?: string
+    @Query("printer") printer?: string,
   ) {
     return this.receiptsService.printReceipt(id, printer);
   }

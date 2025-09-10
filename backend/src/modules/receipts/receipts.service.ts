@@ -189,19 +189,24 @@ export class ReceiptsService {
 
   private async getCompanyName(): Promise<string> {
     try {
-      const settingsPath = path.join(process.cwd(), 'src', 'assets', 'settings.json');
-      
+      const settingsPath = path.join(
+        process.cwd(),
+        "src",
+        "assets",
+        "settings.json",
+      );
+
       try {
-        const settingsData = await fs.readFile(settingsPath, 'utf-8');
+        const settingsData = await fs.readFile(settingsPath, "utf-8");
         const settings = JSON.parse(settingsData);
-        return settings.companyName || '';
+        return settings.companyName || "";
       } catch {
         // If settings file doesn't exist, return empty string
-        return '';
+        return "";
       }
     } catch (error) {
-      console.error('Error reading company name:', error);
-      return '';
+      console.error("Error reading company name:", error);
+      return "";
     }
   }
 
@@ -209,7 +214,7 @@ export class ReceiptsService {
     try {
       // Получаем общее количество чеков
       const totalReceipts = await manager.count(Receipt, {
-        where: { status: ReceiptStatus.GENERATED }
+        where: { status: ReceiptStatus.GENERATED },
       });
 
       // Если чеков больше максимального количества, удаляем старые
@@ -217,8 +222,8 @@ export class ReceiptsService {
         // Получаем старые чеки (оставляем MAX_RECEIPTS-1 самых новых)
         const oldReceipts = await manager.find(Receipt, {
           where: { status: ReceiptStatus.GENERATED },
-          order: { created_at: 'ASC' },
-          take: totalReceipts - (this.MAX_RECEIPTS - 1) // Удаляем все кроме MAX_RECEIPTS-1 самых новых
+          order: { created_at: "ASC" },
+          take: totalReceipts - (this.MAX_RECEIPTS - 1), // Удаляем все кроме MAX_RECEIPTS-1 самых новых
         });
 
         // Удаляем файлы с диска
@@ -228,20 +233,23 @@ export class ReceiptsService {
               await fs.unlink(receipt.pdf_path);
               console.log(`Deleted receipt file: ${receipt.pdf_path}`);
             } catch (error) {
-              console.warn(`Failed to delete receipt file ${receipt.pdf_path}:`, error);
+              console.warn(
+                `Failed to delete receipt file ${receipt.pdf_path}:`,
+                error,
+              );
             }
           }
         }
 
         // Удаляем записи из базы данных
         if (oldReceipts.length > 0) {
-          const receiptIds = oldReceipts.map(receipt => receipt.id);
+          const receiptIds = oldReceipts.map((receipt) => receipt.id);
           await manager.delete(Receipt, receiptIds);
           console.log(`Cleaned up ${oldReceipts.length} old receipts`);
         }
       }
     } catch (error) {
-      console.error('Error cleaning up old receipts:', error);
+      console.error("Error cleaning up old receipts:", error);
       // Не прерываем создание чека из-за ошибки очистки
     }
   }
@@ -251,60 +259,69 @@ export class ReceiptsService {
       const platform = process.platform;
       let command: string;
 
-      if (platform === 'darwin') { // macOS
-        command = 'lpstat -p | grep "printer" | awk \'{print $2}\'';
-      } else if (platform === 'linux') { // Linux
-        command = 'lpstat -p | grep "printer" | awk \'{print $2}\'';
-      } else if (platform === 'win32') { // Windows
-        command = 'powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"';
+      if (platform === "darwin") {
+        // macOS
+        command = "lpstat -p | grep \"printer\" | awk '{print $2}'";
+      } else if (platform === "linux") {
+        // Linux
+        command = "lpstat -p | grep \"printer\" | awk '{print $2}'";
+      } else if (platform === "win32") {
+        // Windows
+        command =
+          'powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"';
       } else {
         return { printers: [] };
       }
 
       const { stdout } = await execAsync(command);
       const printers = stdout
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
 
       return { printers };
-
     } catch (error) {
-      console.error('Error getting printers:', error);
+      console.error("Error getting printers:", error);
       return { printers: [] };
     }
   }
 
-  async printReceipt(receiptId: string, printerName?: string): Promise<{ success: boolean; message: string }> {
+  async printReceipt(
+    receiptId: string,
+    printerName?: string,
+  ): Promise<{ success: boolean; message: string }> {
     try {
       // Получаем чек
       const receipt = await this.findOne(receiptId);
-      
+
       if (!receipt.pdf_path) {
-        throw new Error('PDF файл не найден');
+        throw new Error("PDF файл не найден");
       }
 
       // Проверяем существование файла
       try {
         await fs.access(receipt.pdf_path);
       } catch {
-        throw new Error('PDF файл не найден на диске');
+        throw new Error("PDF файл не найден на диске");
       }
 
       // Определяем команду печати в зависимости от операционной системы
       let printCommand: string;
       const platform = process.platform;
 
-      if (platform === 'darwin') { // macOS
-        printCommand = printerName 
+      if (platform === "darwin") {
+        // macOS
+        printCommand = printerName
           ? `lpr -P "${printerName}" "${receipt.pdf_path}"`
           : `lpr "${receipt.pdf_path}"`;
-      } else if (platform === 'linux') { // Linux
-        printCommand = printerName 
+      } else if (platform === "linux") {
+        // Linux
+        printCommand = printerName
           ? `lp -d "${printerName}" "${receipt.pdf_path}"`
           : `lp "${receipt.pdf_path}"`;
-      } else if (platform === 'win32') { // Windows
-        printCommand = printerName 
+      } else if (platform === "win32") {
+        // Windows
+        printCommand = printerName
           ? `powershell -Command "Start-Process -FilePath '${receipt.pdf_path}' -Verb Print -WindowStyle Hidden"`
           : `powershell -Command "Start-Process -FilePath '${receipt.pdf_path}' -Verb Print -WindowStyle Hidden"`;
       } else {
@@ -312,25 +329,26 @@ export class ReceiptsService {
       }
 
       // Выполняем команду печати
-      console.log(`Printing receipt ${receipt.number} with command: ${printCommand}`);
-      const { stdout, stderr } = await execAsync(printCommand);
+      console.log(
+        `Printing receipt ${receipt.number} with command: ${printCommand}`,
+      );
+      const { stderr } = await execAsync(printCommand);
 
-      if (stderr && !stderr.includes('warning')) {
-        console.error('Print command stderr:', stderr);
+      if (stderr && !stderr.includes("warning")) {
+        console.error("Print command stderr:", stderr);
         throw new Error(`Ошибка печати: ${stderr}`);
       }
 
       console.log(`Receipt ${receipt.number} sent to printer successfully`);
       return {
         success: true,
-        message: `Чек ${receipt.number} отправлен на печать${printerName ? ` (принтер: ${printerName})` : ''}`
+        message: `Чек ${receipt.number} отправлен на печать${printerName ? ` (принтер: ${printerName})` : ""}`,
       };
-
     } catch (error) {
-      console.error('Error printing receipt:', error);
+      console.error("Error printing receipt:", error);
       return {
         success: false,
-        message: `Ошибка при печати чека: ${error.message}`
+        message: `Ошибка при печати чека: ${error.message}`,
       };
     }
   }
