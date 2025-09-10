@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, Users, ShoppingCart, Home, LogOut, Menu, X } from 'lucide-react';
+import { Package, Users, ShoppingCart, Home, LogOut, Menu, X, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Products', href: '/products', icon: Package },
   { name: 'Recipients', href: '/recipients', icon: Users },
   { name: 'Orders', href: '/orders', icon: ShoppingCart },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export const Layout = ({ children }: LayoutProps) => {

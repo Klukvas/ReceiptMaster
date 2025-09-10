@@ -198,6 +198,30 @@ export const receiptsApi = {
     api.get(`/receipts/${id}/pdf`, { responseType: 'blob' }),
 };
 
+export const settingsApi = {
+  uploadLogo: (file: File) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return api.post('/settings/logo/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  
+  getLogo: () =>
+    api.get('/settings/logo', { responseType: 'blob' }),
+
+  deleteLogo: () =>
+    api.post('/settings/logo/delete'),
+
+  updateCompanyName: (companyName: string) =>
+    api.post('/settings/company-name', { companyName }),
+
+  getCompanyName: () =>
+    api.get<{ companyName: string }>('/settings/company-name'),
+};
+
 // Formatting utilities
 export const formatCurrency = (cents: number, currency: string = 'UAH') => {
   const amount = cents / 100;

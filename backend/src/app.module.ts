@@ -10,6 +10,7 @@ import { RecipientsModule } from "./modules/recipients/recipients.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { UsersModule } from "./modules/users/users.module";
+import { SettingsModule } from "./modules/settings/settings.module";
 import { HealthController } from "./health.controller";
 
 @Module({
@@ -53,6 +54,7 @@ import { HealthController } from "./health.controller";
     OrdersModule,
     ReceiptsModule,
     UsersModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [

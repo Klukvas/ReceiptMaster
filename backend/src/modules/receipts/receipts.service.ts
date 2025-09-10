@@ -11,7 +11,7 @@ import { Order, OrderStatus } from "../orders/entities/order.entity";
 import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
-// import * as path from "path";
+import * as path from "path";
 import { ConfigService } from "@nestjs/config";
 
 @Injectable()
@@ -56,11 +56,15 @@ export class ReceiptsService {
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
 
+      // Получаем название компании из настроек
+      const companyName = await this.getCompanyName();
+
       // Генерируем PDF
       const { filePath, url } =
         await this.reactPdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
+          companyName,
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -171,6 +175,24 @@ export class ReceiptsService {
     } catch (error) {
       console.error("Error ensuring receipt number function:", error);
       throw error;
+    }
+  }
+
+  private async getCompanyName(): Promise<string> {
+    try {
+      const settingsPath = path.join(process.cwd(), 'src', 'assets', 'settings.json');
+      
+      try {
+        const settingsData = await fs.readFile(settingsPath, 'utf-8');
+        const settings = JSON.parse(settingsData);
+        return settings.companyName || '';
+      } catch {
+        // If settings file doesn't exist, return empty string
+        return '';
+      }
+    } catch (error) {
+      console.error('Error reading company name:', error);
+      return '';
     }
   }
 }
