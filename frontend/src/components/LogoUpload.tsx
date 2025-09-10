@@ -14,7 +14,7 @@ export const LogoUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current logo
-  const { refetch: refetchLogo, isSuccess: hasLogo } = useQuery({
+  const { refetch: refetchLogo, isSuccess: hasLogo, error: logoError } = useQuery({
     queryKey: ['logo'],
     queryFn: () => settingsApi.getLogo(),
     enabled: true, // Auto-fetch logo
@@ -167,12 +167,16 @@ export const LogoUpload = () => {
         {/* Current Logo Display */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
           <div className="text-center">
-            {hasLogo ? (
+            {hasLogo && !logoError ? (
               <div className="space-y-3">
                 <img
                   src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/settings/logo`}
                   alt="Current logo"
                   className="mx-auto h-24 w-24 object-contain border border-gray-200 rounded"
+                  onError={(e) => {
+                    // Hide the image if it fails to load
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
                 <p className="text-sm text-gray-600">
                   Текущий логотип

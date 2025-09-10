@@ -11,12 +11,7 @@ else
     echo "Fonts directory not found"
 fi
 
-# Copy logo
-if [ -f "src/assets/logo.png" ]; then
-    cp src/assets/logo.png dist/modules/assets/ 2>/dev/null || true
-    echo "Logo copied successfully"
-else
-    echo "Logo file not found"
-fi
+# Note: Logo is served directly from src/assets, not copied to dist
+# This ensures the logo is always fresh and can be updated without rebuilding
 
 echo "Assets copy completed"

@@ -89,7 +89,7 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
               marginBottom: 15 
             }}
           >
-            {hasCustomLogo ? (
+            {hasCustomLogo && (
               <Image 
                 src={getLogoPath()} 
                 style={{ 
@@ -99,29 +99,6 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
                   objectFit: 'contain'
                 }} 
               />
-            ) : (
-              /* Fallback text-based logo */
-              <View 
-                style={{ 
-                  width: 60, 
-                  height: 60, 
-                  backgroundColor: '#4A90E2',
-                  borderRadius: 8,
-                  marginRight: 15,
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}
-              >
-                <Text 
-                  style={{ 
-                    fontSize: 24, 
-                    fontWeight: 'bold', 
-                    color: 'white' 
-                  }}
-                >
-                  M
-                </Text>
-              </View>
             )}
             <View>
               <Text 
