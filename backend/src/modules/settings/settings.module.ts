@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { SettingsController } from './settings.controller';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { SettingsController } from "./settings.controller";
 
 @Module({
   imports: [ConfigModule],

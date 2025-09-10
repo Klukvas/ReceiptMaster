@@ -29,5 +29,3 @@ export class SeedDefaultAdmin1700000000004 implements MigrationInterface {
     ]);
   }
 }
-
-
