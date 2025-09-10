@@ -28,6 +28,9 @@ RUN yarn global add @nestjs/cli
 # Копируем исходный код (контекст билда: ./backend)
 COPY . .
 
+# Делаем скрипты исполняемыми
+RUN chmod +x scripts/*.sh
+
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
 
