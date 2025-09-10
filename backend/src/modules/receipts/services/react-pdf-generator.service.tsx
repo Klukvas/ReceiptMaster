@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { pdf, Document, Page, Text, View, Font } from '@react-pdf/renderer';
+import { pdf, Document, Page, Text, View, Font, Image } from '@react-pdf/renderer';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EnvConfig } from '../../../config/env.schema';
@@ -17,9 +17,40 @@ const getFontPath = (fontFile: string) => {
     return path.join(__dirname, '../../../assets/fonts', fontFile);
   } else {
     // In production, __dirname points to dist/modules/receipts/services/
-    return path.join(__dirname, '../../assets/fonts', fontFile);
+    // Try dist first, then fallback to src
+    const distPath = path.join(__dirname, '../../assets/fonts', fontFile);
+    const srcPath = path.join(process.cwd(), 'src/assets/fonts', fontFile);
+    
+    // Check if dist file exists, otherwise use src
+    try {
+      require('fs').accessSync(distPath);
+      return distPath;
+    } catch {
+      return srcPath;
+    }
   }
 };
+
+// Determine the correct path for logo based on environment
+const getLogoPath = () => {
+  const isDevelopment = __dirname.includes('/src/');
+  if (isDevelopment) {
+    return path.join(__dirname, '../../../assets/logo.png');
+  } else {
+    // In production, try dist first, then fallback to src
+    const distPath = path.join(__dirname, '../../assets/logo.png');
+    const srcPath = path.join(process.cwd(), 'src/assets/logo.png');
+    
+    // Check if dist file exists, otherwise use src
+    try {
+      require('fs').accessSync(distPath);
+      return distPath;
+    } catch {
+      return srcPath;
+    }
+  }
+};
+
 
 Font.register({
   family: 'NotoSans',
@@ -29,7 +60,7 @@ Font.register({
   ],
 });
 
-const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber: string }) => {
+const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: { order: Order; receiptNumber: string; hasCustomLogo: boolean; companyName: string }) => {
   const formatCurrency = (cents: number) => 
     MoneyUtil.formatCentsToCurrency(cents, order.currency);
 
@@ -44,32 +75,102 @@ const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber
           lineHeight: 1.4 
         }}
       >
-        {/* Header */}
+        {/* Header with Logo and Blue Line */}
         <View 
           style={{ 
-            textAlign: 'center', 
-            borderBottom: '2 solid #000', 
-            paddingBottom: 20, 
             marginBottom: 20 
           }}
         >
-          <Text 
+          {/* Company Logo and Name */}
+          <View 
             style={{ 
-              fontSize: 24, 
-              fontWeight: 'bold', 
-              marginBottom: 10 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginBottom: 15 
             }}
           >
-            Квитанція
-          </Text>
-          <Text 
+            {hasCustomLogo ? (
+              <Image 
+                src={getLogoPath()} 
+                style={{ 
+                  width: 60, 
+                  height: 60, 
+                  marginRight: 15,
+                  objectFit: 'contain'
+                }} 
+              />
+            ) : (
+              /* Fallback text-based logo */
+              <View 
+                style={{ 
+                  width: 60, 
+                  height: 60, 
+                  backgroundColor: '#4A90E2',
+                  borderRadius: 8,
+                  marginRight: 15,
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
+              >
+                <Text 
+                  style={{ 
+                    fontSize: 24, 
+                    fontWeight: 'bold', 
+                    color: 'white' 
+                  }}
+                >
+                  M
+                </Text>
+              </View>
+            )}
+            <View>
+              <Text 
+                style={{ 
+                  fontSize: 20, 
+                  fontWeight: 'bold', 
+                  color: '#333' 
+                }}
+              >
+                {companyName}
+              </Text>
+            </View>
+          </View>
+
+          {/* Blue Line */}
+          <View 
             style={{ 
-              fontSize: 16, 
-              color: '#666' 
+              height: 4, 
+              backgroundColor: '#4A90E2', 
+              marginBottom: 15 
+            }} 
+          />
+
+          {/* Invoice Title */}
+          <View 
+            style={{ 
+              textAlign: 'center', 
+              borderBottom: '2 solid #000', 
+              paddingBottom: 15 
             }}
           >
-            № {receiptNumber}
-          </Text>
+            <Text 
+              style={{ 
+                fontSize: 24, 
+                fontWeight: 'bold', 
+                marginBottom: 15 
+              }}
+            >
+              КВИТАНЦІЯ
+            </Text>
+            <Text 
+              style={{ 
+                fontSize: 16, 
+                color: '#666' 
+              }}
+            >
+              № {receiptNumber}
+            </Text>
+          </View>
         </View>
 
         {/* Order Info */}
@@ -108,15 +209,14 @@ const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber
           <View 
             style={{ 
               flexDirection: 'row', 
-              backgroundColor: '#f5f5f5', 
-              padding: 8, 
+              padding: 12, 
               border: '1 solid #ddd' 
             }}
           >
-            <Text style={{ fontWeight: 'bold', width: '50%' }}>Товар</Text>
-            <Text style={{ fontWeight: 'bold', width: '15%' }}>Кількість</Text>
-            <Text style={{ fontWeight: 'bold', width: '20%' }}>Ціна</Text>
-            <Text style={{ fontWeight: 'bold', width: '15%' }}>Сума</Text>
+            <Text style={{ fontWeight: 'bold', width: '50%' }}>Опис товару</Text>
+            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'center' }}>Кількість</Text>
+            <Text style={{ fontWeight: 'bold', width: '20%', textAlign: 'right' }}>Ціна</Text>
+            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'right' }}>Сума</Text>
           </View>
           {/* Table Rows */}
           {order.items.map((item, index) => (
@@ -124,15 +224,15 @@ const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber
               key={index}
               style={{ 
                 flexDirection: 'row', 
-                padding: 8, 
+                padding: 12, 
                 border: '1 solid #ddd', 
-                borderTop: 'none' 
+                borderTop: 'none'
               }}
             >
-              <Text style={{ width: '50%' }}>{item.product_name}</Text>
-              <Text style={{ width: '15%' }}>{item.qty.toString()}</Text>
-              <Text style={{ width: '20%' }}>{formatCurrency(item.unit_price_cents)}</Text>
-              <Text style={{ width: '15%' }}>{formatCurrency(item.line_total_cents)}</Text>
+              <Text style={{ width: '50%', fontSize: 9 }}>{item.product_name}</Text>
+              <Text style={{ width: '15%', textAlign: 'center', fontSize: 9 }}>{item.qty.toString()}</Text>
+              <Text style={{ width: '20%', textAlign: 'right', fontSize: 9 }}>{formatCurrency(item.unit_price_cents)}</Text>
+              <Text style={{ width: '15%', textAlign: 'right', fontSize: 9, fontWeight: 'bold' }}>{formatCurrency(item.line_total_cents)}</Text>
             </View>
           ))}
         </View>
@@ -140,7 +240,7 @@ const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber
         {/* Totals */}
         <View 
           style={{ 
-            borderTop: '2 solid #000', 
+            borderTop: '3 solid #4A90E2', 
             paddingTop: 20, 
             textAlign: 'right' 
           }}
@@ -149,37 +249,45 @@ const ReceiptDocument = ({ order, receiptNumber }: { order: Order; receiptNumber
             style={{ 
               flexDirection: 'row', 
               justifyContent: 'space-between', 
-              marginBottom: 5 
+              marginBottom: 8,
+              paddingHorizontal: 20
             }}
           >
-            <Text style={{ fontWeight: 'bold' }}>Проміжний підсумок:</Text>
-            <Text>{formatCurrency(order.subtotal_cents)}</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 12 }}>Проміжний підсумок:</Text>
+            <Text style={{ fontSize: 12 }}>{formatCurrency(order.subtotal_cents)}</Text>
           </View>
           <View 
             style={{ 
               flexDirection: 'row', 
               justifyContent: 'space-between', 
-              borderTop: '2 solid #000', 
-              paddingTop: 10, 
-              marginTop: 10 
+              backgroundColor: '#4A90E2',
+              padding: 15,
+              marginTop: 10,
+              borderRadius: 5
             }}
           >
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>РАЗОМ:</Text>
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{formatCurrency(order.total_cents)}</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, color: 'white' }}>РАЗОМ:</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, color: 'white' }}>{formatCurrency(order.total_cents)}</Text>
           </View>
         </View>
 
-        {/* Footer */}
+        {/* Footer - positioned at bottom */}
         <View 
           style={{ 
-            marginTop: 30, 
+            position: 'absolute',
+            bottom: 40,
+            left: 40,
+            right: 40,
             textAlign: 'center', 
-            fontSize: 8, 
-            color: '#666' 
+            fontSize: 9, 
+            color: '#666',
+            borderTop: '1 solid #ddd',
+            paddingTop: 20
           }}
         >
-          <Text style={{ marginBottom: 5 }}>Дякуємо за покупку!</Text>
-          <Text>Чек згенеровано: {new Date().toLocaleString('ru-RU')}</Text>
+          <Text style={{ marginBottom: 8, fontSize: 11, fontWeight: 'bold' }}>Дякуємо за покупку!</Text>
+          <Text style={{ marginBottom: 5 }}>Якщо у вас є питання, будь ласка, зв'яжіться з нами.</Text>
+          <Text style={{ fontSize: 8 }}>Чек згенеровано: {new Date().toLocaleString('ru-RU')}</Text>
         </View>
       </Page>
     </Document>
@@ -192,11 +300,22 @@ export class ReactPdfGeneratorService {
 
   constructor(private configService: ConfigService<EnvConfig>) {}
 
-  async generateReceiptPdf(order: Order, receiptNumber: string): Promise<{ filePath: string; url: string }> {
+  async generateReceiptPdf(order: Order, receiptNumber: string, companyName: string = ''): Promise<{ filePath: string; url: string }> {
     try {
       this.logger.log('Починаємо генерацію PDF за допомогою @react-pdf/renderer...');
       this.logger.log('ID замовлення:', order.id);
       this.logger.log('Номер чека:', receiptNumber);
+
+      // Check if custom logo exists
+      let hasCustomLogo = false;
+      try {
+        const logoPath = getLogoPath();
+        await fs.access(logoPath);
+        hasCustomLogo = true;
+        this.logger.log(`Custom logo found at ${logoPath}, using uploaded logo`);
+      } catch (error) {
+        this.logger.log(`No custom logo found, using fallback logo. Error: ${error.message}`);
+      }
 
       // Создаем директорию для чеков если не существует
       const storagePath = this.configService.get('RECEIPT_STORAGE_PATH');
@@ -216,7 +335,7 @@ export class ReactPdfGeneratorService {
       this.logger.log(`Генеруємо PDF: ${filePath}`);
 
       // Генерируем PDF
-      const doc = <ReceiptDocument order={order} receiptNumber={receiptNumber} />;
+      const doc = <ReceiptDocument order={order} receiptNumber={receiptNumber} hasCustomLogo={hasCustomLogo} companyName={companyName} />;
       const pdfBuffer = await pdf(doc).toBuffer();
 
       // Сохраняем PDF в файл
