@@ -77,10 +77,11 @@ export const OrdersPage = () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       setNotification({ type: 'success', message: 'Receipt successfully created!' });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
       setNotification({ 
         type: 'error', 
-        message: error.response?.data?.message || 'Error creating receipt' 
+        message: err.response?.data?.message || 'Error creating receipt' 
       });
     },
   });
@@ -92,10 +93,11 @@ export const OrdersPage = () => {
       setNotification({ type: 'success', message: 'Order successfully deleted!' });
       setDeleteConfirmation({ isOpen: false, order: null });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
       setNotification({ 
         type: 'error', 
-        message: error.response?.data?.message || 'Error deleting order' 
+        message: err.response?.data?.message || 'Error deleting order' 
       });
     },
   });
