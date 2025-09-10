@@ -211,3 +211,21 @@ export const formatCurrency = (cents: number, currency: string = 'UAH') => {
 export const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString('ru-RU');
 };
+
+// Parsing utilities
+// Converts a user-entered currency amount (e.g., "99.99" or "99,99") to integer cents
+export const amountToCents = (amount: string | number): number => {
+  if (typeof amount === 'number') {
+    if (!Number.isFinite(amount)) return 0;
+    return Math.round(amount * 100);
+  }
+  if (!amount) return 0;
+  const normalized = amount
+    .toString()
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(',', '.');
+  const parsed = parseFloat(normalized);
+  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return 0;
+  return Math.round(parsed * 100);
+};

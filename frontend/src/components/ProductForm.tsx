@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { productsApi, type Product } from '../lib/api';
+import { productsApi, type Product, amountToCents } from '../lib/api';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
@@ -25,8 +25,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     if (product) {
       setFormData({
         name: product.name,
-        purchase_price_cents: product.purchase_price_cents.toString(),
-        sale_price_cents: product.sale_price_cents.toString(),
+        purchase_price_cents: (product.purchase_price_cents / 100).toFixed(2),
+        sale_price_cents: (product.sale_price_cents / 100).toFixed(2),
         currency: product.currency,
       });
     }
@@ -53,9 +53,10 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     e.preventDefault();
     
     const data = {
-      ...formData,
-      purchase_price_cents: parseInt(formData.purchase_price_cents),
-      sale_price_cents: parseInt(formData.sale_price_cents),
+      name: formData.name,
+      purchase_price_cents: amountToCents(formData.purchase_price_cents),
+      sale_price_cents: amountToCents(formData.sale_price_cents),
+      currency: formData.currency,
     };
 
     if (product) {
@@ -89,16 +90,24 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Цена покупки (копейки)"
+              label="Цена покупки"
               type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              placeholder="0.00"
               value={formData.purchase_price_cents}
               onChange={(e) => setFormData({ ...formData, purchase_price_cents: e.target.value })}
               required
             />
 
             <Input
-              label="Цена продажи (копейки)"
+              label="Цена продажи"
               type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              placeholder="0.00"
               value={formData.sale_price_cents}
               onChange={(e) => setFormData({ ...formData, sale_price_cents: e.target.value })}
               required
