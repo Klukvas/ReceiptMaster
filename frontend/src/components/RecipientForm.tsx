@@ -41,7 +41,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<Recipient> }) =>
       recipientsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipients'] });

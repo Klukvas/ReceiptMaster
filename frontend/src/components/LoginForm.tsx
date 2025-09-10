@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,8 +16,9 @@ export const LoginForm: React.FC = () => {
 
     try {
       await login(email, password);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка входа в систему');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || 'Ошибка входа в систему');
     } finally {
       setIsLoading(false);
     }

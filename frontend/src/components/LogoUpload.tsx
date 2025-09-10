@@ -14,7 +14,7 @@ export const LogoUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current logo
-  const { data: currentLogo, refetch: refetchLogo, isSuccess: hasLogo } = useQuery({
+  const { refetch: refetchLogo, isSuccess: hasLogo } = useQuery({
     queryKey: ['logo'],
     queryFn: () => settingsApi.getLogo(),
     enabled: true, // Auto-fetch logo
@@ -105,9 +105,6 @@ export const LogoUpload = () => {
     }
   };
 
-  const handleLoadCurrentLogo = () => {
-    refetchLogo();
-  };
 
   const handleCompanyNameChange = (value: string) => {
     setCompanyName(value);

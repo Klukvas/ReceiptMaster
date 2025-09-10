@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Package, Users, ShoppingCart, Home, LogOut, Menu, X, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 interface LayoutProps {
   children: ReactNode;

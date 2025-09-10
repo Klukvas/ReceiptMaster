@@ -29,10 +29,11 @@ export const ProductsPage = () => {
       setNotification({ type: 'success', message: 'Товар успешно удален!' });
       setDeleteConfirmation({ isOpen: false, product: null });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
       setNotification({ 
         type: 'error', 
-        message: error.response?.data?.message || 'Ошибка при удалении товара' 
+        message: err.response?.data?.message || 'Ошибка при удалении товара' 
       });
     },
   });

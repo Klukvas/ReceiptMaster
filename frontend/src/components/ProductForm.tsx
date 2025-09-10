@@ -41,7 +41,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<Product> }) =>
       productsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
