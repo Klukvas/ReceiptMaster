@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Eye, CheckCircle, XCircle, AlertCircle, Trash2, Download, Edit } from 'lucide-react';
+import { Eye, CheckCircle, XCircle, AlertCircle, Trash2, Download, Edit, Printer } from 'lucide-react';
 import { ordersApi, receiptsApi, formatCurrency, formatDate, type Order } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -18,6 +18,7 @@ export const OrdersPage = () => {
     order: Order | null;
   }>({ isOpen: false, order: null });
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   // Function to download PDF receipt with authorization
@@ -56,6 +57,11 @@ export const OrdersPage = () => {
 
   const orders = Array.isArray(ordersData?.data?.data) ? ordersData.data.data : [];
 
+  // Load printers on component mount
+  useEffect(() => {
+    loadPrinters();
+  }, []);
+
   const confirmMutation = useMutation({
     mutationFn: ordersApi.confirm,
     onSuccess: () => {
@@ -82,6 +88,24 @@ export const OrdersPage = () => {
       setNotification({ 
         type: 'error', 
         message: err.response?.data?.message || 'Error creating receipt' 
+      });
+    },
+  });
+
+  const printReceiptMutation = useMutation({
+    mutationFn: ({ receiptId, printer }: { receiptId: string; printer?: string }) =>
+      receiptsApi.print(receiptId, printer),
+    onSuccess: (response) => {
+      setNotification({ 
+        type: response.data.success ? 'success' : 'error', 
+        message: response.data.message 
+      });
+    },
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
+      setNotification({ 
+        type: 'error', 
+        message: err.response?.data?.message || 'Error printing receipt' 
       });
     },
   });
@@ -117,6 +141,24 @@ export const OrdersPage = () => {
   const handleGenerateReceipt = (orderId: string) => {
     if (confirm('Generate receipt for this order?')) {
       generateReceiptMutation.mutate(orderId);
+    }
+  };
+
+  const loadPrinters = async () => {
+    try {
+      const response = await receiptsApi.getPrinters();
+      setAvailablePrinters(response.data.printers);
+    } catch (error) {
+      console.error('Error loading printers:', error);
+    }
+  };
+
+  const handlePrintReceipt = (receiptId: string) => {
+    if (availablePrinters.length > 1) {
+      const printer = prompt(`Available printers: ${availablePrinters.join(', ')}\nEnter printer name (or leave empty for default):`);
+      printReceiptMutation.mutate({ receiptId, printer: printer || undefined });
+    } else {
+      printReceiptMutation.mutate({ receiptId });
     }
   };
 
@@ -327,14 +369,26 @@ export const OrdersPage = () => {
                         {order.status === 'confirmed' && (
                           <>
                             {order.receipts && order.receipts.length > 0 ? (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => downloadReceipt(order.receipts[0].id)}
-                                className="bg-green-600 hover:bg-green-700 focus:ring-green-500"
-                              >
-                                Download Receipt
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => downloadReceipt(order.receipts[0].id)}
+                                  className="bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                                >
+                                  <Download className="w-3 h-3 mr-1" />
+                                  Download
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handlePrintReceipt(order.receipts[0].id)}
+                                  className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 text-white"
+                                >
+                                  <Printer className="w-3 h-3 mr-1" />
+                                  Print
+                                </Button>
+                              </div>
                             ) : (
                               <Button
                                 size="sm"
@@ -456,15 +510,26 @@ export const OrdersPage = () => {
                   {order.status === 'confirmed' && (
                     <>
                       {order.receipts && order.receipts.length > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => downloadReceipt(order.receipts[0].id)}
-                          className="bg-green-600 hover:bg-green-700 focus:ring-green-500 flex-1 sm:flex-none flex items-center justify-center"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download Receipt
-                        </Button>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => downloadReceipt(order.receipts[0].id)}
+                            className="bg-green-600 hover:bg-green-700 focus:ring-green-500 flex-1 sm:flex-none flex items-center justify-center"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handlePrintReceipt(order.receipts[0].id)}
+                            className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 text-white flex-1 sm:flex-none flex items-center justify-center"
+                          >
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print
+                          </Button>
+                        </div>
                       ) : (
                         <Button
                           size="sm"
