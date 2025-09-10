@@ -196,6 +196,12 @@ export const receiptsApi = {
   
   getPdf: (id: string) =>
     api.get(`/receipts/${id}/pdf`, { responseType: 'blob' }),
+  
+  getPrinters: () =>
+    api.get<{ printers: string[] }>('/receipts/printers'),
+  
+  print: (id: string, printer?: string) =>
+    api.post<{ success: boolean; message: string }>(`/receipts/${id}/print${printer ? `?printer=${encodeURIComponent(printer)}` : ''}`),
 };
 
 export const settingsApi = {
