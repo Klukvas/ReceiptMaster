@@ -152,13 +152,14 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       ))}
                     </select>
                   </div>
-                  <div className="w-24">
+                  <div className="w-32">
                     <Input
                       type="number"
                       min="1"
                       value={item.qty}
                       onChange={(e) => updateItem(index, 'qty', parseInt(e.target.value))}
                       required
+                      placeholder="Кол-во"
                     />
                   </div>
                   <div className="w-32 text-sm font-medium">

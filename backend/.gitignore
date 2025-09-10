@@ -44,3 +44,7 @@ lerna-debug.log*
 # Generated files
 /receipts/
 *.pdf
+
+# User uploaded assets
+src/assets/logo.png
+src/assets/settings.json
