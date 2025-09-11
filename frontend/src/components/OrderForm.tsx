@@ -5,6 +5,7 @@ import { ordersApi, productsApi, recipientsApi, formatCurrency } from '../lib/ap
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
+import { Combobox } from './ui/Combobox';
 
 interface OrderFormProps {
   onClose: () => void;
@@ -98,19 +99,18 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Получатель
             </label>
-            <select
-              className="input"
+            <Combobox
+              options={recipientsData?.data.data.map((recipient) => ({
+                value: recipient.id,
+                label: `${recipient.name}${recipient.email ? ` (${recipient.email})` : ''}`,
+                searchText: `${recipient.name} ${recipient.email || ''} ${recipient.phone || ''}`.trim()
+              })) || []}
               value={recipientId}
-              onChange={(e) => setRecipientId(e.target.value)}
+              onChange={setRecipientId}
+              placeholder="Выберите получателя"
+              searchPlaceholder="Поиск получателя..."
               required
-            >
-              <option value="">Выберите получателя</option>
-              {recipientsData?.data.data.map((recipient) => (
-                <option key={recipient.id} value={recipient.id}>
-                  {recipient.name} {recipient.email && `(${recipient.email})`}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
@@ -128,19 +128,18 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
               {items.map((item, index) => (
                 <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
                   <div className="flex-1">
-                    <select
-                      className="input"
+                    <Combobox
+                      options={productsData?.data.data.map((product) => ({
+                        value: product.id,
+                        label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
+                        searchText: `${product.name} ${product.description || ''}`.trim()
+                      })) || []}
                       value={item.productId}
-                      onChange={(e) => updateItem(index, 'productId', e.target.value)}
+                      onChange={(value) => updateItem(index, 'productId', value)}
+                      placeholder="Выберите товар"
+                      searchPlaceholder="Поиск товара..."
                       required
-                    >
-                      <option value="">Выберите товар</option>
-                      {productsData?.data.data.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} - {formatCurrency(product.sale_price_cents, product.currency)}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   <div className="w-32">
                     <Input

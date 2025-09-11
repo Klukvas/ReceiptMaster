@@ -202,6 +202,9 @@ export const receiptsApi = {
   
   print: (id: string, printer?: string) =>
     api.post<{ success: boolean; message: string }>(`/receipts/${id}/print${printer ? `?printer=${encodeURIComponent(printer)}` : ''}`),
+  
+  regenerate: (id: string) =>
+    api.post<Receipt>(`/receipts/${id}/regenerate`),
 };
 
 export const settingsApi = {

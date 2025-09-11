@@ -28,6 +28,26 @@ export class ReceiptsController {
     return this.receiptsService.generateReceipt(orderId);
   }
 
+  @Post("orders/:orderId/receipt/compact")
+  @ApiOperation({ summary: "Создать компактный чек для заказа" })
+  @ApiResponse({ status: 201, description: "Компактный чек успешно создан" })
+  @ApiResponse({ status: 400, description: "Невозможно создать чек" })
+  @ApiResponse({ status: 404, description: "Заказ не найден" })
+  @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
+  createCompactReceipt(@Param("orderId") orderId: string) {
+    return this.receiptsService.generateCompactReceipt(orderId);
+  }
+
+  @Post("orders/:orderId/receipt/standard")
+  @ApiOperation({ summary: "Создать стандартный чек для заказа" })
+  @ApiResponse({ status: 201, description: "Стандартный чек успешно создан" })
+  @ApiResponse({ status: 400, description: "Невозможно создать чек" })
+  @ApiResponse({ status: 404, description: "Заказ не найден" })
+  @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
+  createStandardReceipt(@Param("orderId") orderId: string) {
+    return this.receiptsService.generateStandardReceipt(orderId);
+  }
+
   @Get()
   @ApiOperation({ summary: "Получить список всех чеков" })
   @ApiResponse({ status: 200, description: "Список чеков получен" })
@@ -97,5 +117,14 @@ export class ReceiptsController {
     @Query("printer") printer?: string,
   ) {
     return this.receiptsService.printReceipt(id, printer);
+  }
+
+  @Post(":id/regenerate")
+  @ApiOperation({ summary: "Принудительно регенерировать PDF чек" })
+  @ApiResponse({ status: 200, description: "PDF чек успешно регенерирован" })
+  @ApiResponse({ status: 404, description: "Чек не найден" })
+  @ApiResponse({ status: 500, description: "Ошибка при регенерации PDF" })
+  async regenerateReceiptPdf(@Param("id") id: string) {
+    return this.receiptsService.regenerateReceiptPdf(id);
   }
 }
