@@ -9,6 +9,7 @@ import { Repository, DataSource } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service";
+import { CompactPdfGeneratorService } from "./services/compact-pdf-generator.service";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -28,6 +29,7 @@ export class ReceiptsService {
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
     private reactPdfGeneratorService: ReactPdfGeneratorService,
+    private compactPdfGeneratorService: CompactPdfGeneratorService,
     @InjectDataSource()
     private dataSource: DataSource,
     private configService: ConfigService,
@@ -68,7 +70,129 @@ export class ReceiptsService {
       // Получаем название компании из настроек
       const companyName = await this.getCompanyName();
 
-      // Генерируем PDF
+      // Генерируем PDF (используем компактный генератор по умолчанию)
+      const { filePath, url } =
+        await this.compactPdfGeneratorService.generateReceiptPdf(
+          order,
+          receiptNumber,
+          companyName,
+        );
+
+      // Вычисляем хеш файла для контроля целостности
+      const fileBuffer = await fs.readFile(filePath);
+      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+      // Создаем запись о чеке
+      const receipt = manager.create(Receipt, {
+        order_id: orderId,
+        number: receiptNumber,
+        pdf_path: filePath,
+        pdf_url: url,
+        hash,
+        status: ReceiptStatus.GENERATED,
+      });
+
+      return manager.save(Receipt, receipt);
+    });
+  }
+
+  async generateCompactReceipt(orderId: string): Promise<Receipt> {
+    return this.dataSource.transaction(async (manager) => {
+      // Проверяем существование заказа
+      const order = await manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ["recipient", "items"],
+      });
+      if (!order) {
+        throw new NotFoundException("Заказ не найден");
+      }
+
+      // Проверяем статус заказа
+      if (order.status !== OrderStatus.CONFIRMED) {
+        throw new BadRequestException(
+          "Можно создать чек только для подтвержденного заказа",
+        );
+      }
+
+      // Проверяем, что чек еще не создан
+      const existingReceipt = await manager.findOne(Receipt, {
+        where: { order_id: orderId, status: ReceiptStatus.GENERATED },
+      });
+      if (existingReceipt) {
+        throw new ConflictException("Чек для этого заказа уже существует");
+      }
+
+      // Очищаем старые чеки перед созданием нового
+      await this.cleanupOldReceipts(manager);
+
+      // Генерируем номер чека
+      const receiptNumber = await this.generateReceiptNumber();
+
+      // Получаем название компании из настроек
+      const companyName = await this.getCompanyName();
+
+      // Генерируем компактный PDF
+      const { filePath, url } =
+        await this.compactPdfGeneratorService.generateReceiptPdf(
+          order,
+          receiptNumber,
+          companyName,
+        );
+
+      // Вычисляем хеш файла для контроля целостности
+      const fileBuffer = await fs.readFile(filePath);
+      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+      // Создаем запись о чеке
+      const receipt = manager.create(Receipt, {
+        order_id: orderId,
+        number: receiptNumber,
+        pdf_path: filePath,
+        pdf_url: url,
+        hash,
+        status: ReceiptStatus.GENERATED,
+      });
+
+      return manager.save(Receipt, receipt);
+    });
+  }
+
+  async generateStandardReceipt(orderId: string): Promise<Receipt> {
+    return this.dataSource.transaction(async (manager) => {
+      // Проверяем существование заказа
+      const order = await manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ["recipient", "items"],
+      });
+      if (!order) {
+        throw new NotFoundException("Заказ не найден");
+      }
+
+      // Проверяем статус заказа
+      if (order.status !== OrderStatus.CONFIRMED) {
+        throw new BadRequestException(
+          "Можно создать чек только для подтвержденного заказа",
+        );
+      }
+
+      // Проверяем, что чек еще не создан
+      const existingReceipt = await manager.findOne(Receipt, {
+        where: { order_id: orderId, status: ReceiptStatus.GENERATED },
+      });
+      if (existingReceipt) {
+        throw new ConflictException("Чек для этого заказа уже существует");
+      }
+
+      // Очищаем старые чеки перед созданием нового
+      await this.cleanupOldReceipts(manager);
+
+      // Генерируем номер чека
+      const receiptNumber = await this.generateReceiptNumber();
+
+      // Получаем название компании из настроек
+      const companyName = await this.getCompanyName();
+
+      // Генерируем стандартный PDF
       const { filePath, url } =
         await this.reactPdfGeneratorService.generateReceiptPdf(
           order,
@@ -122,13 +246,97 @@ export class ReceiptsService {
     }
 
     try {
+      // Проверяем существование файла на диске
+      await fs.access(receipt.pdf_path);
       const buffer = await fs.readFile(receipt.pdf_path);
       const filename = `receipt-${receipt.number}.pdf`;
 
       return { buffer, filename };
     } catch (error) {
-      throw new NotFoundException("PDF файл не найден на диске");
+      // Если файл не найден на диске, пытаемся регенерировать его
+      console.log(`PDF файл не найден на диске: ${receipt.pdf_path}, пытаемся регенерировать...`);
+      
+      try {
+        // Получаем заказ для регенерации
+        const order = await this.ordersRepository.findOne({
+          where: { id: receipt.order_id },
+          relations: ["recipient", "items"],
+        });
+
+        if (!order) {
+          throw new NotFoundException("Заказ не найден для регенерации PDF");
+        }
+
+        // Регенерируем PDF
+        const companyName = await this.getCompanyName();
+        const { filePath, url } = await this.compactPdfGeneratorService.generateReceiptPdf(
+          order,
+          receipt.number,
+          companyName,
+        );
+
+        // Обновляем путь к файлу в базе данных
+        receipt.pdf_path = filePath;
+        receipt.pdf_url = url;
+        await this.receiptsRepository.save(receipt);
+
+        // Читаем новый файл
+        const buffer = await fs.readFile(filePath);
+        const filename = `receipt-${receipt.number}.pdf`;
+
+        console.log(`PDF успешно регенерирован: ${filePath}`);
+        return { buffer, filename };
+      } catch (regenerateError) {
+        console.error("Ошибка при регенерации PDF:", regenerateError);
+        throw new NotFoundException("PDF файл не найден и не может быть регенерирован");
+      }
     }
+  }
+
+  async regenerateReceiptPdf(id: string): Promise<Receipt> {
+    const receipt = await this.findOne(id);
+
+    // Получаем заказ для регенерации
+    const order = await this.ordersRepository.findOne({
+      where: { id: receipt.order_id },
+      relations: ["recipient", "items"],
+    });
+
+    if (!order) {
+      throw new NotFoundException("Заказ не найден для регенерации PDF");
+    }
+
+    // Удаляем старый файл, если он существует
+    if (receipt.pdf_path) {
+      try {
+        await fs.unlink(receipt.pdf_path);
+        console.log(`Старый PDF файл удален: ${receipt.pdf_path}`);
+      } catch (error) {
+        console.warn(`Не удалось удалить старый PDF файл: ${error.message}`);
+      }
+    }
+
+    // Регенерируем PDF
+    const companyName = await this.getCompanyName();
+    const { filePath, url } = await this.compactPdfGeneratorService.generateReceiptPdf(
+      order,
+      receipt.number,
+      companyName,
+    );
+
+    // Вычисляем хеш нового файла
+    const fileBuffer = await fs.readFile(filePath);
+    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+    // Обновляем запись о чеке
+    receipt.pdf_path = filePath;
+    receipt.pdf_url = url;
+    receipt.hash = hash;
+
+    const updatedReceipt = await this.receiptsRepository.save(receipt);
+    console.log(`PDF успешно регенерирован: ${filePath}`);
+
+    return updatedReceipt;
   }
 
   private async generateReceiptNumber(): Promise<string> {
