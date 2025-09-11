@@ -86,18 +86,12 @@ export const Combobox = ({
 
   // Обработка выбора опции
   const selectOption = (option: ComboboxOption) => {
-    console.log('Selecting option:', option);
     onChange(option.value);
     setIsOpen(false);
     setSearchTerm('');
     setHighlightedIndex(-1);
   };
 
-  // Обработка клика на элемент списка
-  const handleOptionClick = (option: ComboboxOption) => {
-    console.log('Option clicked:', option);
-    selectOption(option);
-  };
 
   // Обработка очистки
   const handleClear = (e: React.MouseEvent) => {
@@ -282,12 +276,8 @@ export const Combobox = ({
                     ${index === highlightedIndex ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'}
                     ${option.value === value ? 'bg-blue-100 text-blue-900 font-medium' : ''}
                   `}
-                  onClick={() => {
-                    console.log('Direct click on option:', option);
-                    selectOption(option);
-                  }}
+                  onClick={() => selectOption(option)}
                   onMouseDown={(e) => {
-                    console.log('Mouse down on option:', option);
                     e.preventDefault();
                     selectOption(option);
                   }}
