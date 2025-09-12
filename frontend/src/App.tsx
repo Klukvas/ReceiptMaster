@@ -9,6 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { ProductsPage } from './pages/ProductsPage';
 import { RecipientsPage } from './pages/RecipientsPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
 
@@ -55,6 +56,13 @@ const AppRoutes: React.FC = () => {
         <ProtectedRoute>
           <Layout>
             <OrdersPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <Layout>
+            <DashboardPage />
           </Layout>
         </ProtectedRoute>
       } />
