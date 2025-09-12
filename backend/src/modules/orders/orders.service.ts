@@ -13,6 +13,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 // import { MoneyUtil } from "../../common/utils/money.util";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { ReceiptsService } from "../receipts/receipts.service";
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -34,6 +35,7 @@ export class OrdersService {
     private recipientsRepository: Repository<Recipient>,
     @InjectDataSource()
     private dataSource: DataSource,
+    private receiptsService: ReceiptsService,
   ) {}
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
@@ -258,15 +260,12 @@ export class OrdersService {
   async remove(id: string): Promise<void> {
     const order = await this.findOne(id);
 
-    // Can only delete orders in "draft" or "cancelled" status
-    if (order.status === OrderStatus.CONFIRMED) {
-      throw new BadRequestException(
-        "Cannot delete confirmed order. Cancel it first.",
-      );
-    }
-
+    // Allow deletion of orders in any status
     // Delete order and related elements in transaction
     await this.dataSource.transaction(async (manager) => {
+      // Delete receipt files and records first
+      await this.receiptsService.deleteReceiptFilesForOrder(id);
+      
       // Delete order items
       await manager.delete(OrderItem, { order_id: id });
       // Delete the order itself
