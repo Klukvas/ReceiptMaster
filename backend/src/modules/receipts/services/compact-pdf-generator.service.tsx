@@ -188,14 +188,15 @@ const CompactReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyNa
           <View 
             style={{ 
               flexDirection: 'row', 
-              padding: 4, 
+              padding: 1.2,
+              margin: 0,
               border: '1 solid #000' 
             }}
           >
-            <Text style={{ fontWeight: 'bold', width: '50%', fontSize: 7 }}>Опис товару</Text>
-            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'center', fontSize: 7 }}>Кількість</Text>
-            <Text style={{ fontWeight: 'bold', width: '20%', textAlign: 'right', fontSize: 7 }}>Ціна</Text>
-            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'right', fontSize: 7 }}>Сума</Text>
+            <Text style={{ fontWeight: 'bold', width: '50%', fontSize: 6 }}>Опис товару</Text>
+            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'center', fontSize: 6 }}>Кількість</Text>
+            <Text style={{ fontWeight: 'bold', width: '20%', textAlign: 'right', fontSize: 6 }}>Ціна</Text>
+            <Text style={{ fontWeight: 'bold', width: '15%', textAlign: 'right', fontSize: 6 }}>Сума</Text>
           </View>
           {/* Table Rows */}
           {order.items.map((item, index) => (
@@ -203,15 +204,16 @@ const CompactReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyNa
               key={index}
               style={{ 
                 flexDirection: 'row', 
-                padding: 4, 
+                padding: 1.2,
+                margin: 0,
                 border: '1 solid #000', 
                 borderTop: 'none'
               }}
             >
-              <Text style={{ width: '50%', fontSize: 6 }}>{item.product_name}</Text>
-              <Text style={{ width: '15%', textAlign: 'center', fontSize: 6 }}>{item.qty.toString()}</Text>
-              <Text style={{ width: '20%', textAlign: 'right', fontSize: 6 }}>{formatCurrency(item.unit_price_cents)}</Text>
-              <Text style={{ width: '15%', textAlign: 'right', fontSize: 6, fontWeight: 'bold' }}>{formatCurrency(item.line_total_cents)}</Text>
+              <Text style={{ width: '50%', fontSize: 5.4 }}>{item.product_name}</Text>
+              <Text style={{ width: '15%', textAlign: 'center', fontSize: 5.4 }}>{item.qty.toString()}</Text>
+              <Text style={{ width: '20%', textAlign: 'right', fontSize: 5.4 }}>{formatCurrency(item.unit_price_cents)}</Text>
+              <Text style={{ width: '15%', textAlign: 'right', fontSize: 5.4, fontWeight: 'bold' }}>{formatCurrency(item.line_total_cents)}</Text>
             </View>
           ))}
         </View>
@@ -228,7 +230,7 @@ const CompactReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyNa
             style={{ 
               flexDirection: 'row', 
               justifyContent: 'space-between', 
-              marginBottom: 3,
+              marginBottom: 2,
               paddingHorizontal: 8
             }}
           >
@@ -239,13 +241,14 @@ const CompactReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyNa
             style={{ 
               flexDirection: 'row', 
               justifyContent: 'space-between', 
+              alignItems: 'center',
               backgroundColor: '#4A90E2',
-              padding: 6,
-              marginTop: 3,
+              padding: 4,
+              marginTop: 2,
               borderRadius: 3
             }}
           >
-            <Text style={{ fontWeight: 'bold', fontSize: 12, color: 'white' }}>РАЗОМ:</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 12, color: 'white', textAlign: 'center' }}>РАЗОМ:</Text>
             <Text style={{ fontWeight: 'bold', fontSize: 12, color: 'white' }}>{formatCurrency(order.total_cents)}</Text>
           </View>
         </View>

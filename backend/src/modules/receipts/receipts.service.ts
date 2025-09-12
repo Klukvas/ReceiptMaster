@@ -560,4 +560,37 @@ export class ReceiptsService {
       };
     }
   }
+
+  async deleteReceiptFilesForOrder(orderId: string): Promise<void> {
+    try {
+      // Find all receipts for this order
+      const receipts = await this.receiptsRepository.find({
+        where: { order_id: orderId },
+      });
+
+      // Delete PDF files from disk
+      for (const receipt of receipts) {
+        if (receipt.pdf_path) {
+          try {
+            await fs.unlink(receipt.pdf_path);
+            console.log(`Deleted receipt file: ${receipt.pdf_path}`);
+          } catch (error) {
+            console.warn(
+              `Failed to delete receipt file ${receipt.pdf_path}:`,
+              error,
+            );
+          }
+        }
+      }
+
+      // Delete receipt records from database
+      if (receipts.length > 0) {
+        await this.receiptsRepository.delete({ order_id: orderId });
+        console.log(`Deleted ${receipts.length} receipt records for order ${orderId}`);
+      }
+    } catch (error) {
+      console.error("Error deleting receipt files for order:", error);
+      // Don't throw error to avoid breaking order deletion
+    }
+  }
 }

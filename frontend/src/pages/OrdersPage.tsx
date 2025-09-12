@@ -400,16 +400,14 @@ export const OrdersPage = () => {
                             )}
                           </>
                         )}
-                        {(order.status === 'draft' || order.status === 'cancelled') && (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleDeleteOrder(order)}
-                            disabled={deleteOrderMutation.isPending}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleDeleteOrder(order)}
+                          disabled={deleteOrderMutation.isPending}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -543,18 +541,16 @@ export const OrdersPage = () => {
                     </>
                   )}
                   
-                  {(order.status === 'draft' || order.status === 'cancelled') && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleDeleteOrder(order)}
-                      disabled={deleteOrderMutation.isPending}
-                      className="flex-1 sm:flex-none flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => handleDeleteOrder(order)}
+                    disabled={deleteOrderMutation.isPending}
+                    className="flex-1 sm:flex-none flex items-center justify-center"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
                 </div>
               </div>
             </Card>
