@@ -274,4 +274,151 @@ export class OrdersService {
       await manager.delete(Order, { id });
     });
   }
+
+  // Dashboard methods
+  async getRevenueByProducts(startDate?: Date, endDate?: Date): Promise<Array<{
+    product_id: string;
+    product_name: string;
+    total_revenue_cents: number;
+    total_quantity: number;
+    currency: string;
+  }>> {
+    let query = `
+      SELECT 
+        oi.product_id,
+        oi.product_name,
+        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        SUM(oi.qty) as total_quantity,
+        o.currency
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      INNER JOIN products p ON p.id = oi.product_id
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += `
+      GROUP BY oi.product_id, oi.product_name, o.currency
+      ORDER BY total_revenue_cents DESC
+    `;
+
+    const results = await this.dataSource.query(query, params);
+    
+    return results.map(row => ({
+      product_id: row.product_id,
+      product_name: row.product_name,
+      total_revenue_cents: parseInt(row.total_revenue_cents),
+      total_quantity: parseInt(row.total_quantity),
+      currency: row.currency
+    }));
+  }
+
+  async getRevenueByRecipients(startDate?: Date, endDate?: Date): Promise<Array<{
+    recipient_id: string;
+    recipient_name: string;
+    total_revenue_cents: number;
+    total_orders: number;
+    currency: string;
+  }>> {
+    let query = `
+      SELECT 
+        o.recipient_id,
+        r.name as recipient_name,
+        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        COUNT(DISTINCT o.id) as total_orders,
+        o.currency
+      FROM orders o
+      INNER JOIN recipients r ON r.id = o.recipient_id
+      INNER JOIN order_items oi ON oi.order_id = o.id
+      INNER JOIN products p ON p.id = oi.product_id
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += `
+      GROUP BY o.recipient_id, r.name, o.currency
+      ORDER BY total_revenue_cents DESC
+    `;
+
+    const results = await this.dataSource.query(query, params);
+    
+    return results.map(row => ({
+      recipient_id: row.recipient_id,
+      recipient_name: row.recipient_name,
+      total_revenue_cents: parseInt(row.total_revenue_cents),
+      total_orders: parseInt(row.total_orders),
+      currency: row.currency
+    }));
+  }
+
+  async getTotalRevenue(startDate?: Date, endDate?: Date): Promise<{
+    total_revenue_cents: number;
+    total_orders: number;
+    currency: string;
+  }> {
+    let query = `
+      SELECT 
+        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        COUNT(DISTINCT o.id) as total_orders,
+        o.currency
+      FROM orders o
+      INNER JOIN order_items oi ON oi.order_id = o.id
+      INNER JOIN products p ON p.id = oi.product_id
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += ` GROUP BY o.currency`;
+
+    const results = await this.dataSource.query(query, params);
+    const result = results[0];
+    
+    return {
+      total_revenue_cents: result ? parseInt(result.total_revenue_cents) : 0,
+      total_orders: result ? parseInt(result.total_orders) : 0,
+      currency: result?.currency || 'UAH'
+    };
+  }
 }

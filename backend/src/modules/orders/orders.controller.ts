@@ -112,4 +112,70 @@ export class OrdersController {
   remove(@Param("id") id: string) {
     return this.ordersService.remove(id);
   }
+
+  @Get("dashboard/revenue-by-products")
+  @ApiOperation({ summary: "Get revenue by products" })
+  @ApiResponse({ status: 200, description: "Revenue by products retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getRevenueByProducts(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getRevenueByProducts(start, end);
+  }
+
+  @Get("dashboard/revenue-by-recipients")
+  @ApiOperation({ summary: "Get revenue by recipients" })
+  @ApiResponse({ status: 200, description: "Revenue by recipients retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getRevenueByRecipients(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getRevenueByRecipients(start, end);
+  }
+
+  @Get("dashboard/total-revenue")
+  @ApiOperation({ summary: "Get total revenue" })
+  @ApiResponse({ status: 200, description: "Total revenue retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getTotalRevenue(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getTotalRevenue(start, end);
+  }
 }

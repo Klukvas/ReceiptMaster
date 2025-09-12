@@ -95,6 +95,29 @@ export interface Receipt {
   order: Order;
 }
 
+// Dashboard types
+export interface RevenueByProduct {
+  product_id: string;
+  product_name: string;
+  total_revenue_cents: number;
+  total_quantity: number;
+  currency: string;
+}
+
+export interface RevenueByRecipient {
+  recipient_id: string;
+  recipient_name: string;
+  total_revenue_cents: number;
+  total_orders: number;
+  currency: string;
+}
+
+export interface TotalRevenue {
+  total_revenue_cents: number;
+  total_orders: number;
+  currency: string;
+}
+
 // Auth types
 export interface LoginRequest {
   email: string;
@@ -182,6 +205,17 @@ export const ordersApi = {
   
   delete: (id: string) =>
     api.delete(`/orders/${id}`),
+};
+
+export const dashboardApi = {
+  getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<RevenueByProduct[]>('/orders/dashboard/revenue-by-products', { params }),
+  
+  getRevenueByRecipients: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<RevenueByRecipient[]>('/orders/dashboard/revenue-by-recipients', { params }),
+  
+  getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<TotalRevenue>('/orders/dashboard/total-revenue', { params }),
 };
 
 export const receiptsApi = {
