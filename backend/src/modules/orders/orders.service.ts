@@ -11,7 +11,6 @@ import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
-// import { MoneyUtil } from "../../common/utils/money.util";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { ReceiptsService } from "../receipts/receipts.service";
 
@@ -259,6 +258,9 @@ export class OrdersService {
 
   async remove(id: string): Promise<void> {
     const order = await this.findOne(id);
+    if(!order) {
+      throw new NotFoundException("Order not found");
+    }
 
     // Allow deletion of orders in any status
     // Delete order and related elements in transaction
