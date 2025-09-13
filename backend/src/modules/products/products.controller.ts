@@ -41,6 +41,7 @@ export class ProductsController {
     return this.productsService.findAll(pagination);
   }
 
+
   @Get(":id")
   @ApiOperation({ summary: "Получить товар по ID" })
   @ApiResponse({ status: 200, description: "Товар найден" })

@@ -45,6 +45,7 @@ export interface Product {
   name: string;
   purchase_price_cents: number;
   sale_price_cents: number;
+  quantity: number;
   currency: string;
   created_at: string;
   updated_at: string;
@@ -114,6 +115,29 @@ export interface RevenueByRecipient {
 
 export interface TotalRevenue {
   total_revenue_cents: number;
+  total_orders: number;
+  currency: string;
+}
+
+// Turnover types (общий оборот - без вычета себестоимости)
+export interface TurnoverByProduct {
+  product_id: string;
+  product_name: string;
+  total_turnover_cents: number;
+  total_quantity: number;
+  currency: string;
+}
+
+export interface TurnoverByRecipient {
+  recipient_id: string;
+  recipient_name: string;
+  total_turnover_cents: number;
+  total_orders: number;
+  currency: string;
+}
+
+export interface TotalTurnover {
+  total_turnover_cents: number;
   total_orders: number;
   currency: string;
 }
@@ -208,6 +232,7 @@ export const ordersApi = {
 };
 
 export const dashboardApi = {
+  // Revenue methods (доход - с вычетом себестоимости)
   getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<RevenueByProduct[]>('/orders/dashboard/revenue-by-products', { params }),
   
@@ -216,6 +241,16 @@ export const dashboardApi = {
   
   getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TotalRevenue>('/orders/dashboard/total-revenue', { params }),
+
+  // Turnover methods (оборот - без вычета себестоимости)
+  getTurnoverByProducts: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<TurnoverByProduct[]>('/orders/dashboard/turnover-by-products', { params }),
+  
+  getTurnoverByRecipients: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<TurnoverByRecipient[]>('/orders/dashboard/turnover-by-recipients', { params }),
+  
+  getTotalTurnover: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<TotalTurnover>('/orders/dashboard/total-turnover', { params }),
 };
 
 export const receiptsApi = {

@@ -123,6 +123,9 @@ export const ProductsPage = () => {
                   Цена продажи
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Количество
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Валюта
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -144,6 +147,11 @@ export const ProductsPage = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-semibold text-gray-900">
                       {formatCurrency(product.sale_price_cents, product.currency)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {product.quantity}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

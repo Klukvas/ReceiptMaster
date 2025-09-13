@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { ordersApi, productsApi, recipientsApi, formatCurrency } from '../lib/api';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -19,6 +19,8 @@ interface OrderItem {
 export const OrderForm = ({ onClose }: OrderFormProps) => {
   const [recipientId, setRecipientId] = useState('');
   const [items, setItems] = useState<OrderItem[]>([{ productId: '', qty: 1 }]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [backendError, setBackendError] = useState<string>('');
   const queryClient = useQueryClient();
 
   const { data: productsData } = useQuery({
@@ -36,6 +38,9 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       onClose();
+    },
+    onError: (error: any) => {
+      setBackendError(error?.response?.data?.message || 'Ошибка при создании заказа');
     },
   });
 
@@ -55,14 +60,45 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
     setItems(newItems);
   };
 
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    // Валидация получателя
+    if (!recipientId) {
+      newErrors.recipient = 'Выберите получателя';
+    }
+    
+    // Валидация товаров
+    const validItems = items.filter(item => item.productId && item.qty > 0);
+    if (validItems.length === 0) {
+      newErrors.items = 'Добавьте хотя бы один товар';
+    }
+    
+    // Валидация количества для каждого товара
+    validItems.forEach((item, index) => {
+      const product = getProduct(item.productId);
+      if (product && item.qty > product.quantity) {
+        newErrors[`item-${index}-qty`] = `Недостаточно товара. Доступно: ${product.quantity} шт.`;
+      }
+    });
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const validItems = items.filter(item => item.productId && item.qty > 0);
-    if (validItems.length === 0) {
-      alert('Добавьте хотя бы один товар');
+    // Очищаем предыдущие ошибки
+    setErrors({});
+    setBackendError('');
+    
+    // Валидация формы
+    if (!validateForm()) {
       return;
     }
+    
+    const validItems = items.filter(item => item.productId && item.qty > 0);
 
     createMutation.mutate({
       recipientId,
@@ -95,6 +131,16 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Backend ошибки */}
+          {backendError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
+                <span className="text-sm text-red-800">{backendError}</span>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Получатель
@@ -106,11 +152,17 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                 searchText: `${recipient.name} ${recipient.email || ''} ${recipient.phone || ''}`.trim()
               })) || []}
               value={recipientId}
-              onChange={setRecipientId}
+              onChange={(value) => {
+                setRecipientId(value);
+                if (errors.recipient) setErrors({ ...errors, recipient: '' });
+              }}
               placeholder="Выберите получателя"
               searchPlaceholder="Поиск получателя..."
               required
             />
+            {errors.recipient && (
+              <p className="text-sm text-red-600 mt-1">{errors.recipient}</p>
+            )}
           </div>
 
           <div>
@@ -125,48 +177,84 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
             </div>
 
             <div className="space-y-3">
-              {items.map((item, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
-                  <div className="flex-1">
-                    <Combobox
-                      options={productsData?.data.data.map((product) => ({
-                        value: product.id,
-                        label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
-                        searchText: `${product.name} ${product.description || ''}`.trim()
-                      })) || []}
-                      value={item.productId}
-                      onChange={(value) => updateItem(index, 'productId', value)}
-                      placeholder="Выберите товар"
-                      searchPlaceholder="Поиск товара..."
-                      required
-                    />
+              {items.map((item, index) => {
+                const product = getProduct(item.productId);
+                const availableQty = product?.quantity || 0;
+                const isOutOfStock = product && item.qty > availableQty;
+                
+                return (
+                  <div key={index} className={`p-3 border rounded-lg ${isOutOfStock ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-1">
+                        <Combobox
+                          options={productsData?.data.data.map((product) => ({
+                            value: product.id,
+                            label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)} (${product.quantity} шт.)`,
+                            searchText: `${product.name} ${product.description || ''}`.trim()
+                          })) || []}
+                          value={item.productId}
+                          onChange={(value) => {
+                            updateItem(index, 'productId', value);
+                            // Очищаем ошибку количества при смене товара
+                            if (errors[`item-${index}-qty`]) {
+                              setErrors({ ...errors, [`item-${index}-qty`]: '' });
+                            }
+                          }}
+                          placeholder="Выберите товар"
+                          searchPlaceholder="Поиск товара..."
+                          required
+                        />
+                      </div>
+                      <div className="w-32">
+                        <Input
+                          type="number"
+                          min="1"
+                          max={availableQty}
+                          value={item.qty}
+                          onChange={(e) => {
+                            updateItem(index, 'qty', parseInt(e.target.value) || 1);
+                            // Очищаем ошибку при изменении количества
+                            if (errors[`item-${index}-qty`]) {
+                              setErrors({ ...errors, [`item-${index}-qty`]: '' });
+                            }
+                          }}
+                          placeholder="Кол-во"
+                          required
+                          error={errors[`item-${index}-qty`]}
+                        />
+                      </div>
+                      <div className="w-32 text-sm font-medium">
+                        {formatCurrency(calculateItemTotal(item))}
+                      </div>
+                      {items.length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="danger"
+                          onClick={() => removeItem(index)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {product && (
+                      <div className="mt-2 text-xs text-gray-500">
+                        Доступно: {availableQty} шт.
+                        {isOutOfStock && (
+                          <span className="text-red-600 ml-2">
+                            Недостаточно товара!
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="w-32">
-                    <Input
-                      type="number"
-                      min="1"
-                      value={item.qty}
-                      onChange={(e) => updateItem(index, 'qty', parseInt(e.target.value))}
-                      required
-                      placeholder="Кол-во"
-                    />
-                  </div>
-                  <div className="w-32 text-sm font-medium">
-                    {formatCurrency(calculateItemTotal(item))}
-                  </div>
-                  {items.length > 1 && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="danger"
-                      onClick={() => removeItem(index)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
+            
+            {errors.items && (
+              <p className="text-sm text-red-600">{errors.items}</p>
+            )}
           </div>
 
           <div className="border-t pt-4">

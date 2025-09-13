@@ -59,14 +59,21 @@ export class OrdersService {
 
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      // Calculate amounts before creating order
+      // Check product quantities and calculate amounts
       let subtotalCents = 0;
       const currency = products[0].currency; // Take currency from first product
 
       for (const itemDto of createOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
-        const lineTotalCents = product.sale_price_cents * itemDto.qty;
+        
+        // Check if product has enough quantity
+        if (product.quantity < itemDto.qty) {
+          throw new BadRequestException(
+            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+          );
+        }
 
+        const lineTotalCents = product.sale_price_cents * itemDto.qty;
         subtotalCents += lineTotalCents;
       }
 
@@ -97,6 +104,10 @@ export class OrdersService {
         });
 
         await manager.save(OrderItem, orderItem);
+
+        // Decrease product quantity
+        product.quantity -= itemDto.qty;
+        await manager.save(Product, product);
       }
 
       return savedOrder;
@@ -197,6 +208,21 @@ export class OrdersService {
 
       // If products are being updated
       if (updateOrderDto.items) {
+        // First, restore quantities from existing order items
+        const existingOrderItems = await manager.find(OrderItem, {
+          where: { order_id: id },
+        });
+
+        for (const existingItem of existingOrderItems) {
+          const product = await manager.findOne(Product, {
+            where: { id: existingItem.product_id },
+          });
+          if (product) {
+            product.quantity += existingItem.qty;
+            await manager.save(Product, product);
+          }
+        }
+
         // Get products and check their existence
         const productIds = updateOrderDto.items.map((item) => item.productId);
         const products = await manager.find(Product, {
@@ -209,14 +235,21 @@ export class OrdersService {
 
         const productMap = new Map(products.map((p) => [p.id, p]));
 
-        // Calculate new amounts
+        // Check quantities and calculate new amounts
         let subtotalCents = 0;
         const currency = products[0].currency; // Take currency from first product
 
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
-          const lineTotalCents = product.sale_price_cents * itemDto.qty;
+          
+          // Check if product has enough quantity
+          if (product.quantity < itemDto.qty) {
+            throw new BadRequestException(
+              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+            );
+          }
 
+          const lineTotalCents = product.sale_price_cents * itemDto.qty;
           subtotalCents += lineTotalCents;
         }
 
@@ -243,6 +276,10 @@ export class OrdersService {
           });
 
           await manager.save(OrderItem, orderItem);
+
+          // Decrease product quantity
+          product.quantity -= itemDto.qty;
+          await manager.save(Product, product);
         }
       }
 
@@ -266,6 +303,21 @@ export class OrdersService {
     // Allow deletion of orders in any status
     // Delete order and related elements in transaction
     await this.dataSource.transaction(async (manager) => {
+      // Restore product quantities before deleting order items
+      const orderItems = await manager.find(OrderItem, {
+        where: { order_id: id },
+      });
+
+      for (const orderItem of orderItems) {
+        const product = await manager.findOne(Product, {
+          where: { id: orderItem.product_id },
+        });
+        if (product) {
+          product.quantity += orderItem.qty;
+          await manager.save(Product, product);
+        }
+      }
+
       // Delete receipt files and records first
       await this.receiptsService.deleteReceiptFilesForOrder(id);
       
@@ -418,6 +470,148 @@ export class OrdersService {
     
     return {
       total_revenue_cents: result ? parseInt(result.total_revenue_cents) : 0,
+      total_orders: result ? parseInt(result.total_orders) : 0,
+      currency: result?.currency || 'UAH'
+    };
+  }
+
+  // Методы для общего оборота (общая выручка без вычета себестоимости)
+  async getTurnoverByProducts(startDate?: Date, endDate?: Date): Promise<Array<{
+    product_id: string;
+    product_name: string;
+    total_turnover_cents: number;
+    total_quantity: number;
+    currency: string;
+  }>> {
+    let query = `
+      SELECT 
+        oi.product_id,
+        oi.product_name,
+        SUM(oi.line_total_cents) as total_turnover_cents,
+        SUM(oi.qty) as total_quantity,
+        o.currency
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += `
+      GROUP BY oi.product_id, oi.product_name, o.currency
+      ORDER BY total_turnover_cents DESC
+    `;
+
+    const results = await this.dataSource.query(query, params);
+    
+    return results.map(row => ({
+      product_id: row.product_id,
+      product_name: row.product_name,
+      total_turnover_cents: parseInt(row.total_turnover_cents),
+      total_quantity: parseInt(row.total_quantity),
+      currency: row.currency
+    }));
+  }
+
+  async getTurnoverByRecipients(startDate?: Date, endDate?: Date): Promise<Array<{
+    recipient_id: string;
+    recipient_name: string;
+    total_turnover_cents: number;
+    total_orders: number;
+    currency: string;
+  }>> {
+    let query = `
+      SELECT 
+        o.recipient_id,
+        r.name as recipient_name,
+        SUM(o.total_cents) as total_turnover_cents,
+        COUNT(o.id) as total_orders,
+        o.currency
+      FROM orders o
+      INNER JOIN recipients r ON r.id = o.recipient_id
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += `
+      GROUP BY o.recipient_id, r.name, o.currency
+      ORDER BY total_turnover_cents DESC
+    `;
+
+    const results = await this.dataSource.query(query, params);
+    
+    return results.map(row => ({
+      recipient_id: row.recipient_id,
+      recipient_name: row.recipient_name,
+      total_turnover_cents: parseInt(row.total_turnover_cents),
+      total_orders: parseInt(row.total_orders),
+      currency: row.currency
+    }));
+  }
+
+  async getTotalTurnover(startDate?: Date, endDate?: Date): Promise<{
+    total_turnover_cents: number;
+    total_orders: number;
+    currency: string;
+  }> {
+    let query = `
+      SELECT 
+        SUM(o.total_cents) as total_turnover_cents,
+        COUNT(o.id) as total_orders,
+        o.currency
+      FROM orders o
+      WHERE o.status = $1
+    `;
+    
+    const params: any[] = [OrderStatus.CONFIRMED];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND o.created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND o.created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    query += ` GROUP BY o.currency`;
+
+    const results = await this.dataSource.query(query, params);
+    const result = results[0];
+    
+    return {
+      total_turnover_cents: result ? parseInt(result.total_turnover_cents) : 0,
       total_orders: result ? parseInt(result.total_orders) : 0,
       currency: result?.currency || 'UAH'
     };

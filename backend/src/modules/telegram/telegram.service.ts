@@ -40,12 +40,20 @@ export class TelegramService {
 
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      // 3. Рассчитать суммы
+      // 3. Проверить количество и рассчитать суммы
       let subtotalCents = 0;
       const currency = products[0].currency;
 
       for (const itemDto of createTelegramOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
+        
+        // Проверить наличие товара
+        if (product.quantity < itemDto.qty) {
+          throw new BadRequestException(
+            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+          );
+        }
+
         const lineTotalCents = product.sale_price_cents * itemDto.qty;
         subtotalCents += lineTotalCents;
       }
@@ -77,6 +85,10 @@ export class TelegramService {
         });
 
         await manager.save(OrderItem, orderItem);
+
+        // Уменьшить количество товара
+        product.quantity -= itemDto.qty;
+        await manager.save(Product, product);
       }
 
       // 6. Подтвердить заказ

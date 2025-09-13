@@ -26,6 +26,9 @@ export class Product {
   @Column({ type: "integer" })
   sale_price_cents: number;
 
+  @Column({ type: "integer", default: 0 })
+  quantity: number;
+
   @Column({ type: "enum", enum: Currency, default: Currency.UAH })
   currency: Currency;
 

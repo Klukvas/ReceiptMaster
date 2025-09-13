@@ -17,6 +17,11 @@ export class CreateProductDto {
   @Min(0)
   sale_price_cents: number;
 
+  @ApiProperty({ description: "Количество товара на складе", example: 50 })
+  @IsNumber()
+  @Min(0)
+  quantity: number;
+
   @ApiProperty({ description: "Валюта", enum: Currency, example: Currency.UAH })
   @IsEnum(Currency)
   currency: Currency;

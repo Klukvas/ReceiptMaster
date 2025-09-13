@@ -178,4 +178,71 @@ export class OrdersController {
     const end = endDate ? new Date(endDate) : undefined;
     return this.ordersService.getTotalRevenue(start, end);
   }
+
+  // Endpoints для общего оборота
+  @Get("dashboard/turnover-by-products")
+  @ApiOperation({ summary: "Get turnover by products" })
+  @ApiResponse({ status: 200, description: "Turnover by products retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getTurnoverByProducts(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getTurnoverByProducts(start, end);
+  }
+
+  @Get("dashboard/turnover-by-recipients")
+  @ApiOperation({ summary: "Get turnover by recipients" })
+  @ApiResponse({ status: 200, description: "Turnover by recipients retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getTurnoverByRecipients(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getTurnoverByRecipients(start, end);
+  }
+
+  @Get("dashboard/total-turnover")
+  @ApiOperation({ summary: "Get total turnover" })
+  @ApiResponse({ status: 200, description: "Total turnover retrieved" })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    description: "Start date for filtering (ISO string)",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    description: "End date for filtering (ISO string)",
+  })
+  getTotalTurnover(
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.ordersService.getTotalTurnover(start, end);
+  }
 }
