@@ -28,12 +28,18 @@ echo "   - Recipients: $EXISTING_RECIPIENTS"
 # Создаем бэкап, если есть данные
 if [ "$EXISTING_ORDERS" -gt 0 ] || [ "$EXISTING_RECIPIENTS" -gt 0 ]; then
     echo "💾 Creating backup before migration..."
-    ./scripts/backup-db.sh "pre_migration_$(date +%Y%m%d_%H%M%S)"
+    /app/scripts/backup-db.sh "pre_migration_$(date +%Y%m%d_%H%M%S)"
 fi
 
 # Запускаем миграции
 echo "🔄 Running database migrations..."
-yarn migration:run
+yarn migration:run || {
+    echo "❌ Migration failed, trying alternative approach..."
+    npx typeorm migration:run -d src/config/ormconfig.ts || {
+        echo "❌ Alternative migration also failed"
+        exit 1
+    }
+}
 
 # Проверяем, что данные остались
 echo "🔍 Verifying data integrity after migration..."

@@ -14,7 +14,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-c", "./scripts/init-db.sh"]
+    command: ["sh", "-c", "echo '=== Container diagnostics ===' && pwd && ls -la /app/scripts/ && echo '=== Testing script execution ===' && (bash /app/scripts/init-db.sh || sh /app/scripts/init-db.sh || (echo 'Script execution failed, trying direct migration' && yarn migration:run))"]
     networks:
       - marketflow-network
 

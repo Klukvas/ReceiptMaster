@@ -2,7 +2,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Устанавливаем зависимости для Puppeteer
+# Устанавливаем зависимости для Puppeteer и PostgreSQL client
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -10,7 +10,8 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    postgresql-client
 
 # Устанавливаем переменную окружения для Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -33,6 +34,9 @@ RUN mkdir -p /app/receipts
 
 # Делаем скрипты исполняемыми
 RUN chmod +x scripts/*.sh
+
+# Проверяем, что скрипты существуют и исполняемые
+RUN ls -la scripts/ && echo "Scripts permissions:" && stat scripts/init-db.sh
 
 # Диагностика: проверяем наличие файлов модулей/энтити и видимость для TS
 RUN echo "Listing key files under src/modules:" && \
