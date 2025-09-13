@@ -254,8 +254,10 @@ export class ReceiptsService {
       return { buffer, filename };
     } catch (error) {
       // Если файл не найден на диске, пытаемся регенерировать его
-      console.log(`PDF файл не найден на диске: ${receipt.pdf_path}, пытаемся регенерировать...`);
-      
+      console.log(
+        `PDF файл не найден на диске: ${receipt.pdf_path}, пытаемся регенерировать...`,
+      );
+
       try {
         // Получаем заказ для регенерации
         const order = await this.ordersRepository.findOne({
@@ -269,11 +271,12 @@ export class ReceiptsService {
 
         // Регенерируем PDF
         const companyName = await this.getCompanyName();
-        const { filePath, url } = await this.compactPdfGeneratorService.generateReceiptPdf(
-          order,
-          receipt.number,
-          companyName,
-        );
+        const { filePath, url } =
+          await this.compactPdfGeneratorService.generateReceiptPdf(
+            order,
+            receipt.number,
+            companyName,
+          );
 
         // Обновляем путь к файлу в базе данных
         receipt.pdf_path = filePath;
@@ -288,7 +291,9 @@ export class ReceiptsService {
         return { buffer, filename };
       } catch (regenerateError) {
         console.error("Ошибка при регенерации PDF:", regenerateError);
-        throw new NotFoundException("PDF файл не найден и не может быть регенерирован");
+        throw new NotFoundException(
+          "PDF файл не найден и не может быть регенерирован",
+        );
       }
     }
   }
@@ -318,11 +323,12 @@ export class ReceiptsService {
 
     // Регенерируем PDF
     const companyName = await this.getCompanyName();
-    const { filePath, url } = await this.compactPdfGeneratorService.generateReceiptPdf(
-      order,
-      receipt.number,
-      companyName,
-    );
+    const { filePath, url } =
+      await this.compactPdfGeneratorService.generateReceiptPdf(
+        order,
+        receipt.number,
+        companyName,
+      );
 
     // Вычисляем хеш нового файла
     const fileBuffer = await fs.readFile(filePath);
@@ -586,7 +592,9 @@ export class ReceiptsService {
       // Delete receipt records from database
       if (receipts.length > 0) {
         await this.receiptsRepository.delete({ order_id: orderId });
-        console.log(`Deleted ${receipts.length} receipt records for order ${orderId}`);
+        console.log(
+          `Deleted ${receipts.length} receipt records for order ${orderId}`,
+        );
       }
     } catch (error) {
       console.error("Error deleting receipt files for order:", error);

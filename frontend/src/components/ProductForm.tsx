@@ -11,6 +11,15 @@ interface ProductFormProps {
   onClose: () => void;
 }
 
+// Функция для безопасного извлечения сообщения об ошибке
+const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    return response?.data?.message || defaultMessage;
+  }
+  return defaultMessage;
+};
+
 export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -63,8 +72,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onClose();
     },
-    onError: (error: any) => {
-      setBackendError(error?.response?.data?.message || 'Ошибка при создании товара');
+    onError: (error: unknown) => {
+      setBackendError(getErrorMessage(error, 'Ошибка при создании товара'));
     },
   });
 
@@ -75,8 +84,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onClose();
     },
-    onError: (error: any) => {
-      setBackendError(error?.response?.data?.message || 'Ошибка при обновлении товара');
+    onError: (error: unknown) => {
+      setBackendError(getErrorMessage(error, 'Ошибка при обновлении товара'));
     },
   });
 

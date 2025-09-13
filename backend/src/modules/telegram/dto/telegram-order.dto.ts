@@ -1,5 +1,13 @@
-import { IsArray, IsNotEmpty, IsString, IsOptional, IsNumber, Min, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 
 export class TelegramOrderItemDto {
   @IsString()

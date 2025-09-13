@@ -46,7 +46,6 @@ export class ProductsService {
     return product;
   }
 
-
   async update(
     id: string,
     updateProductDto: UpdateProductDto,

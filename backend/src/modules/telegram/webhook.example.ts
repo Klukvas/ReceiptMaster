@@ -11,11 +11,11 @@ export const exampleWebhookUpdates = {
         id: 123456789,
         username: "john_doe",
         first_name: "John",
-        last_name: "Doe"
+        last_name: "Doe",
       },
       date: 1640995200,
-      text: "Привет! Хочу заказать товары"
-    }
+      text: "Привет! Хочу заказать товары",
+    },
   },
 
   // Команда /start
@@ -27,11 +27,11 @@ export const exampleWebhookUpdates = {
         id: 123456789,
         username: "john_doe",
         first_name: "John",
-        last_name: "Doe"
+        last_name: "Doe",
       },
       date: 1640995200,
-      text: "/start"
-    }
+      text: "/start",
+    },
   },
 
   // Поделился контактом
@@ -43,16 +43,16 @@ export const exampleWebhookUpdates = {
         id: 123456789,
         username: "john_doe",
         first_name: "John",
-        last_name: "Doe"
+        last_name: "Doe",
       },
       date: 1640995200,
       contact: {
         phone_number: "+380123456789",
         first_name: "John",
         last_name: "Doe",
-        user_id: 123456789
-      }
-    }
+        user_id: 123456789,
+      },
+    },
   },
 
   // Callback query (нажатие на inline кнопку)
@@ -64,7 +64,7 @@ export const exampleWebhookUpdates = {
         id: 123456789,
         username: "john_doe",
         first_name: "John",
-        last_name: "Doe"
+        last_name: "Doe",
       },
       message: {
         message_id: 126,
@@ -72,14 +72,14 @@ export const exampleWebhookUpdates = {
           id: 123456789,
           username: "john_doe",
           first_name: "John",
-          last_name: "Doe"
+          last_name: "Doe",
         },
         date: 1640995200,
-        text: "Выберите товар:"
+        text: "Выберите товар:",
       },
-      data: "product_123"
-    }
-  }
+      data: "product_123",
+    },
+  },
 };
 
 // Пример cURL запроса для тестирования webhook

@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
-import { Recipient } from '../recipients/entities/recipient.entity';
-import { Order, OrderStatus } from '../orders/entities/order.entity';
-import { Product } from '../products/entities/product.entity';
-import { OrderItem } from '../orders/entities/order-item.entity';
-import { CreateTelegramOrderDto } from './dto/telegram-order.dto';
-import { TelegramUpdateDto } from './dto/telegram-update.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
+import { Repository, DataSource, In } from "typeorm";
+import { Recipient } from "../recipients/entities/recipient.entity";
+import { Order, OrderStatus } from "../orders/entities/order.entity";
+import { Product } from "../products/entities/product.entity";
+import { OrderItem } from "../orders/entities/order-item.entity";
+import { CreateTelegramOrderDto } from "./dto/telegram-order.dto";
+import { TelegramUpdateDto } from "./dto/telegram-update.dto";
 
 @Injectable()
 export class TelegramService {
@@ -23,19 +27,26 @@ export class TelegramService {
     private dataSource: DataSource,
   ) {}
 
-  async createOrderFromTelegram(createTelegramOrderDto: CreateTelegramOrderDto): Promise<Order> {
+  async createOrderFromTelegram(
+    createTelegramOrderDto: CreateTelegramOrderDto,
+  ): Promise<Order> {
     return this.dataSource.transaction(async (manager) => {
       // 1. Найти или создать получателя
-      const recipient = await this.findOrCreateRecipient(manager, createTelegramOrderDto.user);
+      const recipient = await this.findOrCreateRecipient(
+        manager,
+        createTelegramOrderDto.user,
+      );
 
       // 2. Проверить существование продуктов
-      const productIds = createTelegramOrderDto.items.map((item) => item.productId);
+      const productIds = createTelegramOrderDto.items.map(
+        (item) => item.productId,
+      );
       const products = await manager.find(Product, {
         where: { id: In(productIds) },
       });
 
       if (products.length !== productIds.length) {
-        throw new NotFoundException('Один или несколько товаров не найдены');
+        throw new NotFoundException("Один или несколько товаров не найдены");
       }
 
       const productMap = new Map(products.map((p) => [p.id, p]));
@@ -46,11 +57,11 @@ export class TelegramService {
 
       for (const itemDto of createTelegramOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
-        
+
         // Проверить наличие товара
         if (product.quantity < itemDto.qty) {
           throw new BadRequestException(
-            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
           );
         }
 
@@ -65,7 +76,7 @@ export class TelegramService {
         currency: currency,
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
-        created_by: 'telegram_bot',
+        created_by: "telegram_bot",
       });
 
       const savedOrder = await manager.save(Order, order);
@@ -99,7 +110,10 @@ export class TelegramService {
     });
   }
 
-  private async findOrCreateRecipient(manager: any, userData: any): Promise<Recipient> {
+  private async findOrCreateRecipient(
+    manager: any,
+    userData: any,
+  ): Promise<Recipient> {
     // Ищем существующего получателя по telegram_user_id
     let recipient = await manager.findOne(Recipient, {
       where: { telegram_user_id: userData.telegram_user_id },
@@ -108,7 +122,7 @@ export class TelegramService {
     if (recipient) {
       // Обновляем данные получателя, если они изменились
       const updatedData: Partial<Recipient> = {};
-      
+
       if (userData.username && userData.username !== recipient.username) {
         updatedData.username = userData.username;
       }
@@ -132,7 +146,7 @@ export class TelegramService {
 
     // Создаем нового получателя
     const name = this.buildRecipientName(userData);
-    
+
     recipient = manager.create(Recipient, {
       name: name,
       telegram_user_id: userData.telegram_user_id,
@@ -147,7 +161,7 @@ export class TelegramService {
 
   private buildRecipientName(userData: any): string {
     const parts = [];
-    
+
     if (userData.first_name) {
       parts.push(userData.first_name);
     }
@@ -157,38 +171,45 @@ export class TelegramService {
     if (userData.username) {
       parts.push(`(@${userData.username})`);
     }
-    
-    return parts.length > 0 ? parts.join(' ') : `Telegram User ${userData.telegram_user_id}`;
+
+    return parts.length > 0
+      ? parts.join(" ")
+      : `Telegram User ${userData.telegram_user_id}`;
   }
 
   // Обработка стандартного Telegram webhook
   async handleWebhook(update: TelegramUpdateDto): Promise<void> {
-    const message = update.message || update.edited_message || update.callback_query;
-    
+    const message =
+      update.message || update.edited_message || update.callback_query;
+
     if (!message) {
-      console.log('No message in update:', update);
+      console.log("No message in update:", update);
       return;
     }
 
     const user = message.from;
     if (!user) {
-      console.log('No user in message:', message);
+      console.log("No user in message:", message);
       return;
     }
 
     // Здесь можно добавить логику обработки разных типов сообщений
-    console.log('Received message from user:', user.id, 'text:', message.text);
+    console.log("Received message from user:", user.id, "text:", message.text);
 
     // Пример обработки команды /start
-    if (message.text === '/start') {
-      console.log('User started bot:', user.id);
+    if (message.text === "/start") {
+      console.log("User started bot:", user.id);
       // Здесь можно отправить приветственное сообщение
       return;
     }
 
     // Пример обработки контакта
     if (message.contact) {
-      console.log('User shared contact:', user.id, message.contact.phone_number);
+      console.log(
+        "User shared contact:",
+        user.id,
+        message.contact.phone_number,
+      );
       // Здесь можно сохранить контакт пользователя
       return;
     }
@@ -198,15 +219,19 @@ export class TelegramService {
   }
 
   // Вспомогательный метод для преобразования Telegram Update в CreateTelegramOrderDto
-  convertUpdateToOrderDto(update: TelegramUpdateDto, items: any[]): CreateTelegramOrderDto | null {
-    const message = update.message || update.edited_message || update.callback_query;
-    
+  convertUpdateToOrderDto(
+    update: TelegramUpdateDto,
+    items: any[],
+  ): CreateTelegramOrderDto | null {
+    const message =
+      update.message || update.edited_message || update.callback_query;
+
     if (!message || !message.from) {
       return null;
     }
 
     const user = message.from;
-    
+
     return {
       user: {
         telegram_user_id: user.id.toString(),

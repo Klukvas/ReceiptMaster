@@ -1,5 +1,10 @@
-import { IsOptional, IsString, IsNumber, IsObject, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 
 export class TelegramUserDto {
   @IsNumber()

@@ -16,6 +16,15 @@ interface OrderItem {
   qty: number;
 }
 
+// Функция для безопасного извлечения сообщения об ошибке
+const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    return response?.data?.message || defaultMessage;
+  }
+  return defaultMessage;
+};
+
 export const OrderForm = ({ onClose }: OrderFormProps) => {
   const [recipientId, setRecipientId] = useState('');
   const [items, setItems] = useState<OrderItem[]>([{ productId: '', qty: 1 }]);
@@ -39,8 +48,8 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       onClose();
     },
-    onError: (error: any) => {
-      setBackendError(error?.response?.data?.message || 'Ошибка при создании заказа');
+    onError: (error: unknown) => {
+      setBackendError(getErrorMessage(error, 'Ошибка при создании заказа'));
     },
   });
 

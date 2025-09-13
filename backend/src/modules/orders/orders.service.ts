@@ -65,11 +65,11 @@ export class OrdersService {
 
       for (const itemDto of createOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
-        
+
         // Check if product has enough quantity
         if (product.quantity < itemDto.qty) {
           throw new BadRequestException(
-            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
           );
         }
 
@@ -84,7 +84,7 @@ export class OrdersService {
         currency: currency,
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
-        created_by: 'manually',
+        created_by: "manually",
       });
 
       const savedOrder = await manager.save(Order, order);
@@ -241,11 +241,11 @@ export class OrdersService {
 
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
-          
+
           // Check if product has enough quantity
           if (product.quantity < itemDto.qty) {
             throw new BadRequestException(
-              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`
+              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
             );
           }
 
@@ -296,7 +296,7 @@ export class OrdersService {
 
   async remove(id: string): Promise<void> {
     const order = await this.findOne(id);
-    if(!order) {
+    if (!order) {
       throw new NotFoundException("Order not found");
     }
 
@@ -320,7 +320,7 @@ export class OrdersService {
 
       // Delete receipt files and records first
       await this.receiptsService.deleteReceiptFilesForOrder(id);
-      
+
       // Delete order items
       await manager.delete(OrderItem, { order_id: id });
       // Delete the order itself
@@ -329,13 +329,18 @@ export class OrdersService {
   }
 
   // Dashboard methods
-  async getRevenueByProducts(startDate?: Date, endDate?: Date): Promise<Array<{
-    product_id: string;
-    product_name: string;
-    total_revenue_cents: number;
-    total_quantity: number;
-    currency: string;
-  }>> {
+  async getRevenueByProducts(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<
+    Array<{
+      product_id: string;
+      product_name: string;
+      total_revenue_cents: number;
+      total_quantity: number;
+      currency: string;
+    }>
+  > {
     let query = `
       SELECT 
         oi.product_id,
@@ -348,7 +353,7 @@ export class OrdersService {
       INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -370,23 +375,28 @@ export class OrdersService {
     `;
 
     const results = await this.dataSource.query(query, params);
-    
-    return results.map(row => ({
+
+    return results.map((row) => ({
       product_id: row.product_id,
       product_name: row.product_name,
       total_revenue_cents: parseInt(row.total_revenue_cents),
       total_quantity: parseInt(row.total_quantity),
-      currency: row.currency
+      currency: row.currency,
     }));
   }
 
-  async getRevenueByRecipients(startDate?: Date, endDate?: Date): Promise<Array<{
-    recipient_id: string;
-    recipient_name: string;
-    total_revenue_cents: number;
-    total_orders: number;
-    currency: string;
-  }>> {
+  async getRevenueByRecipients(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<
+    Array<{
+      recipient_id: string;
+      recipient_name: string;
+      total_revenue_cents: number;
+      total_orders: number;
+      currency: string;
+    }>
+  > {
     let query = `
       SELECT 
         o.recipient_id,
@@ -400,7 +410,7 @@ export class OrdersService {
       INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -422,17 +432,20 @@ export class OrdersService {
     `;
 
     const results = await this.dataSource.query(query, params);
-    
-    return results.map(row => ({
+
+    return results.map((row) => ({
       recipient_id: row.recipient_id,
       recipient_name: row.recipient_name,
       total_revenue_cents: parseInt(row.total_revenue_cents),
       total_orders: parseInt(row.total_orders),
-      currency: row.currency
+      currency: row.currency,
     }));
   }
 
-  async getTotalRevenue(startDate?: Date, endDate?: Date): Promise<{
+  async getTotalRevenue(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
     total_revenue_cents: number;
     total_orders: number;
     currency: string;
@@ -447,7 +460,7 @@ export class OrdersService {
       INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -467,22 +480,27 @@ export class OrdersService {
 
     const results = await this.dataSource.query(query, params);
     const result = results[0];
-    
+
     return {
       total_revenue_cents: result ? parseInt(result.total_revenue_cents) : 0,
       total_orders: result ? parseInt(result.total_orders) : 0,
-      currency: result?.currency || 'UAH'
+      currency: result?.currency || "UAH",
     };
   }
 
   // Методы для общего оборота (общая выручка без вычета себестоимости)
-  async getTurnoverByProducts(startDate?: Date, endDate?: Date): Promise<Array<{
-    product_id: string;
-    product_name: string;
-    total_turnover_cents: number;
-    total_quantity: number;
-    currency: string;
-  }>> {
+  async getTurnoverByProducts(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<
+    Array<{
+      product_id: string;
+      product_name: string;
+      total_turnover_cents: number;
+      total_quantity: number;
+      currency: string;
+    }>
+  > {
     let query = `
       SELECT 
         oi.product_id,
@@ -494,7 +512,7 @@ export class OrdersService {
       INNER JOIN orders o ON o.id = oi.order_id
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -516,23 +534,28 @@ export class OrdersService {
     `;
 
     const results = await this.dataSource.query(query, params);
-    
-    return results.map(row => ({
+
+    return results.map((row) => ({
       product_id: row.product_id,
       product_name: row.product_name,
       total_turnover_cents: parseInt(row.total_turnover_cents),
       total_quantity: parseInt(row.total_quantity),
-      currency: row.currency
+      currency: row.currency,
     }));
   }
 
-  async getTurnoverByRecipients(startDate?: Date, endDate?: Date): Promise<Array<{
-    recipient_id: string;
-    recipient_name: string;
-    total_turnover_cents: number;
-    total_orders: number;
-    currency: string;
-  }>> {
+  async getTurnoverByRecipients(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<
+    Array<{
+      recipient_id: string;
+      recipient_name: string;
+      total_turnover_cents: number;
+      total_orders: number;
+      currency: string;
+    }>
+  > {
     let query = `
       SELECT 
         o.recipient_id,
@@ -544,7 +567,7 @@ export class OrdersService {
       INNER JOIN recipients r ON r.id = o.recipient_id
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -566,17 +589,20 @@ export class OrdersService {
     `;
 
     const results = await this.dataSource.query(query, params);
-    
-    return results.map(row => ({
+
+    return results.map((row) => ({
       recipient_id: row.recipient_id,
       recipient_name: row.recipient_name,
       total_turnover_cents: parseInt(row.total_turnover_cents),
       total_orders: parseInt(row.total_orders),
-      currency: row.currency
+      currency: row.currency,
     }));
   }
 
-  async getTotalTurnover(startDate?: Date, endDate?: Date): Promise<{
+  async getTotalTurnover(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<{
     total_turnover_cents: number;
     total_orders: number;
     currency: string;
@@ -589,7 +615,7 @@ export class OrdersService {
       FROM orders o
       WHERE o.status = $1
     `;
-    
+
     const params: any[] = [OrderStatus.CONFIRMED];
     let paramIndex = 2;
 
@@ -609,11 +635,11 @@ export class OrdersService {
 
     const results = await this.dataSource.query(query, params);
     const result = results[0];
-    
+
     return {
       total_turnover_cents: result ? parseInt(result.total_turnover_cents) : 0,
       total_orders: result ? parseInt(result.total_orders) : 0,
-      currency: result?.currency || 'UAH'
+      currency: result?.currency || "UAH",
     };
   }
 }

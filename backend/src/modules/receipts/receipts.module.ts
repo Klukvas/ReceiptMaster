@@ -10,7 +10,11 @@ import { Order } from "../orders/entities/order.entity";
 @Module({
   imports: [TypeOrmModule.forFeature([Receipt, Order])],
   controllers: [ReceiptsController],
-  providers: [ReceiptsService, ReactPdfGeneratorService, CompactPdfGeneratorService],
+  providers: [
+    ReceiptsService,
+    ReactPdfGeneratorService,
+    CompactPdfGeneratorService,
+  ],
   exports: [ReceiptsService],
 })
 export class ReceiptsModule {}
