@@ -41,6 +41,9 @@ export class Order {
   @Column({ type: "varchar", length: 3 })
   currency: string;
 
+  @Column({ type: "varchar", length: 50, default: "manually" })
+  created_by: string;
+
   @CreateDateColumn()
   created_at: Date;
 

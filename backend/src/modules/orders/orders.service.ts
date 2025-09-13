@@ -77,6 +77,7 @@ export class OrdersService {
         currency: currency,
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
+        created_by: 'manually',
       });
 
       const savedOrder = await manager.save(Order, order);

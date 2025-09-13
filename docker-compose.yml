@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: market_postgres_dev
+    environment:
+      - POSTGRES_DB=market_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d market_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - market_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: market_backend_dev
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=market_db
+      - API_PREFIX=api/v1
+      - API_KEY=dev-api-key
+      - JWT_SECRET=dev-jwt-secret
+      - RECEIPT_STORAGE_PATH=/app/receipts
+      - RECEIPT_BASE_URL=http://localhost:3000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - receipts_dev:/app/receipts
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["yarn", "start:dev"]
+    networks:
+      - market_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: market_frontend_dev
+    environment:
+      - VITE_API_URL=http://localhost:3000/api/v1
+      - VITE_API_KEY=dev-api-key
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    command: ["yarn", "dev", "--host", "0.0.0.0"]
+    networks:
+      - market_network
+
+volumes:
+  postgres_data_dev:
+  receipts_dev:
+
+networks:
+  market_network:
+    driver: bridge

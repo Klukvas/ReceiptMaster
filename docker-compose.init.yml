@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  db-init:
+    image: ghcr.io/${GITHUB_REPOSITORY:-klukvas/receiptmaster}/backend:latest
+    container_name: marketflow-db-init
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-market_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "./scripts/init-db.sh"]
+    networks:
+      - marketflow-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: marketflow-postgres-init
+    environment:
+      - POSTGRES_DB=${DB_NAME:-market_db}
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-market_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - marketflow-network
+
+volumes:
+  postgres_data:
+
+networks:
+  marketflow-network:
+    driver: bridge

@@ -21,8 +21,10 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix
-  app.setGlobalPrefix(apiPrefix);
+  // API prefix (исключаем Telegram webhook)
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: ['tg/webhook', 'tg/order']
+  });
 
   // CORS
   app.enableCors({

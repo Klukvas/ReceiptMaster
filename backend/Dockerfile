@@ -31,6 +31,9 @@ COPY . .
 # Создаем директорию для чеков
 RUN mkdir -p /app/receipts
 
+# Делаем скрипты исполняемыми
+RUN chmod +x scripts/*.sh
+
 # Диагностика: проверяем наличие файлов модулей/энтити и видимость для TS
 RUN echo "Listing key files under src/modules:" && \
     find src/modules -maxdepth 3 -type f -name "*.ts" | sort | sed 's/^/ - /'

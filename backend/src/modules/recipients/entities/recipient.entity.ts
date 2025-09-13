@@ -25,6 +25,18 @@ export class Recipient {
   @Column({ type: "text", nullable: true })
   address?: string;
 
+  @Column({ type: "varchar", length: 50, nullable: true, unique: true })
+  telegram_user_id?: string;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  username?: string;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  first_name?: string;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  last_name?: string;
+
   @CreateDateColumn()
   created_at: Date;
 

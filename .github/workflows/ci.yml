@@ -232,6 +232,12 @@ jobs:
             # Pre-pull postgres to reduce timeouts/rate-limit issues
             retry docker pull postgres:15-alpine || true
 
+            # Initialize database with migrations
+            echo "🔄 Initializing database..."
+            retry docker compose -f docker-compose.init.yml up -d postgres
+            retry docker compose -f docker-compose.init.yml run --rm db-init
+            docker compose -f docker-compose.init.yml down
+
             # Pull and restart services with retries
             retry docker compose -f docker-compose.prod.yml pull
             retry docker compose -f docker-compose.prod.yml up -d --remove-orphans
