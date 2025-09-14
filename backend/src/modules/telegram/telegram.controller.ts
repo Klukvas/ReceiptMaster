@@ -38,19 +38,4 @@ export class TelegramController {
       return { ok: false, error: error.message };
     }
   }
-
-  @Get("tg/status")
-  @HttpCode(HttpStatus.OK)
-  async getStatus() {
-    try {
-      return await this.telegramService.getBotStatus();
-    } catch (error) {
-      console.error("Status error:", error);
-      return { 
-        connected: false, 
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
 }
