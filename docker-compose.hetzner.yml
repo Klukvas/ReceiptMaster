@@ -26,6 +26,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: market_db
       API_PREFIX: api/v1
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       RECEIPT_STORAGE_PATH: /app/receipts
       RECEIPT_BASE_URL: http://${DOMAIN}   # или http://<IP>, см. .env ниже
       JWT_SECRET: ${JWT_SECRET}
