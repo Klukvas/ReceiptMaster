@@ -24,6 +24,9 @@ export const envSchema = z.object({
   // Receipt generation
   RECEIPT_STORAGE_PATH: z.string().default("./receipts"),
   RECEIPT_BASE_URL: z.string().default("http://localhost:3000"),
+
+  // Telegram Bot
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

@@ -8,10 +8,13 @@ import {
   InternalServerErrorException,
   Get,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from "@nestjs/common";
 
 import { CreateTelegramOrderDto } from "./dto/telegram-order.dto";
 import { TelegramService } from "./telegram.service";
+import { TelegramUpdate } from "./interfaces/telegram.interface";
 
 @Controller()
 export class TelegramController {
@@ -20,48 +23,22 @@ export class TelegramController {
   // Стандартный Telegram webhook endpoint
   @Post("tg/webhook")
   @HttpCode(HttpStatus.OK)
-  async webhook(@Body() update: any) {
+  @UsePipes(new ValidationPipe({
+    transform: true,
+    whitelist: false, // Allow extra properties
+    forbidNonWhitelisted: false, // Don't reject extra properties
+  }))
+  async webhook(@Body() update: TelegramUpdate) {
     try {
       console.log("Webhook received:", JSON.stringify(update, null, 2));
-      // await this.telegramService.handleWebhook(update);
+      
+      // Обрабатываем webhook через TelegramService
+      await this.telegramService.handleWebhook(update);
+      
       return { ok: true };
     } catch (error) {
       console.error("Webhook error:", error);
       return { ok: false, error: error.message };
-    }
-  }
-
-  // Endpoint для проверки webhook (Telegram требует GET endpoint)
-  @Get("tg/webhook")
-  async getWebhook(@Query("token") _token?: string) {
-    return { status: "ok", message: "Webhook is working" };
-  }
-
-  // Endpoint для ручного создания заказа (для тестирования)
-  @Post("tg/order")
-  @HttpCode(HttpStatus.CREATED)
-  async createOrder(@Body() createTelegramOrderDto: CreateTelegramOrderDto) {
-    try {
-      const order = await this.telegramService.createOrderFromTelegram(
-        createTelegramOrderDto,
-      );
-      return {
-        success: true,
-        data: {
-          orderId: order.id,
-          message: "Заказ успешно создан",
-        },
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException({
-        success: false,
-        message: "Не удалось создать заказ, попробуйте ещё раз",
-        error: error.message,
-      });
     }
   }
 }

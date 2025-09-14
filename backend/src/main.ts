@@ -12,7 +12,7 @@ async function bootstrap() {
   const apiPrefix = configService.get("API_PREFIX");
   const port = configService.get("PORT");
 
-  // Global validation
+  // Global validation (strict for API routes)
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
