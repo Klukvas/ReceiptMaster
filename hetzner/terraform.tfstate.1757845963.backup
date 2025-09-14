@@ -1,7 +1,7 @@
 {
   "version": 4,
   "terraform_version": "1.5.7",
-  "serial": 26,
+  "serial": 19,
   "lineage": "f0cea9c5-2774-ab36-bf34-9ccb82b68307",
   "outputs": {
     "app_server_ip": {
@@ -60,9 +60,9 @@
           "schema_version": 0,
           "attributes": {
             "apply_to": [],
-            "id": "2421757",
+            "id": "2401491",
             "labels": {},
-            "name": "production-market-app-fw-v2",
+            "name": "production-market-app-fw",
             "rule": [
               {
                 "description": "",
@@ -120,68 +120,20 @@
         {
           "schema_version": 0,
           "attributes": {
-            "firewall_id": 2421757,
-            "id": "2421757",
-            "label_selectors": null,
+            "firewall_id": 2401491,
+            "id": "2401491",
+            "label_selectors": [],
             "server_ids": [
-              108706529
+              108075036
             ]
           },
           "sensitive_attributes": [],
           "private": "bnVsbA==",
           "dependencies": [
+            "data.hcloud_ssh_keys.all",
             "hcloud_firewall.app",
             "hcloud_server.app"
           ]
-        }
-      ]
-    },
-    {
-      "mode": "managed",
-      "type": "hcloud_server",
-      "name": "app",
-      "provider": "provider[\"registry.terraform.io/hetznercloud/hcloud\"]",
-      "instances": [
-        {
-          "schema_version": 0,
-          "attributes": {
-            "allow_deprecated_images": false,
-            "backup_window": "",
-            "backups": false,
-            "datacenter": "nbg1-dc3",
-            "delete_protection": false,
-            "firewall_ids": [],
-            "id": "108706529",
-            "ignore_remote_firewall_ids": false,
-            "image": "ubuntu-22.04",
-            "ipv4_address": "116.203.176.71",
-            "ipv6_address": "2a01:4f8:1c1a:e3ac::1",
-            "ipv6_network": "2a01:4f8:1c1a:e3ac::/64",
-            "iso": null,
-            "keep_disk": false,
-            "labels": {
-              "environment": "production",
-              "role": "app"
-            },
-            "location": "nbg1",
-            "name": "production-market-app",
-            "network": [],
-            "placement_group_id": 0,
-            "primary_disk_size": 40,
-            "public_net": [],
-            "rebuild_protection": false,
-            "rescue": null,
-            "server_type": "cx22",
-            "shutdown_before_deletion": false,
-            "ssh_keys": [
-              "101552291"
-            ],
-            "status": "running",
-            "timeouts": null,
-            "user_data": null
-          },
-          "sensitive_attributes": [],
-          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo1NDAwMDAwMDAwMDAwfX0="
         }
       ]
     }

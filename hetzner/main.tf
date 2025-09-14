@@ -50,6 +50,12 @@ variable "api_key" {
   sensitive   = true
 }
 
+variable "telegram_bot_token" {
+  description = "Telegram bot token"
+  type        = string
+  sensitive   = true
+}
+
 # SSH Key (you need to create this in Hetzner Cloud console first)
 data "hcloud_ssh_keys" "all" {
 }
@@ -60,7 +66,7 @@ resource "hcloud_server" "app" {
   image       = "ubuntu-22.04"
   server_type = "cx22"  # 2 vCPU, 4GB RAM, 40GB SSD
   location    = var.location
-  ssh_keys    = data.hcloud_ssh_keys.all.ssh_keys[*].id
+  ssh_keys    = ["101552291"]  # Только существующий ключ на сервере
 
   labels = {
     environment = var.environment
@@ -73,7 +79,7 @@ resource "hcloud_server" "app" {
 
 # Firewall for app server
 resource "hcloud_firewall" "app" {
-  name = "${var.environment}-market-app-fw"
+  name = "${var.environment}-market-app-fw-v2"
 
   rule {
     direction = "in"
