@@ -13,11 +13,11 @@ export interface UserCart {
 }
 
 export enum UserState {
-  IDLE = 'idle',
-  SELECTING_PRODUCT = 'selecting_product',
-  ENTERING_QUANTITY = 'entering_quantity',
-  REVIEWING_ORDER = 'reviewing_order',
-  CONFIRMING_ORDER = 'confirming_order'
+  IDLE = "idle",
+  SELECTING_PRODUCT = "selecting_product",
+  ENTERING_QUANTITY = "entering_quantity",
+  REVIEWING_ORDER = "reviewing_order",
+  CONFIRMING_ORDER = "confirming_order",
 }
 
 export interface UserSession {
