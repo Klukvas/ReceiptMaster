@@ -139,7 +139,7 @@ const CompactReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyNa
                 marginBottom: 8 
               }}
             >
-              ФІКСАЛЬНИЙ ЧЕК
+              Видаткова накладна
             </Text>
             <Text 
               style={{ 
