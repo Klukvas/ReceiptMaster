@@ -28,10 +28,55 @@ This document describes the required GitHub Secrets for the new two-server deplo
 ### Frontend Configuration
 - `VITE_API_URL` - Frontend API URL (e.g., `http://116.203.176.71:3000/api/v1`)
 - `VITE_API_KEY` - Frontend API key
+- `FRONTEND_API_URL` - Frontend API URL for Docker build (e.g., `http://116.203.176.71:3000/api/v1`)
+- `FRONTEND_API_KEY` - Frontend API key for Docker build
 
 ### Container Registry
-- `GHCR_TOKEN` - GitHub Container Registry token
-- `GHCR_USERNAME` - GitHub Container Registry username
+- `DOCKERHUB_TOKEN` - Docker Hub access token
+- `DOCKERHUB_USERNAME` - Docker Hub username
+
+## Setting Up GitHub Secrets
+
+To set up all required secrets, run the following commands in your project directory:
+
+```bash
+# Server Configuration
+gh secret set APP_HOST --body "116.203.176.71"
+gh secret set DB_HOST --body "91.98.172.0"
+gh secret set DB_PRIVATE_IP --body "10.0.1.20"
+gh secret set SSH_USER --body "root"
+gh secret set SSH_KEY --body "$(cat ~/.ssh/id_rsa)"
+
+# Database Configuration
+gh secret set DB_NAME --body "market_db"
+gh secret set DB_USERNAME --body "postgres"
+gh secret set DB_PASSWORD --body "your-secure-password"
+gh secret set DB_PORT --body "5432"
+gh secret set PGADMIN_EMAIL --body "admin@market.com"
+gh secret set PGADMIN_PASSWORD --body "your-pgadmin-password"
+
+# Application Configuration
+gh secret set API_KEY --body "your-secure-api-key"
+gh secret set JWT_SECRET --body "your-super-secret-jwt-key-that-is-at-least-32-characters-long"
+gh secret set TELEGRAM_BOT_TOKEN --body "your-telegram-bot-token"
+gh secret set RECEIPT_BASE_URL --body "http://116.203.176.71:3000"
+
+# Frontend Configuration
+gh secret set VITE_API_URL --body "http://116.203.176.71:3000/api/v1"
+gh secret set VITE_API_KEY --body "your-secure-api-key"
+gh secret set FRONTEND_API_URL --body "http://116.203.176.71:3000/api/v1"
+gh secret set FRONTEND_API_KEY --body "your-secure-api-key"
+
+# Docker Hub
+gh secret set DOCKERHUB_TOKEN --body "your-dockerhub-token"
+gh secret set DOCKERHUB_USERNAME --body "your-dockerhub-username"
+```
+
+**Important Notes:**
+- Replace placeholder values with your actual secrets
+- JWT_SECRET must be at least 32 characters long
+- Use strong, unique passwords for all secrets
+- Keep your SSH private key secure
 
 ## Deployment Process
 
@@ -106,12 +151,14 @@ Internet
 
 ### Manual Deployment
 
-If automated deployment fails, you can deploy manually:
+If automated deployment fails, you can deploy manually using GitHub Actions:
+
+1. **Deploy Database**: Go to Actions → "Deploy Database Server" → "Run workflow"
+2. **Deploy Application**: Push to `main` branch or manually trigger the CI workflow
+
+Alternatively, you can deploy locally:
 
 ```bash
-# Deploy database
-./scripts/deploy-db.sh <DB_SERVER_IP>
-
-# Deploy application
-DB_HOST=<DB_PRIVATE_IP> ./scripts/deploy-app.sh <APP_SERVER_IP>
+# Deploy application locally
+docker compose -f docker-compose.application.yml up -d
 ```
