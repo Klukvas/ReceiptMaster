@@ -98,8 +98,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend
+            klukvas/receiptmaster-frontend
+            klukvas/receiptmaster-backend
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -116,8 +116,8 @@ jobs:
             VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
             VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:latest
+            klukvas/receiptmaster-frontend:${{ github.sha }}
+            klukvas/receiptmaster-frontend:latest
           labels: |
             org.opencontainers.image.title=MarketFlow Frontend
             org.opencontainers.image.description=React frontend for MarketFlow trading service
@@ -132,8 +132,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend:${{ github.sha }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend:latest
+            klukvas/receiptmaster-backend:${{ github.sha }}
+            klukvas/receiptmaster-backend:latest
           labels: |
             org.opencontainers.image.title=MarketFlow Backend
             org.opencontainers.image.description=NestJS backend for MarketFlow trading service

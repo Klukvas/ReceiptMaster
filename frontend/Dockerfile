@@ -1,5 +1,5 @@
 # Multi-stage build
-FROM --platform=linux/amd64 node:20-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -16,8 +16,6 @@ RUN npm install
 COPY . .
 
 # Передаём переменные окружения для Vite во время сборки
-ARG VITE_API_URL
-ARG VITE_API_KEY
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_API_KEY=${VITE_API_KEY}
 
@@ -25,7 +23,7 @@ ENV VITE_API_KEY=${VITE_API_KEY}
 RUN vite build
 
 # Production stage with nginx
-FROM --platform=linux/amd64 nginx:alpine
+FROM nginx:alpine
 
 # Копируем собранное приложение
 COPY --from=builder /app/dist /usr/share/nginx/html
