@@ -29,12 +29,24 @@ RUN vite build
 # Production stage with nginx
 FROM nginx:alpine
 
+# Устанавливаем OpenSSL для генерации сертификатов
+RUN apk add --no-cache openssl
+
+# Создаем директории для SSL
+RUN mkdir -p /etc/ssl/certs /etc/ssl/private
+
+# Генерируем самоподписанный SSL сертификат
+RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/nginx-selfsigned.key \
+    -out /etc/ssl/certs/nginx-selfsigned.crt \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+
 # Копируем собранное приложение
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Копируем конфигурацию nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+EXPOSE 80 443
 
 CMD ["nginx", "-g", "daemon off;"]
