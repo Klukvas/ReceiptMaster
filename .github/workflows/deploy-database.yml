@@ -1,0 +1,114 @@
+name: "Deploy Database Server"
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: 'Force recreate database (will lose data!)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Database Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DB_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            export DOCKER_CLIENT_TIMEOUT=${DOCKER_CLIENT_TIMEOUT:-600}
+            export COMPOSE_HTTP_TIMEOUT=${COMPOSE_HTTP_TIMEOUT:-600}
+
+            # Setup database directory
+            sudo mkdir -p /opt/market && sudo chown $USER:$USER /opt/market
+            cd /opt/market
+            if [ ! -d database ]; then
+              echo "🗄️ Database directory not found, cloning repository..."
+              git clone https://github.com/${{ github.repository }}.git database
+            fi
+            cd database
+            git fetch --all -q
+            git reset --hard origin/main -q
+
+            # Write database env
+            cat > .env << 'EOF'
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            PGADMIN_EMAIL=${{ secrets.PGADMIN_EMAIL }}
+            PGADMIN_PASSWORD=${{ secrets.PGADMIN_PASSWORD }}
+            EOF
+
+            # Login to Docker Hub
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Retry helper
+            retry() {
+              local n=0
+              local max=5
+              local delay=10
+              until "$@"; do
+                n=$((n+1))
+                if [ $n -ge $max ]; then
+                  echo "Command failed after $n attempts: $*" >&2
+                  return 1
+                fi
+                echo "Retry $n/$max..."
+                sleep $delay
+              done
+            }
+
+            # Handle force recreate
+            if [ "${{ github.event.inputs.force_recreate }}" == "true" ]; then
+              echo "⚠️ Force recreate enabled - this will destroy existing data!"
+              docker compose -f docker-compose.database.yml down -v
+              docker volume prune -f
+            fi
+
+            # Deploy database
+            echo "🗄️ Deploying database server..."
+            retry docker compose -f docker-compose.database.yml pull
+            retry docker compose -f docker-compose.database.yml up -d --remove-orphans
+
+            # Health check
+            echo "⏳ Waiting for database to be ready..."
+            sleep 30
+            
+            # Check database status
+            if docker compose -f docker-compose.database.yml ps | grep -q "Up"; then
+              echo "✅ Database deployed successfully!"
+            else
+              echo "❌ Database deployment failed!"
+              docker compose -f docker-compose.database.yml logs
+              exit 1
+            fi
+            
+            docker compose -f docker-compose.database.yml ps
+
+      - name: Generate deployment summary
+        run: |
+          echo "## 🗄️ Database Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PostgreSQL | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "| PgAdmin | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Access Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **PostgreSQL**: \`${{ secrets.DB_HOST }}:5432\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PgAdmin**: http://${{ secrets.DB_HOST }}:5050" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.force_recreate }}" == "true" ]; then
+            echo "⚠️ **Warning**: Database was recreated and all data was lost!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Database deployment completed without data loss" >> $GITHUB_STEP_SUMMARY
+          fi

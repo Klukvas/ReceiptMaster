@@ -87,20 +87,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/frontend
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/backend
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -117,8 +116,8 @@ jobs:
             VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
             VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/frontend:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:latest
           labels: |
             org.opencontainers.image.title=MarketFlow Frontend
             org.opencontainers.image.description=React frontend for MarketFlow trading service
@@ -133,8 +132,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/backend:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}/backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-backend:latest
           labels: |
             org.opencontainers.image.title=MarketFlow Backend
             org.opencontainers.image.description=NestJS backend for MarketFlow trading service
@@ -183,10 +182,10 @@ jobs:
     needs: [build-and-deploy]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Deploy over SSH
+      - name: Deploy Application Server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HOST }}
+          host: ${{ secrets.APP_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
@@ -194,6 +193,7 @@ jobs:
             export DOCKER_CLIENT_TIMEOUT=${DOCKER_CLIENT_TIMEOUT:-600}
             export COMPOSE_HTTP_TIMEOUT=${COMPOSE_HTTP_TIMEOUT:-600}
 
+            # Setup application directory
             sudo mkdir -p /opt/market && sudo chown $USER:$USER /opt/market
             cd /opt/market
             if [ ! -d market ]; then
@@ -203,15 +203,31 @@ jobs:
             git fetch --all -q
             git reset --hard origin/main -q
 
-            # Write env
-            echo "${{ secrets.ENV_PROD }}" > .env
-            echo "GITHUB_REPOSITORY=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> .env
+            # Write application env
+            cat > .env << 'EOF'
+            # Database configuration
+            DB_HOST=${{ secrets.DB_PRIVATE_IP }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
 
-            # Logins
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-              echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-            fi
+            # Application configuration
+            API_KEY=${{ secrets.API_KEY }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            RECEIPT_BASE_URL=${{ secrets.RECEIPT_BASE_URL }}
+
+            # Frontend configuration
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_API_KEY=${{ secrets.VITE_API_KEY }}
+
+            # Docker Hub configuration
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            EOF
+
+            # Login to Docker Hub
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
             # Retry helper
             retry() {
@@ -229,20 +245,14 @@ jobs:
               done
             }
 
-            # Pre-pull postgres to reduce timeouts/rate-limit issues
-            retry docker pull postgres:15-alpine || true
+            # Deploy application
+            echo "🚀 Deploying application server..."
+            retry docker compose -f docker-compose.application.yml pull
+            retry docker compose -f docker-compose.application.yml up -d --remove-orphans
 
-            # Initialize database with migrations
-            echo "🔄 Initializing database..."
-            retry docker compose -f docker-compose.init.yml up -d postgres
-            retry docker compose -f docker-compose.init.yml run --rm db-init
-            docker compose -f docker-compose.init.yml down
-
-            # Pull and restart services with retries
-            retry docker compose -f docker-compose.prod.yml pull
-            retry docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
-            # Health & status
+            # Health check
+            echo "⏳ Waiting for application to be ready..."
+            sleep 30
             curl -fsS http://localhost:3000/api/v1/health || true
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.application.yml ps
 

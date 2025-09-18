@@ -60,6 +60,19 @@ variable "telegram_bot_token" {
 data "hcloud_ssh_keys" "all" {
 }
 
+# Private network for servers communication
+resource "hcloud_network" "market_network" {
+  name     = "${var.environment}-market-network"
+  ip_range = "10.0.0.0/16"
+}
+
+resource "hcloud_network_subnet" "market_subnet" {
+  network_id   = hcloud_network.market_network.id
+  type         = "cloud"
+  network_zone = "eu-central"
+  ip_range     = "10.0.1.0/24"
+}
+
 # Main server for application
 resource "hcloud_server" "app" {
   name        = "${var.environment}-market-app"
@@ -74,12 +87,39 @@ resource "hcloud_server" "app" {
   }
 }
 
+# Database server
+resource "hcloud_server" "db" {
+  name        = "${var.environment}-market-db"
+  image       = "ubuntu-22.04"
+  server_type = "cx22"  # 2 vCPU, 4GB RAM, 40GB SSD (оптимизированная конфигурация)
+  location    = var.location
+  ssh_keys    = ["101552291"]
+
+  labels = {
+    environment = var.environment
+    role        = "database"
+  }
+}
+
+# Attach servers to private network
+resource "hcloud_server_network" "app_network" {
+  server_id  = hcloud_server.app.id
+  network_id = hcloud_network.market_network.id
+  ip         = "10.0.1.10"
+}
+
+resource "hcloud_server_network" "db_network" {
+  server_id  = hcloud_server.db.id
+  network_id = hcloud_network.market_network.id
+  ip         = "10.0.1.20"
+}
+
 
 # Note: Using server's default IP instead of floating IP for simplicity
 
 # Firewall for app server
 resource "hcloud_firewall" "app" {
-  name = "${var.environment}-market-app-fw-v2"
+  name = "${var.environment}-market-app-fw-v3"
 
   rule {
     direction = "in"
@@ -110,10 +150,34 @@ resource "hcloud_firewall" "app" {
   }
 }
 
-# Attach firewall to app server
+# Firewall for database server (only SSH and PostgreSQL from app server)
+resource "hcloud_firewall" "db" {
+  name = "${var.environment}-market-db-fw"
+
+  rule {
+    direction = "in"
+    port      = "22"
+    protocol  = "tcp"
+    source_ips = ["0.0.0.0/0"]
+  }
+
+  rule {
+    direction = "in"
+    port      = "5432"
+    protocol  = "tcp"
+    source_ips = ["10.0.1.0/24"]  # Only from private network
+  }
+}
+
+# Attach firewalls to servers
 resource "hcloud_firewall_attachment" "app" {
   firewall_id = hcloud_firewall.app.id
   server_ids  = [hcloud_server.app.id]
+}
+
+resource "hcloud_firewall_attachment" "db" {
+  firewall_id = hcloud_firewall.db.id
+  server_ids  = [hcloud_server.db.id]
 }
 
 
@@ -125,10 +189,30 @@ output "app_server_ip" {
 
 output "app_server_private_ip" {
   description = "Private IP of the app server"
-  value       = hcloud_server.app.ipv4_address
+  value       = hcloud_server_network.app_network.ip
 }
 
 output "app_server_name" {
   description = "Name of the app server"
   value       = hcloud_server.app.name
+}
+
+output "db_server_ip" {
+  description = "Public IP of the database server"
+  value       = hcloud_server.db.ipv4_address
+}
+
+output "db_server_private_ip" {
+  description = "Private IP of the database server"
+  value       = hcloud_server_network.db_network.ip
+}
+
+output "db_server_name" {
+  description = "Name of the database server"
+  value       = hcloud_server.db.name
+}
+
+output "network_id" {
+  description = "ID of the private network"
+  value       = hcloud_network.market_network.id
 }

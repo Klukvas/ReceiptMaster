@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-frontend:latest
+    container_name: marketflow-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api/v1}
+      - VITE_API_KEY=${VITE_API_KEY}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:latest
+    container_name: marketflow-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=${DB_HOST:-10.0.1.20}  # Private IP of DB server
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-market_db}
+      - API_PREFIX=api/v1
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - RECEIPT_STORAGE_PATH=/app/receipts
+      - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
+    volumes:
+      - receipts:/app/receipts
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+volumes:
+  receipts:
+
+networks:
+  marketflow-network:
+    driver: bridge
