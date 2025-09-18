@@ -119,7 +119,7 @@ export interface TotalRevenue {
   currency: string;
 }
 
-// Turnover types (общий оборот - без вычета себестоимости)
+// Turnover types (total turnover - without cost deduction)
 export interface TurnoverByProduct {
   product_id: string;
   product_name: string;
@@ -232,7 +232,7 @@ export const ordersApi = {
 };
 
 export const dashboardApi = {
-  // Revenue methods (доход - с вычетом себестоимости)
+  // Revenue methods (income - with cost deduction)
   getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<RevenueByProduct[]>('/orders/dashboard/revenue-by-products', { params }),
   
@@ -242,7 +242,7 @@ export const dashboardApi = {
   getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TotalRevenue>('/orders/dashboard/total-revenue', { params }),
 
-  // Turnover methods (оборот - без вычета себестоимости)
+  // Turnover methods (turnover - without cost deduction)
   getTurnoverByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TurnoverByProduct[]>('/orders/dashboard/turnover-by-products', { params }),
   

@@ -62,7 +62,7 @@ export const ProductsPage = () => {
     setEditingProduct(null);
   };
 
-  // Автоматически скрываем уведомления через 3 секунды
+  // Automatically hide notifications after 3 seconds
   React.useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 3000);
@@ -80,7 +80,7 @@ export const ProductsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Уведомления */}
+      {/* Notifications */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
           notification.type === 'success' 

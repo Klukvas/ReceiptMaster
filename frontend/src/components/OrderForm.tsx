@@ -16,7 +16,7 @@ interface OrderItem {
   qty: number;
 }
 
-// Функция для безопасного извлечения сообщения об ошибке
+// Function for safe error message extraction
 const getErrorMessage = (error: unknown, defaultMessage: string): string => {
   if (error && typeof error === 'object' && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response;
@@ -72,18 +72,18 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    // Валидация получателя
+    // Recipient validation
     if (!recipientId) {
       newErrors.recipient = 'Выберите получателя';
     }
     
-    // Валидация товаров
+    // Products validation
     const validItems = items.filter(item => item.productId && item.qty > 0);
     if (validItems.length === 0) {
       newErrors.items = 'Добавьте хотя бы один товар';
     }
     
-    // Валидация количества для каждого товара
+    // Quantity validation for each product
     validItems.forEach((item, index) => {
       const product = getProduct(item.productId);
       if (product && item.qty > product.quantity) {
@@ -98,11 +98,11 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Очищаем предыдущие ошибки
+    // Clear previous errors
     setErrors({});
     setBackendError('');
     
-    // Валидация формы
+    // Form validation
     if (!validateForm()) {
       return;
     }
@@ -140,7 +140,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Backend ошибки */}
+          {/* Backend errors */}
           {backendError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center">
@@ -204,7 +204,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                           value={item.productId}
                           onChange={(value) => {
                             updateItem(index, 'productId', value);
-                            // Очищаем ошибку количества при смене товара
+                            // Clear quantity error when changing product
                             if (errors[`item-${index}-qty`]) {
                               setErrors({ ...errors, [`item-${index}-qty`]: '' });
                             }
@@ -222,7 +222,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                           value={item.qty}
                           onChange={(e) => {
                             updateItem(index, 'qty', parseInt(e.target.value) || 1);
-                            // Очищаем ошибку при изменении количества
+                            // Clear error when changing quantity
                             if (errors[`item-${index}-qty`]) {
                               setErrors({ ...errors, [`item-${index}-qty`]: '' });
                             }

@@ -40,7 +40,7 @@ export class TelegramService {
       timeout: 5000,
     });
 
-    // простейший ретрай на 429 (rate limit)
+    // Simple retry on 429 (rate limit)
     this.http.interceptors.response.use(undefined, async (err) => {
       const status = err.response?.status;
       if (status === 429) {
@@ -51,11 +51,11 @@ export class TelegramService {
       throw err;
     });
 
-    // создадим таблицу идемпотентности для update_id, если её нет (Postgres)
+    // Create idempotency table for update_id if it doesn't exist (Postgres)
     void this.ensureUpdatesTable();
   }
 
-  /** Идемпотентность: таблица обработанных update_id */
+  /** Idempotency: table of processed update_id */
   private async ensureUpdatesTable() {
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tg_updates (
@@ -65,17 +65,17 @@ export class TelegramService {
     `);
   }
 
-  /** Вернёт true, если этот update уже обрабатывали */
+  /** Returns true if this update was already processed */
   private async isUpdateProcessed(updateId: number): Promise<boolean> {
     const res = await this.dataSource.query(
       "INSERT INTO tg_updates(processed_update_id) VALUES ($1) ON CONFLICT DO NOTHING",
       [updateId],
     );
-    // если вставка не произошла (конфликт), значит уже обработан
+    // if insertion didn't happen (conflict), it means already processed
     return res.rowCount === 0;
   }
 
-  /** Ответы в Telegram Bot API — с проверкой ok */
+  /** Telegram Bot API responses — with ok check */
   private async tgPost<T = any>(path: string, payload: any): Promise<T> {
     const { data } = await this.http.post(path, payload);
     if (!data?.ok) {
@@ -145,10 +145,10 @@ export class TelegramService {
     });
   }
 
-  /** Главный обработчик апдейтов (не бросает исключений наружу) */
+  /** Main update handler (doesn't throw exceptions outside) */
   async handleWebhook(update: TelegramUpdate) {
     try {
-      // идемпотентность
+      // idempotency
       if (update?.update_id == null) return;
       const already = await this.isUpdateProcessed(update.update_id);
       if (already) return;
@@ -161,9 +161,9 @@ export class TelegramService {
         await this.handleCallbackQuery(update.callback_query);
         return;
       }
-      // прочие типы апдейтов игнорируем для MVP
+      // other update types ignored for MVP
     } catch (e) {
-      // НЕ кидаем наружу: контроллер уже вернул 200
+      // DON'T throw outside: controller already returned 200
       console.error("handleWebhook error", e);
     }
   }
@@ -179,10 +179,10 @@ export class TelegramService {
       `Handling message from ${user?.first_name} (${user?.id}): "${text}"`,
     );
 
-    // Получаем или создаем сессию пользователя
+    // Get or create user session
     const session = this.getOrCreateUserSession(user.id);
 
-    // Обрабатываем команды
+    // Handle commands
     if (text === "/start") {
       await this.handleStartCommand(chatId, user, session);
     } else if (text === "/help") {
@@ -198,7 +198,7 @@ export class TelegramService {
     } else if (text === "/update") {
       await this.handleUpdateCartCommand(chatId, session);
     } else if (text) {
-      // Обрабатываем в зависимости от состояния пользователя
+      // Handle based on user state
       await this.handleTextByState(chatId, text, session);
     }
   }
@@ -214,37 +214,37 @@ export class TelegramService {
       const session = this.getOrCreateUserSession(userId);
 
       if (data.startsWith("add_product_")) {
-        // Добавляем товар в корзину
+        // Add product to cart
         const productId = data.replace("add_product_", "");
         await this.handleAddProduct(chatId, productId, cq);
       } else if (data === "create_order") {
-        // Создаем заказ
+        // Create order
         await this.handleCreateOrder(chatId, cq);
       } else if (data === "confirm_order") {
-        // Подтверждаем заказ
+        // Confirm order
         await this.handleConfirmOrder(chatId, cq, session);
       } else if (data === "view_cart") {
-        // Показываем корзину
+        // Show cart
         await this.answerCallbackQuery(cq.id, { text: "Показываем корзину" });
         await this.showCart(chatId, session);
       } else if (data === "clear_cart") {
-        // Очищаем корзину
+        // Clear cart
         await this.handleClearCommand(chatId, session);
         await this.answerCallbackQuery(cq.id, { text: "Корзина очищена" });
       } else if (data === "back_to_products") {
-        // Возвращаемся к выбору товаров
+        // Return to product selection
         await this.updateUserSession(userId, {
           state: UserState.SELECTING_PRODUCT,
         });
         await this.answerCallbackQuery(cq.id, { text: "Выбираем товары" });
         await this.sendProductsList(chatId);
       } else if (data.startsWith("ADD_PRODUCT:")) {
-        // Старый формат для совместимости
+        // Old format for compatibility
         const sku = data.split(":")[1];
         await this.sendMessage(chatId, `Добавил товар: ${sku}`);
         await this.answerCallbackQuery(cq.id, { text: "Товар добавлен" });
       } else if (data === "CONFIRM_ORDER") {
-        // Старый формат для совместимости
+        // Old format for compatibility
         await this.sendMessage(chatId, "Заказ подтверждён. Готовим чек…");
         await this.answerCallbackQuery(cq.id, { text: "Заказ подтвержден" });
       } else {
@@ -261,7 +261,7 @@ export class TelegramService {
     }
   }
 
-  /** Преобразование апдейта в DTO заказа (используй когда формируешь заказ) */
+  /** Convert update to order DTO (use when forming order) */
   convertUpdateToOrderDto(
     update: TelegramUpdate,
     items: Array<{ productId: string; qty: number }>,
@@ -290,13 +290,13 @@ export class TelegramService {
     };
   }
 
-  /** Создание заказа из Telegram с транзакцией и блокировкой */
+  /** Create order from Telegram with transaction and locking */
   async createOrderFromTelegram(dto: CreateTelegramOrderDto): Promise<Order> {
     return this.dataSource.transaction(async (manager: EntityManager) => {
-      // 1) Получатель (find-or-create) по telegram_user_id
+      // 1) Recipient (find-or-create) by telegram_user_id
       const recipient = await this.findOrCreateRecipient(manager, dto.user);
 
-      // 2) Загрузка товаров + пессимистическая блокировка, чтобы избежать гонок складских остатков
+      // 2) Load products + pessimistic locking to avoid inventory race conditions
       const productIds = dto.items.map((i) => i.productId);
       const products = await manager.getRepository(Product).find({
         where: { id: In(productIds) },
@@ -306,7 +306,7 @@ export class TelegramService {
         throw new NotFoundException("Один или несколько товаров не найдены");
       }
 
-      // 3) Валидации: валюта единая, наличие на складе
+      // 3) Validations: single currency, stock availability
       const currencies = new Set(products.map((p) => p.currency));
       if (currencies.size !== 1) {
         throw new BadRequestException(
@@ -328,18 +328,18 @@ export class TelegramService {
         subtotalCents += p.sale_price_cents * it.qty;
       }
 
-      // 4) Создаём заказ (MVP: сразу CONFIRMED; при оплате — делай RESERVED/WAITING_PAYMENT)
+      // 4) Create order (MVP: immediately CONFIRMED; for payment — make RESERVED/WAITING_PAYMENT)
       const order = manager.getRepository(Order).create({
         recipient_id: recipient.id,
-        status: OrderStatus.CONFIRMED, // или DRAFT → потом CONFIRMED
+        status: OrderStatus.CONFIRMED, // or DRAFT → then CONFIRMED
         currency,
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
-        created_by: "telegram_bot", // зафиксируй enum в модели
+        created_by: "telegram_bot", // fix enum in model
       });
       const savedOrder = await manager.getRepository(Order).save(order);
 
-      // 5) Позиции заказа + списание количества
+      // 5) Order items + quantity deduction
       for (const it of dto.items) {
         const p = byId.get(it.productId)!;
         const lineTotal = p.sale_price_cents * it.qty;
@@ -413,7 +413,7 @@ export class TelegramService {
     return manager.getRepository(Recipient).save(recipient);
   }
 
-  // Методы для работы с сессиями пользователей
+  // Methods for working with user sessions
   private getOrCreateUserSession(userId: number): UserSession {
     if (!this.userSessions.has(userId)) {
       this.userSessions.set(userId, {
@@ -437,7 +437,7 @@ export class TelegramService {
     this.userSessions.set(userId, session);
   }
 
-  // Обработчики команд
+  // Command handlers
   private async handleStartCommand(
     chatId: number,
     user: any,
@@ -522,7 +522,7 @@ export class TelegramService {
       return;
     }
 
-    // Проверяем наличие товаров и обновляем корзину
+    // Check product availability and update cart
     const updatedItems = [];
     const unavailableItems = [];
 
@@ -541,7 +541,7 @@ export class TelegramService {
         continue;
       }
 
-      // Обновляем количество до доступного максимума
+      // Update quantity to available maximum
       const availableQuantity = Math.min(item.quantity, product.quantity);
       if (availableQuantity !== item.quantity) {
         updatedItems.push({
@@ -558,7 +558,7 @@ export class TelegramService {
       }
     }
 
-    // Обновляем корзину
+    // Update cart
     await this.updateUserSession(session.userId, {
       cart: {
         ...session.cart,
@@ -621,7 +621,7 @@ export class TelegramService {
       const userId = callbackQuery.from.id;
       this.getOrCreateUserSession(userId);
 
-      // Получаем информацию о товаре
+      // Get product information
       const product = await this.productsRepo.findOne({
         where: { id: productId },
       });
@@ -634,7 +634,7 @@ export class TelegramService {
         return;
       }
 
-      // Обновляем состояние пользователя
+      // Update user state
       await this.updateUserSession(userId, {
         state: UserState.ENTERING_QUANTITY,
         pendingProductId: productId,
@@ -644,7 +644,7 @@ export class TelegramService {
         text: `Выберите количество для ${product.name}`,
       });
 
-      // Отправляем запрос на ввод количества
+      // Send request for quantity input
       await this.sendMessage(
         chatId,
         `🛒 *${product.name}*\n💰 Цена: ${(product.sale_price_cents / 100).toFixed(2)} грн\n\n` +
@@ -709,7 +709,7 @@ export class TelegramService {
     }
 
     try {
-      // Получаем информацию о товаре
+      // Get product information
       const product = await this.productsRepo.findOne({
         where: { id: session.pendingProductId },
       });
@@ -722,7 +722,7 @@ export class TelegramService {
         return;
       }
 
-      // Проверяем наличие на складе
+      // Check stock availability
       if (product.quantity < quantity) {
         await this.sendMessage(
           chatId,
@@ -731,16 +731,16 @@ export class TelegramService {
         return;
       }
 
-      // Добавляем товар в корзину
+      // Add product to cart
       const existingItemIndex = session.cart.items.findIndex(
         (item) => item.productId === product.id,
       );
 
       if (existingItemIndex >= 0) {
-        // Обновляем существующий товар
+        // Update existing product
         session.cart.items[existingItemIndex].quantity += quantity;
       } else {
-        // Добавляем новый товар
+        // Add new product
         session.cart.items.push({
           productId: product.id,
           name: product.name,
@@ -847,7 +847,7 @@ export class TelegramService {
         return;
       }
 
-      // Проверяем наличие товаров на складе перед созданием заказа
+      // Check product availability before creating order
       const unavailableItems = [];
       for (const item of session.cart.items) {
         const product = await this.productsRepo.findOne({
@@ -874,7 +874,7 @@ export class TelegramService {
         return;
       }
 
-      // Создаем заказ из корзины
+      // Create order from cart
       const orderDto: CreateTelegramOrderDto = {
         user: {
           telegram_user_id: session.userId.toString(),
@@ -888,10 +888,10 @@ export class TelegramService {
         })),
       };
 
-      // Создаем заказ в базе данных
+      // Create order in database
       const order = await this.createOrderFromTelegram(orderDto);
 
-      // Очищаем корзину
+      // Clear cart
       await this.updateUserSession(session.userId, {
         state: UserState.IDLE,
         cart: {
@@ -902,7 +902,7 @@ export class TelegramService {
         },
       });
 
-      // Отправляем подтверждение
+      // Send confirmation
       await this.sendMessage(
         chatId,
         `🎉 *Заказ создан успешно!*\n\n` +
@@ -919,7 +919,7 @@ export class TelegramService {
         "❌ Произошла ошибка при создании заказа. Попробуйте снова.";
 
       if (error instanceof BadRequestException) {
-        // Если это ошибка недостатка товаров, показываем детали
+        // If it's a product shortage error, show details
         errorMessage = `❌ *Ошибка заказа:*\n\n${error.message}\n\n🛒 Проверьте наличие товаров и обновите корзину.`;
       } else if (error.message?.includes("Недостаточно товара")) {
         errorMessage = `❌ *Недостаточно товаров:*\n\n${error.message}\n\n🛒 Обновите корзину командой /cart.`;
@@ -936,7 +936,7 @@ export class TelegramService {
 
   private async sendProductsList(chatId: number) {
     try {
-      // Получаем все товары из базы данных
+      // Get all products from database
       const products = await this.productsRepo.find({
         order: { name: "ASC" },
         where: { quantity: MoreThan(0) },
@@ -947,10 +947,10 @@ export class TelegramService {
         return;
       }
 
-      // Создаем текст с товарами
+      // Create text with products
       let messageText = "🛍️ *Наши товары:*\n\n";
       products.forEach((product) => {
-        const price = (product.sale_price_cents / 100).toFixed(2); // цена в копейках -> гривны
+        const price = (product.sale_price_cents / 100).toFixed(2); // price in kopecks -> hryvnias
         messageText += `*${product.name}*\n`;
         messageText += `💰 ${price} грн`;
         messageText += "\n\n";
@@ -958,19 +958,19 @@ export class TelegramService {
 
       messageText += "💡 Нажмите кнопку ниже для заказа или напишите /order";
 
-      // Создаем inline кнопки для каждого товара
+      // Create inline buttons for each product
       const buttons = products.map((product) => ({
         text: `🛒 ${product.name}`,
         callback_data: `add_product_${product.id}`,
       }));
 
-      // Добавляем кнопку "Оформить заказ"
+      // Add "Create order" button
       buttons.push({
         text: "📝 Оформить заказ",
         callback_data: "create_order",
       });
 
-      // Разбиваем кнопки на ряды (по 2 в ряду)
+      // Split buttons into rows (2 per row)
       const keyboard = [];
       for (let i = 0; i < buttons.length; i += 2) {
         keyboard.push(buttons.slice(i, i + 2));

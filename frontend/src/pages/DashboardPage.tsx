@@ -45,7 +45,7 @@ export const DashboardPage = () => {
         </div>
       </div>
 
-      {/* Фильтры по датам */}
+      {/* Date filters */}
       <Card title="Фильтр по датам">
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1">
@@ -80,7 +80,7 @@ export const DashboardPage = () => {
         </div>
       </Card>
 
-      {/* Табы с контентом */}
+      {/* Content tabs */}
       <Tabs 
         tabs={tabs} 
         activeTab={activeTab} 

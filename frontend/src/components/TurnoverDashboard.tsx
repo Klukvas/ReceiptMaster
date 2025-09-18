@@ -39,7 +39,7 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Общая статистика */}
+      {/* General statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <div className="flex items-center">
@@ -87,7 +87,7 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
         </Card>
       </div>
 
-      {/* Оборот по продуктам */}
+      {/* Turnover by products */}
       <Card title="Оборот по продуктам">
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Загрузка...</div>
@@ -121,7 +121,7 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
         )}
       </Card>
 
-      {/* Оборот по получателям */}
+      {/* Turnover by recipients */}
       <Card title="Оборот по получателям">
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Загрузка...</div>

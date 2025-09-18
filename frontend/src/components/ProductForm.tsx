@@ -11,7 +11,7 @@ interface ProductFormProps {
   onClose: () => void;
 }
 
-// Функция для безопасного извлечения сообщения об ошибке
+// Function for safe error message extraction
 const getErrorMessage = (error: unknown, defaultMessage: string): string => {
   if (error && typeof error === 'object' && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response;
@@ -33,14 +33,14 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
   const queryClient = useQueryClient();
 
-  // Получаем все товары для поиска похожих на фронте
+  // Get all products for similar search on frontend
   const { data: allProducts } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.getAll({ limit: 1000 }),
-    enabled: !product, // Загружаем только при создании нового товара
+    enabled: !product, // Load only when creating new product
   });
 
-  // Поиск похожих товаров на фронте
+  // Search for similar products on frontend
   const similarProducts = useMemo(() => {
     if (!allProducts?.data?.data || formData.name.length < 2) {
       return [];
@@ -51,7 +51,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       .filter((existingProduct) => 
         existingProduct.name.toLowerCase().includes(searchTerm)
       )
-      .slice(0, 10); // Максимум 10 результатов
+      .slice(0, 10); // Maximum 10 results
   }, [allProducts?.data?.data, formData.name]);
 
   useEffect(() => {
@@ -92,24 +92,24 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    // Валидация названия
+    // Name validation
     if (!formData.name.trim()) {
       newErrors.name = 'Название товара обязательно';
     }
     
-    // Валидация цены покупки
+    // Purchase price validation
     const purchasePrice = parseFloat(formData.purchase_price_cents);
     if (isNaN(purchasePrice) || purchasePrice < 0) {
       newErrors.purchase_price_cents = 'Цена покупки должна быть положительным числом';
     }
     
-    // Валидация цены продажи
+    // Sale price validation
     const salePrice = parseFloat(formData.sale_price_cents);
     if (isNaN(salePrice) || salePrice < 0) {
       newErrors.sale_price_cents = 'Цена продажи должна быть положительным числом';
     }
     
-    // Валидация количества
+    // Quantity validation
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity < 0) {
       newErrors.quantity = 'Количество должно быть неотрицательным числом';
@@ -122,11 +122,11 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Очищаем предыдущие ошибки
+    // Clear previous errors
     setErrors({});
     setBackendError('');
     
-    // Валидация формы
+    // Form validation
     if (!validateForm()) {
       return;
     }
@@ -161,7 +161,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Backend ошибки */}
+          {/* Backend errors */}
           {backendError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center">
@@ -183,7 +183,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               error={errors.name}
             />
             
-            {/* Показываем похожие товары только при создании нового товара */}
+            {/* Show similar products only when creating new product */}
             {!product && similarProducts.length > 0 && (
               <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <div className="flex items-center gap-2 mb-2">
