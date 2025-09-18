@@ -37,9 +37,9 @@ This document describes the required GitHub Secrets for the new two-server deplo
 
 ### **Automatic Deployment (CI/CD)**
 - **Trigger**: Push to `main` branch
-- **What deploys**: Only application (frontend + backend)
+- **What deploys**: Application (frontend + backend)
 - **Database**: Assumed to be already running
-- **Workflow**: `ci.yml` → `deploy-application.yml`
+- **Workflow**: `ci.yml`
 
 ### **Manual Database Deployment**
 - **When to use**:
@@ -48,13 +48,6 @@ This document describes the required GitHub Secrets for the new two-server deplo
   - PostgreSQL version updates
   - Recovery after database failure
 - **Workflow**: `deploy-database.yml` (manual trigger)
-
-### **Manual Application Deployment**
-- **When to use**:
-  - Quick app updates without full CI/CD
-  - Testing specific changes
-  - Emergency deployments
-- **Workflow**: `deploy-application.yml` (manual trigger)
 
 ### **Deployment Steps**
 
