@@ -1,4 +1,4 @@
-# 🛒 MarketFlow - Full-Featured Trading Service
+# 🛒 ReceiptMaster - Full-Featured Trading Service
 
 A modern MVP trading service with React frontend and NestJS backend, including product management, order processing, and PDF receipt generation.
 

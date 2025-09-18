@@ -1,7 +1,7 @@
 {
-  "name": "market-service",
+  "name": "receiptmaster",
   "version": "1.0.0",
-  "description": "Полнофункциональный торговый сервис с React фронтендом и NestJS бэкендом",
+  "description": "ReceiptMaster - Full-featured trading service with React frontend and NestJS backend",
   "private": true,
   "workspaces": [
     "backend",

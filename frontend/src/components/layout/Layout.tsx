@@ -33,7 +33,14 @@ export const Layout = ({ children }: LayoutProps) => {
           >
             <Menu className="h-6 w-6" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">Market Service</h1>
+          <div className="flex items-center space-x-2">
+            <img 
+              src="/image.png" 
+              alt="ReceiptMaster Logo" 
+              className="h-6 w-6 object-contain"
+            />
+            <h1 className="text-lg font-bold text-gray-900">ReceiptMaster</h1>
+          </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600 hidden sm:block">
               {user?.firstName} {user?.lastName}
@@ -64,7 +71,14 @@ export const Layout = ({ children }: LayoutProps) => {
         'lg:translate-x-0'
       )}>
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-900">Market Service</h1>
+          <div className="flex items-center space-x-3">
+            <img 
+              src="/image.png" 
+              alt="ReceiptMaster Logo" 
+              className="h-8 w-8 object-contain"
+            />
+            <h1 className="text-xl font-bold text-gray-900">ReceiptMaster</h1>
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"

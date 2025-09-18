@@ -1,7 +1,7 @@
 {
-  "name": "market-service",
+  "name": "receiptmaster-backend",
   "version": "1.0.0",
-  "description": "MVP торговый сервис на NestJS",
+  "description": "ReceiptMaster Backend - NestJS API for trading service",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
