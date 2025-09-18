@@ -108,4 +108,4 @@ Thumbs.db
 # Docker
 # .dockerignore - нужен для сборки Docker образов
 *.pngscripts/
-*.sh
+*.shmarket_backup_*.sql
