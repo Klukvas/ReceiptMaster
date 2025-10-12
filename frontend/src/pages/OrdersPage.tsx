@@ -187,13 +187,13 @@ export const OrdersPage = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
       case 'confirmed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
       case 'cancelled':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
     }
   };
 
@@ -213,7 +213,7 @@ export const OrdersPage = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
@@ -222,7 +222,7 @@ export const OrdersPage = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders</h1>
           <Button 
             onClick={() => setShowForm(true)} 
             className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
@@ -230,15 +230,15 @@ export const OrdersPage = () => {
             Create Order
           </Button>
         </div>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <div className="text-yellow-700">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+          <div className="text-yellow-700 dark:text-yellow-300">
             <strong>Warning:</strong> Failed to load orders. The server may not be running or a network error occurred.
             <br />
             <small>Error: {error.message}</small>
           </div>
         </div>
         <Card>
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             Orders not loaded. Try creating a new order.
           </div>
         </Card>
@@ -252,14 +252,14 @@ export const OrdersPage = () => {
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
           notification.type === 'success' 
-            ? 'bg-green-50 border border-green-200 text-green-700' 
-            : 'bg-red-50 border border-red-200 text-red-700'
+            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300' 
+            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
         }`}>
           <div className="flex items-center">
             {notification.type === 'success' ? (
-              <div className="w-5 h-5 text-green-400 mr-2">✓</div>
+              <div className="w-5 h-5 text-green-400 dark:text-green-500 mr-2">✓</div>
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+              <AlertCircle className="w-5 h-5 text-red-400 dark:text-red-500 mr-2" />
             )}
             {notification.message}
           </div>
@@ -267,7 +267,7 @@ export const OrdersPage = () => {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Orders</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Orders</h1>
         <Button 
           onClick={() => setShowForm(true)} 
           className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
@@ -280,39 +280,39 @@ export const OrdersPage = () => {
       {/* Desktop Table View */}
       <Card className="hidden lg:block">
         <div className="overflow-x-auto shadow-sm rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Recipient</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recipient</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                  <td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">
                     Loading orders...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-red-500">
+                  <td colSpan={5} className="text-center py-8 text-red-500 dark:text-red-400">
                     Error loading orders
                   </td>
                 </tr>
               ) : !orders || orders.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                  <td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">
                     No orders found. Create your first order!
                   </td>
                 </tr>
               ) : (
                 orders.map((order) => (
                   <tr key={order.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                       {order.recipient.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -324,10 +324,10 @@ export const OrdersPage = () => {
                         {getStatusText(order.status)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {formatCurrency(order.total_cents, order.currency)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {formatDate(order.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -422,19 +422,19 @@ export const OrdersPage = () => {
       <div className="lg:hidden space-y-4">
         {isLoading ? (
           <Card>
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               Loading orders...
             </div>
           </Card>
         ) : error ? (
           <Card>
-            <div className="text-center py-8 text-red-500">
+            <div className="text-center py-8 text-red-500 dark:text-red-400">
               Error loading orders
             </div>
           </Card>
         ) : !orders || orders.length === 0 ? (
           <Card>
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               No orders found. Create your first order!
             </div>
           </Card>
@@ -444,8 +444,8 @@ export const OrdersPage = () => {
               <div className="space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="text-lg font-medium text-gray-900">{order.recipient.name}</h3>
-                    <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">{order.recipient.name}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{formatDate(order.created_at)}</p>
                   </div>
                   <span
                     className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
@@ -457,7 +457,7 @@ export const OrdersPage = () => {
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-lg font-semibold text-gray-900">
+                  <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     {formatCurrency(order.total_cents, order.currency)}
                   </span>
                 </div>

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Package, Users, ShoppingCart, Home, LogOut, Menu, X, Settings, BarChart3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,13 +24,13 @@ export const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-sm border-b border-gray-200">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
         <div className="flex h-16 items-center justify-between px-4">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
           >
             <Menu className="h-6 w-6" />
           </button>
@@ -39,15 +40,15 @@ export const Layout = ({ children }: LayoutProps) => {
               alt="ReceiptMaster Logo" 
               className="h-6 w-6 object-contain"
             />
-            <h1 className="text-lg font-bold text-gray-900">ReceiptMaster</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">ReceiptMaster</h1>
           </div>
           <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 hidden sm:block">
+            <span className="text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
               {user?.firstName} {user?.lastName}
             </span>
             <button
               onClick={logout}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
               title="Logout"
             >
               <LogOut className="h-4 w-4" />
@@ -59,46 +60,46 @@ export const Layout = ({ children }: LayoutProps) => {
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div 
-          className="lg:hidden fixed inset-0 z-50 backdrop-blur-sm bg-opacity-20"
+          className="lg:hidden fixed inset-0 z-50 backdrop-blur-sm bg-black bg-opacity-20 dark:bg-opacity-50 transition-opacity duration-300"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div className={clsx(
-        'fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out',
+        'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-all duration-300 ease-in-out',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         'lg:translate-x-0'
       )}>
-        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
             <img 
               src="/image.png" 
               alt="ReceiptMaster Logo" 
               className="h-8 w-8 object-contain"
             />
-            <h1 className="text-xl font-bold text-gray-900">ReceiptMaster</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">ReceiptMaster</h1>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            className="lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="flex flex-col h-full">
-          <div className="px-6 py-4 border-b border-gray-200 lg:hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 lg:hidden">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-700">
+              <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                   {user?.firstName?.[0]}{user?.lastName?.[0]}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {user?.firstName} {user?.lastName}
                 </p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
               </div>
             </div>
           </div>
@@ -112,10 +113,10 @@ export const Layout = ({ children }: LayoutProps) => {
                       to={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={clsx(
-                        'flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                        'flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200',
                         isActive
-                          ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-r-2 border-blue-700 dark:border-blue-400'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
                       )}
                     >
                       <item.icon className="mr-3 h-5 w-5" />
@@ -126,10 +127,14 @@ export const Layout = ({ children }: LayoutProps) => {
               })}
             </ul>
           </nav>
-          <div className="p-3 border-t border-gray-200 lg:hidden">
+          <div className="p-3 space-y-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
+              <ThemeToggle />
+            </div>
             <button
               onClick={logout}
-              className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="lg:hidden flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
             >
               <LogOut className="mr-3 h-4 w-4" />
               Logout
@@ -140,6 +145,25 @@ export const Layout = ({ children }: LayoutProps) => {
 
       {/* Main content */}
       <div className="lg:pl-64">
+        {/* Desktop header with theme toggle */}
+        <div className="hidden lg:flex h-16 items-center justify-end px-8 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors duration-200">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 mr-4">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
+              <ThemeToggle />
+            </div>
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              {user?.firstName} {user?.lastName}
+            </span>
+            <button
+              onClick={logout}
+              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
         <main className="py-6 pt-20 lg:pt-6">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {children}

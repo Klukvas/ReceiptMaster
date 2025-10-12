@@ -98,7 +98,7 @@ export const ProductsPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Загрузка...</div>
+        <div className="text-gray-500 dark:text-gray-400">Загрузка...</div>
       </div>
     );
   }
@@ -109,14 +109,14 @@ export const ProductsPage = () => {
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
           notification.type === 'success' 
-            ? 'bg-green-50 border border-green-200 text-green-700' 
-            : 'bg-red-50 border border-red-200 text-red-700'
+            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300' 
+            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
         }`}>
           <div className="flex items-center">
             {notification.type === 'success' ? (
-              <div className="w-5 h-5 text-green-400 mr-2">✓</div>
+              <div className="w-5 h-5 text-green-400 dark:text-green-500 mr-2">✓</div>
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+              <AlertCircle className="w-5 h-5 text-red-400 dark:text-red-500 mr-2" />
             )}
             {notification.message}
           </div>
@@ -124,7 +124,7 @@ export const ProductsPage = () => {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Товары</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Товары</h1>
         <Button 
           onClick={() => setShowForm(true)} 
           className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
@@ -135,22 +135,22 @@ export const ProductsPage = () => {
 
       <Card>
         <div className="overflow-x-auto shadow-sm rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Название
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Цена покупки
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Цена продажи
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   <button
                     onClick={() => handleSort('quantity')}
-                    className="flex items-center space-x-1 hover:text-gray-700"
+                    className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
                   >
                     <span>Количество</span>
                     {sortBy === 'quantity' ? (
@@ -164,42 +164,42 @@ export const ProductsPage = () => {
                     )}
                   </button>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Валюта
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Действия
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {sortedProducts.map((product, index) => (
                 <tr 
                   key={product.id} 
                   className={`
-                    ${product.quantity < 10 ? 'animate-pulse bg-red-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}
+                    ${product.quantity < 10 ? 'animate-pulse bg-red-100 dark:bg-red-900/20' : (index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50')}
                   `}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{product.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(product.purchase_price_cents, product.currency)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(product.sale_price_cents, product.currency)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm font-semibold ${product.quantity < 10 ? 'text-red-600' : 'text-gray-900'}`}>
+                    <div className={`text-sm font-semibold ${product.quantity < 10 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
                       {product.quantity}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{product.currency}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{product.currency}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">

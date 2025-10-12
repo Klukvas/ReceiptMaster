@@ -48,8 +48,8 @@ export const HomePage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Добро пожаловать в Receipt Master</h1>
-        <p className="text-gray-600">Управляйте товарами, заказами и чеками в одном месте</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Добро пожаловать в Receipt Master</h1>
+        <p className="text-gray-600 dark:text-gray-300">Управляйте товарами, заказами и чеками в одном месте</p>
       </div>
 
       {/* Статистика */}
@@ -57,12 +57,12 @@ export const HomePage = () => {
         {stats.map((stat) => (
           <Card key={stat.name}>
             <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${stat.bgColor}`}>
+              <div className={`p-3 rounded-lg ${stat.bgColor} dark:opacity-80`}>
                 <stat.icon className={`h-6 w-6 ${stat.color}`} />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{stat.name}</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stat.value}</p>
               </div>
             </div>
           </Card>
@@ -75,19 +75,19 @@ export const HomePage = () => {
           {productsData?.data.data.length ? (
             <div className="space-y-3">
               {productsData.data.data.map((product) => (
-                <div key={product.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                <div key={product.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
                   <div>
-                    <div className="font-medium text-sm">{product.name}</div>
-                    <div className="text-xs text-gray-500">Цена продажи: {product.sale_price_cents / 100} {product.currency}</div>
+                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{product.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Цена продажи: {product.sale_price_cents / 100} {product.currency}</div>
                   </div>
-                  <div className="text-sm font-medium">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     Покупка: {product.purchase_price_cents / 100} {product.currency}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               Товары не найдены
             </div>
           )}
@@ -97,16 +97,16 @@ export const HomePage = () => {
           {recipientsData?.data.data.length ? (
             <div className="space-y-3">
               {recipientsData.data.data.map((recipient) => (
-                <div key={recipient.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                <div key={recipient.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
                   <div>
-                    <div className="font-medium text-sm">{recipient.name}</div>
-                    <div className="text-xs text-gray-500">{recipient.email || recipient.phone || 'Нет контактов'}</div>
+                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{recipient.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{recipient.email || recipient.phone || 'Нет контактов'}</div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               Получатели не найдены
             </div>
           )}
@@ -116,20 +116,20 @@ export const HomePage = () => {
       {/* Быстрые действия */}
       <Card title="Быстрые действия">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <Package className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-            <h3 className="font-medium text-sm">Добавить товар</h3>
-            <p className="text-xs text-gray-500 mt-1">Создать новый товар в каталоге</p>
+          <div className="text-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <Package className="h-8 w-8 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100">Добавить товар</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Создать новый товар в каталоге</p>
           </div>
-          <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <Users className="h-8 w-8 mx-auto mb-2 text-green-600" />
-            <h3 className="font-medium text-sm">Добавить получателя</h3>
-            <p className="text-xs text-gray-500 mt-1">Создать нового получателя</p>
+          <div className="text-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <Users className="h-8 w-8 mx-auto mb-2 text-green-600 dark:text-green-400" />
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100">Добавить получателя</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Создать нового получателя</p>
           </div>
-          <div className="text-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-            <h3 className="font-medium text-sm">Создать заказ</h3>
-            <p className="text-xs text-gray-500 mt-1">Оформить новый заказ</p>
+          <div className="text-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-purple-600 dark:text-purple-400" />
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100">Создать заказ</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Оформить новый заказ</p>
           </div>
         </div>
       </Card>

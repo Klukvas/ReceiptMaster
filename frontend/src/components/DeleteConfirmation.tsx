@@ -25,12 +25,12 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center z-50">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50">
       <Card className="w-full max-w-md mx-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <AlertTriangle className="w-6 h-6 text-red-500 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <AlertTriangle className="w-6 h-6 text-red-500 dark:text-red-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
           </div>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -38,9 +38,9 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
         </div>
 
         <div className="mb-6">
-          <p className="text-gray-600 mb-2">{message}</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-2">{message}</p>
           {itemName && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               <strong>Элемент:</strong> {itemName}
             </p>
           )}
