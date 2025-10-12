@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Edit, Trash2, AlertCircle } from 'lucide-react';
+import { Edit, Trash2, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { productsApi, formatCurrency, type Product } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -15,12 +15,37 @@ export const ProductsPage = () => {
     product: Product | null;
   }>({ isOpen: false, product: null });
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [sortBy, setSortBy] = useState<'quantity' | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const queryClient = useQueryClient();
 
   const { data: productsData, isLoading } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.getAll({ limit: 100 }),
   });
+
+  // Sort products by quantity
+  const sortedProducts = useMemo(() => {
+    if (!productsData?.data.data) return [];
+    
+    if (!sortBy) return productsData.data.data;
+    
+    return [...productsData.data.data].sort((a, b) => {
+      if (sortBy === 'quantity') {
+        return sortOrder === 'asc' ? a.quantity - b.quantity : b.quantity - a.quantity;
+      }
+      return 0;
+    });
+  }, [productsData?.data.data, sortBy, sortOrder]);
+
+  const handleSort = (column: 'quantity') => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: productsApi.delete,
@@ -123,7 +148,21 @@ export const ProductsPage = () => {
                   Цена продажи
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Количество
+                  <button
+                    onClick={() => handleSort('quantity')}
+                    className="flex items-center space-x-1 hover:text-gray-700"
+                  >
+                    <span>Количество</span>
+                    {sortBy === 'quantity' ? (
+                      sortOrder === 'asc' ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <div className="w-4 h-4" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Валюта
@@ -134,8 +173,13 @@ export const ProductsPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {productsData?.data.data.map((product, index) => (
-                <tr key={product.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              {sortedProducts.map((product, index) => (
+                <tr 
+                  key={product.id} 
+                  className={`
+                    ${product.quantity < 10 ? 'animate-pulse bg-red-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}
+                  `}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{product.name}</div>
                   </td>
@@ -150,7 +194,7 @@ export const ProductsPage = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className={`text-sm font-semibold ${product.quantity < 10 ? 'text-red-600' : 'text-gray-900'}`}>
                       {product.quantity}
                     </div>
                   </td>
