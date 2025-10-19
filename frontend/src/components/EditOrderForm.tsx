@@ -95,10 +95,10 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-white/20 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Edit Order</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Order</h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -106,7 +106,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Получатель
             </label>
             <Combobox
@@ -125,7 +125,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Products
               </label>
               <Button type="button" size="sm" onClick={addItem}>
@@ -136,13 +136,13 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
             <div className="space-y-3">
               {items.map((item, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
+                <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                   <div className="flex-1">
                     <Combobox
                       options={productsData?.data.data.map((product) => ({
                         value: product.id,
                         label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
-                        searchText: `${product.name} ${product.description || ''}`.trim()
+                        searchText: `${product.name}`.trim()
                       })) || []}
                       value={item.productId}
                       onChange={(value) => updateItem(index, 'productId', value)}
@@ -161,7 +161,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       placeholder="Кол-во"
                     />
                   </div>
-                  <div className="w-32 text-sm font-medium">
+                  <div className="w-32 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {formatCurrency(calculateItemTotal(item))}
                   </div>
                   {items.length > 1 && (
@@ -179,8 +179,8 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
             </div>
           </div>
 
-          <div className="border-t pt-4">
-            <div className="flex justify-between items-center text-lg font-semibold">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="flex justify-between items-center text-lg font-semibold text-gray-900 dark:text-white">
               <span>Total:</span>
               <span>{formatCurrency(calculateTotal())}</span>
             </div>

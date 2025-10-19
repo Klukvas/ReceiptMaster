@@ -17,14 +17,14 @@ export const HomePage = () => {
   const stats = [
     {
       name: 'Товары',
-      value: productsData?.data.total || 0,
+      value: productsData?.data?.total || 0,
       icon: Package,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
     },
     {
       name: 'Получатели',
-      value: recipientsData?.data.total || 0,
+      value: recipientsData?.data?.total || 0,
       icon: Users,
       color: 'text-green-600',
       bgColor: 'bg-green-100',
@@ -72,7 +72,7 @@ export const HomePage = () => {
       {/* Последние товары */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Последние товары">
-          {productsData?.data.data.length ? (
+          {productsData?.data?.data?.length ? (
             <div className="space-y-3">
               {productsData.data.data.map((product) => (
                 <div key={product.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
@@ -94,7 +94,7 @@ export const HomePage = () => {
         </Card>
 
         <Card title="Последние получатели">
-          {recipientsData?.data.data.length ? (
+          {recipientsData?.data?.data?.length ? (
             <div className="space-y-3">
               {recipientsData.data.data.map((recipient) => (
                 <div key={recipient.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">

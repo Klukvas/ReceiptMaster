@@ -209,7 +209,7 @@ export const Combobox = ({
       <div
         ref={inputRef}
         className={`
-          input flex items-center justify-between cursor-pointer
+          w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 flex items-center justify-between cursor-pointer
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
           ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}
         `}
@@ -224,7 +224,7 @@ export const Combobox = ({
           {isOpen ? (
             <input
               type="text"
-              className="w-full bg-transparent border-none outline-none text-sm"
+              className="w-full bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               placeholder={searchPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -233,7 +233,7 @@ export const Combobox = ({
               autoFocus
             />
           ) : (
-            <span className={`text-sm ${selectedOption ? 'text-gray-900' : 'text-gray-500'}`}>
+            <span className={`text-sm ${selectedOption ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
               {selectedOption ? selectedOption.label : placeholder}
             </span>
           )}
@@ -243,16 +243,16 @@ export const Combobox = ({
           {selectedOption && onClear && !disabled && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleClear}
-              className="p-1 h-auto hover:bg-gray-100"
+              className="p-1 h-auto hover:bg-gray-100 dark:hover:bg-gray-600"
             >
               <X className="w-3 h-3" />
             </Button>
           )}
           <ChevronDown 
-            className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
+            className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
           />
         </div>
       </div>
@@ -260,11 +260,11 @@ export const Combobox = ({
       {/* Выпадающий список */}
       {isOpen && (
         <div 
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+          className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto"
         >
           <ul ref={listRef} role="listbox" className="py-1">
             {filteredOptions.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-gray-500">
+              <li className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                 Ничего не найдено
               </li>
             ) : (
@@ -273,8 +273,8 @@ export const Combobox = ({
                   key={option.value}
                   className={`
                     px-3 py-2 text-sm cursor-pointer transition-colors
-                    ${index === highlightedIndex ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'}
-                    ${option.value === value ? 'bg-blue-100 text-blue-900 font-medium' : ''}
+                    ${index === highlightedIndex ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'}
+                    ${option.value === value ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-900 dark:text-blue-200 font-medium' : ''}
                   `}
                   onClick={() => selectOption(option)}
                   onMouseDown={(e) => {

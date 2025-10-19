@@ -130,10 +130,10 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-white/20 flex items-center justify-center z-50">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50">
       <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Создать заказ</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Создать заказ</h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -142,16 +142,16 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Backend errors */}
           {backendError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex items-center">
-                <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
-                <span className="text-sm text-red-800">{backendError}</span>
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mr-2" />
+                <span className="text-sm text-red-800 dark:text-red-300">{backendError}</span>
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Получатель
             </label>
             <Combobox
@@ -170,13 +170,13 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
               required
             />
             {errors.recipient && (
-              <p className="text-sm text-red-600 mt-1">{errors.recipient}</p>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{errors.recipient}</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Товары
               </label>
               <Button type="button" size="sm" onClick={addItem}>
@@ -192,14 +192,14 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                 const isOutOfStock = product && item.qty > availableQty;
                 
                 return (
-                  <div key={index} className={`p-3 border rounded-lg ${isOutOfStock ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                  <div key={index} className={`p-3 border rounded-lg ${isOutOfStock ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
                     <div className="flex items-center space-x-3">
                       <div className="flex-1">
                         <Combobox
                           options={productsData?.data.data.map((product) => ({
                             value: product.id,
                             label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)} (${product.quantity} шт.)`,
-                            searchText: `${product.name} ${product.description || ''}`.trim()
+                            searchText: `${product.name}`.trim()
                           })) || []}
                           value={item.productId}
                           onChange={(value) => {
@@ -232,7 +232,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                           error={errors[`item-${index}-qty`]}
                         />
                       </div>
-                      <div className="w-32 text-sm font-medium">
+                      <div className="w-32 text-sm font-medium text-gray-900 dark:text-gray-100">
                         {formatCurrency(calculateItemTotal(item))}
                       </div>
                       {items.length > 1 && (
@@ -247,10 +247,10 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                       )}
                     </div>
                     {product && (
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                         Доступно: {availableQty} шт.
                         {isOutOfStock && (
-                          <span className="text-red-600 ml-2">
+                          <span className="text-red-600 dark:text-red-400 ml-2">
                             Недостаточно товара!
                           </span>
                         )}
@@ -262,12 +262,12 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
             </div>
             
             {errors.items && (
-              <p className="text-sm text-red-600">{errors.items}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{errors.items}</p>
             )}
           </div>
 
-          <div className="border-t pt-4">
-            <div className="flex justify-between items-center text-lg font-semibold">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="flex justify-between items-center text-lg font-semibold text-gray-900 dark:text-white">
               <span>Итого:</span>
               <span>{formatCurrency(calculateTotal())}</span>
             </div>

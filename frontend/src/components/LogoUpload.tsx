@@ -124,17 +124,17 @@ export const LogoUpload = () => {
     <Card className="p-6">
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Настройки компании
           </h3>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             Настройте название компании и логотип для отображения в PDF чеках.
           </p>
         </div>
 
         {/* Company Name */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Название компании
           </label>
           <div className="flex space-x-2">
@@ -156,29 +156,29 @@ export const LogoUpload = () => {
 
         {/* Logo Upload Section */}
         <div>
-          <h4 className="text-md font-medium text-gray-900 mb-2">
+          <h4 className="text-md font-medium text-gray-900 dark:text-white mb-2">
             Логотип компании
           </h4>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
             Загрузите логотип для отображения в PDF чеках. Поддерживаются форматы: JPG, PNG, GIF, SVG. Максимальный размер: 5MB.
           </p>
         </div>
 
         {/* Current Logo Display */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
           <div className="text-center">
             {hasLogo && !logoError ? (
               <div className="space-y-3">
                 <img
                   src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/settings/logo`}
                   alt="Current logo"
-                  className="mx-auto h-24 w-24 object-contain border border-gray-200 rounded"
+                  className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
                   onError={(e) => {
                     // Hide the image if it fails to load
                     e.currentTarget.style.display = 'none';
                   }}
                 />
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
                   Текущий логотип
                 </p>
                 <Button
@@ -193,8 +193,8 @@ export const LogoUpload = () => {
               </div>
             ) : (
               <div>
-                <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">
+                <ImageIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   Логотип не загружен
                 </p>
               </div>
@@ -203,16 +203,16 @@ export const LogoUpload = () => {
         </div>
 
         {/* File Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
           <div className="text-center">
             {previewUrl ? (
               <div className="space-y-4">
                 <img
                   src={previewUrl}
                   alt="Preview"
-                  className="mx-auto h-24 w-24 object-contain border border-gray-200 rounded"
+                  className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
                 />
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
                   {selectedFile?.name}
                 </p>
                 <div className="flex justify-center space-x-2">
@@ -234,8 +234,8 @@ export const LogoUpload = () => {
               </div>
             ) : (
               <div>
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">
+                <Upload className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   Выберите файл логотипа
                 </p>
                 <input
