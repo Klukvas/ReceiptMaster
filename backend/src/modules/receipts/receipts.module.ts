@@ -6,6 +6,7 @@ import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service
 import { CompactPdfGeneratorService } from "./services/compact-pdf-generator.service";
 import { Receipt } from "./entities/receipt.entity";
 import { Order } from "../orders/entities/order.entity";
+import { ObjectStorageService } from "../../common/services/object-storage.service";
 
 @Module({
   imports: [TypeOrmModule.forFeature([Receipt, Order])],
@@ -14,6 +15,7 @@ import { Order } from "../orders/entities/order.entity";
     ReceiptsService,
     ReactPdfGeneratorService,
     CompactPdfGeneratorService,
+    ObjectStorageService,
   ],
   exports: [ReceiptsService],
 })

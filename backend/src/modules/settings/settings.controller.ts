@@ -15,10 +15,14 @@ import { ConfigService } from "@nestjs/config";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { EnvConfig } from "../../config/env.schema";
+import { ObjectStorageService } from "../../common/services/object-storage.service";
 
 @Controller("settings")
 export class SettingsController {
-  constructor(private configService: ConfigService<EnvConfig>) {}
+  constructor(
+    private configService: ConfigService<EnvConfig>,
+    private objectStorageService: ObjectStorageService,
+  ) {}
 
   @Post("logo/upload")
   @UseInterceptors(
@@ -40,19 +44,16 @@ export class SettingsController {
     }
 
     try {
-      // Create assets directory if it doesn't exist
-      const assetsPath = path.join(process.cwd(), "src", "assets");
-      await fs.mkdir(assetsPath, { recursive: true });
-
-      // Save the uploaded file as logo.png
-      const logoPath = path.join(assetsPath, "logo.png");
-      await fs.writeFile(logoPath, file.buffer);
-
+      // Загружаем в Object Storage
+      const filename = `logo-${Date.now()}.png`;
+      const url = await this.objectStorageService.uploadLogo(file.buffer, filename);
+      
       return {
-        message: "Logo uploaded successfully",
-        filename: "logo.png",
+        message: "Logo uploaded successfully to Object Storage",
+        filename: filename,
         originalName: file.originalname,
         size: file.size,
+        url: url,
       };
     } catch (error) {
       throw new HttpException(

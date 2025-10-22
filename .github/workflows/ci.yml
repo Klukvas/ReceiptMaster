@@ -217,6 +217,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
             RECEIPT_BASE_URL=${{ secrets.RECEIPT_BASE_URL }}
+            AUTO_RUN_MIGRATIONS=true
 
             # Frontend configuration
             VITE_API_URL=${{ secrets.VITE_API_URL }}

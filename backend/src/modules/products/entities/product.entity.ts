@@ -5,8 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from "typeorm";
 import { OrderItem } from "../../orders/entities/order-item.entity";
+import { User } from "../../users/entities/user.entity";
 
 export enum Currency {
   UAH = "UAH",
@@ -31,6 +34,13 @@ export class Product {
 
   @Column({ type: "enum", enum: Currency, default: Currency.UAH })
   currency: Currency;
+
+  @Column({ type: "uuid" })
+  user_id: string;
+
+  @ManyToOne(() => User, (user) => user.products)
+  @JoinColumn({ name: "user_id" })
+  user: User;
 
   @CreateDateColumn()
   created_at: Date;

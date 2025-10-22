@@ -9,6 +9,7 @@ import { Recipient } from "./entities/recipient.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { User } from "../users/entities/user.entity";
 
 @Injectable()
 export class RecipientsService {
@@ -17,15 +18,20 @@ export class RecipientsService {
     private recipientsRepository: Repository<Recipient>,
   ) {}
 
-  async create(createRecipientDto: CreateRecipientDto): Promise<Recipient> {
-    const recipient = this.recipientsRepository.create(createRecipientDto);
+  async create(createRecipientDto: CreateRecipientDto, user: User): Promise<Recipient> {
+    const recipient = this.recipientsRepository.create({
+      ...createRecipientDto,
+      user_id: user.id,
+    });
     return this.recipientsRepository.save(recipient);
   }
 
   async findAll(
     pagination: PaginationDto,
+    user: User,
   ): Promise<{ data: Recipient[]; total: number }> {
     const [data, total] = await this.recipientsRepository.findAndCount({
+      where: { user_id: user.id },
       order: { created_at: "DESC" },
       skip: pagination.offset,
       take: pagination.limit,
@@ -34,9 +40,9 @@ export class RecipientsService {
     return { data, total };
   }
 
-  async findOne(id: string): Promise<Recipient> {
+  async findOne(id: string, user: User): Promise<Recipient> {
     const recipient = await this.recipientsRepository.findOne({
-      where: { id },
+      where: { id, user_id: user.id },
     });
     if (!recipient) {
       throw new NotFoundException("Получатель не найден");
@@ -47,14 +53,15 @@ export class RecipientsService {
   async update(
     id: string,
     updateRecipientDto: UpdateRecipientDto,
+    user: User,
   ): Promise<Recipient> {
-    const recipient = await this.findOne(id);
+    const recipient = await this.findOne(id, user);
     Object.assign(recipient, updateRecipientDto);
     return this.recipientsRepository.save(recipient);
   }
 
-  async remove(id: string): Promise<void> {
-    const recipient = await this.findOne(id);
+  async remove(id: string, user: User): Promise<void> {
+    const recipient = await this.findOne(id, user);
 
     // Проверяем, есть ли у получателя заказы
     const ordersCount = await this.recipientsRepository

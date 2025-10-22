@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { Link } from 'react-router-dom';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -85,6 +86,18 @@ export const LoginForm: React.FC = () => {
             >
               {isLoading ? 'Вход...' : 'Войти'}
             </button>
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Нет аккаунта?{' '}
+              <Link
+                to="/register"
+                className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors duration-200"
+              >
+                Зарегистрироваться
+              </Link>
+            </p>
           </div>
         </form>
       </div>

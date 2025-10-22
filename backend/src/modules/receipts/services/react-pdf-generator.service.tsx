@@ -6,6 +6,7 @@ import * as path from 'path';
 import { EnvConfig } from '../../../config/env.schema';
 import { Order } from '../../orders/entities/order.entity';
 import { MoneyUtil } from '../../../common/utils/money.util';
+import { ObjectStorageService } from '../../../common/services/object-storage.service';
 
 
 // Determine the correct path for fonts based on environment
@@ -275,13 +276,16 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
 export class ReactPdfGeneratorService {
   private readonly logger = new Logger(ReactPdfGeneratorService.name);
 
-  constructor(private configService: ConfigService<EnvConfig>) {}
+  constructor(
+    private configService: ConfigService<EnvConfig>,
+    private objectStorageService: ObjectStorageService,
+  ) {}
 
   async generateReceiptPdf(order: Order, receiptNumber: string, companyName: string = ''): Promise<{ filePath: string; url: string }> {
     try {
-      this.logger.log('Починаємо генерацію PDF за допомогою @react-pdf/renderer...');
-      this.logger.log('ID замовлення:', order.id);
-      this.logger.log('Номер чека:', receiptNumber);
+      this.logger.log('Starting PDF generation using @react-pdf/renderer...');
+      this.logger.log('Order ID:', order.id);
+      this.logger.log('Receipt number:', receiptNumber);
 
       // Check if custom logo exists
       let hasCustomLogo = false;
@@ -294,57 +298,37 @@ export class ReactPdfGeneratorService {
         this.logger.log(`No custom logo found, using fallback logo. Error: ${error.message}`);
       }
 
-      // Создаем директорию для чеков если не существует
-      const storagePath = this.configService.get('RECEIPT_STORAGE_PATH');
-      this.logger.log(`Створюємо директорію для чеків: ${storagePath}`);
-      
-      try {
-        await fs.mkdir(storagePath, { recursive: true });
-        this.logger.log(`Директорію успішно створено: ${storagePath}`);
-      } catch (error) {
-        this.logger.error(`Не вдалося створити директорію ${storagePath}:`, error);
-        throw new Error(`Не вдалося створити директорію для чеків: ${error.message}`);
-      }
-
       const fileName = `receipt-${receiptNumber}-${Date.now()}.pdf`;
-      const filePath = path.join(storagePath, fileName);
       
-      this.logger.log(`Генеруємо PDF: ${filePath}`);
+      this.logger.log(`Generating PDF: ${fileName}`);
 
-      // Генерируем PDF
+      // Generate PDF
       const doc = <ReceiptDocument order={order} receiptNumber={receiptNumber} hasCustomLogo={hasCustomLogo} companyName={companyName} />;
-      const pdfBuffer = await pdf(doc).toBuffer();
+      
+      // Use toBlob() and convert to Buffer
+      const pdfBlob = await pdf(doc).toBlob();
+      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
 
-      // Сохраняем PDF в файл
-      await fs.writeFile(filePath, pdfBuffer);
+      // Save to Object Storage
+      this.logger.log('Saving PDF to Object Storage...');
+      const url = await this.objectStorageService.uploadReceipt(pdfBuffer, fileName);
+      const filePath = `object-storage://receipts/${fileName}`;
+      this.logger.log(`PDF saved to Object Storage: ${url}`);
 
-      // Проверяем, что файл создался
-      try {
-        await fs.access(filePath);
-        this.logger.log(`PDF-файл успішно створено: ${filePath}`);
-        
-        // Проверяем, что это действительно PDF
-        const fileBuffer = await fs.readFile(filePath);
-        const isPdf = fileBuffer.toString('ascii', 0, 4) === '%PDF';
-        if (!isPdf) {
-          this.logger.error(`Згенерований файл не є коректним PDF: ${filePath}`);
-          throw new Error(`Згенерований файл не є коректним PDF: ${filePath}`);
-        }
-        this.logger.log(`PDF-файл є коректним: ${filePath}`);
-      } catch (error) {
-        this.logger.error(`PDF-файл не створено або він некоректний: ${filePath}`, error);
-        throw new Error(`PDF-файл не було створено або він некоректний: ${filePath}`);
+      // Validate PDF format
+      const isPdf = pdfBuffer.subarray(0, 4).toString('ascii') === '%PDF';
+      if (!isPdf) {
+        this.logger.error(`Generated file is not a valid PDF`);
+        throw new Error(`Generated file is not a valid PDF`);
       }
+      this.logger.log(`PDF file is valid and saved to Object Storage`);
 
-      const baseUrl = this.configService.get('RECEIPT_BASE_URL');
-      const url = `${baseUrl}/receipts/${order.id}/pdf`;
-
-      this.logger.log(`PDF чек згенеровано: ${filePath}`);
+      this.logger.log(`PDF receipt generated: ${filePath}`);
 
       return { filePath, url };
     } catch (error) {
-      this.logger.error('Помилка під час генерації PDF:', error);
-      this.logger.error('Деталі помилки:', JSON.stringify(error, null, 2));
+      this.logger.error('Error during PDF generation:', error);
+      this.logger.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
   }

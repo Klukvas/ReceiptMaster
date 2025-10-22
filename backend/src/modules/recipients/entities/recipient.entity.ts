@@ -5,8 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from "typeorm";
 import { Order } from "../../orders/entities/order.entity";
+import { User } from "../../users/entities/user.entity";
 
 @Entity("recipients")
 export class Recipient {
@@ -36,6 +39,13 @@ export class Recipient {
 
   @Column({ type: "varchar", length: 255, nullable: true })
   last_name?: string;
+
+  @Column({ type: "uuid" })
+  user_id: string;
+
+  @ManyToOne(() => User, (user) => user.recipients)
+  @JoinColumn({ name: "user_id" })
+  user: User;
 
   @CreateDateColumn()
   created_at: Date;

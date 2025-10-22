@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  migrations:
+    image: market-backend:latest
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    command: ["yarn", "migration:run"]
+    depends_on:
+      - postgres
+    networks:
+      - market_network
+
+  backend:
+    image: market-backend:latest
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - API_PREFIX=api/v1
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTO_RUN_MIGRATIONS=false
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - LOGOS_BUCKET=${LOGOS_BUCKET}
+      - RECEIPTS_BUCKET=${RECEIPTS_BUCKET}
+      - TEMP_BUCKET=${TEMP_BUCKET}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - market_network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - market_network
+
+  frontend:
+    image: market-frontend:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    networks:
+      - market_network
+
+volumes:
+  postgres_data_prod:
+
+networks:
+  market_network:
+    driver: bridge

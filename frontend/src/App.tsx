@@ -13,6 +13,7 @@ import { OrdersPage } from './pages/OrdersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,10 @@ const AppRoutes: React.FC = () => {
       <Route 
         path="/login" 
         element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} 
+      />
+      <Route 
+        path="/register" 
+        element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />} 
       />
       <Route path="/" element={
         <ProtectedRoute>

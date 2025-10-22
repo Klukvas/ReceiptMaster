@@ -35,6 +35,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
+      - AUTO_RUN_MIGRATIONS=true
     volumes:
       - receipts:/app/receipts
     restart: unless-stopped

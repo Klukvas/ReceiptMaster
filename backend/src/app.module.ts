@@ -13,6 +13,7 @@ import { UsersModule } from "./modules/users/users.module";
 import { SettingsModule } from "./modules/settings/settings.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
 import { HealthController } from "./health.controller";
+import { MigrationService } from "./common/services/migration.service";
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { HealthController } from "./health.controller";
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
     },
+    MigrationService,
   ],
 })
 export class AppModule {}

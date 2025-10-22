@@ -46,6 +46,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(userData);
   };
 
+  const register = async (email: string, password: string, firstName: string, lastName: string) => {
+    const response = await authApi.register({ email, password, firstName, lastName });
+    const { access_token, user: userData } = response.data;
+    
+    // Store token and user data
+    localStorage.setItem('auth_token', access_token);
+    setToken(access_token);
+    setUser(userData);
+  };
+
   const logout = () => {
     localStorage.removeItem('auth_token');
     setToken(null);
@@ -56,6 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     token,
     login,
+    register,
     logout,
     isLoading,
     isAuthenticated: !!user && !!token,

@@ -36,9 +36,17 @@ services:
       - DB_NAME=market_db
       - API_PREFIX=api/v1
       - API_KEY=dev-api-key
-      - JWT_SECRET=dev-jwt-secret
+      - JWT_SECRET=pSPmil4N/FLgTDuIOhrGY17ne5Vk454z4dSa/shpbvQ=
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=http://localhost:3000
+      - AWS_ACCESS_KEY_ID=Q4VEDK3ALS0P6HS3IU54
+      - AWS_SECRET_ACCESS_KEY=nDhkjzjVWRJF2nHOYxOuvnETUv8wsAkOXhUKLQ9N
+      - AWS_REGION=nbg1
+      - S3_ENDPOINT=https://nbg1.your-objectstorage.com
+      - LOGOS_BUCKET=marketflow-storage
+      - RECEIPTS_BUCKET=marketflow-storage
+      - TEMP_BUCKET=marketflow-storage
+      - AUTO_RUN_MIGRATIONS=true
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -53,10 +61,9 @@ services:
       - market_network
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: node:20-alpine
     container_name: market_frontend_dev
+    working_dir: /app
     environment:
       - VITE_API_URL=http://localhost:3000/api/v1
       - VITE_API_KEY=dev-api-key
@@ -67,7 +74,7 @@ services:
       - "5173:5173"
     depends_on:
       - backend
-    command: ["yarn", "dev", "--host", "0.0.0.0"]
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
     networks:
       - market_network
 

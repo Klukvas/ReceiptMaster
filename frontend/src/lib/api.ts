@@ -148,6 +148,13 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
+
 export interface AuthResponse {
   access_token: string;
   user: {
@@ -169,6 +176,9 @@ export interface User {
 export const authApi = {
   login: (data: LoginRequest) =>
     api.post<AuthResponse>('/auth/login', data),
+  
+  register: (data: RegisterRequest) =>
+    api.post<AuthResponse>('/auth/register', data),
   
   getProfile: () =>
     api.get<User>('/auth/profile'),
