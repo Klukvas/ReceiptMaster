@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
+import { parseApiError } from '../../lib/api-errors';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -18,8 +19,8 @@ export const LoginForm: React.FC = () => {
     try {
       await login(email, password);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || 'Ошибка входа в систему');
+      const apiError = parseApiError(err);
+      setError(apiError.message);
     } finally {
       setIsLoading(false);
     }

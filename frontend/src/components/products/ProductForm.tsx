@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { X, Search, Package, AlertCircle } from 'lucide-react';
-import { productsApi, type Product, amountToCents } from '../lib/api';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Card } from './ui/Card';
+import { productsApi, type Product, amountToCents } from '../../lib/api';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Card } from '../ui/Card';
 
 interface ProductFormProps {
   product?: Product | null;

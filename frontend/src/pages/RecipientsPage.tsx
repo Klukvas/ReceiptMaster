@@ -4,7 +4,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { recipientsApi, type Recipient } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { RecipientForm } from '../components/RecipientForm';
+import { RecipientForm } from '../components/recipients/RecipientForm';
 
 export const RecipientsPage = () => {
   const [showForm, setShowForm] = useState(false);

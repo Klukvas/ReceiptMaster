@@ -5,7 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useAuth } from './hooks/useAuth';
 import { Layout } from './components/layout/Layout';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { HomePage } from './pages/HomePage';
 import { ProductsPage } from './pages/ProductsPage';
 import { RecipientsPage } from './pages/RecipientsPage';

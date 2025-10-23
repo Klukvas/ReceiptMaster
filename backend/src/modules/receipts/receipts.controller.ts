@@ -7,6 +7,7 @@ import {
   UseGuards,
   Query,
   Request,
+  Logger,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from "@nestjs/swagger";
 import { Response } from "express";
@@ -18,7 +19,16 @@ import { User } from "../users/entities/user.entity";
 @Controller("receipts")
 @UseGuards(JwtAuthGuard)
 export class ReceiptsController {
+  private readonly logger = new Logger(ReceiptsController.name);
+  
   constructor(private readonly receiptsService: ReceiptsService) {}
+
+  @Get("printers")
+  @ApiOperation({ summary: "Получить список доступных принтеров" })
+  @ApiResponse({ status: 200, description: "Список принтеров получен" })
+  async getPrinters() {
+    return this.receiptsService.getAvailablePrinters();
+  }
 
   @Post("orders/:orderId/receipt")
   @ApiOperation({ summary: "Создать чек для заказа" })
@@ -76,7 +86,7 @@ export class ReceiptsController {
       // Проверяем, что это действительно PDF
       const isPdf = buffer.toString("ascii", 0, 4) === "%PDF";
       if (!isPdf) {
-        console.error("File is not a valid PDF:", filename);
+        this.logger.error("File is not a valid PDF:", filename);
         return res
           .status(400)
           .json({ error: "Файл не является корректным PDF" });
@@ -92,16 +102,9 @@ export class ReceiptsController {
 
       res.send(buffer);
     } catch (error) {
-      console.error("Error serving PDF:", error);
+      this.logger.error("Error serving PDF:", error);
       res.status(500).json({ error: "Ошибка при получении PDF файла" });
     }
-  }
-
-  @Get("printers")
-  @ApiOperation({ summary: "Получить список доступных принтеров" })
-  @ApiResponse({ status: 200, description: "Список принтеров получен" })
-  async getPrinters() {
-    return this.receiptsService.getAvailablePrinters();
   }
 
   @Post(":id/print")

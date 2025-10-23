@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, Package, Users, DollarSign } from 'lucide-react';
-import { dashboardApi, formatCurrency } from '../lib/api';
-import { Card } from './ui/Card';
+import { dashboardApi, formatCurrency } from '../../lib/api';
+import { Card } from '../ui/Card';
 
 interface RevenueDashboardProps {
   dateRange: {

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In } from "typeorm";
 import { Order, OrderStatus } from "./entities/order.entity";
@@ -45,7 +46,7 @@ export class OrdersService {
         where: { id: createOrderDto.recipientId, user_id: user.id },
       });
       if (!recipient) {
-        throw new NotFoundException("Recipient not found");
+        throw ApiErrors.RECIPIENT_NOT_FOUND(createOrderDto.recipientId);
       }
 
       // Get products and check their existence and ownership
@@ -55,7 +56,7 @@ export class OrdersService {
       });
 
       if (products.length !== productIds.length) {
-        throw new NotFoundException("One or more products not found");
+        throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
       }
 
       const productMap = new Map(products.map((p) => [p.id, p]));
@@ -69,9 +70,7 @@ export class OrdersService {
 
         // Check if product has enough quantity
         if (product.quantity < itemDto.qty) {
-          throw new BadRequestException(
-            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
-          );
+          throw ApiErrors.VALIDATION_ERROR('quantity', `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`);
         }
 
         const lineTotalCents = product.sale_price_cents * itemDto.qty;
@@ -155,7 +154,7 @@ export class OrdersService {
       relations: ["recipient", "items", "receipts"],
     });
     if (!order) {
-      throw new NotFoundException("Order not found");
+      throw ApiErrors.ORDER_NOT_FOUND(id);
     }
     return order;
   }
@@ -164,9 +163,7 @@ export class OrdersService {
     const order = await this.findOne(id, user);
 
     if (order.status !== OrderStatus.DRAFT) {
-      throw new BadRequestException(
-        'Can only confirm orders in "draft" status',
-      );
+      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
     }
 
     order.status = OrderStatus.CONFIRMED;
@@ -177,7 +174,7 @@ export class OrdersService {
     const order = await this.findOne(id, user);
 
     if (order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestException("Order already cancelled");
+      throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
     }
 
     order.status = OrderStatus.CANCELLED;
@@ -192,12 +189,12 @@ export class OrdersService {
       });
 
       if (!order) {
-        throw new NotFoundException("Order not found");
+        throw ApiErrors.ORDER_NOT_FOUND(id);
       }
 
       // Can only edit orders in "draft" status
       if (order.status !== OrderStatus.DRAFT) {
-        throw new BadRequestException('Can only edit orders in "draft" status');
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
       }
 
       // If recipient is being updated
@@ -206,7 +203,7 @@ export class OrdersService {
           where: { id: updateOrderDto.recipientId, user_id: user.id },
         });
         if (!recipient) {
-          throw new NotFoundException("Recipient not found");
+          throw ApiErrors.RECIPIENT_NOT_FOUND(updateOrderDto.recipientId);
         }
         order.recipient_id = updateOrderDto.recipientId;
       }
@@ -235,7 +232,7 @@ export class OrdersService {
         });
 
         if (products.length !== productIds.length) {
-          throw new NotFoundException("One or more products not found");
+          throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
         }
 
         const productMap = new Map(products.map((p) => [p.id, p]));
@@ -249,9 +246,7 @@ export class OrdersService {
 
           // Check if product has enough quantity
           if (product.quantity < itemDto.qty) {
-            throw new BadRequestException(
-              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
-            );
+            throw ApiErrors.VALIDATION_ERROR('quantity', `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`);
           }
 
           const lineTotalCents = product.sale_price_cents * itemDto.qty;
@@ -303,7 +298,7 @@ export class OrdersService {
   async remove(id: string, user: User): Promise<void> {
     const order = await this.findOne(id, user);
     if (!order) {
-      throw new NotFoundException("Order not found");
+      throw ApiErrors.ORDER_NOT_FOUND(id);
     }
 
     // Allow deletion of orders in any status

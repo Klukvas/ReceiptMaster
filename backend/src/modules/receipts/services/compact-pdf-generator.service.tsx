@@ -6,7 +6,8 @@ import * as path from 'path';
 import { EnvConfig } from '../../../config/env.schema';
 import { Order } from '../../orders/entities/order.entity';
 import { MoneyUtil } from '../../../common/utils/money.util';
-import { ObjectStorageService } from '../../../common/services/object-storage.service';
+import { PdfStorageService } from '../../../common/services/pdf-storage.service';
+import { ApiErrors } from '../../../common/errors/ApiError';
 
 
 
@@ -280,10 +281,10 @@ export class CompactPdfGeneratorService {
 
   constructor(
     private configService: ConfigService<EnvConfig>,
-    private objectStorageService: ObjectStorageService,
+    private pdfStorageService: PdfStorageService,
   ) {}
 
-  async generateReceiptPdf(order: Order, receiptNumber: string, companyName: string = ''): Promise<{ filePath: string; url: string }> {
+  async generateReceiptPdf(order: Order, receiptNumber: string, companyName: string = '', userId: string): Promise<{ filePath: string; url: string }> {
     try {
       this.logger.log('Starting compact PDF generation using @react-pdf/renderer...');
       this.logger.log('Order ID:', order.id);
@@ -313,15 +314,15 @@ export class CompactPdfGeneratorService {
 
       // Save to Object Storage
       this.logger.log('Saving compact PDF to Object Storage...');
-      const url = await this.objectStorageService.uploadReceipt(pdfBuffer, fileName);
-      const filePath = `object-storage://receipts/${fileName}`;
+      const url = await this.pdfStorageService.uploadReceipt(pdfBuffer, fileName, userId);
+      const filePath = `object-storage://receipts/${userId}/${fileName}`;
       this.logger.log(`Compact PDF saved to Object Storage: ${url}`);
 
       // Validate PDF format
       const isPdf = pdfBuffer.subarray(0, 4).toString('ascii') === '%PDF';
       if (!isPdf) {
         this.logger.error(`Generated file is not a valid PDF`);
-        throw new Error(`Generated file is not a valid PDF`);
+        throw ApiErrors.RECEIPT_GENERATION_FAILED(order.id);
       }
       this.logger.log(`Compact PDF file is valid and saved to Object Storage`);
 

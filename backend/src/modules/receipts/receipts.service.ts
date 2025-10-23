@@ -3,14 +3,16 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service";
 import { CompactPdfGeneratorService } from "./services/compact-pdf-generator.service";
-import { ObjectStorageService } from "../../common/services/object-storage.service";
+import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
@@ -23,6 +25,7 @@ const execAsync = promisify(exec);
 
 @Injectable()
 export class ReceiptsService {
+  private readonly logger = new Logger(ReceiptsService.name);
   private readonly MAX_RECEIPTS = 10; // Максимальное количество чеков
 
   constructor(
@@ -32,7 +35,7 @@ export class ReceiptsService {
     private ordersRepository: Repository<Order>,
     private reactPdfGeneratorService: ReactPdfGeneratorService,
     private compactPdfGeneratorService: CompactPdfGeneratorService,
-    private objectStorageService: ObjectStorageService,
+    private pdfStorageService: PdfStorageService,
     @InjectDataSource()
     private dataSource: DataSource,
     private configService: ConfigService,
@@ -46,14 +49,12 @@ export class ReceiptsService {
         relations: ["recipient", "items"],
       });
       if (!order) {
-        throw new NotFoundException("Заказ не найден");
+        throw ApiErrors.ORDER_NOT_FOUND(orderId);
       }
 
       // Проверяем статус заказа
       if (order.status !== OrderStatus.CONFIRMED) {
-        throw new BadRequestException(
-          "Можно создать чек только для подтвержденного заказа",
-        );
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       }
 
       // Проверяем, что чек еще не создан
@@ -61,7 +62,7 @@ export class ReceiptsService {
         where: { order_id: orderId, status: ReceiptStatus.GENERATED },
       });
       if (existingReceipt) {
-        throw new ConflictException("Чек для этого заказа уже существует");
+        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
       }
 
       // Очищаем старые чеки перед созданием нового
@@ -79,16 +80,17 @@ export class ReceiptsService {
           order,
           receiptNumber,
           companyName,
+          user.id,
         );
 
       // Вычисляем хеш файла для контроля целостности
       let fileBuffer: Buffer;
       if (filePath.startsWith('object-storage://')) {
-        const parsed = this.objectStorageService.parseObjectStoragePath(filePath);
+        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
         if (!parsed) {
-          throw new Error(`Invalid object storage path: ${filePath}`);
+          throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${filePath}`);
         }
-        fileBuffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+        fileBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
       } else {
         fileBuffer = await fs.readFile(filePath);
       }
@@ -117,14 +119,12 @@ export class ReceiptsService {
         relations: ["recipient", "items"],
       });
       if (!order) {
-        throw new NotFoundException("Заказ не найден");
+        throw ApiErrors.ORDER_NOT_FOUND(orderId);
       }
 
       // Проверяем статус заказа
       if (order.status !== OrderStatus.CONFIRMED) {
-        throw new BadRequestException(
-          "Можно создать чек только для подтвержденного заказа",
-        );
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       }
 
       // Проверяем, что чек еще не создан
@@ -132,7 +132,7 @@ export class ReceiptsService {
         where: { order_id: orderId, status: ReceiptStatus.GENERATED },
       });
       if (existingReceipt) {
-        throw new ConflictException("Чек для этого заказа уже существует");
+        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
       }
 
       // Очищаем старые чеки перед созданием нового
@@ -150,16 +150,17 @@ export class ReceiptsService {
           order,
           receiptNumber,
           companyName,
+          user.id,
         );
 
       // Вычисляем хеш файла для контроля целостности
       let fileBuffer: Buffer;
       if (filePath.startsWith('object-storage://')) {
-        const parsed = this.objectStorageService.parseObjectStoragePath(filePath);
+        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
         if (!parsed) {
-          throw new Error(`Invalid object storage path: ${filePath}`);
+          throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${filePath}`);
         }
-        fileBuffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+        fileBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
       } else {
         fileBuffer = await fs.readFile(filePath);
       }
@@ -188,14 +189,12 @@ export class ReceiptsService {
         relations: ["recipient", "items"],
       });
       if (!order) {
-        throw new NotFoundException("Заказ не найден");
+        throw ApiErrors.ORDER_NOT_FOUND(orderId);
       }
 
       // Проверяем статус заказа
       if (order.status !== OrderStatus.CONFIRMED) {
-        throw new BadRequestException(
-          "Можно создать чек только для подтвержденного заказа",
-        );
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       }
 
       // Проверяем, что чек еще не создан
@@ -203,7 +202,7 @@ export class ReceiptsService {
         where: { order_id: orderId, status: ReceiptStatus.GENERATED },
       });
       if (existingReceipt) {
-        throw new ConflictException("Чек для этого заказа уже существует");
+        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
       }
 
       // Очищаем старые чеки перед созданием нового
@@ -221,16 +220,17 @@ export class ReceiptsService {
           order,
           receiptNumber,
           companyName,
+          user.id,
         );
 
       // Вычисляем хеш файла для контроля целостности
       let fileBuffer: Buffer;
       if (filePath.startsWith('object-storage://')) {
-        const parsed = this.objectStorageService.parseObjectStoragePath(filePath);
+        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
         if (!parsed) {
-          throw new Error(`Invalid object storage path: ${filePath}`);
+          throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${filePath}`);
         }
-        fileBuffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+        fileBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
       } else {
         fileBuffer = await fs.readFile(filePath);
       }
@@ -265,7 +265,7 @@ export class ReceiptsService {
       relations: ["order", "order.recipient", "order.items"],
     });
     if (!receipt) {
-      throw new NotFoundException("Чек не найден");
+      throw ApiErrors.RECEIPT_NOT_FOUND(id);
     }
     return receipt;
   }
@@ -277,7 +277,7 @@ export class ReceiptsService {
     const receipt = await this.findOne(id, user);
 
     if (!receipt.pdf_path) {
-      throw new NotFoundException("PDF файл не найден");
+      throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
     }
 
     try {
@@ -285,18 +285,18 @@ export class ReceiptsService {
       
       // Check if it's an object storage path
       if (receipt.pdf_path.startsWith('object-storage://')) {
-        const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
+        const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
         if (!parsed) {
-          throw new Error(`Invalid object storage path: ${receipt.pdf_path}`);
+          throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${receipt.pdf_path}`);
         }
         
         // Check if file exists in object storage
-        const exists = await this.objectStorageService.fileExists(parsed.bucket, parsed.key);
+        const exists = await this.pdfStorageService.fileExists(parsed.bucket, parsed.key);
         if (!exists) {
-          throw new Error(`File not found in object storage: ${receipt.pdf_path}`);
+          throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
         }
         
-        buffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+        buffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
       } else {
         // Local file system path
         await fs.access(receipt.pdf_path);
@@ -307,7 +307,7 @@ export class ReceiptsService {
       return { buffer, filename };
     } catch (error) {
       // Если файл не найден, пытаемся регенерировать его
-      console.log(
+      this.logger.log(
         `PDF файл не найден: ${receipt.pdf_path}, пытаемся регенерировать...`,
       );
 
@@ -319,7 +319,7 @@ export class ReceiptsService {
         });
 
         if (!order) {
-          throw new NotFoundException("Заказ не найден для регенерации PDF");
+          throw ApiErrors.ORDER_NOT_FOUND(receipt.order_id);
         }
 
         // Регенерируем PDF
@@ -329,6 +329,7 @@ export class ReceiptsService {
             order,
             receipt.number,
             companyName,
+            user.id,
           );
 
         // Обновляем путь к файлу в базе данных
@@ -339,24 +340,22 @@ export class ReceiptsService {
         // Читаем новый файл
         let buffer: Buffer;
         if (filePath.startsWith('object-storage://')) {
-          const parsed = this.objectStorageService.parseObjectStoragePath(filePath);
+          const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
           if (!parsed) {
-            throw new Error(`Invalid object storage path: ${filePath}`);
+            throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${filePath}`);
           }
-          buffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+          buffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
         } else {
           buffer = await fs.readFile(filePath);
         }
         
         const filename = `receipt-${receipt.number}.pdf`;
 
-        console.log(`PDF успешно регенерирован: ${filePath}`);
+        this.logger.log(`PDF успешно регенерирован: ${filePath}`);
         return { buffer, filename };
       } catch (regenerateError) {
-        console.error("Ошибка при регенерации PDF:", regenerateError);
-        throw new NotFoundException(
-          "PDF файл не найден и не может быть регенерирован",
-        );
+        this.logger.error("Ошибка при регенерации PDF:", regenerateError);
+        throw ApiErrors.RECEIPT_GENERATION_FAILED(receipt.order_id);
       }
     }
   }
@@ -371,24 +370,24 @@ export class ReceiptsService {
     });
 
     if (!order) {
-      throw new NotFoundException("Заказ не найден для регенерации PDF");
+      throw ApiErrors.ORDER_NOT_FOUND(receipt.order_id);
     }
 
     // Удаляем старый файл, если он существует
     if (receipt.pdf_path) {
       try {
         if (receipt.pdf_path.startsWith('object-storage://')) {
-          const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
+          const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
           if (parsed) {
-            await this.objectStorageService.deleteFile(parsed.bucket, parsed.key);
-            console.log(`Старый PDF файл удален из object storage: ${receipt.pdf_path}`);
+            await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key);
+            this.logger.log(`Старый PDF файл удален из object storage: ${receipt.pdf_path}`);
           }
         } else {
           await fs.unlink(receipt.pdf_path);
-          console.log(`Старый PDF файл удален: ${receipt.pdf_path}`);
+          this.logger.log(`Старый PDF файл удален: ${receipt.pdf_path}`);
         }
       } catch (error) {
-        console.warn(`Не удалось удалить старый PDF файл: ${error.message}`);
+        this.logger.warn(`Не удалось удалить старый PDF файл: ${error.message}`);
       }
     }
 
@@ -399,16 +398,17 @@ export class ReceiptsService {
         order,
         receipt.number,
         companyName,
+        user.id,
       );
 
     // Вычисляем хеш нового файла
     let fileBuffer: Buffer;
     if (filePath.startsWith('object-storage://')) {
-      const parsed = this.objectStorageService.parseObjectStoragePath(filePath);
+      const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
       if (!parsed) {
-        throw new Error(`Invalid object storage path: ${filePath}`);
+        throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${filePath}`);
       }
-      fileBuffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+      fileBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
     } else {
       fileBuffer = await fs.readFile(filePath);
     }
@@ -420,7 +420,7 @@ export class ReceiptsService {
     receipt.hash = hash;
 
     const updatedReceipt = await this.receiptsRepository.save(receipt);
-    console.log(`PDF успешно регенерирован: ${filePath}`);
+    this.logger.log(`PDF успешно регенерирован: ${filePath}`);
 
     return updatedReceipt;
   }
@@ -436,7 +436,7 @@ export class ReceiptsService {
       );
       return _result[0].receipt_number;
     } catch (error) {
-      console.error("Error generating receipt number:", error);
+      this.logger.error("Error generating receipt number:", error);
       // Fallback: генерируем номер вручную
       const year = new Date().getFullYear();
       const timestamp = Date.now().toString().slice(-6);
@@ -476,7 +476,7 @@ export class ReceiptsService {
         `);
       }
     } catch (error) {
-      console.error("Error ensuring receipt number function:", error);
+      this.logger.error("Error ensuring receipt number function:", error);
       throw error;
     }
   }
@@ -499,7 +499,7 @@ export class ReceiptsService {
         return "";
       }
     } catch (error) {
-      console.error("Error reading company name:", error);
+      this.logger.error("Error reading company name:", error);
       return "";
     }
   }
@@ -520,22 +520,17 @@ export class ReceiptsService {
           take: totalReceipts - (this.MAX_RECEIPTS - 1), // Удаляем все кроме MAX_RECEIPTS-1 самых новых
         });
 
-        // Удаляем файлы с диска или из object storage
+        // Удаляем файлы из object storage
         for (const receipt of oldReceipts) {
-          if (receipt.pdf_path) {
+          if (receipt.pdf_path && receipt.pdf_path.startsWith('object-storage://')) {
             try {
-              if (receipt.pdf_path.startsWith('object-storage://')) {
-                const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
-                if (parsed) {
-                  await this.objectStorageService.deleteFile(parsed.bucket, parsed.key);
-                  console.log(`Deleted receipt file from object storage: ${receipt.pdf_path}`);
-                }
-              } else {
-                await fs.unlink(receipt.pdf_path);
-                console.log(`Deleted receipt file: ${receipt.pdf_path}`);
+              const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
+              if (parsed) {
+                await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key);
+                this.logger.log(`Deleted receipt file from object storage: ${receipt.pdf_path}`);
               }
             } catch (error) {
-              console.warn(
+              this.logger.warn(
                 `Failed to delete receipt file ${receipt.pdf_path}:`,
                 error,
               );
@@ -547,11 +542,11 @@ export class ReceiptsService {
         if (oldReceipts.length > 0) {
           const receiptIds = oldReceipts.map((receipt) => receipt.id);
           await manager.delete(Receipt, receiptIds);
-          console.log(`Cleaned up ${oldReceipts.length} old receipts`);
+          this.logger.log(`Cleaned up ${oldReceipts.length} old receipts`);
         }
       }
     } catch (error) {
-      console.error("Error cleaning up old receipts:", error);
+      this.logger.error("Error cleaning up old receipts:", error);
       // Не прерываем создание чека из-за ошибки очистки
     }
   }
@@ -583,7 +578,7 @@ export class ReceiptsService {
 
       return { printers };
     } catch (error) {
-      console.error("Error getting printers:", error);
+      this.logger.error("Error getting printers:", error);
       return { printers: [] };
     }
   }
@@ -598,25 +593,25 @@ export class ReceiptsService {
       const receipt = await this.findOne(receiptId, user);
 
       if (!receipt.pdf_path) {
-        throw new Error("PDF файл не найден");
+        throw ApiErrors.FILE_NOT_FOUND(receiptId);
       }
 
       // Проверяем существование файла
       try {
         if (receipt.pdf_path.startsWith('object-storage://')) {
-          const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
+          const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
           if (!parsed) {
-            throw new Error(`Invalid object storage path: ${receipt.pdf_path}`);
+            throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${receipt.pdf_path}`);
           }
-          const exists = await this.objectStorageService.fileExists(parsed.bucket, parsed.key);
+          const exists = await this.pdfStorageService.fileExists(parsed.bucket, parsed.key);
           if (!exists) {
-            throw new Error("PDF файл не найден в object storage");
+            throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
           }
         } else {
           await fs.access(receipt.pdf_path);
         }
       } catch {
-        throw new Error("PDF файл не найден");
+        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
       }
 
       // Для object storage файлов нужно сначала скачать их
@@ -625,12 +620,12 @@ export class ReceiptsService {
 
       if (receipt.pdf_path.startsWith('object-storage://')) {
         // Скачиваем файл из object storage во временную папку
-        const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
+        const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
         if (!parsed) {
-          throw new Error(`Invalid object storage path: ${receipt.pdf_path}`);
+          throw ApiErrors.VALIDATION_ERROR('pdf_path', `Invalid object storage path: ${receipt.pdf_path}`);
         }
         
-        const fileBuffer = await this.objectStorageService.downloadFile(parsed.bucket, parsed.key);
+        const fileBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
         tempFilePath = path.join(process.cwd(), 'temp', `receipt-${receipt.number}-${Date.now()}.pdf`);
         
         // Создаем папку temp если её нет
@@ -659,11 +654,11 @@ export class ReceiptsService {
           ? `powershell -Command "Start-Process -FilePath '${filePathToPrint}' -Verb Print -WindowStyle Hidden"`
           : `powershell -Command "Start-Process -FilePath '${filePathToPrint}' -Verb Print -WindowStyle Hidden"`;
       } else {
-        throw new Error(`Неподдерживаемая операционная система: ${platform}`);
+        throw ApiErrors.BAD_REQUEST(`Unsupported operating system: ${platform}`);
       }
 
       // Выполняем команду печати
-      console.log(
+      this.logger.log(
         `Printing receipt ${receipt.number} with command: ${printCommand}`,
       );
       const { stderr } = await execAsync(printCommand);
@@ -672,24 +667,24 @@ export class ReceiptsService {
       if (tempFilePath) {
         try {
           await fs.unlink(tempFilePath);
-          console.log(`Temporary file deleted: ${tempFilePath}`);
+          this.logger.log(`Temporary file deleted: ${tempFilePath}`);
         } catch (error) {
-          console.warn(`Failed to delete temporary file: ${error.message}`);
+          this.logger.warn(`Failed to delete temporary file: ${error.message}`);
         }
       }
 
       if (stderr && !stderr.includes("warning")) {
-        console.error("Print command stderr:", stderr);
-        throw new Error(`Ошибка печати: ${stderr}`);
+        this.logger.error("Print command stderr:", stderr);
+        throw ApiErrors.RECEIPT_PRINT_FAILED(receiptId);
       }
 
-      console.log(`Receipt ${receipt.number} sent to printer successfully`);
+      this.logger.log(`Receipt ${receipt.number} sent to printer successfully`);
       return {
         success: true,
         message: `Чек ${receipt.number} отправлен на печать${printerName ? ` (принтер: ${printerName})` : ""}`,
       };
     } catch (error) {
-      console.error("Error printing receipt:", error);
+      this.logger.error("Error printing receipt:", error);
       return {
         success: false,
         message: `Ошибка при печати чека: ${error.message}`,
@@ -709,17 +704,17 @@ export class ReceiptsService {
         if (receipt.pdf_path) {
           try {
             if (receipt.pdf_path.startsWith('object-storage://')) {
-              const parsed = this.objectStorageService.parseObjectStoragePath(receipt.pdf_path);
+              const parsed = this.pdfStorageService.parseObjectStoragePath(receipt.pdf_path);
               if (parsed) {
-                await this.objectStorageService.deleteFile(parsed.bucket, parsed.key);
-                console.log(`Deleted receipt file from object storage: ${receipt.pdf_path}`);
+                await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key);
+                this.logger.log(`Deleted receipt file from object storage: ${receipt.pdf_path}`);
               }
             } else {
               await fs.unlink(receipt.pdf_path);
-              console.log(`Deleted receipt file: ${receipt.pdf_path}`);
+              this.logger.log(`Deleted receipt file: ${receipt.pdf_path}`);
             }
           } catch (error) {
-            console.warn(
+            this.logger.warn(
               `Failed to delete receipt file ${receipt.pdf_path}:`,
               error,
             );
@@ -730,12 +725,12 @@ export class ReceiptsService {
       // Delete receipt records from database
       if (receipts.length > 0) {
         await this.receiptsRepository.delete({ order_id: orderId });
-        console.log(
+        this.logger.log(
           `Deleted ${receipts.length} receipt records for order ${orderId}`,
         );
       }
     } catch (error) {
-      console.error("Error deleting receipt files for order:", error);
+      this.logger.error("Error deleting receipt files for order:", error);
       // Don't throw error to avoid breaking order deletion
     }
   }

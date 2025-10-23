@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
+import { parseApiError } from '../../lib/api-errors';
 
 export const RegisterForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -35,8 +36,8 @@ export const RegisterForm: React.FC = () => {
     try {
       await register(email, password, firstName, lastName);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || 'Ошибка регистрации');
+      const apiError = parseApiError(err);
+      setError(apiError.message);
     } finally {
       setIsLoading(false);
     }

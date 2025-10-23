@@ -2,7 +2,9 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
 import axios, { AxiosInstance } from "axios";
@@ -20,6 +22,7 @@ import { UserSession, UserState } from "./interfaces/cart.interface";
 
 @Injectable()
 export class TelegramService {
+  private readonly logger = new Logger(TelegramService.name);
   private readonly botToken: string;
   private readonly http: AxiosInstance;
   private userSessions: Map<number, UserSession> = new Map();
@@ -33,7 +36,7 @@ export class TelegramService {
   ) {
     this.botToken = process.env.TELEGRAM_BOT_TOKEN || "";
     if (!this.botToken) {
-      throw new Error("TELEGRAM_BOT_TOKEN is not set");
+      throw ApiErrors.INTERNAL_SERVER_ERROR("TELEGRAM_BOT_TOKEN is not set");
     }
     this.http = axios.create({
       baseURL: `https://api.telegram.org/bot${this.botToken}`,
@@ -79,7 +82,7 @@ export class TelegramService {
   private async tgPost<T = any>(path: string, payload: any): Promise<T> {
     const { data } = await this.http.post(path, payload);
     if (!data?.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(data)}`);
+      throw ApiErrors.INTERNAL_SERVER_ERROR(`Telegram API error: ${JSON.stringify(data)}`);
     }
     return data.result as T;
   }
@@ -164,7 +167,7 @@ export class TelegramService {
       // other update types ignored for MVP
     } catch (e) {
       // DON'T throw outside: controller already returned 200
-      console.error("handleWebhook error", e);
+      this.logger.error("handleWebhook error", e);
     }
   }
 
@@ -175,7 +178,7 @@ export class TelegramService {
 
     if (!user) return;
 
-    console.log(
+    this.logger.log(
       `Handling message from ${user?.first_name} (${user?.id}): "${text}"`,
     );
 
@@ -208,7 +211,7 @@ export class TelegramService {
     const userId = cq.from.id;
     const data = cq.data ?? "";
 
-    console.log(`Callback query received: ${data} from user ${userId}`);
+    this.logger.log(`Callback query received: ${data} from user ${userId}`);
 
     try {
       const session = this.getOrCreateUserSession(userId);
@@ -253,7 +256,7 @@ export class TelegramService {
         });
       }
     } catch (error) {
-      console.error("Error handling callback query:", error);
+      this.logger.error("Error handling callback query:", error);
       await this.answerCallbackQuery(cq.id, {
         text: "Произошла ошибка",
         show_alert: true,
@@ -303,15 +306,13 @@ export class TelegramService {
         lock: { mode: "pessimistic_write" },
       });
       if (products.length !== productIds.length) {
-        throw new NotFoundException("Один или несколько товаров не найдены");
+        throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
       }
 
       // 3) Validations: single currency, stock availability
       const currencies = new Set(products.map((p) => p.currency));
       if (currencies.size !== 1) {
-        throw new BadRequestException(
-          "Все товары в заказе должны быть в одной валюте",
-        );
+        throw ApiErrors.VALIDATION_ERROR("currency", "Все товары в заказе должны быть в одной валюте");
       }
       const currency = products[0].currency;
 
@@ -321,9 +322,7 @@ export class TelegramService {
       for (const it of dto.items) {
         const p = byId.get(it.productId)!;
         if (p.quantity < it.qty) {
-          throw new BadRequestException(
-            `Недостаточно товара "${p.name}". Доступно: ${p.quantity}, запрошено: ${it.qty}`,
-          );
+          throw ApiErrors.VALIDATION_ERROR("quantity", `Недостаточно товара "${p.name}". Доступно: ${p.quantity}, запрошено: ${it.qty}`);
         }
         subtotalCents += p.sale_price_cents * it.qty;
       }
@@ -652,7 +651,7 @@ export class TelegramService {
         { parse_mode: "Markdown" },
       );
     } catch (error) {
-      console.error("Error adding product:", error);
+      this.logger.error("Error adding product:", error);
       await this.answerCallbackQuery(callbackQuery.id, {
         text: "Ошибка при добавлении товара",
         show_alert: true,
@@ -763,7 +762,7 @@ export class TelegramService {
         { parse_mode: "Markdown" },
       );
     } catch (error) {
-      console.error("Error handling quantity input:", error);
+      this.logger.error("Error handling quantity input:", error);
       await this.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте снова.");
       await this.updateUserSession(session.userId, {
         state: UserState.SELECTING_PRODUCT,
@@ -913,7 +912,7 @@ export class TelegramService {
         { parse_mode: "Markdown" },
       );
     } catch (error) {
-      console.error("Error confirming order:", error);
+      this.logger.error("Error confirming order:", error);
 
       let errorMessage =
         "❌ Произошла ошибка при создании заказа. Попробуйте снова.";
@@ -983,7 +982,7 @@ export class TelegramService {
         },
       });
     } catch (error) {
-      console.error("Error sending products list:", error);
+      this.logger.error("Error sending products list:", error);
       await this.sendMessage(
         chatId,
         "❌ Ошибка при загрузке товаров. Попробуйте позже.",

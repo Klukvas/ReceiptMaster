@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
@@ -31,7 +32,7 @@ export class UsersService {
     });
 
     if (existingUser) {
-      throw new ConflictException("Пользователь с таким email уже существует");
+      throw ApiErrors.USER_ALREADY_EXISTS(registerDto.email);
     }
 
     // Хешируем пароль
@@ -72,13 +73,13 @@ export class UsersService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException("Неверные учетные данные");
+      throw ApiErrors.INVALID_CREDENTIALS();
     }
 
     // Проверяем пароль
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException("Неверные учетные данные");
+      throw ApiErrors.INVALID_CREDENTIALS();
     }
 
     // Генерируем JWT токен

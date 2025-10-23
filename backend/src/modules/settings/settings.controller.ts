@@ -8,20 +8,29 @@ import {
   HttpException,
   HttpStatus,
   Body,
+  UseGuards,
+  Request,
+  Logger,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { EnvConfig } from "../../config/env.schema";
-import { ObjectStorageService } from "../../common/services/object-storage.service";
+import { LogoStorageService } from "../../common/services/logo-storage.service";
+import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
+import { User } from "../users/entities/user.entity";
 
 @Controller("settings")
+@UseGuards(JwtAuthGuard)
 export class SettingsController {
+  private readonly logger = new Logger(SettingsController.name);
+  
   constructor(
     private configService: ConfigService<EnvConfig>,
-    private objectStorageService: ObjectStorageService,
+    private logoStorageService: LogoStorageService,
   ) {}
 
   @Post("logo/upload")
@@ -38,56 +47,61 @@ export class SettingsController {
       },
     }),
   )
-  async uploadLogo(@UploadedFile() file: Express.Multer.File) {
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: { user: User }
+  ) {
     if (!file) {
-      throw new HttpException("No file uploaded", HttpStatus.BAD_REQUEST);
+      throw ApiErrors.REQUIRED_FIELD_MISSING("logo file");
     }
 
     try {
-      // Загружаем в Object Storage
-      const filename = `logo-${Date.now()}.png`;
-      const url = await this.objectStorageService.uploadLogo(file.buffer, filename);
+      // Удаляем старый логотип пользователя, если он существует
+      try {
+        await this.logoStorageService.deleteUserLogo(req.user.id);
+      } catch (error) {
+        // Игнорируем ошибку, если логотип не найден
+        this.logger.log("No existing logo to delete for user:", req.user.id);
+      }
+
+      // Загружаем новый логотип в Object Storage
+      const url = await this.logoStorageService.uploadLogo(file.buffer, req.user.id);
       
       return {
         message: "Logo uploaded successfully to Object Storage",
-        filename: filename,
+        filename: `logo-${req.user.id}.png`,
         originalName: file.originalname,
         size: file.size,
         url: url,
+        userId: req.user.id,
       };
     } catch (error) {
-      throw new HttpException(
-        "Failed to save logo",
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw ApiErrors.FILE_UPLOAD_FAILED("logo");
     }
   }
 
   @Get("logo")
-  async getLogo(@Res() res: Response) {
+  async getLogo(@Res() res: Response, @Request() req: { user: User }) {
     try {
-      const logoPath = path.join(process.cwd(), "src", "assets", "logo.png");
-
-      // Check if logo exists
-      try {
-        await fs.access(logoPath);
-      } catch {
-        return res.status(404).json({ message: "Logo not found" });
-      }
-
-      const logoBuffer = await fs.readFile(logoPath);
+      // Получаем логотип пользователя из Object Storage
+      const logoBuffer = await this.logoStorageService.downloadLogo(req.user.id);
+      
       res.set({
         "Content-Type": "image/png",
         "Content-Length": logoBuffer.length.toString(),
+        "Cache-Control": "public, max-age=3600", // Кешируем на 1 час
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        "Access-Control-Expose-Headers": "Content-Type, Content-Length",
       });
       res.send(logoBuffer);
     } catch (error) {
-      throw new HttpException(
-        "Failed to retrieve logo",
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.error("Failed to retrieve logo from Object Storage:", error);
+      return res.status(404).json({ message: "Logo not found" });
     }
   }
+
 
   @Post("company-name")
   async updateCompanyName(@Body() body: { companyName: string }) {
@@ -110,10 +124,7 @@ export class SettingsController {
         companyName: settings.companyName,
       };
     } catch (error) {
-      throw new HttpException(
-        "Failed to update company name",
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw ApiErrors.INVALID_SETTINGS("company name");
     }
   }
 
@@ -140,36 +151,40 @@ export class SettingsController {
         };
       }
     } catch (error) {
-      throw new HttpException(
-        "Failed to retrieve company name",
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw ApiErrors.SETTINGS_NOT_FOUND();
+    }
+  }
+
+  @Get("logo/exists")
+  async checkLogoExists(@Request() req: { user: User }) {
+    try {
+      const hasLogo = await this.logoStorageService.userHasLogo(req.user.id);
+      return {
+        hasLogo,
+        userId: req.user.id,
+        message: hasLogo ? "Logo exists" : "No logo found"
+      };
+    } catch (error) {
+      throw ApiErrors.INTERNAL_SERVER_ERROR("Failed to check logo existence");
     }
   }
 
   @Post("logo/delete")
-  async deleteLogo() {
+  async deleteLogo(@Request() req: { user: User }) {
     try {
-      const logoPath = path.join(process.cwd(), "src", "assets", "logo.png");
-
-      try {
-        await fs.unlink(logoPath);
-        return {
-          message: "Logo deleted successfully",
-        };
-      } catch (error) {
-        if (error.code === "ENOENT") {
-          return {
-            message: "Logo not found",
-          };
-        }
-        throw error;
-      }
+      await this.logoStorageService.deleteUserLogo(req.user.id);
+      return {
+        message: "Logo deleted successfully",
+        userId: req.user.id,
+      };
     } catch (error) {
-      throw new HttpException(
-        "Failed to delete logo",
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      if (error.message.includes('No logo found')) {
+        return {
+          message: "Logo not found",
+          userId: req.user.id,
+        };
+      }
+      throw ApiErrors.FILE_DELETE_FAILED("logo");
     }
   }
 }

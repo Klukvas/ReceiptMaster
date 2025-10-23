@@ -4,6 +4,7 @@ import {
   // ConflictException,
   BadRequestException,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { Product } from "./entities/product.entity";
@@ -49,7 +50,7 @@ export class ProductsService {
       where: { id, user_id: user.id } 
     });
     if (!product) {
-      throw new NotFoundException("Товар не найден");
+      throw ApiErrors.PRODUCT_NOT_FOUND(id);
     }
     return product;
   }
@@ -79,9 +80,7 @@ export class ProductsService {
     );
 
     if (parseInt(activeOrders[0].count) > 0) {
-      throw new BadRequestException(
-        "Нельзя удалить товар, который используется в подтвержденных заказах",
-      );
+      throw ApiErrors.BAD_REQUEST("Нельзя удалить товар, который используется в подтвержденных заказах");
     }
 
     // Удаляем товар и связанные записи в транзакции

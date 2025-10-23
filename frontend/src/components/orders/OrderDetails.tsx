@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
-import { formatCurrency, formatDate, type Order } from '../lib/api';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
+import { formatCurrency, formatDate, type Order } from '../../lib/api';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 
 interface OrderDetailsProps {
   order: Order;

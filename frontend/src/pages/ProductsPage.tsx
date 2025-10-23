@@ -4,8 +4,8 @@ import { Edit, Trash2, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react'
 import { productsApi, formatCurrency, type Product } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { ProductForm } from '../components/ProductForm';
-import { DeleteConfirmation } from '../components/DeleteConfirmation';
+import { ProductForm } from '../components/products/ProductForm';
+import { DeleteConfirmation } from '../components/common/DeleteConfirmation';
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);

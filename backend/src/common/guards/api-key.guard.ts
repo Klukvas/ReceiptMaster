@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from "@nestjs/common";
+import { ApiErrors } from "../errors/ApiError";
 import { ConfigService } from "@nestjs/config";
 import { EnvConfig } from "../../config/env.schema";
 
@@ -22,7 +23,7 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     if (!apiKey || apiKey !== expectedApiKey) {
-      throw new UnauthorizedException("Неверный API ключ");
+      throw ApiErrors.UNAUTHORIZED();
     }
 
     return true;

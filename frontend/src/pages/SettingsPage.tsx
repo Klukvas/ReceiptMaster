@@ -1,6 +1,7 @@
-import { LogoUpload } from '../components/LogoUpload';
+import { LogoUpload } from '../components/settings/LogoUpload';
 
 export const SettingsPage = () => {
+
   return (
     <div className="space-y-6">
       <div>

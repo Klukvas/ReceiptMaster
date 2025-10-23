@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { recipientsApi, type Recipient } from '../lib/api';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Card } from './ui/Card';
+import { recipientsApi, type Recipient } from '../../lib/api';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Card } from '../ui/Card';
 
 interface RecipientFormProps {
   recipient?: Recipient | null;

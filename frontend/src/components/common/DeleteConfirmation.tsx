@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 
 interface DeleteConfirmationProps {
   isOpen: boolean;

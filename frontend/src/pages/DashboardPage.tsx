@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
-import { RevenueDashboard } from '../components/RevenueDashboard';
-import { TurnoverDashboard } from '../components/TurnoverDashboard';
+import { RevenueDashboard } from '../components/dashboard/RevenueDashboard';
+import { TurnoverDashboard } from '../components/dashboard/TurnoverDashboard';
 
 export const DashboardPage = () => {
   const [dateRange, setDateRange] = useState({

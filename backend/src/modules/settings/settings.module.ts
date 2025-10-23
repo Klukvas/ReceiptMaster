@@ -1,12 +1,12 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { SettingsController } from "./settings.controller";
-import { ObjectStorageService } from "../../common/services/object-storage.service";
+import { LogoStorageService } from "../../common/services/logo-storage.service";
 
 @Module({
   imports: [ConfigModule],
   controllers: [SettingsController],
-  providers: [ObjectStorageService],
-  exports: [ObjectStorageService],
+  providers: [LogoStorageService],
+  exports: [LogoStorageService],
 })
 export class SettingsModule {}

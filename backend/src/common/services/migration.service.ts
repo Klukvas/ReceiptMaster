@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap, Inject } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { getDataSourceToken } from '@nestjs/typeorm';
@@ -6,6 +6,8 @@ import { EnvConfig } from '../../config/env.schema';
 
 @Injectable()
 export class MigrationService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(MigrationService.name);
+  
   constructor(
     @Inject(getDataSourceToken())
     private readonly dataSource: DataSource,
@@ -18,15 +20,15 @@ export class MigrationService implements OnApplicationBootstrap {
     
     if (autoRunMigrations) {
       try {
-        console.log(`Running database migrations in ${nodeEnv} mode...`);
+        this.logger.log(`Running database migrations in ${nodeEnv} mode...`);
         await this.dataSource.runMigrations();
-        console.log('Database migrations completed successfully');
+        this.logger.log('Database migrations completed successfully');
       } catch (error) {
-        console.error('Error running migrations:', error);
+        this.logger.error('Error running migrations:', error);
         process.exit(1);
       }
     } else {
-      console.log('Automatic migrations disabled. Run migrations manually with: yarn migration:run');
+      this.logger.log('Automatic migrations disabled. Run migrations manually with: yarn migration:run');
     }
   }
 }

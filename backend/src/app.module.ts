@@ -4,7 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { APP_FILTER } from "@nestjs/core";
 import { envSchema } from "./config/env.schema";
 // import { createDataSource } from "./config/database.config";
-import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { GlobalExceptionFilter } from "./common/filters/GlobalExceptionFilter";
 import { ProductsModule } from "./modules/products/products.module";
 import { RecipientsModule } from "./modules/recipients/recipients.module";
 import { OrdersModule } from "./modules/orders/orders.module";
@@ -63,7 +63,7 @@ import { MigrationService } from "./common/services/migration.service";
   providers: [
     {
       provide: APP_FILTER,
-      useClass: HttpExceptionFilter,
+      useClass: GlobalExceptionFilter,
     },
     MigrationService,
   ],

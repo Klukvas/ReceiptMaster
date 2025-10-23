@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Upload, X, Image as ImageIcon, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { settingsApi } from '../lib/api';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Input } from './ui/Input';
+import { settingsApi } from '../../lib/api';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Input } from '../ui/Input';
 
 export const LogoUpload = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -14,12 +14,31 @@ export const LogoUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current logo
-  const { refetch: refetchLogo, isSuccess: hasLogo, error: logoError } = useQuery({
+  const { refetch: refetchLogo, isSuccess: hasLogo, error: logoError, data: logoData, isLoading: logoLoading } = useQuery({
     queryKey: ['logo'],
     queryFn: () => settingsApi.getLogo(),
     enabled: true, // Auto-fetch logo
     retry: false, // Don't retry on 404
   });
+
+  // Create blob URL for logo display
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (logoData && hasLogo && !logoError) {
+      // Create blob URL from the data
+      // logoData.data is the Blob when responseType is 'blob'
+      const url = URL.createObjectURL(logoData.data);
+      setLogoUrl(url);
+      
+      // Cleanup function to revoke the URL when component unmounts or logo changes
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } else {
+      setLogoUrl(null);
+    }
+  }, [logoData, hasLogo, logoError]);
 
   // Get current company name
   const { data: companyNameData } = useQuery({
@@ -165,22 +184,44 @@ export const LogoUpload = () => {
         </div>
 
         {/* Current Logo Display */}
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
           <div className="text-center">
-            {hasLogo && !logoError ? (
-              <div className="space-y-3">
-                <img
-                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/settings/logo`}
-                  alt="Current logo"
-                  className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
-                  onError={(e) => {
-                    // Hide the image if it fails to load
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
+            <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+              Текущий логотип
+            </h4>
+            {logoLoading ? (
+              <div className="space-y-4">
+                <div className="mx-auto h-32 w-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                  <div className="text-gray-400 dark:text-gray-500 text-sm">Загрузка...</div>
+                </div>
                 <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Текущий логотип
+                  Загрузка логотипа...
                 </p>
+              </div>
+            ) : hasLogo && !logoError && logoUrl ? (
+              <div className="space-y-4">
+                <div className="relative inline-block">
+                  <img
+                    src={logoUrl}
+                    alt="Current logo"
+                    className="mx-auto h-32 w-32 object-contain border-2 border-gray-200 dark:border-gray-600 rounded-lg shadow-sm"
+                    onError={(e) => {
+                      console.error('Failed to load logo image');
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                    Активен
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    ✓ Логотип загружен и используется в документах
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Логотип отображается в PDF чеках и других документах
+                  </p>
+                </div>
                 <Button
                   variant="danger"
                   size="sm"
@@ -191,12 +232,46 @@ export const LogoUpload = () => {
                   {deleteLogoMutation.isPending ? 'Удаление...' : 'Удалить логотип'}
                 </Button>
               </div>
+            ) : logoError ? (
+              <div className="space-y-4">
+                <div className="relative inline-block">
+                  <ImageIcon className="mx-auto h-16 w-16 text-red-400 dark:text-red-500" />
+                  <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                    Ошибка
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    Ошибка загрузки логотипа
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {logoError.message || 'Не удалось загрузить логотип'}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => refetchLogo()}
+                  >
+                    Попробовать снова
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <div>
-                <ImageIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                  Логотип не загружен
-                </p>
+              <div className="space-y-4">
+                <div className="relative inline-block">
+                  <ImageIcon className="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500" />
+                  <div className="absolute -top-2 -right-2 bg-gray-400 text-white text-xs px-2 py-1 rounded-full">
+                    Не установлен
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Логотип не загружен
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Загрузите логотип для отображения в документах
+                  </p>
+                </div>
               </div>
             )}
           </div>

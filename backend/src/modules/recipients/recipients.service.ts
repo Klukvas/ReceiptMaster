@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
@@ -45,7 +46,7 @@ export class RecipientsService {
       where: { id, user_id: user.id },
     });
     if (!recipient) {
-      throw new NotFoundException("Получатель не найден");
+      throw ApiErrors.RECIPIENT_NOT_FOUND(id);
     }
     return recipient;
   }
@@ -72,9 +73,7 @@ export class RecipientsService {
       .getCount();
 
     if (ordersCount > 0) {
-      throw new BadRequestException(
-        "Нельзя удалить получателя, у которого есть заказы",
-      );
+      throw ApiErrors.BAD_REQUEST("Нельзя удалить получателя, у которого есть заказы");
     }
 
     await this.recipientsRepository.remove(recipient);
