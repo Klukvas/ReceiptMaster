@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 import { Order } from "./order.entity";
 import { Product } from "../../products/entities/product.entity";
+import { User } from "../../users/entities/user.entity";
 
 @Entity("order_items")
 export class OrderItem {
@@ -31,6 +32,13 @@ export class OrderItem {
 
   @Column({ type: "integer" })
   line_total_cents: number;
+
+  @Column({ type: "uuid" })
+  user_id: string;
+
+  @ManyToOne(() => User, (user) => user.orderItems)
+  @JoinColumn({ name: "user_id" })
+  user: User;
 
   @ManyToOne(() => Order, (order) => order.items, { onDelete: "CASCADE" })
   @JoinColumn({ name: "order_id" })

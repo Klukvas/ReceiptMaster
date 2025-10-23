@@ -12,6 +12,7 @@ import {
 import { Recipient } from "../../recipients/entities/recipient.entity";
 import { OrderItem } from "./order-item.entity";
 import { Receipt } from "../../receipts/entities/receipt.entity";
+import { User } from "../../users/entities/user.entity";
 
 export enum OrderStatus {
   DRAFT = "draft",
@@ -43,6 +44,13 @@ export class Order {
 
   @Column({ type: "varchar", length: 50, default: "manually" })
   created_by: string;
+
+  @Column({ type: "uuid" })
+  user_id: string;
+
+  @ManyToOne(() => User, (user) => user.orders)
+  @JoinColumn({ name: "user_id" })
+  user: User;
 
   @CreateDateColumn()
   created_at: Date;

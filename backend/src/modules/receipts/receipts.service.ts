@@ -11,6 +11,7 @@ import { Order, OrderStatus } from "../orders/entities/order.entity";
 import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service";
 import { CompactPdfGeneratorService } from "./services/compact-pdf-generator.service";
 import { ObjectStorageService } from "../../common/services/object-storage.service";
+import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -37,11 +38,11 @@ export class ReceiptsService {
     private configService: ConfigService,
   ) {}
 
-  async generateReceipt(orderId: string): Promise<Receipt> {
+  async generateReceipt(orderId: string, user: User): Promise<Receipt> {
     return this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа
+      // Проверяем существование заказа и принадлежность пользователю
       const order = await manager.findOne(Order, {
-        where: { id: orderId },
+        where: { id: orderId, user_id: user.id },
         relations: ["recipient", "items"],
       });
       if (!order) {
@@ -101,17 +102,18 @@ export class ReceiptsService {
         pdf_url: url,
         hash,
         status: ReceiptStatus.GENERATED,
+        user_id: user.id,
       });
 
       return manager.save(Receipt, receipt);
     });
   }
 
-  async generateCompactReceipt(orderId: string): Promise<Receipt> {
+  async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
     return this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа
+      // Проверяем существование заказа и принадлежность пользователю
       const order = await manager.findOne(Order, {
-        where: { id: orderId },
+        where: { id: orderId, user_id: user.id },
         relations: ["recipient", "items"],
       });
       if (!order) {
@@ -171,17 +173,18 @@ export class ReceiptsService {
         pdf_url: url,
         hash,
         status: ReceiptStatus.GENERATED,
+        user_id: user.id,
       });
 
       return manager.save(Receipt, receipt);
     });
   }
 
-  async generateStandardReceipt(orderId: string): Promise<Receipt> {
+  async generateStandardReceipt(orderId: string, user: User): Promise<Receipt> {
     return this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа
+      // Проверяем существование заказа и принадлежность пользователю
       const order = await manager.findOne(Order, {
-        where: { id: orderId },
+        where: { id: orderId, user_id: user.id },
         relations: ["recipient", "items"],
       });
       if (!order) {
@@ -241,22 +244,24 @@ export class ReceiptsService {
         pdf_url: url,
         hash,
         status: ReceiptStatus.GENERATED,
+        user_id: user.id,
       });
 
       return manager.save(Receipt, receipt);
     });
   }
 
-  async findAll(): Promise<Receipt[]> {
+  async findAll(user: User): Promise<Receipt[]> {
     return this.receiptsRepository.find({
+      where: { user_id: user.id },
       relations: ["order", "order.recipient"],
       order: { created_at: "DESC" },
     });
   }
 
-  async findOne(id: string): Promise<Receipt> {
+  async findOne(id: string, user: User): Promise<Receipt> {
     const receipt = await this.receiptsRepository.findOne({
-      where: { id },
+      where: { id, user_id: user.id },
       relations: ["order", "order.recipient", "order.items"],
     });
     if (!receipt) {
@@ -267,8 +272,9 @@ export class ReceiptsService {
 
   async getReceiptPdf(
     id: string,
+    user: User,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const receipt = await this.findOne(id);
+    const receipt = await this.findOne(id, user);
 
     if (!receipt.pdf_path) {
       throw new NotFoundException("PDF файл не найден");
@@ -355,8 +361,8 @@ export class ReceiptsService {
     }
   }
 
-  async regenerateReceiptPdf(id: string): Promise<Receipt> {
-    const receipt = await this.findOne(id);
+  async regenerateReceiptPdf(id: string, user: User): Promise<Receipt> {
+    const receipt = await this.findOne(id, user);
 
     // Получаем заказ для регенерации
     const order = await this.ordersRepository.findOne({
@@ -584,11 +590,12 @@ export class ReceiptsService {
 
   async printReceipt(
     receiptId: string,
+    user: User,
     printerName?: string,
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Получаем чек
-      const receipt = await this.findOne(receiptId);
+      const receipt = await this.findOne(receiptId, user);
 
       if (!receipt.pdf_path) {
         throw new Error("PDF файл не найден");

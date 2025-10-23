@@ -8,6 +8,9 @@ import {
 } from "typeorm";
 import { Product } from "../../products/entities/product.entity";
 import { Recipient } from "../../recipients/entities/recipient.entity";
+import { Order } from "../../orders/entities/order.entity";
+import { OrderItem } from "../../orders/entities/order-item.entity";
+import { Receipt } from "../../receipts/entities/receipt.entity";
 
 @Entity("users")
 export class User {
@@ -34,6 +37,15 @@ export class User {
 
   @OneToMany(() => Recipient, (recipient) => recipient.user)
   recipients: Recipient[];
+
+  @OneToMany(() => Order, (order) => order.user)
+  orders: Order[];
+
+  @OneToMany(() => OrderItem, (orderItem) => orderItem.user)
+  orderItems: OrderItem[];
+
+  @OneToMany(() => Receipt, (receipt) => receipt.user)
+  receipts: Receipt[];
 
   @CreateDateColumn()
   createdAt: Date;

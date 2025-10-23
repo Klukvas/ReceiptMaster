@@ -8,6 +8,7 @@ import {
   Index,
 } from "typeorm";
 import { Order } from "../../orders/entities/order.entity";
+import { User } from "../../users/entities/user.entity";
 
 export enum ReceiptStatus {
   GENERATED = "generated",
@@ -42,6 +43,13 @@ export class Receipt {
     default: ReceiptStatus.GENERATED,
   })
   status: ReceiptStatus;
+
+  @Column({ type: "uuid" })
+  user_id: string;
+
+  @ManyToOne(() => User, (user) => user.receipts)
+  @JoinColumn({ name: "user_id" })
+  user: User;
 
   @CreateDateColumn()
   created_at: Date;

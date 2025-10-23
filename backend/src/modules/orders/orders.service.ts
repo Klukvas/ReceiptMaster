@@ -13,6 +13,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { ReceiptsService } from "../receipts/receipts.service";
+import { User } from "../users/entities/user.entity";
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -37,20 +38,20 @@ export class OrdersService {
     private receiptsService: ReceiptsService,
   ) {}
 
-  async create(createOrderDto: CreateOrderDto): Promise<Order> {
+  async create(createOrderDto: CreateOrderDto, user: User): Promise<Order> {
     return this.dataSource.transaction(async (manager) => {
-      // Check recipient existence
+      // Check recipient existence and ownership
       const recipient = await manager.findOne(Recipient, {
-        where: { id: createOrderDto.recipientId },
+        where: { id: createOrderDto.recipientId, user_id: user.id },
       });
       if (!recipient) {
         throw new NotFoundException("Recipient not found");
       }
 
-      // Get products and check their existence
+      // Get products and check their existence and ownership
       const productIds = createOrderDto.items.map((item) => item.productId);
       const products = await manager.find(Product, {
-        where: { id: In(productIds) },
+        where: { id: In(productIds), user_id: user.id },
       });
 
       if (products.length !== productIds.length) {
@@ -85,6 +86,7 @@ export class OrdersService {
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
         created_by: "manually",
+        user_id: user.id,
       });
 
       const savedOrder = await manager.save(Order, order);
@@ -101,6 +103,7 @@ export class OrdersService {
           unit_price_cents: product.sale_price_cents,
           qty: itemDto.qty,
           line_total_cents: lineTotalCents,
+          user_id: user.id,
         });
 
         await manager.save(OrderItem, orderItem);
@@ -116,6 +119,7 @@ export class OrdersService {
 
   async findAll(
     paginationDto: PaginationDto,
+    user: User,
     status?: OrderStatus,
   ): Promise<PaginatedResponse<Order>> {
     const { offset = 0, limit = 10 } = paginationDto;
@@ -126,6 +130,7 @@ export class OrdersService {
       .leftJoinAndSelect("order.recipient", "recipient")
       .leftJoinAndSelect("order.items", "items")
       .leftJoinAndSelect("order.receipts", "receipts")
+      .where("order.user_id = :userId", { userId: user.id })
       .orderBy("order.created_at", "DESC")
       .skip(skip)
       .take(limit);
@@ -144,9 +149,9 @@ export class OrdersService {
     };
   }
 
-  async findOne(id: string): Promise<Order> {
+  async findOne(id: string, user: User): Promise<Order> {
     const order = await this.ordersRepository.findOne({
-      where: { id },
+      where: { id, user_id: user.id },
       relations: ["recipient", "items", "receipts"],
     });
     if (!order) {
@@ -155,8 +160,8 @@ export class OrdersService {
     return order;
   }
 
-  async confirm(id: string): Promise<Order> {
-    const order = await this.findOne(id);
+  async confirm(id: string, user: User): Promise<Order> {
+    const order = await this.findOne(id, user);
 
     if (order.status !== OrderStatus.DRAFT) {
       throw new BadRequestException(
@@ -168,8 +173,8 @@ export class OrdersService {
     return this.ordersRepository.save(order);
   }
 
-  async cancel(id: string): Promise<Order> {
-    const order = await this.findOne(id);
+  async cancel(id: string, user: User): Promise<Order> {
+    const order = await this.findOne(id, user);
 
     if (order.status === OrderStatus.CANCELLED) {
       throw new BadRequestException("Order already cancelled");
@@ -179,11 +184,11 @@ export class OrdersService {
     return this.ordersRepository.save(order);
   }
 
-  async update(id: string, updateOrderDto: UpdateOrderDto): Promise<Order> {
+  async update(id: string, updateOrderDto: UpdateOrderDto, user: User): Promise<Order> {
     return this.dataSource.transaction(async (manager) => {
       // Load order without relations to avoid conflicts with cascade operations
       const order = await manager.findOne(Order, {
-        where: { id },
+        where: { id, user_id: user.id },
       });
 
       if (!order) {
@@ -198,7 +203,7 @@ export class OrdersService {
       // If recipient is being updated
       if (updateOrderDto.recipientId) {
         const recipient = await manager.findOne(Recipient, {
-          where: { id: updateOrderDto.recipientId },
+          where: { id: updateOrderDto.recipientId, user_id: user.id },
         });
         if (!recipient) {
           throw new NotFoundException("Recipient not found");
@@ -223,10 +228,10 @@ export class OrdersService {
           }
         }
 
-        // Get products and check their existence
+        // Get products and check their existence and ownership
         const productIds = updateOrderDto.items.map((item) => item.productId);
         const products = await manager.find(Product, {
-          where: { id: In(productIds) },
+          where: { id: In(productIds), user_id: user.id },
         });
 
         if (products.length !== productIds.length) {
@@ -273,6 +278,7 @@ export class OrdersService {
             unit_price_cents: product.sale_price_cents,
             qty: itemDto.qty,
             line_total_cents: lineTotalCents,
+            user_id: user.id,
           });
 
           await manager.save(OrderItem, orderItem);
@@ -294,8 +300,8 @@ export class OrdersService {
     });
   }
 
-  async remove(id: string): Promise<void> {
-    const order = await this.findOne(id);
+  async remove(id: string, user: User): Promise<void> {
+    const order = await this.findOne(id, user);
     if (!order) {
       throw new NotFoundException("Order not found");
     }

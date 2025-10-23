@@ -9,6 +9,7 @@ import {
   UseGuards,
   Headers,
   Query,
+  Request,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -24,6 +25,7 @@ import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { OrderStatus } from "./entities/order.entity";
 import { Order } from "./entities/order.entity";
+import { User } from "../users/entities/user.entity";
 
 @ApiTags("orders")
 @Controller("orders")
@@ -42,10 +44,11 @@ export class OrdersController {
   })
   create(
     @Body() createOrderDto: CreateOrderDto,
+    @Request() req: { user: User },
     @Headers("idempotency-key") _idempotencyKey?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ) {
     // TODO: Implement idempotency key validation
-    return this.ordersService.create(createOrderDto);
+    return this.ordersService.create(createOrderDto, req.user);
   }
 
   @Get()
@@ -64,17 +67,18 @@ export class OrdersController {
   })
   findAll(
     @Query() paginationDto: PaginationDto,
+    @Request() req: { user: User },
     @Query("status") status?: OrderStatus,
   ): Promise<PaginatedResponse<Order>> {
-    return this.ordersService.findAll(paginationDto, status);
+    return this.ordersService.findAll(paginationDto, req.user, status);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get order by ID" })
   @ApiResponse({ status: 200, description: "Order found" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  findOne(@Param("id") id: string) {
-    return this.ordersService.findOne(id);
+  findOne(@Param("id") id: string, @Request() req: { user: User }) {
+    return this.ordersService.findOne(id, req.user);
   }
 
   @Patch(":id/confirm")
@@ -82,8 +86,8 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully confirmed" })
   @ApiResponse({ status: 400, description: "Cannot confirm order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  confirm(@Param("id") id: string) {
-    return this.ordersService.confirm(id);
+  confirm(@Param("id") id: string, @Request() req: { user: User }) {
+    return this.ordersService.confirm(id, req.user);
   }
 
   @Patch(":id")
@@ -91,8 +95,8 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully updated" })
   @ApiResponse({ status: 400, description: "Cannot update order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  update(@Param("id") id: string, @Body() updateOrderDto: UpdateOrderDto) {
-    return this.ordersService.update(id, updateOrderDto);
+  update(@Param("id") id: string, @Body() updateOrderDto: UpdateOrderDto, @Request() req: { user: User }) {
+    return this.ordersService.update(id, updateOrderDto, req.user);
   }
 
   @Patch(":id/cancel")
@@ -100,8 +104,8 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully cancelled" })
   @ApiResponse({ status: 400, description: "Cannot cancel order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  cancel(@Param("id") id: string) {
-    return this.ordersService.cancel(id);
+  cancel(@Param("id") id: string, @Request() req: { user: User }) {
+    return this.ordersService.cancel(id, req.user);
   }
 
   @Delete(":id")
@@ -109,8 +113,8 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully deleted" })
   @ApiResponse({ status: 400, description: "Cannot delete order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  remove(@Param("id") id: string) {
-    return this.ordersService.remove(id);
+  remove(@Param("id") id: string, @Request() req: { user: User }) {
+    return this.ordersService.remove(id, req.user);
   }
 
   @Get("dashboard/revenue-by-products")
