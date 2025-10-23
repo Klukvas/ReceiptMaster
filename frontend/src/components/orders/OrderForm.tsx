@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { Combobox } from '../ui/Combobox';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface OrderFormProps {
   onClose: () => void;
@@ -31,6 +32,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState<string>('');
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const { data: productsData } = useQuery({
     queryKey: ['products'],
@@ -49,7 +51,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, 'Ошибка при создании заказа'));
+      setBackendError(getErrorMessage(error, t('orders.failedToCreateOrder')));
     },
   });
 
@@ -74,20 +76,20 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
     
     // Recipient validation
     if (!recipientId) {
-      newErrors.recipient = 'Выберите получателя';
+      newErrors.recipient = t('orders.selectRecipient');
     }
     
     // Products validation
     const validItems = items.filter(item => item.productId && item.qty > 0);
     if (validItems.length === 0) {
-      newErrors.items = 'Добавьте хотя бы один товар';
+      newErrors.items = t('orders.addAtLeastOneProduct');
     }
     
     // Quantity validation for each product
     validItems.forEach((item, index) => {
       const product = getProduct(item.productId);
       if (product && item.qty > product.quantity) {
-        newErrors[`item-${index}-qty`] = `Недостаточно товара. Доступно: ${product.quantity} шт.`;
+        newErrors[`item-${index}-qty`] = t('orders.insufficientQuantity', { available: product.quantity });
       }
     });
     
@@ -133,7 +135,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
     <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50">
       <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Создать заказ</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('orders.createOrder')}</h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -152,7 +154,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Получатель
+              {t('orders.recipient')}
             </label>
             <Combobox
               options={recipientsData?.data.data.map((recipient) => ({
@@ -165,8 +167,8 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                 setRecipientId(value);
                 if (errors.recipient) setErrors({ ...errors, recipient: '' });
               }}
-              placeholder="Выберите получателя"
-              searchPlaceholder="Поиск получателя..."
+              placeholder={t('orders.selectRecipient')}
+              searchPlaceholder={t('orders.searchRecipient')}
               required
             />
             {errors.recipient && (
@@ -177,11 +179,11 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Товары
+                {t('orders.products')}
               </label>
               <Button type="button" size="sm" onClick={addItem}>
                 <Plus className="w-4 h-4 mr-1" />
-                Добавить
+                {t('common.add')}
               </Button>
             </div>
 
@@ -209,8 +211,8 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                               setErrors({ ...errors, [`item-${index}-qty`]: '' });
                             }
                           }}
-                          placeholder="Выберите товар"
-                          searchPlaceholder="Поиск товара..."
+                          placeholder={t('orders.selectProduct')}
+                          searchPlaceholder={t('orders.searchProduct')}
                           required
                         />
                       </div>
@@ -227,7 +229,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                               setErrors({ ...errors, [`item-${index}-qty`]: '' });
                             }
                           }}
-                          placeholder="Кол-во"
+                          placeholder={t('orders.quantity')}
                           required
                           error={errors[`item-${index}-qty`]}
                         />
@@ -248,10 +250,10 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                     </div>
                     {product && (
                       <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        Доступно: {availableQty} шт.
+                        {t('orders.available')}: {availableQty} {t('orders.pieces')}
                         {isOutOfStock && (
                           <span className="text-red-600 dark:text-red-400 ml-2">
-                            Недостаточно товара!
+                            {t('orders.insufficientStock')}!
                           </span>
                         )}
                       </div>
@@ -268,17 +270,17 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
 
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <div className="flex justify-between items-center text-lg font-semibold text-gray-900 dark:text-white">
-              <span>Итого:</span>
+              <span>{t('orders.total')}:</span>
               <span>{formatCurrency(calculateTotal())}</span>
             </div>
           </div>
 
           <div className="flex space-x-3 pt-4">
             <Button type="submit" disabled={createMutation.isPending} className="flex-1">
-              {createMutation.isPending ? 'Создание...' : 'Создать заказ'}
+              {createMutation.isPending ? t('common.loading') : t('orders.createOrder')}
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
           </div>
         </form>

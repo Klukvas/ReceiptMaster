@@ -1,4 +1,5 @@
 import { AxiosError } from 'axios';
+import i18n from './i18n';
 
 // API Error response format from backend
 export interface ApiErrorResponse {
@@ -56,54 +57,54 @@ export enum ErrorCode {
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
-// User-friendly error messages
+// User-friendly error messages (fallback for when i18n is not available)
 const ERROR_MESSAGES: Record<string, string> = {
   // User errors
-  [ErrorCode.USER_ALREADY_EXISTS]: 'Пользователь с таким email уже существует',
-  [ErrorCode.USER_NOT_FOUND]: 'Пользователь не найден',
-  [ErrorCode.INVALID_CREDENTIALS]: 'Неверный email или пароль',
+  [ErrorCode.USER_ALREADY_EXISTS]: 'User with this email already exists',
+  [ErrorCode.USER_NOT_FOUND]: 'User not found',
+  [ErrorCode.INVALID_CREDENTIALS]: 'Invalid email or password',
   
   // Order errors
-  [ErrorCode.ORDER_NOT_FOUND]: 'Заказ не найден',
-  [ErrorCode.ORDER_ALREADY_CONFIRMED]: 'Заказ уже подтвержден',
-  [ErrorCode.ORDER_ALREADY_CANCELLED]: 'Заказ уже отменен',
-  [ErrorCode.ORDER_CANNOT_BE_MODIFIED]: 'Заказ нельзя изменить в текущем статусе',
+  [ErrorCode.ORDER_NOT_FOUND]: 'Order not found',
+  [ErrorCode.ORDER_ALREADY_CONFIRMED]: 'Order is already confirmed',
+  [ErrorCode.ORDER_ALREADY_CANCELLED]: 'Order is already cancelled',
+  [ErrorCode.ORDER_CANNOT_BE_MODIFIED]: 'Order cannot be modified in current status',
   
   // Receipt errors
-  [ErrorCode.RECEIPT_NOT_FOUND]: 'Чек не найден',
-  [ErrorCode.RECEIPT_ALREADY_EXISTS]: 'Чек для этого заказа уже существует',
-  [ErrorCode.RECEIPT_GENERATION_FAILED]: 'Не удалось создать чек',
-  [ErrorCode.RECEIPT_PRINT_FAILED]: 'Не удалось распечатать чек',
+  [ErrorCode.RECEIPT_NOT_FOUND]: 'Receipt not found',
+  [ErrorCode.RECEIPT_ALREADY_EXISTS]: 'Receipt for this order already exists',
+  [ErrorCode.RECEIPT_GENERATION_FAILED]: 'Failed to generate receipt',
+  [ErrorCode.RECEIPT_PRINT_FAILED]: 'Failed to print receipt',
   
   // Product errors
-  [ErrorCode.PRODUCT_NOT_FOUND]: 'Товар не найден',
-  [ErrorCode.PRODUCT_ALREADY_EXISTS]: 'Товар с таким названием уже существует',
+  [ErrorCode.PRODUCT_NOT_FOUND]: 'Product not found',
+  [ErrorCode.PRODUCT_ALREADY_EXISTS]: 'Product with this name already exists',
   
   // Recipient errors
-  [ErrorCode.RECIPIENT_NOT_FOUND]: 'Получатель не найден',
-  [ErrorCode.RECIPIENT_ALREADY_EXISTS]: 'Получатель с таким email уже существует',
+  [ErrorCode.RECIPIENT_NOT_FOUND]: 'Recipient not found',
+  [ErrorCode.RECIPIENT_ALREADY_EXISTS]: 'Recipient with this email already exists',
   
   // Settings errors
-  [ErrorCode.SETTINGS_NOT_FOUND]: 'Настройки не найдены',
-  [ErrorCode.INVALID_SETTINGS]: 'Неверные настройки',
+  [ErrorCode.SETTINGS_NOT_FOUND]: 'Settings not found',
+  [ErrorCode.INVALID_SETTINGS]: 'Invalid settings',
   
   // File errors
-  [ErrorCode.FILE_NOT_FOUND]: 'Файл не найден',
-  [ErrorCode.FILE_UPLOAD_FAILED]: 'Не удалось загрузить файл',
-  [ErrorCode.FILE_DELETE_FAILED]: 'Не удалось удалить файл',
+  [ErrorCode.FILE_NOT_FOUND]: 'File not found',
+  [ErrorCode.FILE_UPLOAD_FAILED]: 'Failed to upload file',
+  [ErrorCode.FILE_DELETE_FAILED]: 'Failed to delete file',
   
   // Validation errors
-  [ErrorCode.VALIDATION_ERROR]: 'Ошибка валидации',
-  [ErrorCode.REQUIRED_FIELD_MISSING]: 'Заполните обязательное поле',
+  [ErrorCode.VALIDATION_ERROR]: 'Validation error',
+  [ErrorCode.REQUIRED_FIELD_MISSING]: 'Required field is missing',
   
   // General errors
-  [ErrorCode.INTERNAL_SERVER_ERROR]: 'Внутренняя ошибка сервера',
-  [ErrorCode.UNAUTHORIZED]: 'Необходима авторизация',
-  [ErrorCode.FORBIDDEN]: 'Доступ запрещен',
-  [ErrorCode.NOT_FOUND]: 'Ресурс не найден',
-  [ErrorCode.BAD_REQUEST]: 'Неверный запрос',
-  [ErrorCode.HTTP_EXCEPTION]: 'Ошибка сервера',
-  [ErrorCode.UNKNOWN_ERROR]: 'Неизвестная ошибка',
+  [ErrorCode.INTERNAL_SERVER_ERROR]: 'Internal server error',
+  [ErrorCode.UNAUTHORIZED]: 'Unauthorized access',
+  [ErrorCode.FORBIDDEN]: 'Access forbidden',
+  [ErrorCode.NOT_FOUND]: 'Resource not found',
+  [ErrorCode.BAD_REQUEST]: 'Bad request',
+  [ErrorCode.HTTP_EXCEPTION]: 'Server error',
+  [ErrorCode.UNKNOWN_ERROR]: 'Unknown error occurred',
 };
 
 /**
@@ -123,7 +124,9 @@ export function parseApiError(error: unknown): { message: string; code: string }
     
     if (data.error && data.errorCode) {
       // New format: { error, errorCode }
-      const userFriendlyMessage = ERROR_MESSAGES[data.errorCode] || data.error;
+      const userFriendlyMessage = i18n.t(`errors.${data.errorCode.toLowerCase()}`, { 
+        defaultValue: ERROR_MESSAGES[data.errorCode] || data.error 
+      });
       return {
         message: userFriendlyMessage,
         code: data.errorCode,

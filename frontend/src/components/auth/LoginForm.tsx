@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { parseApiError } from '../../lib/api-errors';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ export const LoginForm: React.FC = () => {
   const [error, setError] = useState('');
   
   const { login } = useAuth();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,17 +33,17 @@ export const LoginForm: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Вход в систему
+            {t('auth.loginTitle')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-300">
-            Введите ваши учетные данные для входа
+            {t('auth.loginSubtitle')}
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
-                Email
+                {t('auth.email')}
               </label>
               <input
                 id="email"
@@ -50,14 +52,14 @@ export const LoginForm: React.FC = () => {
                 autoComplete="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm transition-colors duration-200"
-                placeholder="Email адрес"
+                placeholder={t('auth.email')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
-                Пароль
+                {t('auth.password')}
               </label>
               <input
                 id="password"
@@ -66,7 +68,7 @@ export const LoginForm: React.FC = () => {
                 autoComplete="current-password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm transition-colors duration-200"
-                placeholder="Пароль"
+                placeholder={t('auth.password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -85,18 +87,18 @@ export const LoginForm: React.FC = () => {
               disabled={isLoading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
-              {isLoading ? 'Вход...' : 'Войти'}
+              {isLoading ? t('common.loading') : t('auth.login')}
             </button>
           </div>
 
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Нет аккаунта?{' '}
+              {t('auth.dontHaveAccount')}{' '}
               <Link
                 to="/register"
                 className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors duration-200"
               >
-                Зарегистрироваться
+                {t('auth.signUpHere')}
               </Link>
             </p>
           </div>

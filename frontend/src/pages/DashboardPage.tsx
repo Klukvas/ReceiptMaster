@@ -4,8 +4,10 @@ import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { RevenueDashboard } from '../components/dashboard/RevenueDashboard';
 import { TurnoverDashboard } from '../components/dashboard/TurnoverDashboard';
+import { useTranslation } from '../hooks/useTranslation';
 
 export const DashboardPage = () => {
+  const { t } = useTranslation();
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: ''
@@ -26,12 +28,12 @@ export const DashboardPage = () => {
   const tabs = [
     {
       id: 'revenue',
-      label: 'Доход',
+      label: t('dashboard.revenue'),
       content: <RevenueDashboard dateRange={dateRange} />
     },
     {
       id: 'turnover',
-      label: 'Общий оборот',
+      label: t('dashboard.turnover'),
       content: <TurnoverDashboard dateRange={dateRange} />
     }
   ];
@@ -40,17 +42,17 @@ export const DashboardPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Дашборд</h1>
-          <p className="text-gray-600 dark:text-gray-300">Анализ доходов и оборота по продуктам и получателям</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
+          <p className="text-gray-600 dark:text-gray-300">{t('dashboard.subtitle')}</p>
         </div>
       </div>
 
       {/* Date filters */}
-      <Card title="Фильтр по датам">
+      <Card title={t('dashboard.dateFilter')}>
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Дата начала
+              {t('dashboard.startDate')}
             </label>
             <input
               type="date"
@@ -61,7 +63,7 @@ export const DashboardPage = () => {
           </div>
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Дата окончания
+              {t('dashboard.endDate')}
             </label>
             <input
               type="date"
@@ -75,7 +77,7 @@ export const DashboardPage = () => {
             variant="outline"
             className="whitespace-nowrap"
           >
-            Очистить
+            {t('common.clear')}
           </Button>
         </div>
       </Card>

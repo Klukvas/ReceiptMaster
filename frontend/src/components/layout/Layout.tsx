@@ -4,23 +4,26 @@ import { Package, Users, ShoppingCart, Home, LogOut, Menu, X, Settings, BarChart
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { LanguageSwitcher } from '../ui/LanguageSwitcher';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 const navigation = [
-  { name: 'Home', href: '/', icon: Home },
-  { name: 'Products', href: '/products', icon: Package },
-  { name: 'Recipients', href: '/recipients', icon: Users },
-  { name: 'Orders', href: '/orders', icon: ShoppingCart },
-  { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { nameKey: 'navigation.dashboard', href: '/', icon: Home },
+  { nameKey: 'navigation.products', href: '/products', icon: Package },
+  { nameKey: 'navigation.recipients', href: '/recipients', icon: Users },
+  { nameKey: 'navigation.orders', href: '/orders', icon: ShoppingCart },
+  { nameKey: 'navigation.dashboard', href: '/dashboard', icon: BarChart3 },
+  { nameKey: 'navigation.settings', href: '/settings', icon: Settings },
 ];
 
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -108,7 +111,7 @@ export const Layout = ({ children }: LayoutProps) => {
               {navigation.map((item) => {
                 const isActive = location.pathname === item.href;
                 return (
-                  <li key={item.name}>
+                  <li key={item.nameKey}>
                     <Link
                       to={item.href}
                       onClick={() => setSidebarOpen(false)}
@@ -120,7 +123,7 @@ export const Layout = ({ children }: LayoutProps) => {
                       )}
                     >
                       <item.icon className="mr-3 h-5 w-5" />
-                      {item.name}
+                      {t(item.nameKey)}
                     </Link>
                   </li>
                 );
@@ -132,12 +135,16 @@ export const Layout = ({ children }: LayoutProps) => {
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
               <ThemeToggle />
             </div>
+            <div className="flex items-center justify-between px-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Language</span>
+              <LanguageSwitcher />
+            </div>
             <button
               onClick={logout}
               className="lg:hidden flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
             >
               <LogOut className="mr-3 h-4 w-4" />
-              Logout
+              {t('auth.logout')}
             </button>
           </div>
         </div>
@@ -152,13 +159,17 @@ export const Layout = ({ children }: LayoutProps) => {
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
               <ThemeToggle />
             </div>
+            <div className="flex items-center space-x-3 mr-4">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Language</span>
+              <LanguageSwitcher />
+            </div>
             <span className="text-sm text-gray-600 dark:text-gray-300">
               {user?.firstName} {user?.lastName}
             </span>
             <button
               onClick={logout}
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
-              title="Logout"
+              title={t('auth.logout')}
             >
               <LogOut className="h-4 w-4" />
             </button>

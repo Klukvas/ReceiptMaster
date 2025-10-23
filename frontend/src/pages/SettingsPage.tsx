@@ -1,13 +1,15 @@
 import { LogoUpload } from '../components/settings/LogoUpload';
+import { useTranslation } from '../hooks/useTranslation';
 
 export const SettingsPage = () => {
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Настройки</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
         <p className="text-gray-600 dark:text-gray-300">
-          Управление настройками системы и внешним видом документов
+          {t('settings.subtitle')}
         </p>
       </div>
 

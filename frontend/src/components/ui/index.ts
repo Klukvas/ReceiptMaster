@@ -5,3 +5,4 @@ export { Combobox } from './Combobox';
 export { Tabs } from './Tabs';
 export { ThemeToggle } from './ThemeToggle';
 export { DropdownMenu } from './DropdownMenu';
+export { LanguageSwitcher } from './LanguageSwitcher';

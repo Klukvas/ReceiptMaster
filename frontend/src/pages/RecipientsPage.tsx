@@ -5,11 +5,13 @@ import { recipientsApi, type Recipient } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { RecipientForm } from '../components/recipients/RecipientForm';
+import { useTranslation } from '../hooks/useTranslation';
 
 export const RecipientsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const { data: recipientsData, isLoading } = useQuery({
     queryKey: ['recipients'],
@@ -29,7 +31,7 @@ export const RecipientsPage = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this recipient?')) {
+    if (confirm(t('recipients.deleteRecipientMessage'))) {
       deleteMutation.mutate(id);
     }
   };
@@ -42,7 +44,7 @@ export const RecipientsPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
       </div>
     );
   }
@@ -50,12 +52,12 @@ export const RecipientsPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Recipients</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{t('recipients.title')}</h1>
         <Button 
           onClick={() => setShowForm(true)} 
           className="w-full sm:w-auto bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 text-sm sm:text-base"
         >
-          Add Recipient
+          {t('recipients.createRecipient')}
         </Button>
       </div>
 
@@ -65,19 +67,19 @@ export const RecipientsPage = () => {
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Name
+                  {t('recipients.recipientName')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Email
+                  {t('recipients.email')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Phone
+                  {t('recipients.phone')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Address
+                  {t('recipients.address')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
+                  {t('recipients.actions')}
                 </th>
               </tr>
             </thead>

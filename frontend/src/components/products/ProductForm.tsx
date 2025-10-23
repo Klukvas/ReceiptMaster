@@ -5,6 +5,7 @@ import { productsApi, type Product, amountToCents } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -32,6 +33,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [backendError, setBackendError] = useState<string>('');
 
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   // Get all products for similar search on frontend
   const { data: allProducts } = useQuery({
@@ -94,25 +96,25 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     
     // Name validation
     if (!formData.name.trim()) {
-      newErrors.name = 'Название товара обязательно';
+      newErrors.name = t('products.productNameRequired');
     }
     
     // Purchase price validation
     const purchasePrice = parseFloat(formData.purchase_price_cents);
     if (isNaN(purchasePrice) || purchasePrice < 0) {
-      newErrors.purchase_price_cents = 'Цена покупки должна быть положительным числом';
+      newErrors.purchase_price_cents = t('products.purchasePriceMustBePositive');
     }
     
     // Sale price validation
     const salePrice = parseFloat(formData.sale_price_cents);
     if (isNaN(salePrice) || salePrice < 0) {
-      newErrors.sale_price_cents = 'Цена продажи должна быть положительным числом';
+      newErrors.sale_price_cents = t('products.salePriceMustBePositive');
     }
     
     // Quantity validation
     const quantity = parseInt(formData.quantity);
     if (isNaN(quantity) || quantity < 0) {
-      newErrors.quantity = 'Количество должно быть неотрицательным числом';
+      newErrors.quantity = t('products.quantityMustBeNonNegative');
     }
     
     setErrors(newErrors);
@@ -153,7 +155,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       <Card className="w-full max-w-md mx-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {product ? 'Редактировать товар' : 'Добавить товар'}
+            {product ? t('products.editProduct') : t('products.createProduct')}
           </h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -173,7 +175,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div>
             <Input
-              label="Название"
+              label={t('products.productName')}
               value={formData.name}
               onChange={(e) => {
                 setFormData({ ...formData, name: e.target.value });
@@ -214,7 +216,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Цена покупки"
+              label={t('products.purchasePrice')}
               type="number"
               step="0.01"
               min="0"
@@ -230,7 +232,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             />
 
             <Input
-              label="Цена продажи"
+              label={t('products.salePrice')}
               type="number"
               step="0.01"
               min="0"
@@ -247,7 +249,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </div>
 
           <Input
-            label="Количество на складе"
+            label={t('products.quantity')}
             type="number"
             min="0"
             placeholder="0"
@@ -262,7 +264,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Валюта
+              {t('products.currency')}
             </label>
             <select
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
@@ -275,10 +277,10 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div className="flex space-x-3 pt-4">
             <Button type="submit" disabled={isLoading} className="flex-1">
-              {isLoading ? 'Сохранение...' : product ? 'Обновить' : 'Создать'}
+              {isLoading ? t('common.loading') : product ? t('common.save') : t('common.create')}
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
           </div>
         </form>

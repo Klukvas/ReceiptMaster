@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ProductForm } from '../components/products/ProductForm';
 import { DeleteConfirmation } from '../components/common/DeleteConfirmation';
+import { useTranslation } from '../hooks/useTranslation';
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);
@@ -18,6 +19,7 @@ export const ProductsPage = () => {
   const [sortBy, setSortBy] = useState<'quantity' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const { data: productsData, isLoading } = useQuery({
     queryKey: ['products'],
@@ -98,7 +100,7 @@ export const ProductsPage = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Загрузка...</div>
+        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
       </div>
     );
   }
@@ -124,12 +126,12 @@ export const ProductsPage = () => {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Товары</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{t('products.title')}</h1>
         <Button 
           onClick={() => setShowForm(true)} 
           className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
         >
-          Добавить товар
+          {t('products.createProduct')}
         </Button>
       </div>
 
@@ -139,20 +141,20 @@ export const ProductsPage = () => {
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Название
+                  {t('products.productName')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Цена покупки
+                  {t('products.purchasePrice')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Цена продажи
+                  {t('products.salePrice')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   <button
                     onClick={() => handleSort('quantity')}
                     className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
                   >
-                    <span>Количество</span>
+                    <span>{t('products.quantity')}</span>
                     {sortBy === 'quantity' ? (
                       sortOrder === 'asc' ? (
                         <ChevronUp className="w-4 h-4" />
@@ -165,10 +167,10 @@ export const ProductsPage = () => {
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Валюта
+                  {t('products.currency')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Действия
+                  {t('products.actions')}
                 </th>
               </tr>
             </thead>
@@ -240,8 +242,8 @@ export const ProductsPage = () => {
         isOpen={deleteConfirmation.isOpen}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
-        title="Удалить товар"
-        message="Вы уверены, что хотите удалить этот товар? Это действие нельзя отменить."
+        title={t('products.deleteProduct')}
+        message={t('products.deleteProductMessage')}
         itemName={deleteConfirmation.product?.name}
         isLoading={deleteMutation.isPending}
       />
