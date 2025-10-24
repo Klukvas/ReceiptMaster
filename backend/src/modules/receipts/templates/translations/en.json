@@ -1,0 +1,26 @@
+{
+  "corporate": {
+    "debitMemo": "Debit Memo",
+    "taxInvoice": "TAX INVOICE",
+    "original": "Original",
+    "invoiceNo": "Invoice No :",
+    "date": "Date :",
+    "srNo": "SrNo",
+    "productName": "Product Name",
+    "qty": "Qty",
+    "rate": "Rate",
+    "amount": "Amount",
+    "subTotal": "Sub Total:",
+    "gstinNo": "GSTIN No:",
+    "billAmount": "Bill Amount: Thirty Thousand Forty Four Only",
+    "centralTax": "Central Tax (9.00 %):",
+    "stateTax": "State Tax (9.00 %):",
+    "grandTotal": "Grand Total",
+    "note": "Note:",
+    "termsAndConditions": "Terms & Conditions:",
+    "terms1": "Goods once sold will not be taken back.",
+    "terms2": "Our risk and responsibility ceases as soon as the goods are delivered to the carrier.",
+    "forCompany": "For, {{companyName}}",
+    "authorisedSignatory": "(Authorised Signatory)"
+  }
+}

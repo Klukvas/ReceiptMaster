@@ -1,4 +1,6 @@
 import { LogoUpload } from '../components/settings/LogoUpload';
+import { TemplateSelector } from '../components/settings/TemplateSelector';
+import { LanguageSelector } from '../components/settings/LanguageSelector';
 import { useTranslation } from '../hooks/useTranslation';
 
 export const SettingsPage = () => {
@@ -14,6 +16,8 @@ export const SettingsPage = () => {
       </div>
 
       <LogoUpload />
+      <TemplateSelector />
+      <LanguageSelector />
     </div>
   );
 };

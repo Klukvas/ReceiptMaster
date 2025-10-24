@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elegant Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 3mm;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans', 'Inter', sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #111827;
+            background: white;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .invoice-title {
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: #64748B;
+            margin-bottom: 8px;
+        }
+        
+        .invoice-number {
+            font-size: 16px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 20px;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        
+        .logo {
+            height: 24px;
+            width: auto;
+            filter: grayscale(100%);
+        }
+        
+        /* Company Info */
+        .company-info {
+            display: flex;
+            margin-bottom: 40px;
+        }
+        
+        .info-section {
+            flex: 1;
+            padding: 0 20px;
+        }
+        
+        .info-section:first-child {
+            border-right: 1px solid #E5E7EB;
+        }
+        
+        .section-title {
+            font-size: 9px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: #64748B;
+            margin-bottom: 12px;
+        }
+        
+        .info-content {
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        
+        .info-line {
+            margin-bottom: 4px;
+        }
+        
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .items-table th {
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            text-align: left;
+            padding: 12px 8px;
+            border-bottom: 1px solid #E5E7EB;
+            color: #374151;
+        }
+        
+        .items-table td {
+            font-size: 11px;
+            padding: 12px 8px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .col-description {
+            width: 50%;
+        }
+        
+        .col-qty {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .col-unit {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .col-unit-price {
+            width: 15%;
+            text-align: right;
+        }
+        
+        .col-amount {
+            width: 15%;
+            text-align: right;
+            font-weight: 500;
+        }
+        
+        .item-name {
+            font-size: 11px;
+            font-weight: 500;
+            color: #111827;
+        }
+        
+        .item-description {
+            font-size: 10px;
+            color: #6B7280;
+            margin-top: 2px;
+        }
+        
+        /* Totals */
+        .totals-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 40px;
+        }
+        
+        .totals-table {
+            width: 250px;
+            border-collapse: collapse;
+        }
+        
+        .totals-table td {
+            padding: 8px 0;
+            font-size: 11px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .totals-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        .totals-table td:last-child {
+            text-align: right;
+            font-weight: 500;
+        }
+        
+        .grand-total {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            border-top: 2px solid #374151;
+            padding-top: 12px;
+        }
+        
+        /* Thank You */
+        .thank-you {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .thank-you-text {
+            font-size: 20px;
+            font-weight: 400;
+            color: #94A3B8;
+            font-style: italic;
+            letter-spacing: 0.05em;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+        }
+        
+        .terms {
+            font-size: 9px;
+            color: #6B7280;
+            line-height: 1.4;
+            text-align: center;
+        }
+        
+        /* Paid Badge */
+        .paid-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #10B981;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 500;
+            border: 1px solid #10B981;
+        }
+        
+        /* Discount */
+        .discount-row {
+            color: #EF4444;
+        }
+    </style>
+</head>
+<body>
+    {{#if isPaid}}
+    <div class="paid-badge">Paid</div>
+    {{/if}}
+    
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="invoice-title">Invoice</div>
+            <div class="invoice-number">{{receiptNumber}}</div>
+            <div class="logo-section">
+                {{#if hasCustomLogo}}
+                <img src="{{logoPath}}" alt="Logo" class="logo">
+                {{/if}}
+            </div>
+        </div>
+        
+        <!-- Company Info -->
+        <div class="company-info">
+            <div class="info-section">
+                <div class="section-title">Billed To</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{recipientName}}</strong></div>
+                    {{#if recipientAddress}}
+                    <div class="info-line">{{recipientAddress}}</div>
+                    {{/if}}
+                    {{#if recipientEmail}}
+                    <div class="info-line">{{recipientEmail}}</div>
+                    {{/if}}
+                    {{#if recipientPhone}}
+                    <div class="info-line">{{recipientPhone}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="info-section">
+                <div class="section-title">From</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyAddress}}
+                    <div class="info-line">{{companyAddress}}</div>
+                    {{/if}}
+                    {{#if companyEmail}}
+                    <div class="info-line">{{companyEmail}}</div>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <div class="info-line">{{companyPhone}}</div>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="col-description">Description</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-unit">Unit</th>
+                    <th class="col-unit-price">Unit Price</th>
+                    <th class="col-amount">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td class="col-description">
+                        <div class="item-name">{{productName}}</div>
+                        {{#if description}}
+                        <div class="item-description">{{description}}</div>
+                        {{/if}}
+                    </td>
+                    <td class="col-qty">{{qty}}</td>
+                    <td class="col-unit">{{unit}}</td>
+                    <td class="col-unit-price">{{unitPrice}}</td>
+                    <td class="col-amount">{{lineTotal}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+        
+        <!-- Totals -->
+        <div class="totals-section">
+            <table class="totals-table">
+                <tr>
+                    <td>Subtotal</td>
+                    <td>{{subtotal}}</td>
+                </tr>
+                {{#if discount}}
+                <tr class="discount-row">
+                    <td>Discount</td>
+                    <td>-{{discount}}</td>
+                </tr>
+                {{/if}}
+                {{#each taxes}}
+                <tr>
+                    <td>{{label}}</td>
+                    <td>{{amount}}</td>
+                </tr>
+                {{/each}}
+                <tr class="grand-total">
+                    <td>Total</td>
+                    <td>{{total}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Thank You -->
+        <div class="thank-you">
+            <div class="thank-you-text">Thank you</div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            {{#if terms}}
+            <div class="terms">{{terms}}</div>
+            {{/if}}
+        </div>
+    </div>
+</body>
+</html>

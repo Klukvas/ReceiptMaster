@@ -18,8 +18,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { EnvConfig } from "../../config/env.schema";
 import { LogoStorageService } from "../../common/services/logo-storage.service";
+import { SettingsService } from "./services/settings.service";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+import { TEMPLATE_METADATA } from "../receipts/templates/metadata";
 
 @Controller("settings")
 @UseGuards(JwtAuthGuard)
@@ -29,6 +31,7 @@ export class SettingsController {
   constructor(
     private configService: ConfigService<EnvConfig>,
     private logoStorageService: LogoStorageService,
+    private settingsService: SettingsService,
   ) {}
 
   @Post("logo/upload")
@@ -189,5 +192,65 @@ export class SettingsController {
       }
       throw ApiErrors.FILE_DELETE_FAILED("logo");
     }
+  }
+
+  @Get("templates")
+  getAvailableTemplates() {
+    return {
+      data: Object.values(TEMPLATE_METADATA).map(template => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        features: template.features,
+        colors: template.colors
+      }))
+    };
+  }
+
+  @Get("template")
+  async getTemplateSettings(@Request() req: { user: User }) {
+    const templateId = await this.settingsService.getUserTemplate(req.user.id);
+    this.logger.log(`Getting template for user ${req.user.id}: ${templateId}`);
+    return { data: { templateId } };
+  }
+
+  @Post("template")
+  async updateTemplateSettings(
+    @Request() req: { user: User },
+    @Body() body: { templateId: string }
+  ) {
+    await this.settingsService.setUserTemplate(req.user.id, body.templateId);
+    return { message: 'Template setting updated successfully' };
+  }
+
+  @Get("receipt-title")
+  async getReceiptTitle(@Request() req: { user: User }) {
+    const title = await this.settingsService.getReceiptTitle(req.user.id);
+    return { data: { title } };
+  }
+
+  @Post("receipt-title")
+  async updateReceiptTitle(
+    @Request() req: { user: User },
+    @Body() body: { title: string }
+  ) {
+    await this.settingsService.setReceiptTitle(req.user.id, body.title);
+    return { message: 'Receipt title updated successfully' };
+  }
+
+  @Get("template-language")
+  async getTemplateLanguage(@Request() req: { user: User }) {
+    const language = await this.settingsService.getTemplateLanguage(req.user.id);
+    return { data: { language } };
+  }
+
+  @Post("template-language")
+  async updateTemplateLanguage(
+    @Request() req: { user: User },
+    @Body() body: { language: string }
+  ) {
+    await this.settingsService.setTemplateLanguage(req.user.id, body.language);
+    return { message: 'Template language updated successfully' };
   }
 }

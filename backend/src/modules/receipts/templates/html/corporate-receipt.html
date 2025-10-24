@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corporate Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        
+        @font-face {
+            font-family: 'Inter';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: 'Inter';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', 'Helvetica Neue', 'Arial', sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #000000;
+            background: white;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        /* Company Header */
+        .company-header {
+            text-align: center;
+            border: 1px solid #D1D5DB;
+            padding: 20px;
+            margin-bottom: 0;
+        }
+        
+        .company-name {
+            font-size: 22px;
+            font-weight: bold;
+            color: #000000;
+            margin-bottom: 8px;
+        }
+        
+        .company-address {
+            font-size: 10px;
+            color: #4B5563;
+            line-height: 1.4;
+        }
+        
+        /* Document Type Header */
+        .document-header {
+            background: #F9FAFB;
+            border: 1px solid #D1D5DB;
+            border-top: none;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 32px;
+        }
+        
+        .document-type-left {
+            font-size: 9px;
+            color: #4B5563;
+        }
+        
+        .document-type-center {
+            font-size: 14px;
+            font-weight: bold;
+            color: #000000;
+        }
+        
+        .document-type-right {
+            font-size: 9px;
+            color: #4B5563;
+        }
+        
+        /* Client Details Section */
+        .client-details {
+            border: 1px solid #D1D5DB;
+            border-top: none;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .client-info {
+            flex: 0 0 65%;
+        }
+        
+        .client-label {
+            font-weight: bold;
+            font-size: 11px;
+            color: #000000;
+            margin-bottom: 8px;
+        }
+        
+        .client-data {
+            font-size: 11px;
+            color: #000000;
+            line-height: 1.4;
+        }
+        
+        .invoice-info {
+            flex: 0 0 35%;
+        }
+        
+        .invoice-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        
+        .invoice-label {
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .invoice-value {
+            font-size: 11px;
+            color: #000000;
+            font-weight: normal;
+        }
+        
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #D1D5DB;
+            border-top: none;
+        }
+        
+        .items-header {
+            background: #F3F4F6;
+            font-weight: bold;
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .items-header th {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #D1D5DB;
+        }
+        
+        .items-header th:last-child {
+            text-align: right;
+        }
+        
+        .items-body td {
+            padding: 8px;
+            font-size: 10px;
+            color: #000000;
+            border-bottom: 1px solid #D1D5DB;
+        }
+        
+        .items-body td:last-child {
+            text-align: right;
+        }
+        
+        .items-body td:nth-child(3),
+        .items-body td:nth-child(4),
+        .items-body td:nth-child(5) {
+            text-align: right;
+        }
+        
+        .subtotal-row {
+            font-weight: bold;
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .subtotal-row td {
+            padding: 12px 8px;
+            border-top: 1px solid #D1D5DB;
+        }
+        
+        .subtotal-row td:last-child {
+            text-align: right;
+        }
+        
+        /* Tax and Total Section */
+        .tax-total-section {
+            border: 1px solid #D1D5DB;
+            border-top: none;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .tax-info {
+            flex: 0 0 50%;
+        }
+        
+        .gstin {
+            font-size: 11px;
+            color: #000000;
+            margin-bottom: 8px;
+        }
+        
+        .amount-words {
+            font-size: 10px;
+            color: #6B7280;
+            font-style: italic;
+            line-height: 1.4;
+        }
+        
+        .total-info {
+            flex: 0 0 50%;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .total-row.grand-total {
+            font-weight: bold;
+            font-size: 13px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #D1D5DB;
+        }
+        
+        /* Footer Section */
+        .footer-section {
+            border: 1px solid #D1D5DB;
+            border-top: none;
+            padding: 20px;
+        }
+        
+        .note-section {
+            margin-bottom: 20px;
+        }
+        
+        .note-label {
+            font-size: 11px;
+            color: #000000;
+            margin-bottom: 4px;
+        }
+        
+        .note-line {
+            border-bottom: 1px solid #000000;
+            height: 20px;
+            width: 100%;
+        }
+        
+        .terms-section {
+            border-top: 1px solid #D1D5DB;
+            padding-top: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .terms-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #000000;
+            margin-bottom: 8px;
+        }
+        
+        .terms-list {
+            font-size: 9px;
+            color: #000000;
+            line-height: 1.4;
+        }
+        
+        .terms-list li {
+            margin-bottom: 4px;
+        }
+        
+        .signature-section {
+            text-align: right;
+        }
+        
+        .signature-company {
+            font-weight: bold;
+            font-size: 11px;
+            color: #000000;
+            margin-bottom: 4px;
+        }
+        
+        .signature-title {
+            font-size: 10px;
+            color: #000000;
+            font-style: italic;
+        }
+        
+        /* Print styles */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .container {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Company Header -->
+        <div class="company-header">
+            <div class="company-name">{{companyName}}</div>
+            <div class="company-address">12, VRUNDAVAN NAGAR, ODHAV RIND ROAD, B/H GAURI CINEMA,<br>ODHAV, AHMEDABAD-382415, INDIA.</div>
+        </div>
+        
+        <!-- Document Type Header -->
+        <div class="document-header">
+            <div class="document-type-left">{{translations.debitMemo}}</div>
+            <div class="document-type-center">{{translations.taxInvoice}}</div>
+            <div class="document-type-right">{{translations.original}}</div>
+        </div>
+        
+        <!-- Client Details -->
+        <div class="client-details">
+            <div class="client-info">
+                <div class="client-label">M/s. :</div>
+                <div class="client-data">
+                    {{recipientName}}<br>
+                    {{#if recipientAddress}}{{recipientAddress}}<br>{{/if}}
+                    {{#if recipientPhone}}{{recipientPhone}}<br>{{/if}}
+                    {{#if recipientEmail}}{{recipientEmail}}{{/if}}
+                </div>
+            </div>
+            <div class="invoice-info">
+                <div class="invoice-row">
+                    <span class="invoice-label">{{translations.invoiceNo}}</span>
+                    <span class="invoice-value">{{receiptNumber}}</span>
+                </div>
+                <div class="invoice-row">
+                    <span class="invoice-label">{{translations.date}}</span>
+                    <span class="invoice-value">{{orderDate}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead class="items-header">
+                <tr>
+                    <th>{{translations.srNo}}</th>
+                    <th>{{translations.productName}}</th>
+                    <th>{{translations.qty}}</th>
+                    <th>{{translations.rate}}</th>
+                    <th>{{translations.amount}}</th>
+                </tr>
+            </thead>
+            <tbody class="items-body">
+                {{#each items}}
+                <tr>
+                    <td>{{add @index 1}}</td>
+                    <td>{{productName}}</td>
+                    <td>{{qty}}</td>
+                    <td>{{unitPrice}}</td>
+                    <td>{{lineTotal}}</td>
+                </tr>
+                {{/each}}
+                <tr class="subtotal-row">
+                    <td colspan="4">{{translations.subTotal}}</td>
+                    <td>{{subtotal}}</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Tax and Total Section -->
+        <div class="tax-total-section">
+            <div class="tax-info">
+                <div class="gstin">{{translations.gstinNo}} 26AKJPG9221E1W5</div>
+                <div class="amount-words">{{translations.billAmount}}</div>
+            </div>
+            <div class="total-info">
+                <div class="total-row">
+                    <span>{{translations.subTotal}}</span>
+                    <span>{{subtotal}}</span>
+                </div>
+                <div class="total-row">
+                    <span>{{translations.centralTax}}</span>
+                    <span>$21.09</span>
+                </div>
+                <div class="total-row">
+                    <span>{{translations.stateTax}}</span>
+                    <span>$21.09</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>{{translations.grandTotal}}</span>
+                    <span>{{total}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer Section -->
+        <div class="footer-section">
+            <div class="note-section">
+                <div class="note-label">{{translations.note}}</div>
+                <div class="note-line"></div>
+            </div>
+            
+            <div class="terms-section">
+                <div class="terms-title">{{translations.termsAndConditions}}</div>
+                <ul class="terms-list">
+                    <li>{{translations.terms1}}</li>
+                    <li>{{translations.terms2}}</li>
+                </ul>
+            </div>
+            
+            <div class="signature-section">
+                <div class="signature-company">{{translations.forCompany}}</div>
+                <div class="signature-title">{{translations.authorisedSignatory}}</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

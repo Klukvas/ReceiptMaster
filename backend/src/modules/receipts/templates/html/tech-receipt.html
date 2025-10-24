@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tech Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 16mm;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html {
+            background: white;
+        }
+        
+        body {
+            font-family: 'Noto Sans', 'Inter', 'Manrope', sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #111827;
+            background: white;
+            position: relative;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Geometric accent */
+        .geometric-accent {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 200px;
+            height: 200px;
+            background: 
+                radial-gradient(circle at 30% 30%, #EF4444 0%, transparent 50%),
+                radial-gradient(circle at 70% 70%, #2563EB 0%, transparent 50%);
+            border-radius: 50%;
+            z-index: -1;
+            opacity: 0.1;
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding-top: 10px;
+        }
+        
+        .header-left {
+            flex: 1;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .logo {
+            height: 48px;
+            width: auto;
+            margin-right: 12px;
+        }
+        
+        .invoice-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .invoice-sequence {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6B7280;
+            margin-top: 5px;
+        }
+        
+        .meta-column {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .meta-badge {
+            background: rgba(37, 99, 235, 0.08);
+            border: 1px solid rgba(37, 99, 235, 0.24);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 10px;
+            font-weight: 500;
+            color: #111827;
+            min-width: 120px;
+        }
+        
+        .meta-label {
+            color: #6B7280;
+            font-weight: 400;
+        }
+        
+        .meta-value {
+            color: #111827;
+            font-weight: 600;
+        }
+        
+        /* Company Info */
+        .company-info {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-section {
+            flex: 1;
+        }
+        
+        .section-chip {
+            display: inline-block;
+            background: rgba(37, 99, 235, 0.16);
+            color: #111827;
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        
+        .info-content {
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        
+        .info-line {
+            margin-bottom: 2px;
+        }
+        
+        /* Project badge */
+        .project-badge {
+            display: inline-block;
+            background: #EF4444;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        
+        .items-table th {
+            font-size: 11px;
+            font-weight: 600;
+            text-align: left;
+            padding: 8px 6px;
+            background-color: #F3F4F6;
+            color: #111827;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .items-table td {
+            font-size: 11px;
+            padding: 8px 6px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .col-item {
+            width: 50%;
+        }
+        
+        .col-qty {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .col-price {
+            width: 20%;
+            text-align: right;
+        }
+        
+        .col-amount {
+            width: 20%;
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        .item-notes {
+            font-size: 9px;
+            color: #6B7280;
+            margin-top: 2px;
+            font-style: italic;
+        }
+        
+        /* Totals */
+        .totals-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+        }
+        
+        .totals-card {
+            width: 300px;
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .totals-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+        
+        .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .totals-table td {
+            padding: 6px 0;
+            font-size: 11px;
+            border-bottom: 1px dotted #D1D5DB;
+        }
+        
+        .totals-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        .totals-table td:last-child {
+            text-align: right;
+            font-weight: 500;
+        }
+        
+        .grand-total {
+            font-size: 18px;
+            font-weight: 700;
+            color: #EF4444;
+            border-top: 2px solid #EF4444;
+            padding-top: 8px;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #E5E7EB;
+        }
+        
+        .payment-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .payment-info {
+            flex: 1;
+        }
+        
+        .payment-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+        
+        .payment-method {
+            font-size: 11px;
+            color: #6B7280;
+            margin-bottom: 4px;
+        }
+        
+        .payment-details {
+            font-size: 10px;
+            color: #6B7280;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .qr-section {
+            text-align: right;
+        }
+        
+        .qr-code {
+            width: 80px;
+            height: 80px;
+            border: 1px solid #E5E7EB;
+            border-radius: 4px;
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+        }
+        
+        .qr-label {
+            font-size: 9px;
+            color: #6B7280;
+        }
+        
+        .footer-links {
+            font-size: 9px;
+            color: #6B7280;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        /* Overdue badge */
+        .overdue-badge {
+            display: inline-block;
+            background: #EF4444;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="geometric-accent"></div>
+    
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo-section">
+                    {{#if hasCustomLogo}}
+                    <img src="{{logoPath}}" alt="Logo" class="logo">
+                    {{/if}}
+                    <div>
+                        <div class="invoice-title">{{receiptTitle}}</div>
+                        <div class="invoice-sequence">{{receiptNumber}}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="meta-column">
+                <div class="meta-badge">
+                    <span class="meta-label">№</span> <span class="meta-value">{{receiptNumber}}</span>
+                </div>
+                <div class="meta-badge">
+                    <span class="meta-label">Date</span> <span class="meta-value">{{orderDate}}</span>
+                </div>
+                {{#if project}}
+                <div class="meta-badge">
+                    <span class="meta-label">Project</span> <span class="meta-value">{{project}}</span>
+                </div>
+                {{/if}}
+                {{#if late}}
+                <div class="meta-badge">
+                    <span class="meta-label">Status</span> <span class="meta-value">Overdue<span class="overdue-badge">OVERDUE</span></span>
+                </div>
+                {{/if}}
+            </div>
+        </div>
+        
+        <!-- Company Info -->
+        <div class="company-info">
+            <div class="info-section">
+                <div class="section-chip">Bill To</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{recipientName}}</strong></div>
+                    {{#if recipientAddress}}
+                    <div class="info-line">{{recipientAddress}}</div>
+                    {{/if}}
+                    {{#if recipientEmail}}
+                    <div class="info-line">{{recipientEmail}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="info-section">
+                <div class="section-chip">From</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyAddress}}
+                    <div class="info-line">{{companyAddress}}</div>
+                    {{/if}}
+                    {{#if companyEmail}}
+                    <div class="info-line">{{companyEmail}}</div>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="col-item">Item</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-price">Price</th>
+                    <th class="col-amount">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td class="col-item">
+                        {{productName}}
+                        {{#if notes}}
+                        <div class="item-notes">{{notes}}</div>
+                        {{/if}}
+                    </td>
+                    <td class="col-qty">{{qty}}</td>
+                    <td class="col-price">{{unitPrice}}</td>
+                    <td class="col-amount">{{lineTotal}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+        
+        <!-- Totals -->
+        <div class="totals-section">
+            <div class="totals-card">
+                <div class="totals-title">Summary</div>
+                <table class="totals-table">
+                    {{#each taxes}}
+                    <tr>
+                        <td>{{label}} ({{rate}}%)</td>
+                        <td>{{amount}}</td>
+                    </tr>
+                    {{/each}}
+                    <tr class="grand-total">
+                        <td>Total</td>
+                        <td>{{total}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-links">
+                {{#if transactionId}}
+                Transaction ID: {{transactionId}}
+                {{/if}}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

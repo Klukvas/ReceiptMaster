@@ -13,6 +13,7 @@ import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
+import { SettingsService } from "../settings/services/settings.service";
 
 const execAsync = promisify(exec);
 
@@ -31,7 +32,34 @@ export class ReceiptsService {
     @InjectDataSource()
     private dataSource: DataSource,
     private configService: ConfigService,
+    private settingsService: SettingsService,
   ) {}
+
+  private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
+    switch (templateId) {
+      case 'standard':
+        return ReceiptStyle.STANDARD;
+      case 'compact':
+        return ReceiptStyle.COMPACT;
+      case 'classic':
+        return ReceiptStyle.CLASSIC;
+      case 'modern':
+        return ReceiptStyle.MODERN;
+      case 'elegant':
+        return ReceiptStyle.ELEGANT;
+      case 'vintage':
+        return ReceiptStyle.VINTAGE;
+      case 'tech':
+        return ReceiptStyle.TECH;
+      case 'wave':
+        return ReceiptStyle.WAVE;
+      case 'minimal':
+        return ReceiptStyle.MINIMAL;
+      default:
+        this.logger.warn(`Unknown template ID: ${templateId}, falling back to COMPACT`);
+        return ReceiptStyle.COMPACT;
+    }
+  }
 
   async generateReceipt(orderId: string, user: User): Promise<Receipt> {
     return this.dataSource.transaction(async (manager) => {
@@ -66,14 +94,30 @@ export class ReceiptsService {
       // Получаем название компании из настроек
       const companyName = await this.getCompanyName();
 
-      // Генерируем PDF (используем компактный генератор по умолчанию)
+      // Получаем шаблон пользователя из настроек
+      const userTemplateId = await this.settingsService.getUserTemplate(user.id);
+      const receiptStyle = this.getReceiptStyleFromTemplateId(userTemplateId);
+      
+      // Получаем заголовок чека из настроек
+      const receiptTitle = await this.settingsService.getReceiptTitle(user.id);
+      
+      // Получаем язык шаблона из настроек
+      const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
+      
+      this.logger.log(`Using template for user ${user.id}: ${userTemplateId} -> ${receiptStyle}`);
+      this.logger.log(`Using receipt title for user ${user.id}: ${receiptTitle}`);
+      this.logger.log(`Using template language for user ${user.id}: ${templateLanguage}`);
+
+      // Генерируем PDF с пользовательским шаблоном
       const { filePath, url } =
         await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
           companyName,
           user.id,
-          ReceiptStyle.COMPACT
+          receiptStyle,
+          receiptTitle,
+          templateLanguage
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -348,13 +392,16 @@ export class ReceiptsService {
 
         // Регенерируем PDF
         const companyName = await this.getCompanyName();
+        const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
         const { filePath, url } =
           await this.pdfGeneratorService.generateReceiptPdf(
             order,
             receipt.number,
             companyName,
             user.id,
-            ReceiptStyle.COMPACT
+            ReceiptStyle.COMPACT,
+            'Invoice',
+            templateLanguage
           );
 
         // Обновляем путь к файлу в базе данных
@@ -431,13 +478,16 @@ export class ReceiptsService {
 
     // Регенерируем PDF
     const companyName = await this.getCompanyName();
+    const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
     const { filePath, url } =
       await this.pdfGeneratorService.generateReceiptPdf(
         order,
         receipt.number,
         companyName,
         user.id,
-        ReceiptStyle.COMPACT
+        ReceiptStyle.COMPACT,
+        'Invoice',
+        templateLanguage
       );
 
     // Вычисляем хеш нового файла

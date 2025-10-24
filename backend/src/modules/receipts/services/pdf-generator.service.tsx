@@ -10,7 +10,14 @@ import { PlaywrightPdfGenerator } from './playwright-pdf-generator.service';
 
 export enum ReceiptStyle {
   STANDARD = 'standard',
-  COMPACT = 'compact'
+  COMPACT = 'compact',
+  CLASSIC = 'classic',
+  MODERN = 'modern',
+  ELEGANT = 'elegant',
+  VINTAGE = 'vintage',
+  TECH = 'tech',
+  WAVE = 'wave',
+  MINIMAL = 'minimal'
 }
 
 @Injectable()
@@ -25,12 +32,39 @@ export class PdfGeneratorService {
     private playwrightPdfGenerator: PlaywrightPdfGenerator,
   ) {}
 
+  private getTemplateName(style: ReceiptStyle): ReceiptTemplate {
+    switch (style) {
+      case ReceiptStyle.STANDARD:
+        return ReceiptTemplate.STANDARD;
+      case ReceiptStyle.COMPACT:
+        return ReceiptTemplate.COMPACT;
+      case ReceiptStyle.CLASSIC:
+        return ReceiptTemplate.CLASSIC;
+      case ReceiptStyle.MODERN:
+        return ReceiptTemplate.MODERN;
+      case ReceiptStyle.ELEGANT:
+        return ReceiptTemplate.ELEGANT;
+      case ReceiptStyle.VINTAGE:
+        return ReceiptTemplate.VINTAGE;
+      case ReceiptStyle.TECH:
+        return ReceiptTemplate.TECH;
+      case ReceiptStyle.WAVE:
+        return ReceiptTemplate.WAVE;
+      case ReceiptStyle.MINIMAL:
+        return ReceiptTemplate.MINIMAL;
+      default:
+        return ReceiptTemplate.STANDARD;
+    }
+  }
+
   async generateReceiptPdf(
     order: Order, 
     receiptNumber: string, 
     companyName: string = '', 
     userId: string,
-    style: ReceiptStyle = ReceiptStyle.STANDARD
+    style: ReceiptStyle = ReceiptStyle.STANDARD,
+    receiptTitle: string = 'Invoice',
+    language: string = 'en'
   ): Promise<{ filePath: string; url: string }> {
     try {
       this.logger.log(`Starting ${style} PDF generation using Playwright...`);
@@ -89,11 +123,13 @@ export class PdfGeneratorService {
         receiptNumber,
         companyName,
         hasCustomLogo,
-        logoPath
+        logoPath,
+        receiptTitle,
+        language
       );
 
       // Render HTML template
-      const templateName = style === ReceiptStyle.COMPACT ? ReceiptTemplate.COMPACT : ReceiptTemplate.STANDARD;
+      const templateName = this.getTemplateName(style);
       const html = await this.templateService.renderTemplate(templateName, templateData);
       
       this.logger.log(`HTML template rendered for ${style} style`);

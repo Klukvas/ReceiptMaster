@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 3mm;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans', 'Inter', 'Arial', sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #111827;
+            background: white;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo {
+            height: 30px;
+            width: auto;
+            margin-right: 15px;
+        }
+        
+        .invoice-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #1E3A8A;
+        }
+        
+        .invoice-meta {
+            text-align: right;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+        
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+        }
+        
+        .meta-label {
+            font-weight: 500;
+            min-width: 80px;
+            text-align: left;
+        }
+        
+        .meta-value {
+            font-family: 'Roboto Mono', monospace;
+            min-width: 100px;
+            text-align: right;
+        }
+        
+        /* Company Info */
+        .company-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .info-section {
+            width: 65%;
+        }
+        
+        .info-section.from {
+            width: 35%;
+        }
+        
+        .section-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.01em;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+        
+        .info-content {
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        
+        .info-line {
+            margin-bottom: 3px;
+        }
+        
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        .items-table th {
+            font-size: 12px;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 8px;
+            border-bottom: 1px solid #E5E7EB;
+            background-color: #F8FAFC;
+        }
+        
+        .items-table td {
+            font-size: 11px;
+            padding: 10px 8px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .items-table tr:nth-child(even) {
+            background-color: rgba(248, 250, 252, 0.3);
+        }
+        
+        .col-qty {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .col-description {
+            width: 50%;
+        }
+        
+        .col-unit-price {
+            width: 20%;
+            text-align: right;
+        }
+        
+        .col-amount {
+            width: 20%;
+            text-align: right;
+            font-weight: 500;
+        }
+        
+        .description-text {
+            color: #6B7280;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+        
+        /* Totals */
+        .totals-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+        }
+        
+        .totals-table {
+            width: 300px;
+            border-collapse: collapse;
+        }
+        
+        .totals-table td {
+            padding: 6px 12px;
+            font-size: 11px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        .totals-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        .totals-table td:last-child {
+            text-align: right;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .grand-total {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1E3A8A;
+            border-top: 2px solid #1E3A8A;
+            padding-top: 8px;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+        }
+        
+        .terms {
+            font-size: 10px;
+            color: #6B7280;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+        
+        .contact-info {
+            font-size: 10px;
+            color: #6B7280;
+            margin-bottom: 20px;
+        }
+        
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        
+        .signature-box {
+            width: 120px;
+            height: 60px;
+            border: 1px solid #D1D5DB;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #9CA3AF;
+        }
+        
+        /* Paid watermark */
+        .paid-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-38deg);
+            font-size: 48px;
+            font-weight: 700;
+            color: #1E3A8A;
+            opacity: 0.08;
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        /* Tax exempt */
+        .tax-exempt {
+            font-size: 10px;
+            color: #6B7280;
+            font-style: italic;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    {{#if isPaid}}
+    <div class="paid-watermark">PAID</div>
+    {{/if}}
+    
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                {{#if hasCustomLogo}}
+                <img src="{{logoPath}}" alt="Logo" class="logo">
+                {{/if}}
+                <div class="invoice-title">Invoice</div>
+            </div>
+            <div class="invoice-meta">
+                <div class="meta-row">
+                    <span class="meta-label">Invoice No:</span>
+                    <span class="meta-value">{{receiptNumber}}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Invoice Date:</span>
+                    <span class="meta-value">{{orderDate}}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Due Date:</span>
+                    <span class="meta-value">{{dueDate}}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Currency:</span>
+                    <span class="meta-value">{{currency}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Company Info -->
+        <div class="company-info">
+            <div class="info-section">
+                <div class="section-title">Bill To</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{recipientName}}</strong></div>
+                    {{#if recipientAddress}}
+                    <div class="info-line">{{recipientAddress}}</div>
+                    {{/if}}
+                    {{#if recipientTaxId}}
+                    <div class="info-line">Tax ID: {{recipientTaxId}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="info-section from">
+                <div class="section-title">From</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyAddress}}
+                    <div class="info-line">{{companyAddress}}</div>
+                    {{/if}}
+                    {{#if companyTaxId}}
+                    <div class="info-line">Tax ID: {{companyTaxId}}</div>
+                    {{/if}}
+                    {{#if companyBank}}
+                    <div class="info-line">{{companyBank}}</div>
+                    {{/if}}
+                    {{#if companyIban}}
+                    <div class="info-line">IBAN: {{companyIban}}</div>
+                    {{/if}}
+                    {{#if companySwift}}
+                    <div class="info-line">SWIFT: {{companySwift}}</div>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="col-qty">QTY</th>
+                    <th class="col-description">DESCRIPTION</th>
+                    <th class="col-unit-price">UNIT PRICE</th>
+                    <th class="col-amount">AMOUNT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td class="col-qty">{{qty}}</td>
+                    <td class="col-description">
+                        {{productName}}
+                        {{#if description}}
+                        <div class="description-text">{{description}}</div>
+                        {{/if}}
+                    </td>
+                    <td class="col-unit-price">{{unitPrice}}</td>
+                    <td class="col-amount">{{lineTotal}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+        
+        <!-- Totals -->
+        <div class="totals-section">
+            <table class="totals-table">
+                <tr>
+                    <td>Subtotal</td>
+                    <td>{{subtotal}}</td>
+                </tr>
+                {{#if discount}}
+                <tr>
+                    <td>Discount</td>
+                    <td>-{{discount}}</td>
+                </tr>
+                {{/if}}
+                {{#each taxes}}
+                <tr>
+                    <td>{{label}} ({{rate}}%)</td>
+                    <td>{{amount}}</td>
+                </tr>
+                {{/each}}
+                {{#if shipping}}
+                <tr>
+                    <td>Shipping</td>
+                    <td>{{shipping}}</td>
+                </tr>
+                {{/if}}
+                <tr class="grand-total">
+                    <td>Grand Total</td>
+                    <td>{{total}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        {{#unless taxes}}
+        <div class="tax-exempt">Tax exempt</div>
+        {{/unless}}
+        
+        <!-- Footer -->
+        <div class="footer">
+            {{#if terms}}
+            <div class="terms">{{terms}}</div>
+            {{/if}}
+            
+            <div class="contact-info">
+                {{#if companyEmail}}{{companyEmail}}{{/if}}
+                {{#if companyPhone}} · {{companyPhone}}{{/if}}
+                {{#if companyWebsite}} · {{companyWebsite}}{{/if}}
+            </div>
+            
+            <div class="signature-section">
+                <div class="signature-box">
+                    {{#if signature}}
+                    <img src="{{signature}}" alt="Signature" style="max-width: 100%; max-height: 100%;">
+                    {{else}}
+                    Signature
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

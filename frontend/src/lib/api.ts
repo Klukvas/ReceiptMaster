@@ -305,6 +305,36 @@ export const settingsApi = {
 
   getCompanyName: () =>
     api.get<{ companyName: string }>('/settings/company-name'),
+
+  // Template settings
+  getTemplateSettings: () =>
+    api.get<{ templateId: string }>('/settings/template'),
+
+  updateTemplateSettings: (templateId: string) =>
+    api.post('/settings/template', { templateId }),
+
+  getAvailableTemplates: () =>
+    api.get<{
+      data: Array<{
+        id: string;
+        name: string;
+        description: string;
+        category: string;
+        features: string[];
+        colors: {
+          primary: string;
+          secondary: string;
+          accent: string;
+        };
+      }>;
+    }>('/settings/templates'),
+
+  // Template language settings
+  getTemplateLanguage: () =>
+    api.get<{ language: string }>('/settings/template-language'),
+
+  updateTemplateLanguage: (language: string) =>
+    api.post('/settings/template-language', { language }),
 };
 
 // Formatting utilities
