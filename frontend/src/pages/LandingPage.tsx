@@ -7,12 +7,9 @@ import {
   BarChart3, 
   CheckCircle, 
   ArrowRight,
-  Star,
   Shield,
-  Zap,
   Globe,
   Smartphone,
-  CreditCard,
   FileText,
   TrendingUp
 } from 'lucide-react';

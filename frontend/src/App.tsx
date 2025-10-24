@@ -8,7 +8,6 @@ import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { HomePage } from './pages/HomePage';
 import { DashboardHomePage } from './pages/DashboardHomePage';
-import { LandingPage } from './pages/LandingPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { RecipientsPage } from './pages/RecipientsPage';
 import { OrdersPage } from './pages/OrdersPage';
@@ -27,7 +26,7 @@ const queryClient = new QueryClient({
 });
 
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated: _isAuthenticated } = useAuth();
 
   return (
     <Routes>

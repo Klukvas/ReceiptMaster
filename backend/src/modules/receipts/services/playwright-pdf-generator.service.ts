@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { chromium, Browser, Page } from 'playwright';
+import { chromium, Browser } from 'playwright';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 
 @Injectable()
 export class PlaywrightPdfGenerator {

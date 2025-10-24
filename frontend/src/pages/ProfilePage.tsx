@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, Save, Edit3, X } from 'lucide-react';
+import { Mail, Lock, Save, Edit3, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from '../hooks/useTranslation';
 import { authApi } from '../lib/api';
 import toast from 'react-hot-toast';
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

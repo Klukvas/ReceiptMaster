@@ -155,7 +155,6 @@ export class TemplateService {
       ];
 
       let templatePath: string | null = null;
-      let templateContent: string;
 
       // Try each path until we find the template
       for (const testPath of possiblePaths) {
@@ -173,7 +172,7 @@ export class TemplateService {
       }
       
       this.logger.log(`Loading template from: ${templatePath}`);
-      templateContent = await fs.readFile(templatePath, 'utf-8');
+      const templateContent = await fs.readFile(templatePath, 'utf-8');
       const compiledTemplate = Handlebars.compile(templateContent);
       
       this.templates.set(templateName, compiledTemplate);

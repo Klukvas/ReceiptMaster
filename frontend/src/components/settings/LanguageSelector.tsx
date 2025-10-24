@@ -14,7 +14,7 @@ const LANGUAGES = [
 ];
 
 export const LanguageSelector = () => {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedLanguage, setSelectedLanguage] = useState<string>('');
 

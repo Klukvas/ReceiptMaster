@@ -40,7 +40,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const TemplateSelector = () => {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
