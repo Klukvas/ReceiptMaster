@@ -4,8 +4,7 @@ import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
-import { ReactPdfGeneratorService } from "./services/react-pdf-generator.service";
-import { CompactPdfGeneratorService } from "./services/compact-pdf-generator.service";
+import { PdfGeneratorService, ReceiptStyle } from "./services/pdf-generator.service";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
@@ -27,8 +26,7 @@ export class ReceiptsService {
     private receiptsRepository: Repository<Receipt>,
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
-    private reactPdfGeneratorService: ReactPdfGeneratorService,
-    private compactPdfGeneratorService: CompactPdfGeneratorService,
+    private pdfGeneratorService: PdfGeneratorService,
     private pdfStorageService: PdfStorageService,
     @InjectDataSource()
     private dataSource: DataSource,
@@ -70,11 +68,12 @@ export class ReceiptsService {
 
       // Генерируем PDF (используем компактный генератор по умолчанию)
       const { filePath, url } =
-        await this.compactPdfGeneratorService.generateReceiptPdf(
+        await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
           companyName,
           user.id,
+          ReceiptStyle.COMPACT
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -146,11 +145,12 @@ export class ReceiptsService {
 
       // Генерируем компактный PDF
       const { filePath, url } =
-        await this.compactPdfGeneratorService.generateReceiptPdf(
+        await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
           companyName,
           user.id,
+          ReceiptStyle.COMPACT
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -222,11 +222,12 @@ export class ReceiptsService {
 
       // Генерируем стандартный PDF
       const { filePath, url } =
-        await this.reactPdfGeneratorService.generateReceiptPdf(
+        await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
           companyName,
           user.id,
+          ReceiptStyle.STANDARD
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -348,11 +349,12 @@ export class ReceiptsService {
         // Регенерируем PDF
         const companyName = await this.getCompanyName();
         const { filePath, url } =
-          await this.compactPdfGeneratorService.generateReceiptPdf(
+          await this.pdfGeneratorService.generateReceiptPdf(
             order,
             receipt.number,
             companyName,
             user.id,
+            ReceiptStyle.COMPACT
           );
 
         // Обновляем путь к файлу в базе данных
@@ -430,11 +432,12 @@ export class ReceiptsService {
     // Регенерируем PDF
     const companyName = await this.getCompanyName();
     const { filePath, url } =
-      await this.compactPdfGeneratorService.generateReceiptPdf(
+      await this.pdfGeneratorService.generateReceiptPdf(
         order,
         receipt.number,
         companyName,
         user.id,
+        ReceiptStyle.COMPACT
       );
 
     // Вычисляем хеш нового файла

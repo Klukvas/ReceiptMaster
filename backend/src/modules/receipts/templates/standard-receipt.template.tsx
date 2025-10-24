@@ -1,68 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { pdf, Document, Page, Text, View, Font, Image } from '@react-pdf/renderer';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { EnvConfig } from '../../../config/env.schema';
+import { Document, Page, Text, View, Image } from '@react-pdf/renderer';
 import { Order } from '../../orders/entities/order.entity';
 import { MoneyUtil } from '../../../common/utils/money.util';
-import { PdfStorageService } from '../../../common/services/pdf-storage.service';
-import { ApiErrors } from '../../../common/errors/ApiError';
 
+interface StandardReceiptProps {
+  order: Order;
+  receiptNumber: string;
+  hasCustomLogo: boolean;
+  companyName: string;
+  logoPath?: string;
+}
 
-// Determine the correct path for fonts based on environment
-const getFontPath = (fontFile: string) => {
-  const isDevelopment = __dirname.includes('/src/');
-  if (isDevelopment) {
-    // In development, __dirname points to src/modules/receipts/services/
-    // Need to go up to src/ and then to assets/fonts/
-    return path.join(__dirname, '../../../assets/fonts', fontFile);
-  } else {
-    // In production, __dirname points to dist/modules/receipts/services/
-    // Try dist first, then fallback to src
-    const distPath = path.join(__dirname, '../../assets/fonts', fontFile);
-    const srcPath = path.join(process.cwd(), 'src/assets/fonts', fontFile);
-    
-    // Check if dist file exists, otherwise use src
-    try {
-      require('fs').accessSync(distPath);
-      return distPath;
-    } catch {
-      return srcPath;
-    }
-  }
-};
-
-// Determine the correct path for logo based on environment
-const getLogoPath = () => {
-  const isDevelopment = __dirname.includes('/src/');
-  if (isDevelopment) {
-    return path.join(__dirname, '../../../assets/logo.png');
-  } else {
-    // In production, try dist first, then fallback to src
-    const distPath = path.join(__dirname, '../../assets/logo.png');
-    const srcPath = path.join(process.cwd(), 'src/assets/logo.png');
-    
-    // Check if dist file exists, otherwise use src
-    try {
-      require('fs').accessSync(distPath);
-      return distPath;
-    } catch {
-      return srcPath;
-    }
-  }
-};
-
-
-Font.register({
-  family: 'NotoSans',
-  fonts: [
-    { src: getFontPath('NotoSans-Regular.ttf'), fontWeight: 'normal' },
-    { src: getFontPath('NotoSans_Condensed-Bold.ttf'), fontWeight: 'bold' },
-  ],
-});
-
-const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: { order: Order; receiptNumber: string; hasCustomLogo: boolean; companyName: string }) => {
+export const StandardReceiptDocument = ({ 
+  order, 
+  receiptNumber, 
+  hasCustomLogo, 
+  companyName, 
+  logoPath 
+}: StandardReceiptProps) => {
   const formatCurrency = (cents: number) => 
     MoneyUtil.formatCentsToCurrency(cents, order.currency);
 
@@ -91,9 +45,9 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
               marginBottom: 15 
             }}
           >
-            {hasCustomLogo && (
+            {hasCustomLogo && logoPath && (
               <Image 
-                src={getLogoPath()} 
+                src={logoPath} 
                 style={{ 
                   width: 60, 
                   height: 60, 
@@ -272,65 +226,3 @@ const ReceiptDocument = ({ order, receiptNumber, hasCustomLogo, companyName }: {
     </Document>
   );
 };
-
-@Injectable()
-export class ReactPdfGeneratorService {
-  private readonly logger = new Logger(ReactPdfGeneratorService.name);
-
-  constructor(
-    private configService: ConfigService<EnvConfig>,
-    private pdfStorageService: PdfStorageService,
-  ) {}
-
-  async generateReceiptPdf(order: Order, receiptNumber: string, companyName: string = '', userId: string): Promise<{ filePath: string; url: string }> {
-    try {
-      this.logger.log('Starting PDF generation using @react-pdf/renderer...');
-      this.logger.log('Order ID:', order.id);
-      this.logger.log('Receipt number:', receiptNumber);
-
-      // Check if custom logo exists
-      let hasCustomLogo = false;
-      try {
-        const logoPath = getLogoPath();
-        await fs.access(logoPath);
-        hasCustomLogo = true;
-        this.logger.log(`Custom logo found at ${logoPath}, using uploaded logo`);
-      } catch (error) {
-        this.logger.log(`No custom logo found, using fallback logo. Error: ${error.message}`);
-      }
-
-      const fileName = `receipt-${receiptNumber}-${Date.now()}.pdf`;
-      
-      this.logger.log(`Generating PDF: ${fileName}`);
-
-      // Generate PDF
-      const doc = <ReceiptDocument order={order} receiptNumber={receiptNumber} hasCustomLogo={hasCustomLogo} companyName={companyName} />;
-      
-      // Use toBlob() and convert to Buffer
-      const pdfBlob = await pdf(doc).toBlob();
-      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
-
-      // Save to Object Storage
-      this.logger.log('Saving PDF to Object Storage...');
-      const url = await this.pdfStorageService.uploadReceipt(pdfBuffer, fileName, userId);
-      const filePath = `object-storage://receipts/${userId}/${fileName}`;
-      this.logger.log(`PDF saved to Object Storage: ${url}`);
-
-      // Validate PDF format
-      const isPdf = pdfBuffer.subarray(0, 4).toString('ascii') === '%PDF';
-      if (!isPdf) {
-        this.logger.error(`Generated file is not a valid PDF`);
-        throw ApiErrors.RECEIPT_GENERATION_FAILED(order.id);
-      }
-      this.logger.log(`PDF file is valid and saved to Object Storage`);
-
-      this.logger.log(`PDF receipt generated: ${filePath}`);
-
-      return { filePath, url };
-    } catch (error) {
-      this.logger.error('Error during PDF generation:', error);
-      this.logger.error('Error details:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-  }
-}

@@ -34,6 +34,10 @@ export const OrderCard = ({
   isDeleting,
 }: OrderCardProps) => {
   const { t } = useTranslation();
+  
+  // Ensure orders is always an array
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -80,7 +84,7 @@ export const OrderCard = ({
     );
   }
 
-  if (!orders || orders.length === 0) {
+  if (!safeOrders || safeOrders.length === 0) {
     return (
       <Card>
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -92,7 +96,7 @@ export const OrderCard = ({
 
   return (
     <div className="space-y-4">
-      {orders.map((order) => (
+      {safeOrders.map((order) => (
         <Card key={order.id} className="p-4">
           <div className="space-y-3">
             <div className="flex items-start justify-between">

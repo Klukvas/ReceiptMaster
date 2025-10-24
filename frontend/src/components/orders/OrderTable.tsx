@@ -34,6 +34,10 @@ export const OrderTable = ({
   isDeleting,
 }: OrderTableProps) => {
   const { t } = useTranslation();
+  
+  // Ensure orders is always an array
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -102,7 +106,7 @@ export const OrderTable = ({
               </td>
             </tr>
           ) : (
-            orders.map((order) => (
+            safeOrders.map((order) => (
               <tr key={order.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {order.recipient.name}

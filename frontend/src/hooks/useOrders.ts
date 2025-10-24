@@ -29,7 +29,8 @@ export const useOrders = () => {
     queryFn: () => orderService.getAllOrders(50),
   });
 
-  const orders = ordersData || [];
+  // Ensure orders is always an array
+  const orders = Array.isArray(ordersData) ? ordersData : [];
 
   // Mutations
   const confirmMutation = useMutation({
