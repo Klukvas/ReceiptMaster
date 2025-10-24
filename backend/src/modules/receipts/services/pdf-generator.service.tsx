@@ -1,33 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { pdf, Font } from '@react-pdf/renderer';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { EnvConfig } from '../../../config/env.schema';
 import { Order } from '../../orders/entities/order.entity';
 import { PdfStorageService } from '../../../common/services/pdf-storage.service';
 import { LogoStorageService } from '../../../common/services/logo-storage.service';
 import { ApiErrors } from '../../../common/errors/ApiError';
-import { StandardReceiptDocument, CompactReceiptDocument } from '../templates';
+import { TemplateService, ReceiptTemplate } from './template.service';
+import { PlaywrightPdfGenerator } from './playwright-pdf-generator.service';
 
 export enum ReceiptStyle {
   STANDARD = 'standard',
   COMPACT = 'compact'
 }
-
-// Determine the correct path for fonts based on environment
-const getFontPath = (fontFile: string): string => {
-  const isDevelopment = __dirname.includes('/src/');
-  if (isDevelopment) {
-    // In development, __dirname points to src/modules/receipts/services/
-    // Need to go up to src/ and then to assets/fonts/
-    return path.join(__dirname, '../../../assets/fonts', fontFile);
-  } else {
-    // In production, __dirname points to dist/modules/receipts/services/
-    // Fonts are copied to dist/modules/assets/fonts during build
-    return path.join(__dirname, '../../assets/fonts', fontFile);
-  }
-};
 
 @Injectable()
 export class PdfGeneratorService {
@@ -37,6 +21,8 @@ export class PdfGeneratorService {
     private configService: ConfigService<EnvConfig>,
     private pdfStorageService: PdfStorageService,
     private logoStorageService: LogoStorageService,
+    private templateService: TemplateService,
+    private playwrightPdfGenerator: PlaywrightPdfGenerator,
   ) {}
 
   async generateReceiptPdf(
@@ -46,40 +32,19 @@ export class PdfGeneratorService {
     userId: string,
     style: ReceiptStyle = ReceiptStyle.STANDARD
   ): Promise<{ filePath: string; url: string }> {
-    let logoPath: string | undefined;
-    
     try {
-      this.logger.log(`Starting ${style} PDF generation using @react-pdf/renderer...`);
+      this.logger.log(`Starting ${style} PDF generation using Playwright...`);
       this.logger.log('Order ID:', order.id);
       this.logger.log('Receipt number:', receiptNumber);
 
-      // Register fonts
-      const regularFontPath = getFontPath('NotoSans-Regular.ttf');
-      const boldFontPath = getFontPath('NotoSans_Condensed-Bold.ttf');
-      
-      // Check if font files exist
-      try {
-        await fs.access(regularFontPath);
-        await fs.access(boldFontPath);
-        this.logger.log(`Font files found: ${regularFontPath}, ${boldFontPath}`);
-      } catch (error) {
-        this.logger.error(`Font files not found: ${error.message}`);
-        throw new Error(`Font files not found: ${error.message}`);
-      }
-      
-      Font.register({
-        family: 'NotoSans',
-        fonts: [
-          { src: regularFontPath, fontWeight: 'normal' },
-          { src: boldFontPath, fontWeight: 'bold' },
-        ],
-      });
-
       // Check if user has custom logo in Object Storage
       let hasCustomLogo = false;
+      let logoPath: string | undefined;
+      
       try {
         hasCustomLogo = await this.logoStorageService.userHasLogo(userId);
         this.logger.log(`Logo check for user ${userId}: hasCustomLogo = ${hasCustomLogo}`);
+        
         if (hasCustomLogo) {
           const logoBuffer = await this.logoStorageService.downloadLogo(userId);
           this.logger.log(`Custom logo found for user ${userId}, logo size: ${logoBuffer.length} bytes`);
@@ -100,7 +65,7 @@ export class PdfGeneratorService {
           
           this.logger.log(`Detected MIME type: ${mimeType}`);
           
-          // Convert to base64 for react-pdf
+          // Convert to base64 for HTML
           const base64String = logoBuffer.toString('base64');
           logoPath = `data:${mimeType};base64,${base64String}`;
           this.logger.log(`Logo converted to base64, length: ${logoPath.length}`);
@@ -118,27 +83,45 @@ export class PdfGeneratorService {
       
       this.logger.log(`Generating ${style} PDF: ${fileName}`);
 
-      // Generate PDF based on style
-      const doc = style === ReceiptStyle.COMPACT 
-        ? <CompactReceiptDocument order={order} receiptNumber={receiptNumber} hasCustomLogo={hasCustomLogo} companyName={companyName} logoPath={logoPath} />
-        : <StandardReceiptDocument order={order} receiptNumber={receiptNumber} hasCustomLogo={hasCustomLogo} companyName={companyName} logoPath={logoPath} />;
+      // Prepare template data
+      const templateData = this.templateService.prepareTemplateData(
+        order,
+        receiptNumber,
+        companyName,
+        hasCustomLogo,
+        logoPath
+      );
+
+      // Render HTML template
+      const templateName = style === ReceiptStyle.COMPACT ? ReceiptTemplate.COMPACT : ReceiptTemplate.STANDARD;
+      const html = await this.templateService.renderTemplate(templateName, templateData);
       
-      // Use toBlob() and convert to Buffer
-      const pdfBlob = await pdf(doc).toBlob();
-      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
+      this.logger.log(`HTML template rendered for ${style} style`);
 
-      // Save to Object Storage
-      this.logger.log(`Saving ${style} PDF to Object Storage...`);
-      const url = await this.pdfStorageService.uploadReceipt(pdfBuffer, fileName, userId);
-      const filePath = `object-storage://receipts/${userId}/${fileName}`;
-      this.logger.log(`${style} PDF saved to Object Storage: ${url}`);
+      // Generate PDF using Playwright
+      const pdfBuffer = await this.playwrightPdfGenerator.generatePdf(html);
+      
+      this.logger.log(`${style} PDF buffer generated, size: ${pdfBuffer.length} bytes`);
 
-      // Validate PDF format
-      const isPdf = pdfBuffer.subarray(0, 4).toString('ascii') === '%PDF';
-      if (!isPdf) {
-        this.logger.error(`Generated file is not a valid PDF`);
+      // Validate PDF buffer
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        this.logger.error(`Generated PDF buffer is empty or invalid`);
         throw ApiErrors.RECEIPT_GENERATION_FAILED(order.id);
       }
+
+      // Check if it's a valid PDF by looking at the header
+      const pdfHeader = pdfBuffer.subarray(0, 4).toString();
+      if (pdfHeader !== '%PDF') {
+        this.logger.error(`Generated buffer is not a valid PDF. Header: ${pdfHeader}`);
+        throw ApiErrors.RECEIPT_GENERATION_FAILED(order.id);
+      }
+
+      this.logger.log(`${style} PDF buffer is valid`);
+
+      // Store PDF in Object Storage
+      const url = await this.pdfStorageService.uploadReceipt(pdfBuffer, fileName, userId);
+      const filePath = `object-storage://receipts/${userId}/${fileName}`;
+      
       this.logger.log(`${style} PDF file is valid and saved to Object Storage`);
 
       this.logger.log(`${style} PDF receipt generated: ${filePath}`);
