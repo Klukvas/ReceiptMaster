@@ -32,7 +32,10 @@ export class ProductsController {
   @Post()
   @ApiOperation({ summary: "Создать товар" })
   @ApiResponse({ status: 201, description: "Товар успешно создан" })
-  create(@Body() createProductDto: CreateProductDto, @Request() req: { user: User }) {
+  create(
+    @Body() createProductDto: CreateProductDto,
+    @Request() req: { user: User },
+  ) {
     return this.productsService.create(createProductDto, req.user);
   }
 
@@ -55,7 +58,11 @@ export class ProductsController {
   @ApiOperation({ summary: "Обновить товар" })
   @ApiResponse({ status: 200, description: "Товар успешно обновлен" })
   @ApiResponse({ status: 404, description: "Товар не найден" })
-  update(@Param("id") id: string, @Body() updateProductDto: UpdateProductDto, @Request() req: { user: User }) {
+  update(
+    @Param("id") id: string,
+    @Body() updateProductDto: UpdateProductDto,
+    @Request() req: { user: User },
+  ) {
     return this.productsService.update(id, updateProductDto, req.user);
   }
 

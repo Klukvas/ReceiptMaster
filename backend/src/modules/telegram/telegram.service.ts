@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-  Logger,
-} from "@nestjs/common";
+import { Injectable, BadRequestException, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
@@ -82,7 +77,9 @@ export class TelegramService {
   private async tgPost<T = any>(path: string, payload: any): Promise<T> {
     const { data } = await this.http.post(path, payload);
     if (!data?.ok) {
-      throw ApiErrors.INTERNAL_SERVER_ERROR(`Telegram API error: ${JSON.stringify(data)}`);
+      throw ApiErrors.INTERNAL_SERVER_ERROR(
+        `Telegram API error: ${JSON.stringify(data)}`,
+      );
     }
     return data.result as T;
   }
@@ -312,7 +309,10 @@ export class TelegramService {
       // 3) Validations: single currency, stock availability
       const currencies = new Set(products.map((p) => p.currency));
       if (currencies.size !== 1) {
-        throw ApiErrors.VALIDATION_ERROR("currency", "Все товары в заказе должны быть в одной валюте");
+        throw ApiErrors.VALIDATION_ERROR(
+          "currency",
+          "Все товары в заказе должны быть в одной валюте",
+        );
       }
       const currency = products[0].currency;
 
@@ -322,7 +322,10 @@ export class TelegramService {
       for (const it of dto.items) {
         const p = byId.get(it.productId)!;
         if (p.quantity < it.qty) {
-          throw ApiErrors.VALIDATION_ERROR("quantity", `Недостаточно товара "${p.name}". Доступно: ${p.quantity}, запрошено: ${it.qty}`);
+          throw ApiErrors.VALIDATION_ERROR(
+            "quantity",
+            `Недостаточно товара "${p.name}". Доступно: ${p.quantity}, запрошено: ${it.qty}`,
+          );
         }
         subtotalCents += p.sale_price_cents * it.qty;
       }

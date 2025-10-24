@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-} from "@nestjs/common";
+import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
 import { ApiErrors } from "../errors/ApiError";
 import { ConfigService } from "@nestjs/config";
 import { EnvConfig } from "../../config/env.schema";

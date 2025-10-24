@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In } from "typeorm";
@@ -70,7 +66,10 @@ export class OrdersService {
 
         // Check if product has enough quantity
         if (product.quantity < itemDto.qty) {
-          throw ApiErrors.VALIDATION_ERROR('quantity', `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`);
+          throw ApiErrors.VALIDATION_ERROR(
+            "quantity",
+            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
+          );
         }
 
         const lineTotalCents = product.sale_price_cents * itemDto.qty;
@@ -181,7 +180,11 @@ export class OrdersService {
     return this.ordersRepository.save(order);
   }
 
-  async update(id: string, updateOrderDto: UpdateOrderDto, user: User): Promise<Order> {
+  async update(
+    id: string,
+    updateOrderDto: UpdateOrderDto,
+    user: User,
+  ): Promise<Order> {
     return this.dataSource.transaction(async (manager) => {
       // Load order without relations to avoid conflicts with cascade operations
       const order = await manager.findOne(Order, {
@@ -246,7 +249,10 @@ export class OrdersService {
 
           // Check if product has enough quantity
           if (product.quantity < itemDto.qty) {
-            throw ApiErrors.VALIDATION_ERROR('quantity', `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`);
+            throw ApiErrors.VALIDATION_ERROR(
+              "quantity",
+              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
+            );
           }
 
           const lineTotalCents = product.sale_price_cents * itemDto.qty;

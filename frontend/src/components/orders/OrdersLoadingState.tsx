@@ -3,7 +3,7 @@ import { Card } from '../ui/Card';
 
 interface OrdersLoadingStateProps {
   isLoading: boolean;
-  error: any;
+  error: Error | null;
   onCreateOrder: () => void;
 }
 

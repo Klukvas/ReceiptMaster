@@ -95,7 +95,11 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully updated" })
   @ApiResponse({ status: 400, description: "Cannot update order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  update(@Param("id") id: string, @Body() updateOrderDto: UpdateOrderDto, @Request() req: { user: User }) {
+  update(
+    @Param("id") id: string,
+    @Body() updateOrderDto: UpdateOrderDto,
+    @Request() req: { user: User },
+  ) {
     return this.ordersService.update(id, updateOrderDto, req.user);
   }
 

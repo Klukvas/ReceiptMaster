@@ -6,7 +6,7 @@ import { Card } from '../ui/Card';
 interface OrderCardProps {
   orders: Order[];
   isLoading: boolean;
-  error: any;
+  error: Error | null;
   onViewOrder: (order: Order) => void;
   onEditOrder: (order: Order) => void;
   onConfirmOrder: (id: string) => void;

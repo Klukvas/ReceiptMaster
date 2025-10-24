@@ -27,7 +27,10 @@ export class RecipientsController {
   @Post()
   @ApiOperation({ summary: "Создать получателя" })
   @ApiResponse({ status: 201, description: "Получатель успешно создан" })
-  create(@Body() createRecipientDto: CreateRecipientDto, @Request() req: { user: User }) {
+  create(
+    @Body() createRecipientDto: CreateRecipientDto,
+    @Request() req: { user: User },
+  ) {
     return this.recipientsService.create(createRecipientDto, req.user);
   }
 

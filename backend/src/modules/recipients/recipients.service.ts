@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -19,7 +15,10 @@ export class RecipientsService {
     private recipientsRepository: Repository<Recipient>,
   ) {}
 
-  async create(createRecipientDto: CreateRecipientDto, user: User): Promise<Recipient> {
+  async create(
+    createRecipientDto: CreateRecipientDto,
+    user: User,
+  ): Promise<Recipient> {
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
       user_id: user.id,
@@ -73,7 +72,9 @@ export class RecipientsService {
       .getCount();
 
     if (ordersCount > 0) {
-      throw ApiErrors.BAD_REQUEST("Нельзя удалить получателя, у которого есть заказы");
+      throw ApiErrors.BAD_REQUEST(
+        "Нельзя удалить получателя, у которого есть заказы",
+      );
     }
 
     await this.recipientsRepository.remove(recipient);

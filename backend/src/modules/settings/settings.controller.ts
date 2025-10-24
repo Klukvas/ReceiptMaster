@@ -5,8 +5,6 @@ import {
   UploadedFile,
   Get,
   Res,
-  HttpException,
-  HttpStatus,
   Body,
   UseGuards,
   Request,
@@ -27,7 +25,7 @@ import { User } from "../users/entities/user.entity";
 @UseGuards(JwtAuthGuard)
 export class SettingsController {
   private readonly logger = new Logger(SettingsController.name);
-  
+
   constructor(
     private configService: ConfigService<EnvConfig>,
     private logoStorageService: LogoStorageService,
@@ -49,7 +47,7 @@ export class SettingsController {
   )
   async uploadLogo(
     @UploadedFile() file: Express.Multer.File,
-    @Request() req: { user: User }
+    @Request() req: { user: User },
   ) {
     if (!file) {
       throw ApiErrors.REQUIRED_FIELD_MISSING("logo file");
@@ -65,8 +63,11 @@ export class SettingsController {
       }
 
       // Загружаем новый логотип в Object Storage
-      const url = await this.logoStorageService.uploadLogo(file.buffer, req.user.id);
-      
+      const url = await this.logoStorageService.uploadLogo(
+        file.buffer,
+        req.user.id,
+      );
+
       return {
         message: "Logo uploaded successfully to Object Storage",
         filename: `logo-${req.user.id}.png`,
@@ -84,15 +85,18 @@ export class SettingsController {
   async getLogo(@Res() res: Response, @Request() req: { user: User }) {
     try {
       // Получаем логотип пользователя из Object Storage
-      const logoBuffer = await this.logoStorageService.downloadLogo(req.user.id);
-      
+      const logoBuffer = await this.logoStorageService.downloadLogo(
+        req.user.id,
+      );
+
       res.set({
         "Content-Type": "image/png",
         "Content-Length": logoBuffer.length.toString(),
         "Cache-Control": "public, max-age=3600", // Кешируем на 1 час
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, X-API-Key",
         "Access-Control-Expose-Headers": "Content-Type, Content-Length",
       });
       res.send(logoBuffer);
@@ -101,7 +105,6 @@ export class SettingsController {
       return res.status(404).json({ message: "Logo not found" });
     }
   }
-
 
   @Post("company-name")
   async updateCompanyName(@Body() body: { companyName: string }) {
@@ -162,7 +165,7 @@ export class SettingsController {
       return {
         hasLogo,
         userId: req.user.id,
-        message: hasLogo ? "Logo exists" : "No logo found"
+        message: hasLogo ? "Logo exists" : "No logo found",
       };
     } catch (error) {
       throw ApiErrors.INTERNAL_SERVER_ERROR("Failed to check logo existence");
@@ -178,7 +181,7 @@ export class SettingsController {
         userId: req.user.id,
       };
     } catch (error) {
-      if (error.message.includes('No logo found')) {
+      if (error.message.includes("No logo found")) {
         return {
           message: "Logo not found",
           userId: req.user.id,

@@ -12,7 +12,7 @@ export const envSchema = z.object({
   DB_USERNAME: z.string().default("postgres"),
   DB_PASSWORD: z.string().default("postgres"),
   DB_NAME: z.string().default("market_db"),
-  
+
   // Auto migrations
   AUTO_RUN_MIGRATIONS: z.coerce.boolean().default(true),
 

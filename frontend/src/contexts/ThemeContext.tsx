@@ -1,29 +1,13 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
+import type { Theme } from './theme-constants';
+import { getInitialTheme } from './theme-constants';
+import { ThemeContext } from './ThemeContextInstance';
 
-type Theme = 'light' | 'dark';
-
-interface ThemeContextType {
+export interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
 }
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-const getInitialTheme = (): Theme => {
-  // Check localStorage first
-  const savedTheme = localStorage.getItem('theme') as Theme | null;
-  if (savedTheme) {
-    return savedTheme;
-  }
-  
-  // Check system preference
-  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
-  }
-  
-  return 'light';
-};
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
@@ -53,13 +37,5 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </ThemeContext.Provider>
   );
-};
-
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
 };
 

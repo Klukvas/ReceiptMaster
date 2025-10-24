@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MoreVertical, Edit, XCircle, Printer, FileText, Trash2 } from 'lucide-react';
+import type { Order } from '../../lib/api';
 
 interface DropdownMenuProps {
-  order: any;
-  onEditOrder: (order: any) => void;
+  order: Order;
+  onEditOrder: (order: Order) => void;
   onCancelOrder: (id: string) => void;
-  onDeleteOrder: (order: any) => void;
+  onDeleteOrder: (order: Order) => void;
   onPrintReceipt: (receiptId: string) => void;
   onGenerateReceipt: (orderId: string) => void;
   isDeleting: boolean;

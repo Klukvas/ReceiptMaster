@@ -14,7 +14,7 @@ import { TelegramUpdate } from "./interfaces/telegram.interface";
 @Controller()
 export class TelegramController {
   private readonly logger = new Logger(TelegramController.name);
-  
+
   constructor(private readonly telegramService: TelegramService) {}
 
   // Стандартный Telegram webhook endpoint

@@ -5,7 +5,7 @@ import { parseApiError } from '../lib/api-errors';
 export interface OrderState {
   orders: Order[];
   isLoading: boolean;
-  error: any;
+  error: Error | null;
   editingOrder: Order | null;
   selectedOrder: Order | null;
   deleteConfirmation: {

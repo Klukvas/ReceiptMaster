@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  // ConflictException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
@@ -22,7 +17,10 @@ export class ProductsService {
     private dataSource: DataSource,
   ) {}
 
-  async create(createProductDto: CreateProductDto, user: User): Promise<Product> {
+  async create(
+    createProductDto: CreateProductDto,
+    user: User,
+  ): Promise<Product> {
     const product = this.productsRepository.create({
       ...createProductDto,
       user_id: user.id,
@@ -46,8 +44,8 @@ export class ProductsService {
   }
 
   async findOne(id: string, user: User): Promise<Product> {
-    const product = await this.productsRepository.findOne({ 
-      where: { id, user_id: user.id } 
+    const product = await this.productsRepository.findOne({
+      where: { id, user_id: user.id },
     });
     if (!product) {
       throw ApiErrors.PRODUCT_NOT_FOUND(id);
@@ -80,7 +78,9 @@ export class ProductsService {
     );
 
     if (parseInt(activeOrders[0].count) > 0) {
-      throw ApiErrors.BAD_REQUEST("Нельзя удалить товар, который используется в подтвержденных заказах");
+      throw ApiErrors.BAD_REQUEST(
+        "Нельзя удалить товар, который используется в подтвержденных заказах",
+      );
     }
 
     // Удаляем товар и связанные записи в транзакции

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as AWS from 'aws-sdk';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as AWS from "aws-sdk";
 
 export interface FileUploadResult {
   url: string;
@@ -20,12 +20,12 @@ export abstract class BaseObjectStorageService {
 
   constructor(protected readonly configService: ConfigService) {
     this.s3 = new AWS.S3({
-      endpoint: this.configService.get('S3_ENDPOINT'),
-      region: this.configService.get('AWS_REGION'),
-      accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
-      secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
+      endpoint: this.configService.get("S3_ENDPOINT"),
+      region: this.configService.get("AWS_REGION"),
+      accessKeyId: this.configService.get("AWS_ACCESS_KEY_ID"),
+      secretAccessKey: this.configService.get("AWS_SECRET_ACCESS_KEY"),
       s3ForcePathStyle: true,
-      signatureVersion: 'v4',
+      signatureVersion: "v4",
     });
   }
 
@@ -44,12 +44,12 @@ export abstract class BaseObjectStorageService {
         Key: key,
         Body: file,
         ContentType: contentType,
-        ACL: 'private',
+        ACL: "private",
       };
 
       const result = await this.s3.upload(params).promise();
       this.logger.log(`File uploaded successfully: ${result.Location}`);
-      
+
       return result.Location;
     } catch (error) {
       this.logger.error(`Failed to upload file: ${error.message}`);
@@ -118,13 +118,15 @@ export abstract class BaseObjectStorageService {
    * Parse object storage path to extract bucket and key
    */
   parseObjectStoragePath(objectStoragePath: string): FileInfo | null {
-    const match = objectStoragePath.match(/^object-storage:\/\/([^\/]+)\/(.+)$/);
+    const match = objectStoragePath.match(
+      /^object-storage:\/\/([^\/]+)\/(.+)$/,
+    );
     if (!match) {
       return null;
     }
 
     const [, folder, path] = match;
-    
+
     // Determine bucket based on folder
     const bucket = this.getBucketForFolder(folder);
     if (!bucket) {
@@ -133,7 +135,7 @@ export abstract class BaseObjectStorageService {
 
     return {
       bucket,
-      key: `${folder}/${path}`
+      key: `${folder}/${path}`,
     };
   }
 

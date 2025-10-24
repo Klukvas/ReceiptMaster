@@ -20,7 +20,7 @@ import { User } from "../users/entities/user.entity";
 @UseGuards(JwtAuthGuard)
 export class ReceiptsController {
   private readonly logger = new Logger(ReceiptsController.name);
-  
+
   constructor(private readonly receiptsService: ReceiptsService) {}
 
   @Get("printers")
@@ -36,7 +36,10 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createReceipt(@Param("orderId") orderId: string, @Request() req: { user: User }) {
+  createReceipt(
+    @Param("orderId") orderId: string,
+    @Request() req: { user: User },
+  ) {
     return this.receiptsService.generateReceipt(orderId, req.user);
   }
 
@@ -46,7 +49,10 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createCompactReceipt(@Param("orderId") orderId: string, @Request() req: { user: User }) {
+  createCompactReceipt(
+    @Param("orderId") orderId: string,
+    @Request() req: { user: User },
+  ) {
     return this.receiptsService.generateCompactReceipt(orderId, req.user);
   }
 
@@ -56,7 +62,10 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createStandardReceipt(@Param("orderId") orderId: string, @Request() req: { user: User }) {
+  createStandardReceipt(
+    @Param("orderId") orderId: string,
+    @Request() req: { user: User },
+  ) {
     return this.receiptsService.generateStandardReceipt(orderId, req.user);
   }
 
@@ -79,9 +88,16 @@ export class ReceiptsController {
   @ApiOperation({ summary: "Скачать PDF чек" })
   @ApiResponse({ status: 200, description: "PDF файл получен" })
   @ApiResponse({ status: 404, description: "PDF файл не найден" })
-  async getPdf(@Param("id") id: string, @Res() res: Response, @Request() req: { user: User }) {
+  async getPdf(
+    @Param("id") id: string,
+    @Res() res: Response,
+    @Request() req: { user: User },
+  ) {
     try {
-      const { buffer, filename } = await this.receiptsService.getReceiptPdf(id, req.user);
+      const { buffer, filename } = await this.receiptsService.getReceiptPdf(
+        id,
+        req.user,
+      );
 
       // Проверяем, что это действительно PDF
       const isPdf = buffer.toString("ascii", 0, 4) === "%PDF";
@@ -130,7 +146,10 @@ export class ReceiptsController {
   @ApiResponse({ status: 200, description: "PDF чек успешно регенерирован" })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при регенерации PDF" })
-  async regenerateReceiptPdf(@Param("id") id: string, @Request() req: { user: User }) {
+  async regenerateReceiptPdf(
+    @Param("id") id: string,
+    @Request() req: { user: User },
+  ) {
     return this.receiptsService.regenerateReceiptPdf(id, req.user);
   }
 }
