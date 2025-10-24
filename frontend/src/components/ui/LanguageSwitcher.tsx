@@ -14,11 +14,11 @@ export const LanguageSwitcher: React.FC = () => {
   const isDark = theme === 'dark';
 
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <select
         value={currentLanguage}
         onChange={(e) => changeLanguage(e.target.value as 'en' | 'ru' | 'uk')}
-        className={`appearance-none border rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 ${
+        className={`appearance-none border rounded-md px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 w-full min-w-0 ${
           isDark 
             ? 'bg-gray-800 border-gray-600 text-gray-100' 
             : 'bg-white border-gray-300 text-gray-900'

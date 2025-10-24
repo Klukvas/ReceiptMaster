@@ -17,7 +17,9 @@
     "clear": "Очистити",
     "yes": "Так",
     "no": "Ні",
-    "ok": "ОК"
+    "ok": "ОК",
+    "item": "Елемент",
+    "deleting": "Видалення..."
   },
   "auth": {
     "login": "Вхід",
@@ -60,6 +62,7 @@
     "confirm": "Підтвердити",
     "cancel": "Скасувати",
     "edit": "Редагувати",
+    "editOrder": "Редагувати замовлення",
     "delete": "Видалити",
     "draft": "Чернетка",
     "confirmed": "Підтверджено",
@@ -78,7 +81,16 @@
     "failedToLoadOrders": "Не вдалося завантажити замовлення",
     "failedToConfirmOrder": "Не вдалося підтвердити замовлення",
     "failedToCancelOrder": "Не вдалося скасувати замовлення",
-    "failedToDeleteOrder": "Не вдалося видалити замовлення"
+    "failedToDeleteOrder": "Не вдалося видалити замовлення",
+    "failedToCreateOrder": "Не вдалося створити замовлення",
+    "selectRecipient": "Виберіть отримувача",
+    "searchRecipient": "Пошук отримувача...",
+    "selectProduct": "Виберіть товар",
+    "searchProduct": "Пошук товару...",
+    "addAtLeastOneProduct": "Додайте хоча б один товар",
+    "insufficientQuantity": "Недостатньо товару. Доступно: {{available}} шт.",
+    "insufficientStock": "Недостатньо товару",
+    "generateReceipt": "Створити чек"
   },
   "products": {
     "title": "Товари",
@@ -99,7 +111,13 @@
     "failedToCreateProduct": "Не вдалося створити товар",
     "failedToUpdateProduct": "Не вдалося оновити товар",
     "failedToDeleteProduct": "Не вдалося видалити товар",
-    "cannotDeleteProduct": "Не можна видалити товар, який використовується в підтверджених замовленнях"
+    "cannotDeleteProduct": "Не можна видалити товар, який використовується в підтверджених замовленнях",
+    "productNameRequired": "Назва товару обов'язкова",
+    "purchasePriceMustBePositive": "Ціна покупки повинна бути додатним числом",
+    "salePriceMustBePositive": "Ціна продажу повинна бути додатним числом",
+    "quantityMustBeNonNegative": "Кількість повинна бути невід'ємним числом",
+    "deleteProduct": "Видалити товар",
+    "deleteProductMessage": "Ви впевнені, що хочете видалити цей товар? Цю дію неможливо скасувати."
   },
   "recipients": {
     "title": "Отримувачі",
@@ -119,10 +137,12 @@
     "failedToCreateRecipient": "Не вдалося створити отримувача",
     "failedToUpdateRecipient": "Не вдалося оновити отримувача",
     "failedToDeleteRecipient": "Не вдалося видалити отримувача",
-    "cannotDeleteRecipient": "Не можна видалити отримувача, у якого є замовлення"
+    "cannotDeleteRecipient": "Не можна видалити отримувача, у якого є замовлення",
+    "deleteRecipientMessage": "Ви впевнені, що хочете видалити цього отримувача?"
   },
   "settings": {
     "title": "Налаштування",
+    "subtitle": "Управління налаштуваннями системи та зовнішнім виглядом документів",
     "companyName": "Назва компанії",
     "logo": "Логотип",
     "uploadLogo": "Завантажити логотип",
@@ -134,8 +154,31 @@
     "failedToUploadLogo": "Не вдалося завантажити логотип",
     "failedToDeleteLogo": "Не вдалося видалити логотип"
   },
+  "home": {
+    "welcome": "Ласкаво просимо до Receipt Master",
+    "subtitle": "Керуйте товарами, замовленнями та чеками в одному місці",
+    "latestProducts": "Останні товари",
+    "latestRecipients": "Останні отримувачі",
+    "quickActions": "Швидкі дії",
+    "salePrice": "Ціна продажу",
+    "purchasePrice": "Ціна закупівлі",
+    "noContacts": "Немає контактів",
+    "addProduct": "Додати товар",
+    "addProductDescription": "Створити новий товар в каталозі",
+    "addRecipient": "Додати отримувача",
+    "addRecipientDescription": "Створити нового отримувача",
+    "createOrder": "Створити замовлення",
+    "createOrderDescription": "Оформити нове замовлення",
+    "receipts": "Чеки"
+  },
   "dashboard": {
     "title": "Панель керування",
+    "subtitle": "Аналіз доходів та обороту по продуктах та отримувачах",
+    "revenue": "Дохід",
+    "turnover": "Загальний оборот",
+    "dateFilter": "Фільтр по датах",
+    "startDate": "Дата початку",
+    "endDate": "Дата закінчення",
     "totalRevenue": "Загальний дохід",
     "totalOrders": "Всього замовлень",
     "revenueByProduct": "Дохід по товарах",

@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { Combobox } from '../ui/Combobox';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface EditOrderFormProps {
   order: Order;
@@ -18,6 +19,7 @@ interface OrderItem {
 }
 
 export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
+  const { t } = useTranslation();
   const [recipientId, setRecipientId] = useState(order.recipient_id);
   const [items, setItems] = useState<OrderItem[]>(
     order.items.map(item => ({
@@ -67,7 +69,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
     
     const validItems = items.filter(item => item.productId && item.qty > 0);
     if (validItems.length === 0) {
-      alert('Add at least one product');
+      alert(t('orders.addAtLeastOneProduct'));
       return;
     }
 
@@ -98,7 +100,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
     <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Order</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('orders.editOrder')}</h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -107,7 +109,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Получатель
+              {t('orders.recipient')}
             </label>
             <Combobox
               options={recipientsData?.data.data.map((recipient) => ({
@@ -117,8 +119,8 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
               })) || []}
               value={recipientId}
               onChange={setRecipientId}
-              placeholder="Выберите получателя"
-              searchPlaceholder="Поиск получателя..."
+              placeholder={t('orders.selectRecipient')}
+              searchPlaceholder={t('orders.searchRecipient')}
               required
             />
           </div>
@@ -126,11 +128,11 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Products
+                {t('orders.products')}
               </label>
               <Button type="button" size="sm" onClick={addItem}>
                 <Plus className="w-4 h-4 mr-1" />
-                Add
+                {t('common.add')}
               </Button>
             </div>
 
@@ -146,8 +148,8 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       })) || []}
                       value={item.productId}
                       onChange={(value) => updateItem(index, 'productId', value)}
-                      placeholder="Выберите товар"
-                      searchPlaceholder="Поиск товара..."
+                      placeholder={t('orders.selectProduct')}
+                      searchPlaceholder={t('orders.searchProduct')}
                       required
                     />
                   </div>
@@ -158,7 +160,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       value={item.qty}
                       onChange={(e) => updateItem(index, 'qty', parseInt(e.target.value))}
                       required
-                      placeholder="Кол-во"
+                      placeholder={t('orders.quantity')}
                     />
                   </div>
                   <div className="w-32 text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -181,17 +183,17 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <div className="flex justify-between items-center text-lg font-semibold text-gray-900 dark:text-white">
-              <span>Total:</span>
+              <span>{t('orders.total')}:</span>
               <span>{formatCurrency(calculateTotal())}</span>
             </div>
           </div>
 
           <div className="flex space-x-3 pt-4">
             <Button type="submit" disabled={updateMutation.isPending} className="flex-1">
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('common.loading') : t('common.save')}
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         </form>

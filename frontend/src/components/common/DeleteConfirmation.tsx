@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface DeleteConfirmationProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   itemName,
   isLoading = false,
 }) => {
+  const { t } = useTranslation();
   if (!isOpen) return null;
 
   return (
@@ -41,7 +43,7 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
           <p className="text-gray-600 dark:text-gray-300 mb-2">{message}</p>
           {itemName && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              <strong>Элемент:</strong> {itemName}
+              <strong>{t('common.item')}:</strong> {itemName}
             </p>
           )}
         </div>
@@ -52,14 +54,14 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
             onClick={onClose}
             disabled={isLoading}
           >
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             variant="danger"
             onClick={onConfirm}
             disabled={isLoading}
           >
-            {isLoading ? 'Удаление...' : 'Удалить'}
+            {isLoading ? t('common.deleting') : t('common.delete')}
           </Button>
         </div>
       </Card>

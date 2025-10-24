@@ -18,7 +18,9 @@
     "add": "Добавить",
     "yes": "Да",
     "no": "Нет",
-    "ok": "ОК"
+    "ok": "ОК",
+    "item": "Элемент",
+    "deleting": "Удаление..."
   },
   "auth": {
     "login": "Вход",
@@ -65,6 +67,7 @@
     "confirm": "Подтвердить",
     "cancel": "Отменить",
     "edit": "Редактировать",
+    "editOrder": "Редактировать заказ",
     "delete": "Удалить",
     "draft": "Черновик",
     "confirmed": "Подтвержден",
@@ -91,7 +94,8 @@
     "searchProduct": "Поиск товара...",
     "addAtLeastOneProduct": "Добавьте хотя бы один товар",
     "insufficientQuantity": "Недостаточно товара. Доступно: {{available}} шт.",
-    "insufficientStock": "Недостаточно товара"
+    "insufficientStock": "Недостаточно товара",
+    "generateReceipt": "Создать чек"
   },
   "products": {
     "title": "Товары",

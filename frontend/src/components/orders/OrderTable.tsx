@@ -2,6 +2,7 @@ import { Eye, CheckCircle, Download } from 'lucide-react';
 import { formatCurrency, formatDate, type Order } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { DropdownMenu } from '../ui/DropdownMenu';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface OrderTableProps {
   orders: Order[];
@@ -32,6 +33,7 @@ export const OrderTable = ({
   onGenerateReceipt,
   isDeleting,
 }: OrderTableProps) => {
+  const { t } = useTranslation();
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -48,11 +50,11 @@ export const OrderTable = ({
   const getStatusText = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'Draft';
+        return t('orders.draft');
       case 'confirmed':
-        return 'Confirmed';
+        return t('orders.confirmed');
       case 'cancelled':
-        return 'Cancelled';
+        return t('orders.cancelled');
       default:
         return status;
     }
@@ -64,19 +66,19 @@ export const OrderTable = ({
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Recipient
+              {t('orders.recipient')}
             </th>
             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Status
+              {t('orders.status')}
             </th>
             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Amount
+              {t('orders.total')}
             </th>
             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Date
+              {t('orders.date')}
             </th>
             <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Actions
+              {t('orders.actions')}
             </th>
           </tr>
         </thead>
@@ -84,19 +86,19 @@ export const OrderTable = ({
           {isLoading ? (
             <tr>
               <td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">
-                Loading orders...
+                {t('common.loading')}
               </td>
             </tr>
           ) : error ? (
             <tr>
               <td colSpan={5} className="text-center py-8 text-red-500 dark:text-red-400">
-                Error loading orders
+                {t('orders.failedToLoadOrders')}
               </td>
             </tr>
           ) : !orders || orders.length === 0 ? (
             <tr>
               <td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">
-                No orders found. Create your first order!
+                {t('orders.noOrders')}
               </td>
             </tr>
           ) : (
@@ -127,7 +129,7 @@ export const OrderTable = ({
                       size="sm"
                       variant="secondary"
                       onClick={() => onViewOrder(order)}
-                      title="View order details"
+                      title={t('orders.view')}
                     >
                       <Eye className="w-3 h-3" />
                     </Button>
@@ -139,9 +141,9 @@ export const OrderTable = ({
                         variant="primary"
                         onClick={() => onDownloadReceipt(order.receipts[0].id)}
                         className="bg-green-600 hover:bg-green-700 focus:ring-green-500 flex items-center"
-                        title="Download receipt PDF"
+                        title={t('orders.download')}
                       >
-                        <Download className="w-3 h-3 mr-1" /> Download
+                        <Download className="w-3 h-3 mr-1" /> {t('orders.download')}
                       </Button>
                     )}
 
@@ -151,7 +153,7 @@ export const OrderTable = ({
                         size="sm"
                         variant="primary"
                         onClick={() => onConfirmOrder(order.id)}
-                        title="Confirm order"
+                        title={t('orders.confirm')}
                       >
                         <CheckCircle className="w-3 h-3" />
                       </Button>

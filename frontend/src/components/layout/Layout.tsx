@@ -91,21 +91,6 @@ export const Layout = ({ children }: LayoutProps) => {
           </button>
         </div>
         <div className="flex flex-col h-full">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 lg:hidden">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
-                </span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
-              </div>
-            </div>
-          </div>
           <nav className="flex-1 mt-6 px-3">
             <ul className="space-y-1">
               {navigation.map((item) => {
@@ -130,18 +115,35 @@ export const Layout = ({ children }: LayoutProps) => {
               })}
             </ul>
           </nav>
-          <div className="p-3 space-y-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between px-3">
+          {/* User profile section - visible on all screen sizes */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3 border-t border-gray-200 dark:border-gray-700 mb-6">
+            <div className="flex items-center justify-between px-2">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
               <ThemeToggle />
             </div>
-            <div className="flex items-center justify-between px-3">
+            <div className="flex items-center justify-between px-2">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Language</span>
               <LanguageSwitcher />
             </div>
             <button
               onClick={logout}
-              className="lg:hidden flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+              className="flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
             >
               <LogOut className="mr-3 h-4 w-4" />
               {t('auth.logout')}
@@ -152,30 +154,7 @@ export const Layout = ({ children }: LayoutProps) => {
 
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Desktop header with theme toggle */}
-        <div className="hidden lg:flex h-16 items-center justify-end px-8 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors duration-200">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3 mr-4">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Theme</span>
-              <ThemeToggle />
-            </div>
-            <div className="flex items-center space-x-3 mr-4">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Language</span>
-              <LanguageSwitcher />
-            </div>
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              {user?.firstName} {user?.lastName}
-            </span>
-            <button
-              onClick={logout}
-              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
-              title={t('auth.logout')}
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <main className="py-6 pt-20 lg:pt-6">
+        <main className="py-6 pt-20 lg:pt-6 pb-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {children}
           </div>

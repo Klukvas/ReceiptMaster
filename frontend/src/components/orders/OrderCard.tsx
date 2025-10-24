@@ -2,6 +2,7 @@ import { Eye, CheckCircle, XCircle, Download, Edit, Printer, Trash2 } from 'luci
 import { formatCurrency, formatDate, type Order } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface OrderCardProps {
   orders: Order[];
@@ -32,6 +33,7 @@ export const OrderCard = ({
   onGenerateReceipt,
   isDeleting,
 }: OrderCardProps) => {
+  const { t } = useTranslation();
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -48,11 +50,11 @@ export const OrderCard = ({
   const getStatusText = (status: string) => {
     switch (status) {
       case 'draft':
-        return 'Draft';
+        return t('orders.draft');
       case 'confirmed':
-        return 'Confirmed';
+        return t('orders.confirmed');
       case 'cancelled':
-        return 'Cancelled';
+        return t('orders.cancelled');
       default:
         return status;
     }
@@ -62,7 +64,7 @@ export const OrderCard = ({
     return (
       <Card>
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          Loading orders...
+          {t('common.loading')}
         </div>
       </Card>
     );
@@ -72,7 +74,7 @@ export const OrderCard = ({
     return (
       <Card>
         <div className="text-center py-8 text-red-500 dark:text-red-400">
-          Error loading orders
+          {t('orders.failedToLoadOrders')}
         </div>
       </Card>
     );
@@ -82,7 +84,7 @@ export const OrderCard = ({
     return (
       <Card>
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          No orders found. Create your first order!
+          {t('orders.noOrders')}
         </div>
       </Card>
     );
@@ -123,10 +125,10 @@ export const OrderCard = ({
                 variant="secondary"
                 onClick={() => onViewOrder(order)}
                 className="flex-1 sm:flex-none flex items-center justify-center"
-                title="View order details"
+                title={t('orders.view')}
               >
                 <Eye className="w-4 h-4 mr-2" />
-                View
+                {t('orders.view')}
               </Button>
               
               {order.status === 'draft' && (
@@ -136,30 +138,30 @@ export const OrderCard = ({
                     variant="secondary"
                     onClick={() => onEditOrder(order)}
                     className="flex-1 sm:flex-none flex items-center justify-center"
-                    title="Edit order"
+                    title={t('orders.edit')}
                   >
                     <Edit className="w-4 h-4 mr-2" />
-                    Edit
+                    {t('orders.edit')}
                   </Button>
                   <Button
                     size="sm"
                     variant="primary"
                     onClick={() => onConfirmOrder(order.id)}
                     className="flex-1 sm:flex-none flex items-center justify-center"
-                    title="Confirm order"
+                    title={t('orders.confirm')}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Confirm
+                    {t('orders.confirm')}
                   </Button>
                   <Button
                     size="sm"
                     variant="danger"
                     onClick={() => onCancelOrder(order.id)}
                     className="flex-1 sm:flex-none flex items-center justify-center"
-                    title="Cancel order"
+                    title={t('orders.cancel')}
                   >
                     <XCircle className="w-4 h-4 mr-2" />
-                    Cancel
+                    {t('orders.cancel')}
                   </Button>
                 </>
               )}
@@ -173,20 +175,20 @@ export const OrderCard = ({
                         variant="primary"
                         onClick={() => onDownloadReceipt(order.receipts[0].id)}
                         className="bg-green-600 hover:bg-green-700 focus:ring-green-500 flex-1 sm:flex-none flex items-center justify-center"
-                        title="Download receipt PDF"
+                        title={t('orders.download')}
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        Download
+                        {t('orders.download')}
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={() => onPrintReceipt(order.receipts[0].id)}
                         className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 text-white flex-1 sm:flex-none flex items-center justify-center"
-                        title="Print receipt"
+                        title={t('orders.print')}
                       >
                         <Printer className="w-4 h-4 mr-2" />
-                        Print
+                        {t('orders.print')}
                       </Button>
                     </div>
                   ) : (
@@ -195,9 +197,9 @@ export const OrderCard = ({
                       variant="primary"
                       onClick={() => onGenerateReceipt(order.id)}
                       className="flex-1 sm:flex-none flex items-center justify-center"
-                      title="Generate receipt"
+                      title={t('orders.generateReceipt')}
                     >
-                      Create Receipt
+                      {t('orders.generateReceipt')}
                     </Button>
                   )}
                 </>
@@ -209,10 +211,10 @@ export const OrderCard = ({
                 onClick={() => onDeleteOrder(order)}
                 disabled={isDeleting}
                 className="flex-1 sm:flex-none flex items-center justify-center"
-                title="Delete order"
+                title={t('orders.delete')}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete
+                {t('orders.delete')}
               </Button>
             </div>
           </div>
