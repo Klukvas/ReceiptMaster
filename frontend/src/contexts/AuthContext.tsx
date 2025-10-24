@@ -44,22 +44,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.setItem('auth_token', access_token);
     setToken(access_token);
     setUser(userData);
+    
+    // Redirect to dashboard after successful login
+    window.location.href = '/dashboard';
   };
 
-  const register = async (email: string, password: string, firstName: string, lastName: string) => {
-    const response = await authApi.register({ email, password, firstName, lastName });
+  const register = async (email: string, password: string) => {
+    const response = await authApi.register({ email, password });
     const { access_token, user: userData } = response.data;
     
     // Store token and user data
     localStorage.setItem('auth_token', access_token);
     setToken(access_token);
     setUser(userData);
+    
+    // Redirect to dashboard after successful registration
+    window.location.href = '/dashboard';
   };
 
   const logout = () => {
     localStorage.removeItem('auth_token');
     setToken(null);
     setUser(null);
+    // Используем window.location для редиректа на главную страницу
+    window.location.href = '/';
   };
 
   const value: AuthContextType = {

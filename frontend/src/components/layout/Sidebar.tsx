@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Package, Users, ShoppingCart, Home, LogOut, X, Settings, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, Users, ShoppingCart, Home, LogOut, X, Settings, BarChart3, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -13,21 +13,22 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const navigation = [
-  { nameKey: 'navigation.dashboard', href: '/', icon: Home },
-  { nameKey: 'navigation.products', href: '/products', icon: Package },
-  { nameKey: 'navigation.recipients', href: '/recipients', icon: Users },
-  { nameKey: 'navigation.orders', href: '/orders', icon: ShoppingCart },
-  { nameKey: 'navigation.dashboard', href: '/dashboard', icon: BarChart3 },
-  { nameKey: 'navigation.settings', href: '/settings', icon: Settings },
-];
+  const navigation = [
+    { nameKey: 'navigation.dashboard', href: '/dashboard', icon: Home },
+    { nameKey: 'navigation.products', href: '/products', icon: Package },
+    { nameKey: 'navigation.recipients', href: '/recipients', icon: Users },
+    { nameKey: 'navigation.orders', href: '/orders', icon: ShoppingCart },
+    { nameKey: 'navigation.analytics', href: '/analytics', icon: BarChart3 },
+    { nameKey: 'navigation.profile', href: '/profile', icon: User },
+    { nameKey: 'navigation.settings', href: '/settings', icon: Settings },
+  ];
 
 export const Sidebar = ({ isOpen, isCollapsed, onToggle, onClose }: SidebarProps) => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { t } = useTranslation();
 
-  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`;
+  const initials = user?.email?.[0]?.toUpperCase() || 'U';
 
   return (
     <>
@@ -120,7 +121,11 @@ export const Sidebar = ({ isOpen, isCollapsed, onToggle, onClose }: SidebarProps
                isCollapsed ? 'px-2' : 'px-4'
              )}
            >
-             <div className={clsx('flex items-center transition-all duration-300 ease-in-out', isCollapsed ? 'justify-center' : 'gap-3')}>
+             <Link
+               to="/profile"
+               onClick={onClose}
+               className={clsx('flex items-center transition-all duration-300 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 -m-2', isCollapsed ? 'justify-center' : 'gap-3')}
+             >
                <div className="w-9 h-9 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-sm font-medium text-gray-700 dark:text-gray-200 flex-shrink-0 transition-all duration-300 ease-in-out hover:scale-105">
                  {initials || '🧑'}
                </div>
@@ -133,13 +138,10 @@ export const Sidebar = ({ isOpen, isCollapsed, onToggle, onClose }: SidebarProps
                  )}
                >
                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate transition-all duration-300 ease-in-out">
-                   {user?.firstName} {user?.lastName}
-                 </p>
-                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate transition-all duration-300 ease-in-out">
                    {user?.email}
                  </p>
                </div>
-             </div>
+             </Link>
            </div>
 
            {/* 2) Navigation (middle, sticks to top below profile) */}

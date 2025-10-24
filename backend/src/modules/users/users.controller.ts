@@ -5,6 +5,7 @@ import {
   Get,
   UseGuards,
   Request,
+  Patch,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -15,6 +16,7 @@ import {
 import { UsersService } from "./users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { User } from "./entities/user.entity";
@@ -60,5 +62,18 @@ export class UsersController {
   async getProfile(@Request() req): Promise<Omit<User, "password">> {
     const { password: _password, ...userWithoutPassword } = req.user;
     return userWithoutPassword;
+  }
+
+  @Patch("profile")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Обновить профиль текущего пользователя" })
+  @ApiResponse({ status: 200, description: "Профиль обновлен", type: User })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  async updateProfile(
+    @Request() req,
+    @Body() updateProfileDto: UpdateProfileDto
+  ): Promise<Omit<User, "password">> {
+    return this.usersService.updateProfile(req.user.id, updateProfileDto);
   }
 }

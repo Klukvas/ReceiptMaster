@@ -151,8 +151,6 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
 }
 
 export interface AuthResponse {
@@ -160,16 +158,12 @@ export interface AuthResponse {
   user: {
     id: string;
     email: string;
-    firstName: string;
-    lastName: string;
   };
 }
 
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
 }
 
 // API methods
@@ -182,6 +176,9 @@ export const authApi = {
   
   getProfile: () =>
     api.get<User>('/auth/profile'),
+  
+  updateProfile: (data: { email: string }) =>
+    api.patch<User>('/auth/profile', data),
 };
 
 export const productsApi = {

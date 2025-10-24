@@ -39,14 +39,18 @@
     "alreadyHaveAccount": "Already have an account?",
     "dontHaveAccount": "Don't have an account?",
     "signInHere": "Sign in here",
-    "signUpHere": "Sign up here"
+    "signUpHere": "Sign up here",
+    "loginSuccess": "Successfully logged in!",
+    "registerSuccess": "Successfully registered!"
   },
   "navigation": {
     "dashboard": "Dashboard",
     "orders": "Orders",
     "products": "Products",
     "recipients": "Recipients",
-    "settings": "Settings"
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "profile": "Profile"
   },
   "orders": {
     "title": "Orders",
@@ -160,11 +164,109 @@
     "failedToUploadLogo": "Failed to upload logo",
     "failedToDeleteLogo": "Failed to delete logo"
   },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Manage your account information and settings",
+    "profileInformation": "Profile Information",
+    "editProfile": "Edit Profile",
+    "changePassword": "Change Password",
+    "accountActions": "Account Actions",
+    "deleteAccount": "Delete Account",
+    "deleteAccountDescription": "Permanently delete your account and all associated data",
+    "profileUpdated": "Profile updated successfully",
+    "updateFailed": "Failed to update profile",
+    "fillAllFields": "Please fill in all fields",
+    "passwordChangeNotImplemented": "Password change functionality is not yet implemented",
+    "deleteAccountNotImplemented": "Account deletion functionality is not yet implemented"
+  },
+  "landing": {
+    "welcome": "Welcome",
+    "goToDashboard": "Go to Dashboard",
+    "hero": {
+      "title": "Manage Your Business with ReceiptMaster",
+      "subtitle": "Complete solution for product management, orders, and receipt generation. Streamline your business operations with our powerful platform.",
+      "getStarted": "Get Started Free",
+      "login": "Sign In",
+      "welcomeBack": "Welcome Back!",
+      "welcomeBackSubtitle": "Ready to continue managing your business?",
+      "goToDashboard": "Go to Dashboard"
+    },
+    "features": {
+      "title": "Everything You Need to Manage Your Business",
+      "subtitle": "Our comprehensive platform provides all the tools you need to run your business efficiently",
+      "products": {
+        "title": "Product Management",
+        "description": "Easily manage your product catalog with prices, quantities, and detailed information"
+      },
+      "recipients": {
+        "title": "Customer Management",
+        "description": "Keep track of your customers and their contact information in one place"
+      },
+      "orders": {
+        "title": "Order Processing",
+        "description": "Create, manage, and track orders with real-time status updates"
+      },
+      "receipts": {
+        "title": "Receipt Generation",
+        "description": "Generate professional receipts and invoices automatically for your orders"
+      },
+      "analytics": {
+        "title": "Business Analytics",
+        "description": "Track revenue, turnover, and performance with detailed analytics and reports"
+      },
+      "security": {
+        "title": "Secure & Reliable",
+        "description": "Your data is protected with enterprise-grade security and regular backups"
+      }
+    },
+    "benefits": {
+      "title": "Why Choose ReceiptMaster?",
+      "subtitle": "Join thousands of businesses that trust ReceiptMaster to manage their operations",
+      "easy": "Easy to use interface",
+      "fast": "Fast and responsive",
+      "secure": "Secure data storage",
+      "multilingual": "Multi-language support",
+      "responsive": "Mobile-friendly design",
+      "realTime": "Real-time updates"
+    },
+    "stats": {
+      "revenue": "Revenue Tracking",
+      "revenueDesc": "Track your profits and revenue in real-time",
+      "receipts": "Digital Receipts",
+      "receiptsDesc": "Generate professional receipts instantly",
+      "mobile": "Mobile Ready",
+      "mobileDesc": "Access your business from anywhere",
+      "global": "Global Support",
+      "globalDesc": "Available in multiple languages"
+    },
+    "cta": {
+      "title": "Ready to Transform Your Business?",
+      "subtitle": "Join thousands of satisfied customers and start managing your business more efficiently today",
+      "startFree": "Start Free Trial",
+      "login": "Sign In",
+      "welcomeBackTitle": "Ready to Continue?",
+      "welcomeBackSubtitle": "Your dashboard is waiting for you",
+      "goToDashboard": "Go to Dashboard"
+    },
+    "footer": {
+      "description": "The complete solution for modern business management. Streamline your operations with our powerful platform.",
+      "product": "Product",
+      "features": "Features",
+      "pricing": "Pricing",
+      "support": "Support",
+      "company": "Company",
+      "about": "About Us",
+      "contact": "Contact",
+      "privacy": "Privacy Policy",
+      "rights": "All rights reserved."
+    }
+  },
   "home": {
     "welcome": "Welcome to Receipt Master",
     "subtitle": "Manage products, orders and receipts in one place",
     "latestProducts": "Latest Products",
     "latestRecipients": "Latest Recipients",
+    "latestOrders": "Latest Orders",
     "quickActions": "Quick Actions",
     "salePrice": "Sale Price",
     "purchasePrice": "Purchase Price",
@@ -175,6 +277,15 @@
     "addRecipientDescription": "Create a new recipient",
     "createOrder": "Create Order",
     "createOrderDescription": "Place a new order",
+    "viewDashboard": "View Dashboard",
+    "viewDashboardDescription": "Analyze revenue and turnover",
+    "viewAllProducts": "View All Products",
+    "viewAllRecipients": "View All Recipients",
+    "viewAllOrders": "View All Orders",
+    "totalRevenue": "Total Revenue",
+    "totalTurnover": "Total Turnover",
+    "revenueDescription": "Net profit after costs",
+    "turnoverDescription": "Total sales amount",
     "receipts": "Receipts"
   },
   "dashboard": {

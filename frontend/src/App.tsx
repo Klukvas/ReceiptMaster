@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -7,13 +7,14 @@ import { useAuth } from './hooks/useAuth';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { HomePage } from './pages/HomePage';
+import { DashboardHomePage } from './pages/DashboardHomePage';
+import { LandingPage } from './pages/LandingPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { RecipientsPage } from './pages/RecipientsPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,18 +30,11 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} 
-      />
-      <Route 
-        path="/register" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />} 
-      />
-      <Route path="/" element={
+      <Route path="/" element={<HomePage />} />
+      <Route path="/dashboard" element={
         <ProtectedRoute>
           <Layout>
-            <HomePage />
+            <DashboardHomePage />
           </Layout>
         </ProtectedRoute>
       } />
@@ -65,7 +59,7 @@ const AppRoutes: React.FC = () => {
           </Layout>
         </ProtectedRoute>
       } />
-      <Route path="/dashboard" element={
+      <Route path="/analytics" element={
         <ProtectedRoute>
           <Layout>
             <DashboardPage />
@@ -76,6 +70,13 @@ const AppRoutes: React.FC = () => {
         <ProtectedRoute>
           <Layout>
             <SettingsPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Layout>
+            <ProfilePage />
           </Layout>
         </ProtectedRoute>
       } />

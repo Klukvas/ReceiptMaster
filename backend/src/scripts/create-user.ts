@@ -10,8 +10,6 @@ async function createUser() {
   try {
     const email = process.argv[2] || "admin@example.com";
     const _password = process.argv[3] || "password123";
-    const firstName = process.argv[4] || "Admin";
-    const lastName = process.argv[5] || "User";
 
     // Check if user already exists
     const existingUser = await usersService.findByEmail(email);
@@ -27,8 +25,6 @@ async function createUser() {
     const _result = await usersService.register({
       email,
       password: _password,
-      firstName,
-      lastName,
     });
   } catch (error) {
     console.error("Error creating user:", error.message);

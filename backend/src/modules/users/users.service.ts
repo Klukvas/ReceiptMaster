@@ -8,6 +8,7 @@ import * as bcrypt from "bcrypt";
 import { User } from "./entities/user.entity";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
 @Injectable()
@@ -20,7 +21,7 @@ export class UsersService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, password, firstName, lastName } = registerDto;
+    const { email, password } = registerDto;
 
     // Проверяем, существует ли пользователь с таким email
     const existingUser = await this.userRepository.findOne({
@@ -39,8 +40,6 @@ export class UsersService {
     const user = this.userRepository.create({
       email,
       password: _hashedPassword,
-      firstName,
-      lastName,
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -54,8 +53,6 @@ export class UsersService {
       user: {
         id: savedUser.id,
         email: savedUser.email,
-        firstName: savedUser.firstName,
-        lastName: savedUser.lastName,
       },
     };
   }
@@ -87,8 +84,6 @@ export class UsersService {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
       },
     };
   }
@@ -103,5 +98,33 @@ export class UsersService {
     return this.userRepository.findOne({
       where: { email },
     });
+  }
+
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<Omit<User, "password">> {
+    const { email } = updateProfileDto;
+
+    // Проверяем, не занят ли email другим пользователем
+    const existingUser = await this.userRepository.findOne({
+      where: { email },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw ApiErrors.USER_ALREADY_EXISTS(email);
+    }
+
+    // Обновляем пользователя
+    await this.userRepository.update(userId, { email });
+
+    // Возвращаем обновленного пользователя без пароля
+    const updatedUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!updatedUser) {
+      throw ApiErrors.USER_NOT_FOUND(userId);
+    }
+
+    const { password: _password, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
   }
 }
