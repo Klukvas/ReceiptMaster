@@ -304,6 +304,13 @@
     "turnoverByRecipient": "Turnover by Recipient",
     "noData": "No data available"
   },
+  "notFound": {
+    "title": "Page Not Found",
+    "description": "Sorry, the page you are looking for does not exist or has been moved.",
+    "goHome": "Go Home",
+    "goBack": "Go Back",
+    "helpText": "If you believe this is an error, please contact support."
+  },
   "errors": {
     "userAlreadyExists": "User with this email already exists",
     "userNotFound": "User not found",

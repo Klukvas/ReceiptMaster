@@ -15,6 +15,7 @@ import { OrdersPage } from './pages/OrdersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ const AppRoutes: React.FC = () => {
           </Layout>
         </ProtectedRoute>
       } />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 };
