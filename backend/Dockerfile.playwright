@@ -1,5 +1,5 @@
-# Use Playwright's official image as base
-FROM mcr.microsoft.com/playwright:v1.47.0-jammy
+# Use Playwright's official image as base (matching package.json version)
+FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 
 # Set working directory
 WORKDIR /app
