@@ -11,13 +11,19 @@ RUN npm install -g yarn && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy package files
-COPY package.json yarn.lock ./
+COPY package.json ./
 
-# Install dependencies
-RUN yarn install --frozen-lockfile
+# Install dependencies (without lockfile requirement)
+RUN yarn install
+
+# Install Nest CLI globally
+RUN yarn global add @nestjs/cli
 
 # Copy source code
 COPY . .
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh || true
 
 # Build the application
 RUN yarn build
