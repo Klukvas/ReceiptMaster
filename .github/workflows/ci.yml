@@ -129,7 +129,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          file: ./backend/Dockerfile
+          file: ./backend/Dockerfile.playwright
           push: true
           tags: |
             klukvas/receiptmaster-backend:${{ github.sha }}
@@ -218,6 +218,15 @@ jobs:
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
             RECEIPT_BASE_URL=${{ secrets.RECEIPT_BASE_URL }}
             AUTO_RUN_MIGRATIONS=true
+
+            # S3 Object Storage configuration
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_REGION=${{ secrets.AWS_REGION }}
+            S3_ENDPOINT=${{ secrets.S3_ENDPOINT }}
+            LOGOS_BUCKET=${{ secrets.LOGOS_BUCKET }}
+            RECEIPTS_BUCKET=${{ secrets.RECEIPTS_BUCKET }}
+            TEMP_BUCKET=${{ secrets.TEMP_BUCKET }}
 
             # Frontend configuration
             VITE_API_URL=${{ secrets.VITE_API_URL }}
