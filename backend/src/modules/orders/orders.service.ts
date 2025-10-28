@@ -72,7 +72,9 @@ export class OrdersService {
           );
         }
 
-        const lineTotalCents = product.sale_price_cents * itemDto.qty;
+        // Use custom price if provided, otherwise use product's sale price
+        const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+        const lineTotalCents = unitPriceCents * itemDto.qty;
         subtotalCents += lineTotalCents;
       }
 
@@ -92,13 +94,15 @@ export class OrdersService {
       // Create order items
       for (const itemDto of createOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
-        const lineTotalCents = product.sale_price_cents * itemDto.qty;
+        // Use custom price if provided, otherwise use product's sale price
+        const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+        const lineTotalCents = unitPriceCents * itemDto.qty;
 
         const orderItem = manager.create(OrderItem, {
           order_id: savedOrder.id,
           product_id: product.id,
           product_name: product.name,
-          unit_price_cents: product.sale_price_cents,
+          unit_price_cents: unitPriceCents,
           qty: itemDto.qty,
           line_total_cents: lineTotalCents,
           user_id: user.id,
@@ -255,7 +259,9 @@ export class OrdersService {
             );
           }
 
-          const lineTotalCents = product.sale_price_cents * itemDto.qty;
+          // Use custom price if provided, otherwise use product's sale price
+          const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+          const lineTotalCents = unitPriceCents * itemDto.qty;
           subtotalCents += lineTotalCents;
         }
 
@@ -270,13 +276,15 @@ export class OrdersService {
         // Create new order items
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
-          const lineTotalCents = product.sale_price_cents * itemDto.qty;
+          // Use custom price if provided, otherwise use product's sale price
+          const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+          const lineTotalCents = unitPriceCents * itemDto.qty;
 
           const orderItem = manager.create(OrderItem, {
             order_id: id,
             product_id: product.id,
             product_name: product.name,
-            unit_price_cents: product.sale_price_cents,
+            unit_price_cents: unitPriceCents,
             qty: itemDto.qty,
             line_total_cents: lineTotalCents,
             user_id: user.id,

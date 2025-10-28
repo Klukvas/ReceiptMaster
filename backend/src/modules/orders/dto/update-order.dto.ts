@@ -6,6 +6,7 @@ import {
   IsPositive,
   Min,
   IsOptional,
+  IsInt,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -21,6 +22,16 @@ export class UpdateOrderItemDto {
   @IsPositive()
   @Min(1)
   qty: number;
+
+  @ApiProperty({
+    description: "Unit price in cents (optional, defaults to product sale price)",
+    example: 99900,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  unitPriceCents?: number;
 }
 
 export class UpdateOrderDto {

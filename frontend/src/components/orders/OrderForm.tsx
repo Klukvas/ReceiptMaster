@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, AlertCircle, Info } from 'lucide-react';
 import { ordersApi, productsApi, recipientsApi, formatCurrency } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -15,6 +15,7 @@ interface OrderFormProps {
 interface OrderItem {
   productId: string;
   qty: number;
+  unitPriceCents?: number;
 }
 
 // Function for safe error message extraction
@@ -124,7 +125,8 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   const calculateItemTotal = (item: OrderItem) => {
     const product = getProduct(item.productId);
     if (!product) return 0;
-    return product.sale_price_cents * item.qty;
+    const unitPrice = item.unitPriceCents ?? product.sale_price_cents;
+    return unitPrice * item.qty;
   };
 
   const calculateTotal = () => {
@@ -216,7 +218,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                           required
                         />
                       </div>
-                      <div className="w-32">
+                      <div className="w-28">
                         <Input
                           type="number"
                           min="1"
@@ -234,7 +236,40 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                           error={errors[`item-${index}-qty`]}
                         />
                       </div>
-                      <div className="w-32 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {product && (
+                        <div className="w-28">
+                          <div className="relative group">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPriceCents ? (item.unitPriceCents / 100).toFixed(2) : ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || value === '0') {
+                                  updateItem(index, 'unitPriceCents', undefined);
+                                } else {
+                                  const cents = Math.round(parseFloat(value) * 100);
+                                  updateItem(index, 'unitPriceCents', cents);
+                                }
+                              }}
+                              placeholder={formatCurrency(product.sale_price_cents, product.currency).replace(/[^\d.,]/g, '')}
+                              title={`Переопределить цену за единицу. По умолчанию: ${formatCurrency(product.sale_price_cents, product.currency)}`}
+                            />
+                            <Info 
+                              className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors pointer-events-none" 
+                            />
+                            {/* Custom tooltip */}
+                            <div className="absolute z-50 left-0 bottom-full mb-2 hidden group-hover:block px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
+                              Переопределить цену за единицу
+                              <br />
+                              <span className="text-gray-300">По умолчанию: {formatCurrency(product.sale_price_cents, product.currency)}</span>
+                              <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="w-28 text-sm font-medium text-gray-900 dark:text-gray-100">
                         {formatCurrency(calculateItemTotal(item))}
                       </div>
                       {items.length > 1 && (

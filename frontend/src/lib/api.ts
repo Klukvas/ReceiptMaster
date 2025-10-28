@@ -222,10 +222,10 @@ export const ordersApi = {
   getById: (id: string) =>
     api.get<Order>(`/orders/${id}`),
   
-  create: (data: { recipientId: string; items: { productId: string; qty: number }[] }) =>
+  create: (data: { recipientId: string; items: { productId: string; qty: number; unitPriceCents?: number }[] }) =>
     api.post<Order>('/orders', data),
   
-  update: (id: string, data: { recipientId?: string; items?: { productId: string; qty: number }[] }) =>
+  update: (id: string, data: { recipientId?: string; items?: { productId: string; qty: number; unitPriceCents?: number }[] }) =>
     api.patch<Order>(`/orders/${id}`, data),
   
   confirm: (id: string) =>

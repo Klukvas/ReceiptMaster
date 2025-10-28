@@ -5,6 +5,8 @@ import {
   ValidateNested,
   IsPositive,
   Min,
+  IsOptional,
+  IsInt,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -20,6 +22,16 @@ export class CreateOrderItemDto {
   @IsPositive()
   @Min(1)
   qty: number;
+
+  @ApiProperty({
+    description: "Цена за единицу в копейках (опционально, по умолчанию используется цена из продукта)",
+    example: 99900,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  unitPriceCents?: number;
 }
 
 export class CreateOrderDto {
