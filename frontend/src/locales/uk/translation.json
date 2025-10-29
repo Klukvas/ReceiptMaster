@@ -94,7 +94,9 @@
     "addAtLeastOneProduct": "Додайте хоча б один товар",
     "insufficientQuantity": "Недостатньо товару. Доступно: {{available}} шт.",
     "insufficientStock": "Недостатньо товару",
-    "generateReceipt": "Створити чек"
+    "generateReceipt": "Створити чек",
+    "customPriceTooltip": "Перевизначити ціну за одиницю",
+    "customPriceDefault": "За замовчуванням"
   },
   "products": {
     "title": "Товари",

@@ -30,6 +30,7 @@ const getErrorMessage = (error: unknown, defaultMessage: string): string => {
 export const OrderForm = ({ onClose }: OrderFormProps) => {
   const [recipientId, setRecipientId] = useState('');
   const [items, setItems] = useState<OrderItem[]>([{ productId: '', qty: 1 }]);
+  const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState<string>('');
   const queryClient = useQueryClient();
@@ -66,7 +67,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
     }
   };
 
-  const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
+  const updateItem = (index: number, field: keyof OrderItem, value: string | number | undefined) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
@@ -240,30 +241,62 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                         <div className="w-28">
                           <div className="relative group">
                             <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.unitPriceCents ? (item.unitPriceCents / 100).toFixed(2) : ''}
+                              type="text"
+                              inputMode="decimal"
+                              value={priceInputs[index] !== undefined ? priceInputs[index] : (item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '')}
                               onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || value === '0') {
+                                const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                                setPriceInputs(prev => ({ ...prev, [index]: value }));
+                                if (value === '' || value === '.' || value === '0.') {
+                                  updateItem(index, 'unitPriceCents', undefined);
+                                } else if (value === '0') {
                                   updateItem(index, 'unitPriceCents', undefined);
                                 } else {
-                                  const cents = Math.round(parseFloat(value) * 100);
+                                  const numValue = parseFloat(value);
+                                  if (!isNaN(numValue) && numValue >= 0) {
+                                    const cents = Math.round(numValue * 100);
+                                    updateItem(index, 'unitPriceCents', cents);
+                                  }
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                                if (value && !isNaN(parseFloat(value)) && parseFloat(value) > 0) {
+                                  const numValue = parseFloat(value);
+                                  const cents = Math.round(numValue * 100);
                                   updateItem(index, 'unitPriceCents', cents);
+                                  setPriceInputs(prev => {
+                                    const newState = { ...prev };
+                                    delete newState[index];
+                                    return newState;
+                                  });
+                                } else if (!value || value === '.') {
+                                  updateItem(index, 'unitPriceCents', undefined);
+                                  setPriceInputs(prev => {
+                                    const newState = { ...prev };
+                                    delete newState[index];
+                                    return newState;
+                                  });
+                                }
+                              }}
+                              onFocus={() => {
+                                const currentValue = item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '';
+                                if (priceInputs[index] === undefined) {
+                                  setPriceInputs(prev => ({ ...prev, [index]: currentValue }));
                                 }
                               }}
                               placeholder={formatCurrency(product.sale_price_cents, product.currency).replace(/[^\d.,]/g, '')}
-                              title={`Переопределить цену за единицу. По умолчанию: ${formatCurrency(product.sale_price_cents, product.currency)}`}
+                              title={`${t('orders.customPriceTooltip')}. ${t('orders.customPriceDefault')}: ${formatCurrency(product.sale_price_cents, product.currency)}`}
+                              className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                             <Info 
                               className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors pointer-events-none" 
                             />
                             {/* Custom tooltip */}
                             <div className="absolute z-50 left-0 bottom-full mb-2 hidden group-hover:block px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
-                              Переопределить цену за единицу
+                              {t('orders.customPriceTooltip')}
                               <br />
-                              <span className="text-gray-300">По умолчанию: {formatCurrency(product.sale_price_cents, product.currency)}</span>
+                              <span className="text-gray-300">{t('orders.customPriceDefault')}: {formatCurrency(product.sale_price_cents, product.currency)}</span>
                               <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
                             </div>
                           </div>

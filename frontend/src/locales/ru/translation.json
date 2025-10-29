@@ -99,7 +99,9 @@
     "addAtLeastOneProduct": "Добавьте хотя бы один товар",
     "insufficientQuantity": "Недостаточно товара. Доступно: {{available}} шт.",
     "insufficientStock": "Недостаточно товара",
-    "generateReceipt": "Создать чек"
+    "generateReceipt": "Создать чек",
+    "customPriceTooltip": "Переопределить цену за единицу",
+    "customPriceDefault": "По умолчанию"
   },
   "products": {
     "title": "Товары",

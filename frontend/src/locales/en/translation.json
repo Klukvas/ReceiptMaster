@@ -100,7 +100,9 @@
     "addAtLeastOneProduct": "Add at least one product",
     "insufficientQuantity": "Insufficient quantity. Available: {{available}} pcs",
     "insufficientStock": "Insufficient stock",
-    "generateReceipt": "Generate Receipt"
+    "generateReceipt": "Generate Receipt",
+    "customPriceTooltip": "Override price per unit",
+    "customPriceDefault": "Default"
   },
   "products": {
     "title": "Products",
