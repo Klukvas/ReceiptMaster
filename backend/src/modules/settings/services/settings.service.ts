@@ -139,30 +139,6 @@ export class SettingsService {
     }
   }
 
-  async getHeaderTitle(userId: string): Promise<string | undefined> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-    return settings?.headerText || undefined;
-  }
-
-  async setHeaderTitle(userId: string, headerTitle: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.headerText = headerTitle;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        headerText: headerTitle
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
-  }
-
   async setTemplateLanguage(userId: string, language: string): Promise<void> {
     const existingSettings = await this.userSettingsRepository.findOne({
       where: { userId }
@@ -175,6 +151,63 @@ export class SettingsService {
       const newSettings = this.userSettingsRepository.create({
         userId,
         templateLanguage: language
+      });
+      await this.userSettingsRepository.save(newSettings);
+    }
+  }
+
+  async getCompanyInfo(userId: string): Promise<Partial<UserSettings>> {
+    const settings = await this.userSettingsRepository.findOne({
+      where: { userId }
+    });
+    
+    if (!settings) {
+      return {
+        companyName: '',
+        companyAddress: '',
+        companyEmail: '',
+        companyPhone: '',
+        companyTaxId: '',
+        companyIban: '',
+        companySwift: '',
+        companyWebsite: '',
+        companyTagline: '',
+      };
+    }
+
+    return {
+      companyName: settings.companyName || '',
+      companyAddress: settings.companyAddress || '',
+      companyEmail: settings.companyEmail || '',
+      companyPhone: settings.companyPhone || '',
+      companyTaxId: settings.companyTaxId || '',
+      companyIban: settings.companyIban || '',
+      companySwift: settings.companySwift || '',
+      companyWebsite: settings.companyWebsite || '',
+      companyTagline: settings.companyTagline || '',
+    };
+  }
+
+  async updateCompanyInfo(userId: string, companyInfo: Partial<UserSettings>): Promise<void> {
+    const existingSettings = await this.userSettingsRepository.findOne({
+      where: { userId }
+    });
+
+    if (existingSettings) {
+      if (companyInfo.companyName !== undefined) existingSettings.companyName = companyInfo.companyName;
+      if (companyInfo.companyAddress !== undefined) existingSettings.companyAddress = companyInfo.companyAddress;
+      if (companyInfo.companyEmail !== undefined) existingSettings.companyEmail = companyInfo.companyEmail;
+      if (companyInfo.companyPhone !== undefined) existingSettings.companyPhone = companyInfo.companyPhone;
+      if (companyInfo.companyTaxId !== undefined) existingSettings.companyTaxId = companyInfo.companyTaxId;
+      if (companyInfo.companyIban !== undefined) existingSettings.companyIban = companyInfo.companyIban;
+      if (companyInfo.companySwift !== undefined) existingSettings.companySwift = companyInfo.companySwift;
+      if (companyInfo.companyWebsite !== undefined) existingSettings.companyWebsite = companyInfo.companyWebsite;
+      if (companyInfo.companyTagline !== undefined) existingSettings.companyTagline = companyInfo.companyTagline;
+      await this.userSettingsRepository.save(existingSettings);
+    } else {
+      const newSettings = this.userSettingsRepository.create({
+        userId,
+        ...companyInfo
       });
       await this.userSettingsRepository.save(newSettings);
     }

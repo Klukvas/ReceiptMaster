@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, X, Image as ImageIcon, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { settingsApi } from '../../lib/api';
@@ -12,6 +12,7 @@ export const LogoUpload = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   // Get current logo
   const { refetch: refetchLogo, isSuccess: hasLogo, error: logoError, data: logoData, isLoading: logoLoading } = useQuery({
@@ -36,6 +37,10 @@ export const LogoUpload = () => {
         URL.revokeObjectURL(url);
       };
     } else {
+      // Clear logo URL if there's no data or there's an error (including 404)
+      if (logoUrl) {
+        URL.revokeObjectURL(logoUrl);
+      }
       setLogoUrl(null);
     }
   }, [logoData, hasLogo, logoError]);
@@ -78,8 +83,16 @@ export const LogoUpload = () => {
 
   const deleteLogoMutation = useMutation({
     mutationFn: settingsApi.deleteLogo,
-    onSuccess: () => {
-      refetchLogo();
+    onSuccess: async () => {
+      // Clear logo URL immediately
+      if (logoUrl) {
+        URL.revokeObjectURL(logoUrl);
+      }
+      setLogoUrl(null);
+      // Reset query cache to remove the old logo data
+      queryClient.removeQueries({ queryKey: ['logo'] });
+      // Refetch to verify deletion (will return 404, which is expected)
+      await refetchLogo();
       toast.success('Логотип успешно удален!');
     },
     onError: () => {
@@ -198,7 +211,7 @@ export const LogoUpload = () => {
                   Загрузка логотипа...
                 </p>
               </div>
-            ) : hasLogo && !logoError && logoUrl ? (
+            ) : logoUrl && hasLogo && !logoError ? (
               <div className="space-y-4">
                 <div className="relative inline-block">
                   <img
@@ -232,7 +245,7 @@ export const LogoUpload = () => {
                   {deleteLogoMutation.isPending ? 'Удаление...' : 'Удалить логотип'}
                 </Button>
               </div>
-            ) : logoError ? (
+            ) : logoError && (logoError as any)?.response?.status !== 404 ? (
               <div className="space-y-4">
                 <div className="relative inline-block">
                   <ImageIcon className="mx-auto h-16 w-16 text-red-400 dark:text-red-500" />
@@ -245,7 +258,7 @@ export const LogoUpload = () => {
                     Ошибка загрузки логотипа
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {logoError.message || 'Не удалось загрузить логотип'}
+                    {(logoError as any)?.message || 'Не удалось загрузить логотип'}
                   </p>
                   <Button
                     variant="secondary"

@@ -256,11 +256,13 @@
         /* Footer */
         .footer {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #E5E7EB;
+            text-align: center;
         }
         
         .notes-section {
@@ -269,14 +271,14 @@
         }
         
         .notes-title {
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 600;
             color: #111827;
             margin-bottom: 8px;
         }
         
         .notes-content {
-            font-size: 10px;
+            font-size: 12px;
             color: #6B7280;
             line-height: 1.4;
         }
@@ -333,10 +335,10 @@
                 <img src="{{logoPath}}" alt="Logo" class="logo">
                 {{/if}}
                 <div>
-                    {{#if headerTitle}}
-                    <div class="company-name" style="font-weight: 700; margin-bottom: 4px;">{{headerTitle}}</div>
-                    {{/if}}
                     <div class="company-name">{{companyName}}</div>
+                    {{#if companyTagline}}
+                    <div class="company-tagline">{{companyTagline}}</div>
+                    {{/if}}
                 </div>
             </div>
             <div>
@@ -383,15 +385,30 @@
             <div class="info-card">
                 <div class="card-title">From</div>
                 <div class="info-content">
-                    {{#if headerTitle}}
-                    <div class="info-line"><strong>{{headerTitle}}</strong></div>
-                    {{/if}}
                     <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyTagline}}
+                    <div class="info-line">{{companyTagline}}</div>
+                    {{/if}}
                     {{#if companyAddress}}
                     <div class="info-line">{{companyAddress}}</div>
                     {{/if}}
-                    {{#if companyVatId}}
-                    <div class="info-line">VAT: {{companyVatId}}</div>
+                    {{#if companyEmail}}
+                    <div class="info-line">{{companyEmail}}</div>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <div class="info-line">{{companyPhone}}</div>
+                    {{/if}}
+                    {{#if companyWebsite}}
+                    <div class="info-line">{{companyWebsite}}</div>
+                    {{/if}}
+                    {{#if companyTaxId}}
+                    <div class="info-line">Tax ID: {{companyTaxId}}</div>
+                    {{/if}}
+                    {{#if companyIban}}
+                    <div class="info-line">IBAN: {{companyIban}}</div>
+                    {{/if}}
+                    {{#if companySwift}}
+                    <div class="info-line">SWIFT: {{companySwift}}</div>
                     {{/if}}
                 </div>
             </div>

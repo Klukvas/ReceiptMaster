@@ -196,7 +196,7 @@
             left: 20mm;
             right: 20mm;
             text-align: center;
-            font-size: 9px;
+            font-size: 12px;
             color: #666;
             border-top: 2px solid #ddd;
             padding-top: 20px;
@@ -204,16 +204,17 @@
         
         .footer-title {
             margin-bottom: 8px;
-            font-size: 11px;
+            font-size: 14px;
             font-weight: bold;
         }
         
         .footer-text {
             margin-bottom: 5px;
+            font-size: 12px;
         }
         
         .footer-timestamp {
-            font-size: 8px;
+            font-size: 10px;
         }
         
         @media print {
@@ -231,10 +232,10 @@
             <img src="{{logoPath}}" alt="Logo" class="logo">
             {{/if}}
             <div>
-                {{#if headerTitle}}
-                <div class="company-name">{{headerTitle}}</div>
-                {{/if}}
                 <div class="company-name">{{companyName}}</div>
+                {{#if companyTagline}}
+                <div class="company-tagline">{{companyTagline}}</div>
+                {{/if}}
             </div>
         </div>
         

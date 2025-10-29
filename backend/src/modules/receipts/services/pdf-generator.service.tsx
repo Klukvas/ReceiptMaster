@@ -60,14 +60,23 @@ export class PdfGeneratorService {
   async generateReceiptPdf(
     order: Order, 
     receiptNumber: string, 
-    companyName: string = '', 
+    companyInfo: {
+      companyName: string;
+      companyAddress?: string;
+      companyEmail?: string;
+      companyPhone?: string;
+      companyTaxId?: string;
+      companyIban?: string;
+      companySwift?: string;
+      companyWebsite?: string;
+      companyTagline?: string;
+    },
     userId: string,
     style: ReceiptStyle = ReceiptStyle.STANDARD,
     receiptTitle: string = 'Invoice',
     language: string = 'en',
     footerTitle?: string,
-    footerSubtitle?: string,
-    headerTitle?: string
+    footerSubtitle?: string
   ): Promise<{ filePath: string; url: string }> {
     try {
       this.logger.log(`Starting ${style} PDF generation using Playwright...`);
@@ -124,14 +133,13 @@ export class PdfGeneratorService {
       const templateData = this.templateService.prepareTemplateData(
         order,
         receiptNumber,
-        companyName,
+        companyInfo,
         hasCustomLogo,
         logoPath,
         receiptTitle,
         language,
         footerTitle,
-        footerSubtitle,
-        headerTitle
+        footerSubtitle
       );
 
       // Render HTML template

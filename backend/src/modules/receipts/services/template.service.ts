@@ -8,6 +8,14 @@ import { MoneyUtil } from '../../../common/utils/money.util';
 export interface TemplateData {
   // Company info
   companyName: string;
+  companyAddress?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  companyTaxId?: string;
+  companyIban?: string;
+  companySwift?: string;
+  companyWebsite?: string;
+  companyTagline?: string;
   hasCustomLogo: boolean;
   logoPath?: string;
   
@@ -45,9 +53,6 @@ export interface TemplateData {
   // Footer customization
   footerTitle?: string;
   footerSubtitle?: string;
-  
-  // Header customization
-  headerTitle?: string;
 }
 
 export enum ReceiptTemplate {
@@ -200,14 +205,23 @@ export class TemplateService {
   prepareTemplateData(
     order: Order,
     receiptNumber: string,
-    companyName: string = '',
+    companyInfo: {
+      companyName: string;
+      companyAddress?: string;
+      companyEmail?: string;
+      companyPhone?: string;
+      companyTaxId?: string;
+      companyIban?: string;
+      companySwift?: string;
+      companyWebsite?: string;
+      companyTagline?: string;
+    },
     hasCustomLogo: boolean = false,
     logoPath?: string,
     receiptTitle: string = 'Invoice',
     language: string = 'en',
     footerTitle?: string,
-    footerSubtitle?: string,
-    headerTitle?: string
+    footerSubtitle?: string
   ): TemplateData {
     const formatCurrency = (cents: number) => 
       MoneyUtil.formatCentsToCurrency(cents, order.currency);
@@ -216,7 +230,15 @@ export class TemplateService {
     const translations = this.translations.get(language) || this.translations.get('en') || {};
     
     return {
-      companyName,
+      companyName: companyInfo.companyName || '',
+      companyAddress: companyInfo.companyAddress,
+      companyEmail: companyInfo.companyEmail,
+      companyPhone: companyInfo.companyPhone,
+      companyTaxId: companyInfo.companyTaxId,
+      companyIban: companyInfo.companyIban,
+      companySwift: companyInfo.companySwift,
+      companyWebsite: companyInfo.companyWebsite,
+      companyTagline: companyInfo.companyTagline,
       hasCustomLogo,
       logoPath,
       receiptTitle,
@@ -239,8 +261,7 @@ export class TemplateService {
       fontBold: this.fonts.get('bold') || '',
       translations,
       footerTitle,
-      footerSubtitle,
-      headerTitle
+      footerSubtitle
     };
   }
 }

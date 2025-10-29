@@ -21,7 +21,10 @@ export const FooterCustomizer = () => {
   // Get current footer settings
   const { data: footerTitleData, isLoading: isLoadingTitle } = useQuery({
     queryKey: ['footerTitle'],
-    queryFn: () => settingsApi.getFooterTitle(),
+    queryFn: async () => {
+      const response = await settingsApi.getFooterTitle();
+      return response.data.data;
+    },
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -29,7 +32,10 @@ export const FooterCustomizer = () => {
 
   const { data: footerSubtitleData, isLoading: isLoadingSubtitle } = useQuery({
     queryKey: ['footerSubtitle'],
-    queryFn: () => settingsApi.getFooterSubtitle(),
+    queryFn: async () => {
+      const response = await settingsApi.getFooterSubtitle();
+      return response.data.data;
+    },
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -37,19 +43,19 @@ export const FooterCustomizer = () => {
 
   // Update form data when settings are loaded
   useEffect(() => {
-    if (footerTitleData?.data?.footerTitle !== undefined) {
+    if (footerTitleData?.footerTitle !== undefined) {
       setFormData(prev => ({
         ...prev,
-        footerTitle: footerTitleData.data.footerTitle || '',
+        footerTitle: footerTitleData.footerTitle || '',
       }));
     }
   }, [footerTitleData]);
 
   useEffect(() => {
-    if (footerSubtitleData?.data?.footerSubtitle !== undefined) {
+    if (footerSubtitleData?.footerSubtitle !== undefined) {
       setFormData(prev => ({
         ...prev,
-        footerSubtitle: footerSubtitleData.data.footerSubtitle || '',
+        footerSubtitle: footerSubtitleData.footerSubtitle || '',
       }));
     }
   }, [footerSubtitleData]);
@@ -94,8 +100,8 @@ export const FooterCustomizer = () => {
   const handleCancel = () => {
     // Reset to current values
     setFormData({
-      footerTitle: footerTitleData?.data?.footerTitle || '',
-      footerSubtitle: footerSubtitleData?.data?.footerSubtitle || '',
+      footerTitle: footerTitleData?.footerTitle || '',
+      footerSubtitle: footerSubtitleData?.footerSubtitle || '',
     });
     setIsEditing(false);
   };

@@ -352,12 +352,39 @@ export const settingsApi = {
   updateFooterSubtitle: (footerSubtitle: string) =>
     api.post('/settings/footer-subtitle', { footerSubtitle }),
 
-  // Header settings
-  getHeaderTitle: () =>
-    api.get<{ headerTitle: string }>('/settings/header-title'),
+  // Receipt title settings
+  getReceiptTitle: () =>
+    api.get<{ title: string }>('/settings/receipt-title'),
 
-  updateHeaderTitle: (headerTitle: string) =>
-    api.post('/settings/header-title', { headerTitle }),
+  updateReceiptTitle: (title: string) =>
+    api.post('/settings/receipt-title', { title }),
+
+  // Company information
+  getCompanyInfo: () =>
+    api.get<{
+      companyName: string;
+      companyAddress: string;
+      companyEmail: string;
+      companyPhone: string;
+      companyTaxId: string;
+      companyIban: string;
+      companySwift: string;
+      companyWebsite: string;
+      companyTagline: string;
+    }>('/settings/company-info'),
+
+  updateCompanyInfo: (companyInfo: {
+    companyName?: string;
+    companyAddress?: string;
+    companyEmail?: string;
+    companyPhone?: string;
+    companyTaxId?: string;
+    companyIban?: string;
+    companySwift?: string;
+    companyWebsite?: string;
+    companyTagline?: string;
+  }) =>
+    api.post('/settings/company-info', companyInfo),
 };
 
 // Formatting utilities

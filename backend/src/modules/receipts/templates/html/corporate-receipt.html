@@ -247,6 +247,7 @@
             border: 1px solid #D1D5DB;
             border-top: none;
             padding: 20px;
+            text-align: center;
         }
         
         .note-section {
@@ -254,9 +255,17 @@
         }
         
         .note-label {
-            font-size: 11px;
+            font-size: 14px;
+            font-weight: 600;
             color: #000000;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        
+        .note-content {
+            font-size: 12px;
+            color: #000000;
+            line-height: 1.4;
+            margin-bottom: 10px;
         }
         
         .note-line {
@@ -322,11 +331,31 @@
     <div class="container">
         <!-- Company Header -->
         <div class="company-header">
-            {{#if headerTitle}}
-            <div class="company-name" style="font-size: 18px; margin-bottom: 4px;">{{headerTitle}}</div>
-            {{/if}}
             <div class="company-name">{{companyName}}</div>
-            <div class="company-address">12, VRUNDAVAN NAGAR, ODHAV RIND ROAD, B/H GAURI CINEMA,<br>ODHAV, AHMEDABAD-382415, INDIA.</div>
+            {{#if companyTagline}}
+            <div class="company-tagline">{{companyTagline}}</div>
+            {{/if}}
+            {{#if companyAddress}}
+            <div class="company-address">{{companyAddress}}</div>
+            {{/if}}
+            {{#if companyEmail}}
+            <div class="company-contact">{{companyEmail}}</div>
+            {{/if}}
+            {{#if companyPhone}}
+            <div class="company-contact">{{companyPhone}}</div>
+            {{/if}}
+            {{#if companyWebsite}}
+            <div class="company-contact">{{companyWebsite}}</div>
+            {{/if}}
+            {{#if companyTaxId}}
+            <div class="company-contact">Tax ID: {{companyTaxId}}</div>
+            {{/if}}
+            {{#if companyIban}}
+            <div class="company-contact">IBAN: {{companyIban}}</div>
+            {{/if}}
+            {{#if companySwift}}
+            <div class="company-contact">SWIFT: {{companySwift}}</div>
+            {{/if}}
         </div>
         
         <!-- Document Type Header -->

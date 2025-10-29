@@ -1,7 +1,8 @@
 import { LogoUpload } from '../components/settings/LogoUpload';
+import { CompanyInfoCustomizer } from '../components/settings/CompanyInfoCustomizer';
 import { TemplateSelector } from '../components/settings/TemplateSelector';
 import { LanguageSelector } from '../components/settings/LanguageSelector';
-import { HeaderCustomizer } from '../components/settings/HeaderCustomizer';
+import { ReceiptTitleCustomizer } from '../components/settings/ReceiptTitleCustomizer';
 import { FooterCustomizer } from '../components/settings/FooterCustomizer';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -18,7 +19,8 @@ export const SettingsPage = () => {
       </div>
 
       <LogoUpload />
-      <HeaderCustomizer />
+      <CompanyInfoCustomizer />
+      <ReceiptTitleCustomizer />
       <TemplateSelector />
       <LanguageSelector />
       <FooterCustomizer />

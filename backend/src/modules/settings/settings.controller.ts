@@ -184,12 +184,7 @@ export class SettingsController {
         userId: req.user.id,
       };
     } catch (error) {
-      if (error.message.includes("No logo found")) {
-        return {
-          message: "Logo not found",
-          userId: req.user.id,
-        };
-      }
+      this.logger.error(`Failed to delete logo for user ${req.user.id}: ${error.message}`);
       throw ApiErrors.FILE_DELETE_FAILED("logo");
     }
   }
@@ -284,18 +279,28 @@ export class SettingsController {
     return { message: 'Footer subtitle updated successfully' };
   }
 
-  @Get("header-title")
-  async getHeaderTitle(@Request() req: { user: User }) {
-    const headerTitle = await this.settingsService.getHeaderTitle(req.user.id);
-    return { data: { headerTitle: headerTitle || '' } };
+  @Get("company-info")
+  async getCompanyInfo(@Request() req: { user: User }) {
+    const companyInfo = await this.settingsService.getCompanyInfo(req.user.id);
+    return { data: companyInfo };
   }
 
-  @Post("header-title")
-  async updateHeaderTitle(
+  @Post("company-info")
+  async updateCompanyInfo(
     @Request() req: { user: User },
-    @Body() body: { headerTitle: string }
+    @Body() body: {
+      companyName?: string;
+      companyAddress?: string;
+      companyEmail?: string;
+      companyPhone?: string;
+      companyTaxId?: string;
+      companyIban?: string;
+      companySwift?: string;
+      companyWebsite?: string;
+      companyTagline?: string;
+    }
   ) {
-    await this.settingsService.setHeaderTitle(req.user.id, body.headerTitle);
-    return { message: 'Header title updated successfully' };
+    await this.settingsService.updateCompanyInfo(req.user.id, body);
+    return { message: 'Company information updated successfully' };
   }
 }

@@ -197,10 +197,26 @@
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #D1D5DB;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .footer-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+        
+        .footer-text {
+            font-size: 12px;
+            color: #4B5563;
+            line-height: 1.4;
+            margin-bottom: 10px;
         }
         
         .terms {
-            font-size: 9px;
+            font-size: 12px;
             color: #4B5563;
             line-height: 1.4;
             margin-bottom: 15px;
@@ -257,16 +273,38 @@
             <div class="info-block">
                 <div class="info-line">
                     <span class="info-label">From:</span>
-                    {{#if headerTitle}}
-                    <span><strong>{{headerTitle}}</strong></span>
+                    <span><strong>{{companyName}}</strong></span>
+                    {{#if companyTagline}}
                     <span class="info-separator">—</span>
+                    <span>{{companyTagline}}</span>
                     {{/if}}
-                    <span>{{companyName}}</span>
+                    {{#if companyAddress}}
                     <span class="info-separator">—</span>
                     <span>{{companyAddress}}</span>
+                    {{/if}}
+                    {{#if companyEmail}}
+                    <span class="info-separator">—</span>
+                    <span>{{companyEmail}}</span>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <span class="info-separator">—</span>
+                    <span>{{companyPhone}}</span>
+                    {{/if}}
+                    {{#if companyWebsite}}
+                    <span class="info-separator">—</span>
+                    <span>{{companyWebsite}}</span>
+                    {{/if}}
                     {{#if companyTaxId}}
                     <span class="info-separator">—</span>
-                    <span>{{companyTaxId}}</span>
+                    <span>Tax ID: {{companyTaxId}}</span>
+                    {{/if}}
+                    {{#if companyIban}}
+                    <span class="info-separator">—</span>
+                    <span>IBAN: {{companyIban}}</span>
+                    {{/if}}
+                    {{#if companySwift}}
+                    <span class="info-separator">—</span>
+                    <span>SWIFT: {{companySwift}}</span>
                     {{/if}}
                 </div>
             </div>

@@ -259,10 +259,26 @@
             margin-top: 40px;
             padding-top: 20px;
             border-top: 1px solid #D1B48A;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .footer-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6B4F35;
+            margin-bottom: 8px;
+        }
+        
+        .footer-text {
+            font-size: 12px;
+            color: #8C6B4A;
+            line-height: 1.4;
+            margin-bottom: 10px;
         }
         
         .terms {
-            font-size: 9px;
+            font-size: 12px;
             color: #8C6B4A;
             line-height: 1.4;
             margin-bottom: 20px;
@@ -355,15 +371,30 @@
             <div class="info-card">
                 <div class="card-title">From</div>
                 <div class="info-content">
-                    {{#if headerTitle}}
-                    <div class="info-line"><strong>{{headerTitle}}</strong></div>
-                    {{/if}}
                     <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyTagline}}
+                    <div class="info-line">{{companyTagline}}</div>
+                    {{/if}}
                     {{#if companyAddress}}
                     <div class="info-line">{{companyAddress}}</div>
                     {{/if}}
                     {{#if companyEmail}}
                     <div class="info-line">{{companyEmail}}</div>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <div class="info-line">{{companyPhone}}</div>
+                    {{/if}}
+                    {{#if companyWebsite}}
+                    <div class="info-line">{{companyWebsite}}</div>
+                    {{/if}}
+                    {{#if companyTaxId}}
+                    <div class="info-line">Tax ID: {{companyTaxId}}</div>
+                    {{/if}}
+                    {{#if companyIban}}
+                    <div class="info-line">IBAN: {{companyIban}}</div>
+                    {{/if}}
+                    {{#if companySwift}}
+                    <div class="info-line">SWIFT: {{companySwift}}</div>
                     {{/if}}
                 </div>
             </div>
