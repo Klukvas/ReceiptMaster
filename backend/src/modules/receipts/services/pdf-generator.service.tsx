@@ -64,7 +64,10 @@ export class PdfGeneratorService {
     userId: string,
     style: ReceiptStyle = ReceiptStyle.STANDARD,
     receiptTitle: string = 'Invoice',
-    language: string = 'en'
+    language: string = 'en',
+    footerTitle?: string,
+    footerSubtitle?: string,
+    headerTitle?: string
   ): Promise<{ filePath: string; url: string }> {
     try {
       this.logger.log(`Starting ${style} PDF generation using Playwright...`);
@@ -125,7 +128,10 @@ export class PdfGeneratorService {
         hasCustomLogo,
         logoPath,
         receiptTitle,
-        language
+        language,
+        footerTitle,
+        footerSubtitle,
+        headerTitle
       );
 
       // Render HTML template

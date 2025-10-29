@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 3mm;
+            margin: 20mm;
         }
         
         @font-face {
@@ -332,10 +332,15 @@
                 {{#if hasCustomLogo}}
                 <img src="{{logoPath}}" alt="Logo" class="logo">
                 {{/if}}
-                <div class="company-name">{{companyName}}</div>
+                <div>
+                    {{#if headerTitle}}
+                    <div class="company-name" style="font-weight: 700; margin-bottom: 4px;">{{headerTitle}}</div>
+                    {{/if}}
+                    <div class="company-name">{{companyName}}</div>
+                </div>
             </div>
             <div>
-                <div class="invoice-title">Invoice</div>
+                <div class="invoice-title">{{receiptTitle}}</div>
                 <div class="meta-card">
                     <div class="meta-item">
                         <span class="meta-label">№</span>
@@ -378,6 +383,9 @@
             <div class="info-card">
                 <div class="card-title">From</div>
                 <div class="info-content">
+                    {{#if headerTitle}}
+                    <div class="info-line"><strong>{{headerTitle}}</strong></div>
+                    {{/if}}
                     <div class="info-line"><strong>{{companyName}}</strong></div>
                     {{#if companyAddress}}
                     <div class="info-line">{{companyAddress}}</div>
@@ -457,9 +465,16 @@
         <!-- Footer -->
         <div class="footer">
             <div class="notes-section">
+                {{#if footerTitle}}
+                <div class="notes-title">{{footerTitle}}</div>
+                {{#if footerSubtitle}}
+                <div class="notes-content">{{footerSubtitle}}</div>
+                {{/if}}
+                {{else}}
                 {{#if notes}}
                 <div class="notes-title">Notes</div>
                 <div class="notes-content">{{notes}}</div>
+                {{/if}}
                 {{/if}}
                 
                 {{#if paymentInfo}}

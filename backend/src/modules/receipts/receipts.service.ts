@@ -104,9 +104,19 @@ export class ReceiptsService {
       // Получаем язык шаблона из настроек
       const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
       
+      // Получаем footer настройки из настроек
+      const footerTitle = await this.settingsService.getFooterTitle(user.id);
+      const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
+      
+      // Получаем header настройки из настроек
+      const headerTitle = await this.settingsService.getHeaderTitle(user.id);
+      
       this.logger.log(`Using template for user ${user.id}: ${userTemplateId} -> ${receiptStyle}`);
       this.logger.log(`Using receipt title for user ${user.id}: ${receiptTitle}`);
       this.logger.log(`Using template language for user ${user.id}: ${templateLanguage}`);
+      this.logger.log(`Using footer title for user ${user.id}: ${footerTitle || 'default'}`);
+      this.logger.log(`Using footer subtitle for user ${user.id}: ${footerSubtitle || 'default'}`);
+      this.logger.log(`Using header title for user ${user.id}: ${headerTitle || 'default (companyName)'}`);
 
       // Генерируем PDF с пользовательским шаблоном
       const { filePath, url } =
@@ -117,7 +127,10 @@ export class ReceiptsService {
           user.id,
           receiptStyle,
           receiptTitle,
-          templateLanguage
+          templateLanguage,
+          footerTitle,
+          footerSubtitle,
+          headerTitle
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -187,6 +200,13 @@ export class ReceiptsService {
       // Получаем название компании из настроек
       const companyName = await this.getCompanyName();
 
+      // Получаем настройки для footer
+      const footerTitle = await this.settingsService.getFooterTitle(user.id);
+      const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
+      
+      // Получаем header настройки
+      const headerTitle = await this.settingsService.getHeaderTitle(user.id);
+
       // Генерируем компактный PDF
       const { filePath, url } =
         await this.pdfGeneratorService.generateReceiptPdf(
@@ -194,7 +214,12 @@ export class ReceiptsService {
           receiptNumber,
           companyName,
           user.id,
-          ReceiptStyle.COMPACT
+          ReceiptStyle.COMPACT,
+          'Invoice',
+          'en',
+          footerTitle,
+          footerSubtitle,
+          headerTitle
         );
 
       // Вычисляем хеш файла для контроля целостности

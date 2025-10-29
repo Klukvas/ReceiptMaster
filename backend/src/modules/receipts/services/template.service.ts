@@ -41,6 +41,13 @@ export interface TemplateData {
   
   // Translations
   translations: Record<string, string>;
+  
+  // Footer customization
+  footerTitle?: string;
+  footerSubtitle?: string;
+  
+  // Header customization
+  headerTitle?: string;
 }
 
 export enum ReceiptTemplate {
@@ -197,7 +204,10 @@ export class TemplateService {
     hasCustomLogo: boolean = false,
     logoPath?: string,
     receiptTitle: string = 'Invoice',
-    language: string = 'en'
+    language: string = 'en',
+    footerTitle?: string,
+    footerSubtitle?: string,
+    headerTitle?: string
   ): TemplateData {
     const formatCurrency = (cents: number) => 
       MoneyUtil.formatCentsToCurrency(cents, order.currency);
@@ -227,7 +237,10 @@ export class TemplateService {
       total: formatCurrency(order.total_cents),
       fontRegular: this.fonts.get('regular') || '',
       fontBold: this.fonts.get('bold') || '',
-      translations
+      translations,
+      footerTitle,
+      footerSubtitle,
+      headerTitle
     };
   }
 }

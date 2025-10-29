@@ -230,14 +230,19 @@
             {{#if hasCustomLogo}}
             <img src="{{logoPath}}" alt="Logo" class="logo">
             {{/if}}
-            <div class="company-name">{{companyName}}</div>
+            <div>
+                {{#if headerTitle}}
+                <div class="company-name">{{headerTitle}}</div>
+                {{/if}}
+                <div class="company-name">{{companyName}}</div>
+            </div>
         </div>
         
         <div class="blue-line"></div>
         
         <!-- Title Section -->
         <div class="title-section">
-            <div class="title">ФІКСАЛЬНИЙ ЧЕК</div>
+            <div class="title">{{receiptTitle}}</div>
             <div class="receipt-number">№ {{receiptNumber}}</div>
         </div>
         
@@ -307,8 +312,16 @@
         
         <!-- Footer -->
         <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{else}}
             <div class="footer-title">Дякуємо за покупку!</div>
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
+            {{else}}
             <div class="footer-text">Якщо у вас є питання, будь ласка, зв'яжіться з нами.</div>
+            {{/if}}
             <div class="footer-timestamp">Чек згенеровано: {{generatedAt}}</div>
         </div>
     </div>

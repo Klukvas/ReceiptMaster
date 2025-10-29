@@ -253,4 +253,49 @@ export class SettingsController {
     await this.settingsService.setTemplateLanguage(req.user.id, body.language);
     return { message: 'Template language updated successfully' };
   }
+
+  @Get("footer-title")
+  async getFooterTitle(@Request() req: { user: User }) {
+    const footerTitle = await this.settingsService.getFooterTitle(req.user.id);
+    return { data: { footerTitle: footerTitle || '' } };
+  }
+
+  @Post("footer-title")
+  async updateFooterTitle(
+    @Request() req: { user: User },
+    @Body() body: { footerTitle: string }
+  ) {
+    await this.settingsService.setFooterTitle(req.user.id, body.footerTitle);
+    return { message: 'Footer title updated successfully' };
+  }
+
+  @Get("footer-subtitle")
+  async getFooterSubtitle(@Request() req: { user: User }) {
+    const footerSubtitle = await this.settingsService.getFooterSubtitle(req.user.id);
+    return { data: { footerSubtitle: footerSubtitle || '' } };
+  }
+
+  @Post("footer-subtitle")
+  async updateFooterSubtitle(
+    @Request() req: { user: User },
+    @Body() body: { footerSubtitle: string }
+  ) {
+    await this.settingsService.setFooterSubtitle(req.user.id, body.footerSubtitle);
+    return { message: 'Footer subtitle updated successfully' };
+  }
+
+  @Get("header-title")
+  async getHeaderTitle(@Request() req: { user: User }) {
+    const headerTitle = await this.settingsService.getHeaderTitle(req.user.id);
+    return { data: { headerTitle: headerTitle || '' } };
+  }
+
+  @Post("header-title")
+  async updateHeaderTitle(
+    @Request() req: { user: User },
+    @Body() body: { headerTitle: string }
+  ) {
+    await this.settingsService.setHeaderTitle(req.user.id, body.headerTitle);
+    return { message: 'Header title updated successfully' };
+  }
 }

@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 16mm;
+            margin: 20mm;
         }
         
         @font-face {
@@ -412,6 +412,9 @@
             <div class="info-section">
                 <div class="section-chip">From</div>
                 <div class="info-content">
+                    {{#if headerTitle}}
+                    <div class="info-line"><strong>{{headerTitle}}</strong></div>
+                    {{/if}}
                     <div class="info-line"><strong>{{companyName}}</strong></div>
                     {{#if companyAddress}}
                     <div class="info-line">{{companyAddress}}</div>
@@ -471,6 +474,12 @@
         
         <!-- Footer -->
         <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
+            {{/if}}
+            {{/if}}
             <div class="footer-links">
                 {{#if transactionId}}
                 Transaction ID: {{transactionId}}

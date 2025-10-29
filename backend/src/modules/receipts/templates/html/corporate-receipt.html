@@ -322,6 +322,9 @@
     <div class="container">
         <!-- Company Header -->
         <div class="company-header">
+            {{#if headerTitle}}
+            <div class="company-name" style="font-size: 18px; margin-bottom: 4px;">{{headerTitle}}</div>
+            {{/if}}
             <div class="company-name">{{companyName}}</div>
             <div class="company-address">12, VRUNDAVAN NAGAR, ODHAV RIND ROAD, B/H GAURI CINEMA,<br>ODHAV, AHMEDABAD-382415, INDIA.</div>
         </div>
@@ -329,7 +332,7 @@
         <!-- Document Type Header -->
         <div class="document-header">
             <div class="document-type-left">{{translations.debitMemo}}</div>
-            <div class="document-type-center">{{translations.taxInvoice}}</div>
+            <div class="document-type-center">{{receiptTitle}}</div>
             <div class="document-type-right">{{translations.original}}</div>
         </div>
         
@@ -412,10 +415,19 @@
         
         <!-- Footer Section -->
         <div class="footer-section">
+            {{#if footerTitle}}
+            <div class="note-section" style="margin-bottom: 16px;">
+                <div class="note-label">{{footerTitle}}</div>
+                {{#if footerSubtitle}}
+                <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
+                {{/if}}
+            </div>
+            {{else}}
             <div class="note-section">
                 <div class="note-label">{{translations.note}}</div>
                 <div class="note-line"></div>
             </div>
+            {{/if}}
             
             <div class="terms-section">
                 <div class="terms-title">{{translations.termsAndConditions}}</div>

@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 3mm;
+            margin: 20mm;
         }
         
         @font-face {
@@ -322,6 +322,9 @@
     <div class="container">
         <!-- Company Header -->
         <div class="company-header">
+            {{#if headerTitle}}
+            <div class="company-name" style="font-size: 18px; margin-bottom: 4px;">{{headerTitle}}</div>
+            {{/if}}
             <div class="company-name">{{company.name}}</div>
             <div class="company-address">{{company.address}}</div>
         </div>
@@ -329,7 +332,7 @@
         <!-- Document Type Header -->
         <div class="document-header">
             <div class="document-type-left">Debit Memo</div>
-            <div class="document-type-center">TAX INVOICE</div>
+            <div class="document-type-center">{{receiptTitle}}</div>
             <div class="document-type-right">Original</div>
         </div>
         
@@ -410,10 +413,19 @@
         
         <!-- Footer Section -->
         <div class="footer-section">
+            {{#if footerTitle}}
+            <div class="note-section" style="margin-bottom: 16px;">
+                <div class="note-label">{{footerTitle}}</div>
+                {{#if footerSubtitle}}
+                <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
+                {{/if}}
+            </div>
+            {{else}}
             <div class="note-section">
                 <div class="note-label">Note:</div>
                 <div class="note-line"></div>
             </div>
+            {{/if}}
             
             <div class="terms-section">
                 <div class="terms-title">Terms & Conditions:</div>

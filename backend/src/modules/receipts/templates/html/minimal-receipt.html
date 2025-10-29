@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 3mm;
+            margin: 20mm;
         }
         
         @font-face {
@@ -247,7 +247,7 @@
                 {{#if hasCustomLogo}}
                 <img src="{{logoPath}}" alt="Logo" class="logo">
                 {{/if}}
-                <div class="invoice-title">invoice</div>
+                <div class="invoice-title">{{receiptTitle}}</div>
             </div>
             <div class="invoice-number">№ {{receiptNumber}}</div>
         </div>
@@ -257,6 +257,10 @@
             <div class="info-block">
                 <div class="info-line">
                     <span class="info-label">From:</span>
+                    {{#if headerTitle}}
+                    <span><strong>{{headerTitle}}</strong></span>
+                    <span class="info-separator">—</span>
+                    {{/if}}
                     <span>{{companyName}}</span>
                     <span class="info-separator">—</span>
                     <span>{{companyAddress}}</span>
@@ -329,8 +333,15 @@
         
         <!-- Footer -->
         <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
+            {{/if}}
+            {{else}}
             {{#if terms}}
             <div class="terms">{{terms}}</div>
+            {{/if}}
             {{/if}}
             
             {{#if companyIban}}

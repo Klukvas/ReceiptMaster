@@ -1,6 +1,8 @@
 import { LogoUpload } from '../components/settings/LogoUpload';
 import { TemplateSelector } from '../components/settings/TemplateSelector';
 import { LanguageSelector } from '../components/settings/LanguageSelector';
+import { HeaderCustomizer } from '../components/settings/HeaderCustomizer';
+import { FooterCustomizer } from '../components/settings/FooterCustomizer';
 import { useTranslation } from '../hooks/useTranslation';
 
 export const SettingsPage = () => {
@@ -16,8 +18,10 @@ export const SettingsPage = () => {
       </div>
 
       <LogoUpload />
+      <HeaderCustomizer />
       <TemplateSelector />
       <LanguageSelector />
+      <FooterCustomizer />
     </div>
   );
 };

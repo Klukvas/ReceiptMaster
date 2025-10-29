@@ -338,6 +338,26 @@ export const settingsApi = {
 
   updateTemplateLanguage: (language: string) =>
     api.post('/settings/template-language', { language }),
+
+  // Footer settings
+  getFooterTitle: () =>
+    api.get<{ footerTitle: string }>('/settings/footer-title'),
+
+  updateFooterTitle: (footerTitle: string) =>
+    api.post('/settings/footer-title', { footerTitle }),
+
+  getFooterSubtitle: () =>
+    api.get<{ footerSubtitle: string }>('/settings/footer-subtitle'),
+
+  updateFooterSubtitle: (footerSubtitle: string) =>
+    api.post('/settings/footer-subtitle', { footerSubtitle }),
+
+  // Header settings
+  getHeaderTitle: () =>
+    api.get<{ headerTitle: string }>('/settings/header-title'),
+
+  updateHeaderTitle: (headerTitle: string) =>
+    api.post('/settings/header-title', { headerTitle }),
 };
 
 // Formatting utilities

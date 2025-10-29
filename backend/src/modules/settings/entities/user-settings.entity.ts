@@ -50,6 +50,9 @@ export class UserSettings {
   @Column({ nullable: true })
   subFooterText: string;
 
+  @Column({ nullable: true })
+  headerText: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
