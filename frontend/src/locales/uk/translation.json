@@ -173,7 +173,13 @@
     "updateFailed": "Не вдалося оновити профіль",
     "fillAllFields": "Будь ласка, заповніть всі поля",
     "passwordChangeNotImplemented": "Функція зміни пароля поки не реалізована",
-    "deleteAccountNotImplemented": "Функція видалення акаунту поки не реалізована"
+    "deleteAccountNotImplemented": "Функція видалення акаунту поки не реалізована",
+    "currentPassword": "Поточний пароль",
+    "newPassword": "Новий пароль",
+    "confirmPassword": "Підтвердіть пароль",
+    "passwordChanged": "Пароль успішно змінено",
+    "passwordChangeFailed": "Не вдалося змінити пароль",
+    "passwordMinLength": "Пароль повинен містити мінімум 6 символів"
   },
   "landing": {
     "welcome": "Ласкаво просимо",

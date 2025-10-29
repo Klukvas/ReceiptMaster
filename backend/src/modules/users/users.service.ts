@@ -9,6 +9,7 @@ import { User } from "./entities/user.entity";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
 @Injectable()
@@ -126,5 +127,42 @@ export class UsersService {
 
     const { password: _password, ...userWithoutPassword } = updatedUser;
     return userWithoutPassword;
+  }
+
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
+    const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
+
+    // Проверяем, что новый пароль и подтверждение совпадают
+    if (newPassword !== confirmPassword) {
+      throw ApiErrors.VALIDATION_ERROR("password", "Новый пароль и подтверждение не совпадают");
+    }
+
+    // Находим пользователя
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw ApiErrors.USER_NOT_FOUND(userId);
+    }
+
+    // Проверяем текущий пароль
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw ApiErrors.VALIDATION_ERROR("currentPassword", "Текущий пароль неверен");
+    }
+
+    // Проверяем, что новый пароль отличается от текущего
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw ApiErrors.VALIDATION_ERROR("newPassword", "Новый пароль должен отличаться от текущего");
+    }
+
+    // Хешируем новый пароль
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Обновляем пароль
+    await this.userRepository.update(userId, { password: hashedPassword });
   }
 }

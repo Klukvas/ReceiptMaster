@@ -17,6 +17,7 @@ import { UsersService } from "./users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { User } from "./entities/user.entity";
@@ -75,5 +76,20 @@ export class UsersController {
     @Body() updateProfileDto: UpdateProfileDto
   ): Promise<Omit<User, "password">> {
     return this.usersService.updateProfile(req.user.id, updateProfileDto);
+  }
+
+  @Post("change-password")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Изменить пароль текущего пользователя" })
+  @ApiResponse({ status: 200, description: "Пароль успешно изменен" })
+  @ApiResponse({ status: 400, description: "Ошибка валидации" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  async changePassword(
+    @Request() req,
+    @Body() changePasswordDto: ChangePasswordDto
+  ): Promise<{ message: string }> {
+    await this.usersService.changePassword(req.user.id, changePasswordDto);
+    return { message: "Пароль успешно изменен" };
   }
 }

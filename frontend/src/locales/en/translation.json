@@ -179,7 +179,13 @@
     "updateFailed": "Failed to update profile",
     "fillAllFields": "Please fill in all fields",
     "passwordChangeNotImplemented": "Password change functionality is not yet implemented",
-    "deleteAccountNotImplemented": "Account deletion functionality is not yet implemented"
+    "deleteAccountNotImplemented": "Account deletion functionality is not yet implemented",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "passwordChanged": "Password changed successfully",
+    "passwordChangeFailed": "Failed to change password",
+    "passwordMinLength": "Password must be at least 6 characters long"
   },
   "landing": {
     "welcome": "Welcome",

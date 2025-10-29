@@ -179,6 +179,9 @@ export const authApi = {
   
   updateProfile: (data: { email: string }) =>
     api.patch<User>('/auth/profile', data),
+  
+  changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    api.post<{ message: string }>('/auth/change-password', data),
 };
 
 export const productsApi = {

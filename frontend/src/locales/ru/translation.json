@@ -178,7 +178,13 @@
     "updateFailed": "Не удалось обновить профиль",
     "fillAllFields": "Пожалуйста, заполните все поля",
     "passwordChangeNotImplemented": "Функция изменения пароля пока не реализована",
-    "deleteAccountNotImplemented": "Функция удаления аккаунта пока не реализована"
+    "deleteAccountNotImplemented": "Функция удаления аккаунта пока не реализована",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "confirmPassword": "Подтвердите пароль",
+    "passwordChanged": "Пароль успешно изменен",
+    "passwordChangeFailed": "Не удалось изменить пароль",
+    "passwordMinLength": "Пароль должен содержать минимум 6 символов"
   },
   "landing": {
     "welcome": "Добро пожаловать",
