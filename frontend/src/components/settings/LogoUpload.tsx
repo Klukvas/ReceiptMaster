@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, X, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Upload, X, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { settingsApi } from '../../lib/api';
 import { Button } from '../ui/Button';
@@ -20,13 +20,18 @@ export const LogoUpload = () => {
     queryFn: () => settingsApi.getLogo(),
     enabled: true, // Auto-fetch logo
     retry: false, // Don't retry on 404
+    staleTime: 0, // Always consider data stale
+    gcTime: 0, // Don't cache in memory after unmount
   });
 
   // Create blob URL for logo display
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (logoData && hasLogo && !logoError) {
+    // Check if logo was deleted (404 error)
+    const isDeleted = logoError && (logoError as any)?.response?.status === 404;
+    
+    if (logoData && hasLogo && !logoError && !isDeleted) {
       // Create blob URL from the data
       // logoData.data is the Blob when responseType is 'blob'
       const url = URL.createObjectURL(logoData.data);
@@ -70,10 +75,11 @@ export const LogoUpload = () => {
         URL.revokeObjectURL(logoUrl);
       }
       setLogoUrl(null);
-      // Reset query cache to remove the old logo data
+      // Aggressively remove all cached queries and invalidate
       queryClient.removeQueries({ queryKey: ['logo'] });
-      // Refetch to verify deletion (will return 404, which is expected)
-      await refetchLogo();
+      queryClient.cancelQueries({ queryKey: ['logo'] });
+      // Force refetch with cache busting
+      await queryClient.refetchQueries({ queryKey: ['logo'] });
       toast.success('Логотип успешно удален!');
     },
     onError: () => {
@@ -151,102 +157,67 @@ export const LogoUpload = () => {
           </p>
         </div>
 
-        {/* Current Logo Display */}
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
-          <div className="text-center">
-            <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-              Текущий логотип
-            </h4>
-            {logoLoading ? (
-              <div className="space-y-4">
-                <div className="mx-auto h-32 w-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                  <div className="text-gray-400 dark:text-gray-500 text-sm">Загрузка...</div>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Загрузка логотипа...
-                </p>
-              </div>
-            ) : logoUrl && hasLogo && !logoError ? (
-              <div className="space-y-4">
-                <div className="relative inline-block">
-                  <img
-                    src={logoUrl}
-                    alt="Current logo"
-                    className="mx-auto h-32 w-32 object-contain border-2 border-gray-200 dark:border-gray-600 rounded-lg shadow-sm"
-                    onError={(e) => {
-                      console.error('Failed to load logo image');
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                  <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                    Активен
+        {/* Current Logo Display - Only show if logo exists or is loading */}
+        {(logoLoading || (logoUrl && hasLogo && !logoError)) && (
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+            <div className="text-center">
+              <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                Текущий логотип
+              </h4>
+              {logoLoading ? (
+                <div className="space-y-4">
+                  <div className="mx-auto h-32 w-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                    <div className="text-gray-400 dark:text-gray-500 text-sm">Загрузка...</div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-green-600 dark:text-green-400 font-medium">
-                    ✓ Логотип загружен и используется в документах
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Логотип отображается в PDF чеках и других документах
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Загрузка логотипа...
                   </p>
                 </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleDeleteLogo}
-                  disabled={deleteLogoMutation.isPending}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  {deleteLogoMutation.isPending ? 'Удаление...' : 'Удалить логотип'}
-                </Button>
-              </div>
-            ) : logoError && (logoError as any)?.response?.status !== 404 ? (
-              <div className="space-y-4">
-                <div className="relative inline-block">
-                  <ImageIcon className="mx-auto h-16 w-16 text-red-400 dark:text-red-500" />
-                  <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    Ошибка
+              ) : logoUrl && hasLogo && !logoError && logoUrl !== null ? (
+                <div className="space-y-4">
+                  <div className="relative inline-block">
+                    <img
+                      key={logoUrl || 'no-logo'}
+                      src={logoUrl || undefined}
+                      alt="Current logo"
+                      className="mx-auto h-32 w-32 object-contain border-2 border-gray-200 dark:border-gray-600 rounded-lg shadow-sm"
+                      onError={(e) => {
+                        console.error('Failed to load logo image');
+                        e.currentTarget.style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        // Image loaded successfully
+                      }}
+                    />
+                    <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                      Активен
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    Ошибка загрузки логотипа
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {(logoError as any)?.message || 'Не удалось загрузить логотип'}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+                      ✓ Логотип загружен и используется в документах
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Логотип отображается в PDF чеках и других документах
+                    </p>
+                  </div>
                   <Button
-                    variant="secondary"
+                    variant="danger"
                     size="sm"
-                    onClick={() => refetchLogo()}
+                    onClick={handleDeleteLogo}
+                    disabled={deleteLogoMutation.isPending}
                   >
-                    Попробовать снова
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    {deleteLogoMutation.isPending ? 'Удаление...' : 'Удалить логотип'}
                   </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="relative inline-block">
-                  <ImageIcon className="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500" />
-                  <div className="absolute -top-2 -right-2 bg-gray-400 text-white text-xs px-2 py-1 rounded-full">
-                    Не установлен
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Логотип не загружен
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Загрузите логотип для отображения в документах
-                  </p>
-                </div>
-              </div>
-            )}
+              ) : null}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* File Upload: show only when no current logo */}
-        {!(logoUrl && hasLogo && !logoError) && (
+        {!logoLoading && !(logoUrl && hasLogo && !logoError) && (
           <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
             <div className="text-center">
               {previewUrl ? (
