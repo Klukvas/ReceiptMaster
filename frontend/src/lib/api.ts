@@ -308,11 +308,6 @@ export const settingsApi = {
   deleteLogo: () =>
     api.post('/settings/logo/delete'),
 
-  updateCompanyName: (companyName: string) =>
-    api.post('/settings/company-name', { companyName }),
-
-  getCompanyName: () =>
-    api.get<{ companyName: string }>('/settings/company-name'),
 
   // Template settings
   getTemplateSettings: () =>

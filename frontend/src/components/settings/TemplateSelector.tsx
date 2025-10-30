@@ -45,18 +45,33 @@ export const TemplateSelector = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
   // Get current template setting
-  const { data: currentTemplate, isLoading: isLoadingCurrent } = useQuery({
+  type TemplateSetting = { templateId: string };
+  const { data: currentTemplate, isLoading: isLoadingCurrent } = useQuery<TemplateSetting>({
     queryKey: ['templateSettings'],
-    queryFn: () => settingsApi.getTemplateSettings(),
+    queryFn: async () => {
+      const response = await settingsApi.getTemplateSettings();
+      const payload = response?.data;
+      const normalized = (payload && typeof payload === 'object' && 'data' in payload)
+        ? (payload as any).data
+        : payload;
+      return { templateId: normalized?.templateId ?? 'standard' } as TemplateSetting;
+    },
     staleTime: 1000 * 60 * 5, // 5 minutes - reasonable cache time
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
     refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Get available templates
-  const { data: templates, isLoading: isLoadingTemplates, error: templatesError } = useQuery({
+  const { data: templates, isLoading: isLoadingTemplates, error: templatesError } = useQuery<Template[]>({
     queryKey: ['availableTemplates'],
-    queryFn: () => settingsApi.getAvailableTemplates(),
+    queryFn: async () => {
+      const response = await settingsApi.getAvailableTemplates();
+      const payload = response?.data;
+      const normalized = (payload && typeof payload === 'object' && 'data' in payload)
+        ? (payload as any).data
+        : payload;
+      return Array.isArray(normalized) ? (normalized as Template[]) : [];
+    },
   });
 
   // Debug logging
@@ -64,10 +79,7 @@ export const TemplateSelector = () => {
   console.log('Templates response:', templates);
   console.log('Templates error:', templatesError);
   console.log('Current template response:', currentTemplate);
-  console.log('Current template data:', currentTemplate?.data);
-  console.log('Current template data.data:', currentTemplate?.data?.data);
-  console.log('Current templateId (old):', currentTemplate?.data?.templateId);
-  console.log('Current templateId (new):', currentTemplate?.data?.data?.templateId);
+  console.log('Current templateId:', currentTemplate?.templateId);
   console.log('Selected template state:', selectedTemplate);
   console.log('Is loading current:', isLoadingCurrent);
   console.log('Is loading templates:', isLoadingTemplates);
@@ -76,12 +88,12 @@ export const TemplateSelector = () => {
   // Update template setting
   const updateTemplateMutation = useMutation({
     mutationFn: (templateId: string) => settingsApi.updateTemplateSettings(templateId),
-    onSuccess: (data, templateId) => {
+    onSuccess: (_data, templateId) => {
       console.log('Template update successful, templateId:', templateId);
       // Invalidate and refetch template settings to update the UI
       queryClient.invalidateQueries({ queryKey: ['templateSettings'] });
-      // Reset selected template to show the new current template
-      setSelectedTemplate('');
+      // Keep the selected template highlighted until refetch updates current template
+      setSelectedTemplate(templateId);
       toast.success('Шаблон успешно обновлен');
     },
     onError: (error: any) => {
@@ -92,7 +104,7 @@ export const TemplateSelector = () => {
 
   // Update selected template when current template changes
   useEffect(() => {
-    const templateId = currentTemplate?.data?.data?.templateId;
+    const templateId = currentTemplate?.templateId;
     if (templateId && !selectedTemplate) {
       console.log('Setting selected template from current template:', templateId);
       setSelectedTemplate(templateId);
@@ -140,7 +152,7 @@ export const TemplateSelector = () => {
   }
 
   // Extract templates array safely - handle Axios response object
-  const templatesList = templates?.data?.data || templates?.data || templates || [];
+  const templatesList: Template[] = templates || [];
   
   if (!Array.isArray(templatesList)) {
     console.error('Templates data is not an array:', templatesList);
@@ -153,7 +165,7 @@ export const TemplateSelector = () => {
     );
   }
 
-  const currentTemplateId = currentTemplate?.data?.data?.templateId || 'standard';
+  const currentTemplateId = currentTemplate?.templateId || 'standard';
   // Use selectedTemplate if it exists, otherwise use currentTemplateId
   const selectedTemplateId = selectedTemplate || currentTemplateId;
   
@@ -161,8 +173,7 @@ export const TemplateSelector = () => {
   console.log('- currentTemplateId:', currentTemplateId);
   console.log('- selectedTemplate:', selectedTemplate);
   console.log('- selectedTemplateId:', selectedTemplateId);
-  console.log('- currentTemplate data:', currentTemplate?.data);
-  console.log('- currentTemplate data.data:', currentTemplate?.data?.data);
+  console.log('- currentTemplate:', currentTemplate);
 
   return (
     <Card className="p-6">
@@ -275,9 +286,8 @@ export const TemplateSelector = () => {
           <Button
             onClick={handleSaveTemplate}
             disabled={selectedTemplateId === currentTemplateId || updateTemplateMutation.isPending}
-            loading={updateTemplateMutation.isPending}
           >
-            Сохранить
+            {updateTemplateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
           </Button>
         </div>
       </div>

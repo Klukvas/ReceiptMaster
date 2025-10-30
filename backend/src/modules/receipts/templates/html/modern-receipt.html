@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 5mm;
         }
         
         @font-face {
@@ -45,10 +45,14 @@
         
         /* Accent bar */
         .accent-bar {
+            /* Stretch across full page width, compensating @page margins (20mm each side) */
+            width: calc(100% + 40mm);
+            margin-left: -20mm;
+            margin-right: -20mm;
             height: 10px;
             background-color: #2563EB;
             margin-bottom: 20px;
-            border-radius: 0 0 4px 4px;
+            border-radius: 0;
         }
         
         /* Header */
@@ -60,12 +64,14 @@
         }
         
         .header-left {
+            height: 120px;
+            width: auto;
             display: flex;
             align-items: center;
         }
         
         .logo {
-            height: 28px;
+            height: 110px;
             width: auto;
             margin-right: 15px;
         }
@@ -80,7 +86,8 @@
             font-size: 20px;
             font-weight: 600;
             color: #111827;
-            margin-bottom: 20px;
+            margin: 10px 0 20px 0;
+            text-align: center;
         }
         
         .meta-card {
@@ -335,14 +342,12 @@
                 <img src="{{logoPath}}" alt="Logo" class="logo">
                 {{/if}}
                 <div>
-                    <div class="company-name">{{companyName}}</div>
                     {{#if companyTagline}}
                     <div class="company-tagline">{{companyTagline}}</div>
                     {{/if}}
                 </div>
             </div>
             <div>
-                <div class="invoice-title">{{receiptTitle}}</div>
                 <div class="meta-card">
                     <div class="meta-item">
                         <span class="meta-label">№</span>
@@ -368,6 +373,9 @@
             </div>
         </div>
         
+        <!-- Centered Invoice Title below header -->
+        <div class="invoice-title">{{receiptTitle}}</div>
+
         <!-- Company Info -->
         <div class="company-info">
             <div class="info-card">

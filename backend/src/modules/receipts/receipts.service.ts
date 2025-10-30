@@ -55,6 +55,8 @@ export class ReceiptsService {
         return ReceiptStyle.WAVE;
       case 'minimal':
         return ReceiptStyle.MINIMAL;
+      case 'corporate':
+        return ReceiptStyle.CORPORATE;
       default:
         this.logger.warn(`Unknown template ID: ${templateId}, falling back to COMPACT`);
         return ReceiptStyle.COMPACT;

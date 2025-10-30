@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 5mm;
         }
         
         @font-face {
@@ -75,7 +75,7 @@
         }
         
         .logo {
-            height: 24px;
+            height: 120px;
             width: auto;
             filter: grayscale(100%);
         }
@@ -275,10 +275,6 @@
     </style>
 </head>
 <body>
-    {{#if isPaid}}
-    <div class="paid-badge">Paid</div>
-    {{/if}}
-    
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -393,11 +389,6 @@
                     <td>{{total}}</td>
                 </tr>
             </table>
-        </div>
-        
-        <!-- Thank You -->
-        <div class="thank-you">
-            <div class="thank-you-text">Thank you</div>
         </div>
         
         <!-- Footer -->

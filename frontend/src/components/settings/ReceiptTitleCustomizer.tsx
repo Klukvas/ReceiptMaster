@@ -11,14 +11,21 @@ import { useTranslation } from '../../hooks/useTranslation';
 export const ReceiptTitleCustomizer: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
   const [title, setTitle] = useState('');
 
-  const { data, isLoading } = useQuery({
+  type ReceiptTitle = { title: string };
+
+  const { data } = useQuery<ReceiptTitle>({
     queryKey: ['receiptTitle'],
     queryFn: async () => {
       const response = await settingsApi.getReceiptTitle();
-      return response.data;
+      // Normalize backend shape: either { data: { title } } or { title }
+      const payload = response?.data;
+      const normalized = (payload && typeof payload === 'object' && 'data' in payload)
+        ? (payload as any).data
+        : payload;
+      return { title: normalized?.title ?? 'Invoice' } as ReceiptTitle;
     },
     refetchOnWindowFocus: false,
     staleTime: 1000 * 60 * 5,
@@ -54,41 +61,35 @@ export const ReceiptTitleCustomizer: React.FC = () => {
         {t('settings.receiptTitleHint') || 'This title appears across all templates.'}
       </p>
 
-      {isLoading ? (
-        <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-          {t('common.loading') || 'Loading...'}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <Input
-            label={t('settings.receiptTitle') || 'Receipt Title'}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t('settings.receiptTitlePlaceholder') || 'e.g., Invoice / Tax Invoice / Receipt'}
-            disabled={!isEditing}
-          />
+      <div className="space-y-4">
+        <Input
+          label={t('settings.receiptTitle') || 'Receipt Title'}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t('settings.receiptTitlePlaceholder') || 'e.g., Invoice / Tax Invoice / Receipt'}
+          disabled={!isEditing}
+        />
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            {isEditing ? (
-              <>
-                <Button variant="outline" onClick={() => { setTitle(data?.title || 'Invoice'); setIsEditing(false); }} disabled={isSaving} className="flex items-center space-x-2">
-                  <X className="h-4 w-4" />
-                  <span>{t('common.cancel') || 'Cancel'}</span>
-                </Button>
-                <Button onClick={() => { mutation.mutate(title); setIsEditing(false); }} disabled={isSaving} className="flex items-center space-x-2">
-                  <Save className="h-4 w-4" />
-                  <span>{isSaving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}</span>
-                </Button>
-              </>
-            ) : (
-              <Button variant="secondary" onClick={() => setIsEditing(true)} className="flex items-center space-x-2">
-                <FileText className="h-4 w-4" />
-                <span>{t('common.edit') || 'Edit'}</span>
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          {isEditing ? (
+            <>
+              <Button variant="outline" onClick={() => { setTitle(data?.title || 'Invoice'); setIsEditing(false); }} disabled={isSaving} className="flex items-center space-x-2">
+                <X className="h-4 w-4" />
+                <span>{t('common.cancel') || 'Cancel'}</span>
               </Button>
-            )}
-          </div>
+              <Button onClick={() => { mutation.mutate(title); setIsEditing(false); }} disabled={isSaving} className="flex items-center space-x-2">
+                <Save className="h-4 w-4" />
+                <span>{isSaving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}</span>
+              </Button>
+            </>
+          ) : (
+            <Button variant="secondary" onClick={() => setIsEditing(true)} className="flex items-center space-x-2">
+              <FileText className="h-4 w-4" />
+              <span>{t('common.edit') || 'Edit'}</span>
+            </Button>
+          )}
         </div>
-      )}
+      </div>
       </div>
     </Card>
   );

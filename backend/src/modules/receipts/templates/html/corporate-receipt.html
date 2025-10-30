@@ -7,18 +7,18 @@
     <style>
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 5mm;
         }
         
         @font-face {
-            font-family: 'Inter';
+            font-family: 'Noto Sans';
             src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
             font-weight: normal;
             font-style: normal;
         }
         
         @font-face {
-            font-family: 'Inter';
+            font-family: 'Noto Sans';
             src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
             font-weight: bold;
             font-style: normal;
@@ -31,7 +31,7 @@
         }
         
         body {
-            font-family: 'Inter', 'Helvetica Neue', 'Arial', sans-serif;
+            font-family: 'Noto Sans', 'Helvetica Neue', 'Arial', sans-serif;
             font-size: 11px;
             line-height: 1.4;
             color: #000000;
@@ -58,10 +58,22 @@
             margin-bottom: 8px;
         }
         
+        .company-tagline {
+            font-size: 12px;
+            color: #4B5563;
+            margin-bottom: 8px;
+        }
+        
         .company-address {
             font-size: 10px;
             color: #4B5563;
             line-height: 1.4;
+        }
+        
+        .company-contact {
+            font-size: 10px;
+            color: #4B5563;
+            margin-top: 4px;
         }
         
         /* Document Type Header */
@@ -169,10 +181,15 @@
             font-size: 10px;
             color: #000000;
             border-bottom: 1px solid #D1D5DB;
+            text-align: center;
         }
         
-        .items-body td:last-child {
-            text-align: right;
+        .items-body td:first-child {
+            text-align: center;
+        }
+        
+        .items-body td:nth-child(2) {
+            text-align: left;
         }
         
         .items-body td:nth-child(3),
@@ -213,13 +230,6 @@
             font-size: 11px;
             color: #000000;
             margin-bottom: 8px;
-        }
-        
-        .amount-words {
-            font-size: 10px;
-            color: #6B7280;
-            font-style: italic;
-            line-height: 1.4;
         }
         
         .total-info {
@@ -331,6 +341,9 @@
     <div class="container">
         <!-- Company Header -->
         <div class="company-header">
+            {{#if hasCustomLogo}}
+            <img src="{{logoPath}}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;">
+            {{/if}}
             <div class="company-name">{{companyName}}</div>
             {{#if companyTagline}}
             <div class="company-tagline">{{companyTagline}}</div>
@@ -348,7 +361,7 @@
             <div class="company-contact">{{companyWebsite}}</div>
             {{/if}}
             {{#if companyTaxId}}
-            <div class="company-contact">Tax ID: {{companyTaxId}}</div>
+            <div class="company-contact">{{#if translations.gstinNo}}{{translations.gstinNo}} {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
             {{/if}}
             {{#if companyIban}}
             <div class="company-contact">IBAN: {{companyIban}}</div>
@@ -360,9 +373,9 @@
         
         <!-- Document Type Header -->
         <div class="document-header">
-            <div class="document-type-left">{{translations.debitMemo}}</div>
+            <div class="document-type-left">{{#if translations.debitMemo}}{{translations.debitMemo}}{{else}}Debit Memo{{/if}}</div>
             <div class="document-type-center">{{receiptTitle}}</div>
-            <div class="document-type-right">{{translations.original}}</div>
+            <div class="document-type-right">{{#if translations.original}}{{translations.original}}{{else}}Original{{/if}}</div>
         </div>
         
         <!-- Client Details -->
@@ -378,11 +391,11 @@
             </div>
             <div class="invoice-info">
                 <div class="invoice-row">
-                    <span class="invoice-label">{{translations.invoiceNo}}</span>
+                    <span class="invoice-label">{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No :{{/if}}</span>
                     <span class="invoice-value">{{receiptNumber}}</span>
                 </div>
                 <div class="invoice-row">
-                    <span class="invoice-label">{{translations.date}}</span>
+                    <span class="invoice-label">{{#if translations.date}}{{translations.date}}{{else}}Date :{{/if}}</span>
                     <span class="invoice-value">{{orderDate}}</span>
                 </div>
             </div>
@@ -392,11 +405,11 @@
         <table class="items-table">
             <thead class="items-header">
                 <tr>
-                    <th>{{translations.srNo}}</th>
-                    <th>{{translations.productName}}</th>
-                    <th>{{translations.qty}}</th>
-                    <th>{{translations.rate}}</th>
-                    <th>{{translations.amount}}</th>
+                    <th>{{#if translations.srNo}}{{translations.srNo}}{{else}}SrNo{{/if}}</th>
+                    <th>{{#if translations.productName}}{{translations.productName}}{{else}}Product Name{{/if}}</th>
+                    <th>{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th>{{#if translations.rate}}{{translations.rate}}{{else}}Rate{{/if}}</th>
+                    <th>{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
             </thead>
             <tbody class="items-body">
@@ -410,7 +423,7 @@
                 </tr>
                 {{/each}}
                 <tr class="subtotal-row">
-                    <td colspan="4">{{translations.subTotal}}</td>
+                    <td colspan="4">{{#if translations.subTotal}}{{translations.subTotal}}{{else}}Sub Total:{{/if}}</td>
                     <td>{{subtotal}}</td>
                 </tr>
             </tbody>
@@ -419,24 +432,17 @@
         <!-- Tax and Total Section -->
         <div class="tax-total-section">
             <div class="tax-info">
-                <div class="gstin">{{translations.gstinNo}} 26AKJPG9221E1W5</div>
-                <div class="amount-words">{{translations.billAmount}}</div>
+                {{#if companyTaxId}}
+                <div class="gstin">{{#if translations.gstinNo}}{{translations.gstinNo}} {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
+                {{/if}}
             </div>
             <div class="total-info">
                 <div class="total-row">
-                    <span>{{translations.subTotal}}</span>
+                    <span>{{#if translations.subTotal}}{{translations.subTotal}}{{else}}Sub Total:{{/if}}</span>
                     <span>{{subtotal}}</span>
                 </div>
-                <div class="total-row">
-                    <span>{{translations.centralTax}}</span>
-                    <span>$21.09</span>
-                </div>
-                <div class="total-row">
-                    <span>{{translations.stateTax}}</span>
-                    <span>$21.09</span>
-                </div>
                 <div class="total-row grand-total">
-                    <span>{{translations.grandTotal}}</span>
+                    <span>{{#if translations.grandTotal}}{{translations.grandTotal}}{{else}}Grand Total{{/if}}</span>
                     <span>{{total}}</span>
                 </div>
             </div>
@@ -453,24 +459,12 @@
             </div>
             {{else}}
             <div class="note-section">
-                <div class="note-label">{{translations.note}}</div>
+                <div class="note-label">{{#if translations.note}}{{translations.note}}{{else}}Note:{{/if}}</div>
                 <div class="note-line"></div>
             </div>
             {{/if}}
-            
-            <div class="terms-section">
-                <div class="terms-title">{{translations.termsAndConditions}}</div>
-                <ul class="terms-list">
-                    <li>{{translations.terms1}}</li>
-                    <li>{{translations.terms2}}</li>
-                </ul>
-            </div>
-            
-            <div class="signature-section">
-                <div class="signature-company">{{translations.forCompany}}</div>
-                <div class="signature-title">{{translations.authorisedSignatory}}</div>
-            </div>
         </div>
     </div>
 </body>
 </html>
+

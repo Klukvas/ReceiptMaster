@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 5mm;
         }
         
         @font-face {
@@ -35,8 +35,11 @@
             font-size: 11px;
             line-height: 1.4;
             color: #2B2B2B;
-            background: white;
             position: relative;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(139, 107, 74, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(139, 107, 74, 0.1) 0%, transparent 50%),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 248, 248, 0.9) 100%);
         }
         
         /* Parchment background effect */
@@ -47,10 +50,6 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(139, 107, 74, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(139, 107, 74, 0.1) 0%, transparent 50%),
-                linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 248, 248, 0.9) 100%);
             z-index: -1;
             pointer-events: none;
         }
@@ -100,7 +99,7 @@
         }
         
         .logo {
-            height: 26px;
+            height: 120px;
             width: auto;
             filter: sepia(100%) hue-rotate(30deg) saturate(0.8);
         }
@@ -284,35 +283,6 @@
             margin-bottom: 20px;
         }
         
-        .signature-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-        }
-        
-        .signature-box {
-            width: 120px;
-            height: 60px;
-            border: 1px solid #D1B48A;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.5);
-        }
-        
-        .signature-image {
-            max-width: 100%;
-            max-height: 100%;
-            opacity: 0.7;
-        }
-        
-        .signature-label {
-            font-size: 9px;
-            color: #8C6B4A;
-            font-style: italic;
-        }
-        
         .seal {
             width: 60px;
             height: 60px;
@@ -465,21 +435,6 @@
             <div class="iban">IBAN: {{companyIban}}</div>
             {{/if}}
             
-            <div class="signature-section">
-                <div class="signature-box">
-                    {{#if signature}}
-                    <img src="{{signature}}" alt="Signature" class="signature-image">
-                    {{else}}
-                    <div class="signature-label">Signature</div>
-                    {{/if}}
-                </div>
-                
-                {{#if seal}}
-                <div class="seal">
-                    <div class="seal-text">SEAL</div>
-                </div>
-                {{/if}}
-            </div>
         </div>
     </div>
 </body>

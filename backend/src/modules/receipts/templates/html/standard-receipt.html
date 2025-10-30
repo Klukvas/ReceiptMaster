@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 5mm;
         }
         
         * {
@@ -50,8 +50,8 @@
         }
         
         .logo {
-            width: 60px;
-            height: 60px;
+            width: auto;
+            height: 120px;
             margin-right: 15px;
             object-fit: contain;
         }
@@ -217,6 +217,21 @@
             font-size: 10px;
         }
         
+        .footer-company-info {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-size: 10px;
+        }
+        
+        .footer-company-info:empty {
+            display: none;
+        }
+        
+        .footer-company-info div {
+            margin-bottom: 3px;
+        }
+        
         @media print {
             .footer {
                 position: fixed;
@@ -323,6 +338,31 @@
             {{else}}
             <div class="footer-text">Якщо у вас є питання, будь ласка, зв'яжіться з нами.</div>
             {{/if}}
+            
+            <div class="footer-company-info">
+                {{#if companyAddress}}
+                <div>{{companyAddress}}</div>
+                {{/if}}
+                {{#if companyEmail}}
+                <div>{{companyEmail}}</div>
+                {{/if}}
+                {{#if companyPhone}}
+                <div>{{companyPhone}}</div>
+                {{/if}}
+                {{#if companyWebsite}}
+                <div>{{companyWebsite}}</div>
+                {{/if}}
+                {{#if companyTaxId}}
+                <div>Tax ID: {{companyTaxId}}</div>
+                {{/if}}
+                {{#if companyIban}}
+                <div>IBAN: {{companyIban}}</div>
+                {{/if}}
+                {{#if companySwift}}
+                <div>SWIFT: {{companySwift}}</div>
+                {{/if}}
+            </div>
+            
             <div class="footer-timestamp">Чек згенеровано: {{generatedAt}}</div>
         </div>
     </div>

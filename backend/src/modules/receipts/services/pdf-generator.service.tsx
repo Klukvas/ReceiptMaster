@@ -17,7 +17,8 @@ export enum ReceiptStyle {
   VINTAGE = 'vintage',
   TECH = 'tech',
   WAVE = 'wave',
-  MINIMAL = 'minimal'
+  MINIMAL = 'minimal',
+  CORPORATE = 'corporate'
 }
 
 @Injectable()
@@ -52,6 +53,8 @@ export class PdfGeneratorService {
         return ReceiptTemplate.WAVE;
       case ReceiptStyle.MINIMAL:
         return ReceiptTemplate.MINIMAL;
+      case ReceiptStyle.CORPORATE:
+        return ReceiptTemplate.CORPORATE;
       default:
         return ReceiptTemplate.STANDARD;
     }

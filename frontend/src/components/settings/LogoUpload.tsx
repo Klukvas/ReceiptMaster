@@ -5,12 +5,12 @@ import toast from 'react-hot-toast';
 import { settingsApi } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
-import { Input } from '../ui/Input';
+// import { Input } from '../ui/Input';
 
 export const LogoUpload = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string>('');
+  // const [companyName, setCompanyName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -45,18 +45,7 @@ export const LogoUpload = () => {
     }
   }, [logoData, hasLogo, logoError]);
 
-  // Get current company name
-  const { data: companyNameData } = useQuery({
-    queryKey: ['companyName'],
-    queryFn: () => settingsApi.getCompanyName(),
-  });
-
-  // Update company name in input when data is loaded
-  useEffect(() => {
-    if (companyNameData?.data?.companyName !== undefined) {
-      setCompanyName(companyNameData.data.companyName);
-    }
-  }, [companyNameData]);
+  // Company name UI removed
 
   const uploadMutation = useMutation({
     mutationFn: settingsApi.uploadLogo,
@@ -71,15 +60,7 @@ export const LogoUpload = () => {
     },
   });
 
-  const updateCompanyNameMutation = useMutation({
-    mutationFn: settingsApi.updateCompanyName,
-    onSuccess: () => {
-      toast.success('Название компании успешно обновлено!');
-    },
-    onError: () => {
-      toast.error('Ошибка при обновлении названия компании');
-    },
-  });
+  // Removed company name mutation
 
   const deleteLogoMutation = useMutation({
     mutationFn: settingsApi.deleteLogo,
@@ -138,13 +119,7 @@ export const LogoUpload = () => {
   };
 
 
-  const handleCompanyNameChange = (value: string) => {
-    setCompanyName(value);
-  };
-
-  const handleSaveCompanyName = () => {
-    updateCompanyNameMutation.mutate(companyName.trim());
-  };
+  // Removed company name handlers
 
   const handleDeleteLogo = () => {
     if (confirm('Вы уверены, что хотите удалить логотип?')) {
@@ -164,27 +139,7 @@ export const LogoUpload = () => {
           </p>
         </div>
 
-        {/* Company Name */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Название компании
-          </label>
-          <div className="flex space-x-2">
-            <Input
-              value={companyName}
-              onChange={(e) => handleCompanyNameChange(e.target.value)}
-              placeholder="Введите название компании"
-              className="flex-1"
-            />
-            <Button
-              onClick={handleSaveCompanyName}
-              disabled={updateCompanyNameMutation.isPending}
-              size="sm"
-            >
-              {updateCompanyNameMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-            </Button>
-          </div>
-        </div>
+        
 
         {/* Logo Upload Section */}
         <div>
@@ -290,60 +245,62 @@ export const LogoUpload = () => {
           </div>
         </div>
 
-        {/* File Upload */}
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
-          <div className="text-center">
-            {previewUrl ? (
-              <div className="space-y-4">
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
-                />
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  {selectedFile?.name}
-                </p>
-                <div className="flex justify-center space-x-2">
-                  <Button
-                    onClick={handleUpload}
-                    disabled={uploadMutation.isPending}
-                    size="sm"
-                  >
-                    {uploadMutation.isPending ? 'Загрузка...' : 'Загрузить'}
-                  </Button>
+        {/* File Upload: show only when no current logo */}
+        {!(logoUrl && hasLogo && !logoError) && (
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+            <div className="text-center">
+              {previewUrl ? (
+                <div className="space-y-4">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
+                  />
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {selectedFile?.name}
+                  </p>
+                  <div className="flex justify-center space-x-2">
+                    <Button
+                      onClick={handleUpload}
+                      disabled={uploadMutation.isPending}
+                      size="sm"
+                    >
+                      {uploadMutation.isPending ? 'Загрузка...' : 'Загрузить'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={handleRemove}
+                      size="sm"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Upload className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    Выберите файл логотипа
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
                   <Button
                     variant="secondary"
-                    onClick={handleRemove}
-                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-2"
                   >
-                    <X className="w-4 h-4" />
+                    Выбрать файл
                   </Button>
                 </div>
-              </div>
-            ) : (
-              <div>
-                <Upload className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                  Выберите файл логотипа
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <Button
-                  variant="secondary"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-2"
-                >
-                  Выбрать файл
-                </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </Card>

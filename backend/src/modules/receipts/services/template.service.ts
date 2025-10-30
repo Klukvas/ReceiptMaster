@@ -149,7 +149,8 @@ export class TemplateService {
   }
 
   async loadTemplate(templateName: ReceiptTemplate): Promise<HandlebarsTemplateDelegate> {
-    if (this.templates.has(templateName)) {
+    const isDevelopment = __dirname.includes('/src/') || process.env.NODE_ENV !== 'production';
+    if (!isDevelopment && this.templates.has(templateName)) {
       return this.templates.get(templateName)!;
     }
 
@@ -187,8 +188,12 @@ export class TemplateService {
       const templateContent = await fs.readFile(templatePath, 'utf-8');
       const compiledTemplate = Handlebars.compile(templateContent);
       
-      this.templates.set(templateName, compiledTemplate);
-      this.logger.log(`Template ${templateName} loaded successfully`);
+      if (!isDevelopment) {
+        this.templates.set(templateName, compiledTemplate);
+        this.logger.log(`Template ${templateName} loaded and cached`);
+      } else {
+        this.logger.log(`Template ${templateName} loaded (dev mode, no cache)`);
+      }
       
       return compiledTemplate;
     } catch (error) {
