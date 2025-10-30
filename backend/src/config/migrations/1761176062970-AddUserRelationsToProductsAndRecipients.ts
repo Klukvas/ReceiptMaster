@@ -7,23 +7,29 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "orders" DROP CONSTRAINT "FK_orders_recipient_id"`,
+      `ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "FK_orders_recipient_id"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" DROP CONSTRAINT "FK_order_items_order_id"`,
+      `ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_order_items_order_id"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" DROP CONSTRAINT "FK_order_items_product_id"`,
+      `ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_order_items_product_id"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "receipts" DROP CONSTRAINT "FK_receipts_order_id"`,
+      `ALTER TABLE "receipts" DROP CONSTRAINT IF EXISTS "FK_receipts_order_id"`,
     );
-    await queryRunner.query(`DROP INDEX "public"."IDX_orders_recipient_id"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_orders_created_at"`);
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_receipts_order_id_unique"`,
+      `DROP INDEX IF EXISTS "public"."IDX_orders_recipient_id"`,
     );
-    await queryRunner.query(`DROP INDEX "public"."IDX_receipts_number_unique"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "public"."IDX_orders_created_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "public"."IDX_receipts_order_id_unique"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "public"."IDX_receipts_number_unique"`,
+    );
     // Добавляем колонки user_id как nullable сначала
     await queryRunner.query(`ALTER TABLE "recipients" ADD "user_id" uuid`);
     await queryRunner.query(`ALTER TABLE "products" ADD "user_id" uuid`);
@@ -52,7 +58,12 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
     );
     await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "status"`);
     await queryRunner.query(
-      `CREATE TYPE "public"."orders_status_enum" AS ENUM('draft', 'confirmed', 'cancelled')`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'orders_status_enum') THEN
+          CREATE TYPE "public"."orders_status_enum" AS ENUM('draft', 'confirmed', 'cancelled');
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
       `ALTER TABLE "orders" ADD "status" "public"."orders_status_enum" NOT NULL DEFAULT 'draft'`,
@@ -62,7 +73,12 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
     );
     await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "currency"`);
     await queryRunner.query(
-      `CREATE TYPE "public"."products_currency_enum" AS ENUM('UAH')`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'products_currency_enum') THEN
+          CREATE TYPE "public"."products_currency_enum" AS ENUM('UAH');
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
       `ALTER TABLE "products" ADD "currency" "public"."products_currency_enum" NOT NULL DEFAULT 'UAH'`,
@@ -74,83 +90,128 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `ALTER TABLE "users" ALTER COLUMN "updatedAt" SET DEFAULT now()`,
     );
     await queryRunner.query(
-      `ALTER TABLE "receipts" ADD CONSTRAINT "UQ_9545ae8fc5f7714cd8a807dd937" UNIQUE ("order_id")`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'UQ_9545ae8fc5f7714cd8a807dd937') THEN
+          ALTER TABLE "receipts" ADD CONSTRAINT "UQ_9545ae8fc5f7714cd8a807dd937" UNIQUE ("order_id");
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "receipts" ADD CONSTRAINT "UQ_c4c2c9f6e041e6680df88dd121e" UNIQUE ("number")`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'UQ_c4c2c9f6e041e6680df88dd121e') THEN
+          ALTER TABLE "receipts" ADD CONSTRAINT "UQ_c4c2c9f6e041e6680df88dd121e" UNIQUE ("number");
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(`ALTER TABLE "receipts" DROP COLUMN "status"`);
     await queryRunner.query(
-      `CREATE TYPE "public"."receipts_status_enum" AS ENUM('generated', 'void')`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'receipts_status_enum') THEN
+          CREATE TYPE "public"."receipts_status_enum" AS ENUM('generated', 'void');
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
       `ALTER TABLE "receipts" ADD "status" "public"."receipts_status_enum" NOT NULL DEFAULT 'generated'`,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_c884e321f927d5b86aac7c8f9e" ON "orders" ("created_at") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_c884e321f927d5b86aac7c8f9e" ON "orders" ("created_at") `,
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_5ac3048b290562976746002e49" ON "orders" ("recipient_id") `,
+      `CREATE INDEX IF NOT EXISTS "IDX_5ac3048b290562976746002e49" ON "orders" ("recipient_id") `,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_c4c2c9f6e041e6680df88dd121" ON "receipts" ("number") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_c4c2c9f6e041e6680df88dd121" ON "receipts" ("number") `,
     );
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_9545ae8fc5f7714cd8a807dd93" ON "receipts" ("order_id") `,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_9545ae8fc5f7714cd8a807dd93" ON "receipts" ("order_id") `,
     );
     await queryRunner.query(
-      `ALTER TABLE "recipients" ADD CONSTRAINT "FK_6157e8b6ba4e6e3089616481fe2" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_6157e8b6ba4e6e3089616481fe2') THEN
+          ALTER TABLE "recipients" ADD CONSTRAINT "FK_6157e8b6ba4e6e3089616481fe2" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "orders" ADD CONSTRAINT "FK_5ac3048b290562976746002e49f" FOREIGN KEY ("recipient_id") REFERENCES "recipients"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_5ac3048b290562976746002e49f') THEN
+          ALTER TABLE "orders" ADD CONSTRAINT "FK_5ac3048b290562976746002e49f" FOREIGN KEY ("recipient_id") REFERENCES "recipients"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" ADD CONSTRAINT "FK_145532db85752b29c57d2b7b1f1" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_145532db85752b29c57d2b7b1f1') THEN
+          ALTER TABLE "order_items" ADD CONSTRAINT "FK_145532db85752b29c57d2b7b1f1" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" ADD CONSTRAINT "FK_9263386c35b6b242540f9493b00" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_9263386c35b6b242540f9493b00') THEN
+          ALTER TABLE "order_items" ADD CONSTRAINT "FK_9263386c35b6b242540f9493b00" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "products" ADD CONSTRAINT "FK_176b502c5ebd6e72cafbd9d6f70" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_176b502c5ebd6e72cafbd9d6f70') THEN
+          ALTER TABLE "products" ADD CONSTRAINT "FK_176b502c5ebd6e72cafbd9d6f70" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
     await queryRunner.query(
-      `ALTER TABLE "receipts" ADD CONSTRAINT "FK_9545ae8fc5f7714cd8a807dd937" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+      `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_9545ae8fc5f7714cd8a807dd937') THEN
+          ALTER TABLE "receipts" ADD CONSTRAINT "FK_9545ae8fc5f7714cd8a807dd937" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+        END IF;
+      END$$;`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "receipts" DROP CONSTRAINT "FK_9545ae8fc5f7714cd8a807dd937"`,
+      `ALTER TABLE "receipts" DROP CONSTRAINT IF EXISTS "FK_9545ae8fc5f7714cd8a807dd937"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "products" DROP CONSTRAINT "FK_176b502c5ebd6e72cafbd9d6f70"`,
+      `ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "FK_176b502c5ebd6e72cafbd9d6f70"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" DROP CONSTRAINT "FK_9263386c35b6b242540f9493b00"`,
+      `ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_9263386c35b6b242540f9493b00"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "order_items" DROP CONSTRAINT "FK_145532db85752b29c57d2b7b1f1"`,
+      `ALTER TABLE "order_items" DROP CONSTRAINT IF EXISTS "FK_145532db85752b29c57d2b7b1f1"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "orders" DROP CONSTRAINT "FK_5ac3048b290562976746002e49f"`,
+      `ALTER TABLE "orders" DROP CONSTRAINT IF EXISTS "FK_5ac3048b290562976746002e49f"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "recipients" DROP CONSTRAINT "FK_6157e8b6ba4e6e3089616481fe2"`,
+      `ALTER TABLE "recipients" DROP CONSTRAINT IF EXISTS "FK_6157e8b6ba4e6e3089616481fe2"`,
     );
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_9545ae8fc5f7714cd8a807dd93"`,
+      `DROP INDEX IF EXISTS "public"."IDX_9545ae8fc5f7714cd8a807dd93"`,
     );
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_c4c2c9f6e041e6680df88dd121"`,
+      `DROP INDEX IF EXISTS "public"."IDX_c4c2c9f6e041e6680df88dd121"`,
     );
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_5ac3048b290562976746002e49"`,
+      `DROP INDEX IF EXISTS "public"."IDX_5ac3048b290562976746002e49"`,
     );
     await queryRunner.query(
-      `DROP INDEX "public"."IDX_c884e321f927d5b86aac7c8f9e"`,
+      `DROP INDEX IF EXISTS "public"."IDX_c884e321f927d5b86aac7c8f9e"`,
     );
     await queryRunner.query(`ALTER TABLE "receipts" DROP COLUMN "status"`);
-    await queryRunner.query(`DROP TYPE "public"."receipts_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."receipts_status_enum"`);
     await queryRunner.query(
       `ALTER TABLE "receipts" ADD "status" character varying(20) NOT NULL DEFAULT 'generated'`,
     );
@@ -167,7 +228,7 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `ALTER TABLE "users" ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP`,
     );
     await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "currency"`);
-    await queryRunner.query(`DROP TYPE "public"."products_currency_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."products_currency_enum"`);
     await queryRunner.query(
       `ALTER TABLE "products" ADD "currency" character varying(3) NOT NULL DEFAULT 'UAH'`,
     );
@@ -175,7 +236,7 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `ALTER TABLE "products" ALTER COLUMN "purchase_price_cents" SET DEFAULT '0'`,
     );
     await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "status"`);
-    await queryRunner.query(`DROP TYPE "public"."orders_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."orders_status_enum"`);
     await queryRunner.query(
       `ALTER TABLE "orders" ADD "status" character varying(20) NOT NULL DEFAULT 'draft'`,
     );

@@ -21,6 +21,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -32,24 +33,26 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       ...prev,
       [name]: value
     }));
+    if (errorMessage) setErrorMessage(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.email.trim() || !formData.password.trim()) {
-      toast.error(t('errors.requiredFieldMissing'));
+      setErrorMessage(t('errors.requiredFieldMissing'));
       return;
     }
 
     setIsLoading(true);
     try {
+      setErrorMessage(null);
       await login(formData.email, formData.password);
       toast.success(t('auth.loginSuccess') || 'Successfully logged in!');
       onClose();
       setFormData({ email: '', password: '' });
     } catch (error: any) {
-      toast.error(error.response?.data?.message || t('errors.invalidCredentials'));
+      setErrorMessage(error.response?.data?.message || t('errors.invalidCredentials'));
     } finally {
       setIsLoading(false);
     }
@@ -67,6 +70,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       title={t('auth.loginTitle')}
       size="sm"
     >
+      {errorMessage && (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+          {errorMessage}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Email */}
         <div>

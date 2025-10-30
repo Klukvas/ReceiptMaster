@@ -29,11 +29,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear token and redirect to login
+    const status = error.response?.status;
+    const url = error.config?.url || '';
+    const isPublicEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+    if (status === 401 && !isPublicEndpoint) {
+      // Clear token and redirect to landing
+      // Remove token from cookie (and localStorage for safety)
+      document.cookie = 'auth_token=; Max-Age=0; path=/; SameSite=Lax';
       localStorage.removeItem('auth_token');
       delete api.defaults.headers.common['Authorization'];
-      window.location.href = '/login';
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
