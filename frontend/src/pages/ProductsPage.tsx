@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Edit, Trash2, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { Edit, Trash2, AlertCircle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { productsApi, formatCurrency, type Product } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { Pagination } from '../components/ui/Pagination';
 import { ProductForm } from '../components/products/ProductForm';
+import { ProductSearchBar } from '../components/products/ProductSearchBar';
 import { DeleteConfirmation } from '../components/common/DeleteConfirmation';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -16,31 +18,104 @@ export const ProductsPage = () => {
     product: Product | null;
   }>({ isOpen: false, product: null });
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [sortBy, setSortBy] = useState<'quantity' | null>(null);
+  const [sortBy, setSortBy] = useState<'name' | 'purchase_price_cents' | 'sale_price_cents' | 'quantity' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    // Load from localStorage or use default
+    const saved = localStorage.getItem('productsItemsPerPage');
+    return saved ? Number(saved) : 10;
+  });
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
+  // Save itemsPerPage to localStorage when it changes
+  React.useEffect(() => {
+    localStorage.setItem('productsItemsPerPage', itemsPerPage.toString());
+  }, [itemsPerPage]);
+
+  // When search query or itemsPerPage changes, reset to page 1
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, itemsPerPage]);
+
+  // Determine if we should use server-side pagination or client-side filtering
+  const hasSearch = searchQuery.trim().length > 0;
+  
+  // If searching, load all products for client-side filtering
+  // Otherwise, use server-side pagination
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => productsApi.getAll({ limit: 100 }),
+    queryKey: ['products', hasSearch ? 'all' : currentPage, itemsPerPage],
+    queryFn: () => {
+      if (hasSearch) {
+        // Load all products for client-side search
+        return productsApi.getAll({ limit: 1000 });
+      } else {
+        // Use server-side pagination
+        const offset = (currentPage - 1) * itemsPerPage;
+        return productsApi.getAll({ limit: itemsPerPage, offset });
+      }
+    },
   });
 
-  // Sort products by quantity
-  const sortedProducts = useMemo(() => {
+  // Filter and sort products
+  const filteredAndSortedProducts = useMemo(() => {
     if (!productsData?.data.data) return [];
     
-    if (!sortBy) return productsData.data.data;
+    let filtered = productsData.data.data;
     
-    return [...productsData.data.data].sort((a, b) => {
-      if (sortBy === 'quantity') {
-        return sortOrder === 'asc' ? a.quantity - b.quantity : b.quantity - a.quantity;
+    // Apply search filter (only when searching)
+    if (hasSearch) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((product) =>
+        product.name.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply sorting
+    if (!sortBy) return filtered;
+    
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'purchase_price_cents':
+          comparison = a.purchase_price_cents - b.purchase_price_cents;
+          break;
+        case 'sale_price_cents':
+          comparison = a.sale_price_cents - b.sale_price_cents;
+          break;
+        case 'quantity':
+          comparison = a.quantity - b.quantity;
+          break;
+        default:
+          return 0;
       }
-      return 0;
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [productsData?.data.data, sortBy, sortOrder]);
+  }, [productsData?.data.data, searchQuery, hasSearch, sortBy, sortOrder]);
 
-  const handleSort = (column: 'quantity') => {
+  // Calculate pagination for filtered results (when searching)
+  const totalItems = hasSearch 
+    ? filteredAndSortedProducts.length 
+    : (productsData?.data.total || 0);
+  
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  
+  // When searching, paginate the filtered results on client-side
+  const paginatedProducts = hasSearch
+    ? filteredAndSortedProducts.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      )
+    : filteredAndSortedProducts;
+
+  const handleSort = (column: 'name' | 'purchase_price_cents' | 'sale_price_cents' | 'quantity') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -135,19 +210,71 @@ export const ProductsPage = () => {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <ProductSearchBar
+        searchQuery={searchQuery}
+        onSearchChange={(query) => {
+          setSearchQuery(query);
+          setCurrentPage(1); // Reset to first page when search changes
+        }}
+        resultsCount={hasSearch ? filteredAndSortedProducts.length : totalItems}
+      />
+
       <Card>
         <div className="overflow-x-auto shadow-sm rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  {t('products.productName')}
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
+                  >
+                    <span>{t('products.productName')}</span>
+                    {sortBy === 'name' ? (
+                      sortOrder === 'asc' ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  {t('products.purchasePrice')}
+                  <button
+                    onClick={() => handleSort('purchase_price_cents')}
+                    className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
+                  >
+                    <span>{t('products.purchasePrice')}</span>
+                    {sortBy === 'purchase_price_cents' ? (
+                      sortOrder === 'asc' ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  {t('products.salePrice')}
+                  <button
+                    onClick={() => handleSort('sale_price_cents')}
+                    className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
+                  >
+                    <span>{t('products.salePrice')}</span>
+                    {sortBy === 'sale_price_cents' ? (
+                      sortOrder === 'asc' ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   <button
@@ -162,7 +289,7 @@ export const ProductsPage = () => {
                         <ChevronDown className="w-4 h-4" />
                       )
                     ) : (
-                      <div className="w-4 h-4" />
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
                     )}
                   </button>
                 </th>
@@ -175,7 +302,16 @@ export const ProductsPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {sortedProducts.map((product, index) => (
+              {paginatedProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="text-gray-500 dark:text-gray-400">
+                      {hasSearch ? t('products.noProductsFound') : t('products.noProducts')}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginatedProducts.map((product, index) => (
                 <tr 
                   key={product.id} 
                   className={`
@@ -225,11 +361,27 @@ export const ProductsPage = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </Card>
+
+      {/* Pagination */}
+      {totalItems > 0 && (
+        <Card>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemsPerPageOptions={[10, 20, 50, 100]}
+          />
+        </Card>
+      )}
 
       {showForm && (
         <ProductForm

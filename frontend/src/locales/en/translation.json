@@ -21,7 +21,10 @@
     "no": "No",
     "ok": "OK",
     "item": "Item",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "showing": "Showing",
+    "of": "of",
+    "itemsPerPage": "Items per page"
   },
   "auth": {
     "login": "Login",
@@ -129,7 +132,11 @@
     "salePriceMustBePositive": "Sale price must be a positive number",
     "quantityMustBeNonNegative": "Quantity must be a non-negative number",
     "deleteProduct": "Delete Product",
-    "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone."
+    "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone.",
+    "searchPlaceholder": "Search products by name, price, quantity, or currency...",
+    "noProductsFound": "No products found matching your search",
+    "productFound": "product found",
+    "productsFound": "products found"
   },
   "recipients": {
     "title": "Recipients",
