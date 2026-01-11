@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Edit, Trash2, AlertCircle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { productsApi, formatCurrency, type Product } from '../lib/api';
@@ -21,6 +21,7 @@ export const ProductsPage = () => {
   const [sortBy, setSortBy] = useState<'name' | 'purchase_price_cents' | 'sale_price_cents' | 'quantity' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
     // Load from localStorage or use default
@@ -31,33 +32,28 @@ export const ProductsPage = () => {
   const { t } = useTranslation();
 
   // Save itemsPerPage to localStorage when it changes
-  React.useEffect(() => {
+  useEffect(() => {
     localStorage.setItem('productsItemsPerPage', itemsPerPage.toString());
   }, [itemsPerPage]);
 
-  // When search query or itemsPerPage changes, reset to page 1
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, itemsPerPage]);
+  // Debounce search query with 0.4s delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 400);
 
-  // Determine if we should use server-side pagination or client-side filtering
-  const hasSearch = searchQuery.trim().length > 0;
-  
-  // If searching, load all products for client-side filtering
-  // Otherwise, use server-side pagination
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Load all products once for client-side filtering
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', hasSearch ? 'all' : currentPage, itemsPerPage],
-    queryFn: () => {
-      if (hasSearch) {
-        // Load all products for client-side search
-        return productsApi.getAll({ limit: 1000 });
-      } else {
-        // Use server-side pagination
-        const offset = (currentPage - 1) * itemsPerPage;
-        return productsApi.getAll({ limit: itemsPerPage, offset });
-      }
-    },
+    queryKey: ['products', 'all'],
+    queryFn: () => productsApi.getAll({ limit: 100 }),
   });
+
+  // Determine if we have an active search
+  const hasSearch = debouncedSearchQuery.trim().length > 0;
 
   // Filter and sort products
   const filteredAndSortedProducts = useMemo(() => {
@@ -67,7 +63,7 @@ export const ProductsPage = () => {
     
     // Apply search filter (only when searching)
     if (hasSearch) {
-      const query = searchQuery.toLowerCase().trim();
+      const query = debouncedSearchQuery.toLowerCase().trim();
       filtered = filtered.filter((product) =>
         product.name.toLowerCase().includes(query)
       );
@@ -98,22 +94,28 @@ export const ProductsPage = () => {
       
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [productsData?.data.data, searchQuery, hasSearch, sortBy, sortOrder]);
+  }, [productsData?.data.data, debouncedSearchQuery, hasSearch, sortBy, sortOrder]);
 
-  // Calculate pagination for filtered results (when searching)
-  const totalItems = hasSearch 
-    ? filteredAndSortedProducts.length 
-    : (productsData?.data.total || 0);
-  
+  // Calculate pagination for filtered results (always client-side now)
+  const totalItems = filteredAndSortedProducts.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // When searching, paginate the filtered results on client-side
-  const paginatedProducts = hasSearch
-    ? filteredAndSortedProducts.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-      )
-    : filteredAndSortedProducts;
+  // Ensure currentPage is valid when totalPages changes
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+  
+  // Paginate the filtered results on client-side
+  const paginatedProducts = filteredAndSortedProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const handleSort = (column: 'name' | 'purchase_price_cents' | 'sale_price_cents' | 'quantity') => {
     if (sortBy === column) {
@@ -213,11 +215,9 @@ export const ProductsPage = () => {
       {/* Search Bar */}
       <ProductSearchBar
         searchQuery={searchQuery}
-        onSearchChange={(query) => {
-          setSearchQuery(query);
-          setCurrentPage(1); // Reset to first page when search changes
-        }}
-        resultsCount={hasSearch ? filteredAndSortedProducts.length : totalItems}
+        onSearchChange={handleSearchChange}
+        resultsCount={totalItems}
+        showResultsCount={hasSearch}
       />
 
       <Card>

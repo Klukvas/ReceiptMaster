@@ -10,7 +10,7 @@ interface ProductSearchBarProps {
   showResultsCount?: boolean;
 }
 
-export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
+export const ProductSearchBar = React.memo<ProductSearchBarProps>(({
   searchQuery,
   onSearchChange,
   resultsCount,
@@ -50,5 +50,7 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
       )}
     </Card>
   );
-};
+});
+
+ProductSearchBar.displayName = 'ProductSearchBar';
 
