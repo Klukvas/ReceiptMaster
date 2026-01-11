@@ -141,65 +141,72 @@ export const LandingPage: React.FC = () => {
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <div className="relative">
-                <img
-                  src="/image.png"
-                  alt="ReceiptMaster Logo"
-                  className="h-10 w-10 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300 rounded-full" />
-              </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
-                ReceiptMaster
-              </h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <LanguageSwitcher />
-              {isAuthenticated ? (
-                <>
-                  <div className="text-sm text-gray-600 dark:text-gray-300 hidden md:block">
-                    {t('landing.welcome')}, <span className="font-semibold">{user?.email?.split('@')[0]}!</span>
+          {/* Mobile: Two-row centered layout, Desktop: Single-row left-right layout */}
+          <div className="py-3 md:py-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center space-y-2 md:space-y-0">
+              {/* Logo and Title */}
+              <div className="flex justify-center md:justify-start items-center">
+                <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                  <div className="relative">
+                    <img
+                      src="/image.png"
+                      alt="ReceiptMaster Logo"
+                      className="h-10 w-10 object-contain transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300 rounded-full" />
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="hover:scale-105 transition-transform duration-200"
-                  >
-                    {t('landing.goToDashboard')}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={logout}
-                    className="hover:scale-105 transition-transform duration-200"
-                  >
-                    {t('auth.logout')}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={openLoginModal}
-                    className="hover:scale-105 transition-transform duration-200"
-                  >
-                    {t('auth.login')}
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={openRegisterModal}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 hover:scale-105 transition-all duration-200 shadow-lg shadow-blue-500/50"
-                  >
-                    {t('auth.register')}
-                  </Button>
-                </>
-              )}
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
+                    ReceiptMaster
+                  </h1>
+                </div>
+              </div>
+              
+              {/* All buttons */}
+              <div className="flex justify-center md:justify-end items-center space-x-2">
+                <ThemeToggle />
+                <LanguageSwitcher />
+                {isAuthenticated ? (
+                  <>
+                    <div className="text-sm text-gray-600 dark:text-gray-300 hidden lg:inline-block">
+                      {t('landing.welcome')}, <span className="font-semibold">{user?.email?.split('@')[0]}!</span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => window.location.href = '/dashboard'}
+                      className="hover:scale-105 transition-transform duration-200"
+                    >
+                      {t('landing.goToDashboard')}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={logout}
+                      className="hover:scale-105 transition-transform duration-200"
+                    >
+                      {t('auth.logout')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={openLoginModal}
+                      className="hover:scale-105 transition-transform duration-200"
+                    >
+                      {t('auth.login')}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={openRegisterModal}
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 hover:scale-105 transition-all duration-200 shadow-lg shadow-blue-500/50"
+                    >
+                      {t('auth.register')}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
