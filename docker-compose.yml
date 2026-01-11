@@ -24,7 +24,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.playwright
     container_name: market_backend_dev
     environment:
       - NODE_ENV=development
