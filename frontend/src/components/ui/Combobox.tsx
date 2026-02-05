@@ -36,6 +36,16 @@ export const Combobox = ({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Фильтруем опции по поисковому запросу
   const filteredOptions = options.filter(option => {
@@ -56,7 +66,10 @@ export const Combobox = ({
         setSearchTerm('');
         setHighlightedIndex(-1);
         // Небольшая задержка для корректного рендеринга инпута
-        setTimeout(() => {
+        if (focusTimeoutRef.current) {
+          clearTimeout(focusTimeoutRef.current);
+        }
+        focusTimeoutRef.current = setTimeout(() => {
           const searchInput = inputRef.current?.querySelector('input');
           if (searchInput) {
             searchInput.focus();
@@ -74,7 +87,10 @@ export const Combobox = ({
       setIsOpen(true);
       setSearchTerm('');
       setHighlightedIndex(-1);
-      setTimeout(() => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+      focusTimeoutRef.current = setTimeout(() => {
         const searchInput = inputRef.current?.querySelector('input');
         if (searchInput) {
           searchInput.focus();

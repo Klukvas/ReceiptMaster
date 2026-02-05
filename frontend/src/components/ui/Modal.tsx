@@ -49,10 +49,10 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby={title ? 'modal-title' : undefined}>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 transition-opacity"
+        className="fixed inset-0 bg-black/50 animate-modal-backdrop"
         onClick={onClose}
       />
       
@@ -60,7 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className={clsx(
-            'relative w-full transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-xl transition-all',
+            'relative w-full transform overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-xl animate-modal-content',
             sizeClasses[size]
           )}
           onClick={(e) => e.stopPropagation()}
@@ -69,14 +69,16 @@ export const Modal: React.FC<ModalProps> = ({
           {(title || showCloseButton) && (
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
               {title && (
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">
                   {title}
-                </h3>
+                </h2>
               )}
               {showCloseButton && (
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="rounded-md p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="rounded-lg p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>

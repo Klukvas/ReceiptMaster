@@ -212,4 +212,50 @@ export class SettingsService {
       await this.userSettingsRepository.save(newSettings);
     }
   }
+
+  /**
+   * Get all PDF-related settings in a single database query
+   * This optimizes the N+1 query problem when generating receipts
+   */
+  async getAllPdfSettings(userId: string): Promise<{
+    companyInfo: {
+      companyName: string;
+      companyAddress?: string;
+      companyEmail?: string;
+      companyPhone?: string;
+      companyTaxId?: string;
+      companyIban?: string;
+      companySwift?: string;
+      companyWebsite?: string;
+      companyTagline?: string;
+    };
+    templateId: string;
+    receiptTitle: string;
+    templateLanguage: string;
+    footerTitle?: string;
+    footerSubtitle?: string;
+  }> {
+    const settings = await this.userSettingsRepository.findOne({
+      where: { userId }
+    });
+
+    return {
+      companyInfo: {
+        companyName: settings?.companyName || '',
+        companyAddress: settings?.companyAddress || undefined,
+        companyEmail: settings?.companyEmail || undefined,
+        companyPhone: settings?.companyPhone || undefined,
+        companyTaxId: settings?.companyTaxId || undefined,
+        companyIban: settings?.companyIban || undefined,
+        companySwift: settings?.companySwift || undefined,
+        companyWebsite: settings?.companyWebsite || undefined,
+        companyTagline: settings?.companyTagline || undefined,
+      },
+      templateId: settings?.templateId || 'standard',
+      receiptTitle: settings?.receiptTitle || 'Invoice',
+      templateLanguage: settings?.templateLanguage || 'en',
+      footerTitle: settings?.footerText || undefined,
+      footerSubtitle: settings?.subFooterText || undefined,
+    };
+  }
 }

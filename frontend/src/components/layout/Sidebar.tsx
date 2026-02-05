@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Package, Users, ShoppingCart, Home, LogOut, X, Settings, BarChart3, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Package, Users, ShoppingCart, Home, LogOut, X, Settings, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../hooks/useAuth';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -19,7 +19,6 @@ interface SidebarProps {
     { nameKey: 'navigation.recipients', href: '/recipients', icon: Users },
     { nameKey: 'navigation.orders', href: '/orders', icon: ShoppingCart },
     { nameKey: 'navigation.analytics', href: '/analytics', icon: BarChart3 },
-    { nameKey: 'navigation.profile', href: '/profile', icon: User },
     { nameKey: 'navigation.settings', href: '/settings', icon: Settings },
   ];
 
@@ -113,18 +112,18 @@ export const Sidebar = ({ isOpen, isCollapsed, onToggle, onClose }: SidebarProps
          </div>
 
         {/* 3-block layout */}
-        <div className="grid grid-rows-[auto,1fr,auto] h-[calc(100vh-4rem)] min-h-0">
+        <div className="grid grid-rows-[auto,1fr,auto] h-[calc(100vh-4rem)] min-h-0 overflow-hidden">
            {/* 1) User profile (top) */}
            <div
              className={clsx(
-               'row-start-1 border-gray-200 dark:border-gray-700 py-3 transition-all duration-300 ease-in-out',
+               'row-start-1 border-gray-200 dark:border-gray-700 py-3 overflow-hidden transition-all duration-300 ease-in-out',
                isCollapsed ? 'px-2' : 'px-4'
              )}
            >
              <Link
                to="/profile"
                onClick={onClose}
-               className={clsx('flex items-center transition-all duration-300 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 -m-2', isCollapsed ? 'justify-center' : 'gap-3')}
+               className={clsx('flex items-center overflow-hidden transition-all duration-300 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 -m-2', isCollapsed ? 'justify-center' : 'gap-3')}
              >
                <div className="w-9 h-9 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-sm font-medium text-gray-700 dark:text-gray-200 flex-shrink-0 transition-all duration-300 ease-in-out hover:scale-105">
                  {initials || '🧑'}
@@ -133,11 +132,11 @@ export const Sidebar = ({ isOpen, isCollapsed, onToggle, onClose }: SidebarProps
                {/* Hide details in collapsed */}
                <div
                  className={clsx(
-                   'min-w-0 overflow-hidden transition-all duration-300 ease-in-out',
-                   isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+                   'min-w-0 flex-1 overflow-hidden transition-all duration-300 ease-in-out',
+                   isCollapsed ? 'w-0 opacity-0' : 'opacity-100'
                  )}
                >
-                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate transition-all duration-300 ease-in-out">
+                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate transition-all duration-300 ease-in-out" title={user?.email}>
                    {user?.email}
                  </p>
                </div>

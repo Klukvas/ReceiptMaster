@@ -91,6 +91,8 @@
     "orderCancelled": "Заказ успешно отменен",
     "orderDeleted": "Заказ успешно удален",
     "failedToLoadOrders": "Не удалось загрузить заказы",
+    "loadErrorWarning": "Сервер может быть недоступен или произошла сетевая ошибка.",
+    "ordersNotLoadedTryCreating": "Заказы не загружены. Попробуйте создать новый заказ.",
     "failedToConfirmOrder": "Не удалось подтвердить заказ",
     "failedToCancelOrder": "Не удалось отменить заказ",
     "failedToDeleteOrder": "Не удалось удалить заказ",
@@ -345,7 +347,10 @@
     "totalTurnover": "Общий оборот",
     "revenueDescription": "Чистая прибыль после затрат",
     "turnoverDescription": "Общая сумма продаж",
-    "receipts": "Чеки"
+    "receipts": "Чеки",
+    "addFirstProduct": "Добавьте первый товар",
+    "addFirstRecipient": "Добавьте первого получателя",
+    "createFirstOrder": "Создайте первый заказ"
   },
   "dashboard": {
     "title": "Панель управления",

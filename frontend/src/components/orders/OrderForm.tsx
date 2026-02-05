@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, AlertCircle, Info } from 'lucide-react';
+import { X, Trash2, AlertCircle, Info } from 'lucide-react';
 import { ordersApi, productsApi, recipientsApi, formatCurrency } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -120,7 +120,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
   };
 
   const getProduct = (productId: string) => {
-    return productsData?.data.data.find(p => p.id === productId);
+    return productsData?.data?.data?.find(p => p.id === productId);
   };
 
   const calculateItemTotal = (item: OrderItem) => {
@@ -160,7 +160,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
               {t('orders.recipient')}
             </label>
             <Combobox
-              options={recipientsData?.data.data.map((recipient) => ({
+              options={recipientsData?.data?.data?.map((recipient) => ({
                 value: recipient.id,
                 label: `${recipient.name}${recipient.email ? ` (${recipient.email})` : ''}`,
                 searchText: `${recipient.name} ${recipient.email || ''} ${recipient.phone || ''}`.trim()
@@ -185,7 +185,6 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                 {t('orders.products')}
               </label>
               <Button type="button" size="sm" onClick={addItem}>
-                <Plus className="w-4 h-4 mr-1" />
                 {t('common.add')}
               </Button>
             </div>
@@ -201,7 +200,7 @@ export const OrderForm = ({ onClose }: OrderFormProps) => {
                     <div className="flex items-center space-x-3">
                       <div className="flex-1">
                         <Combobox
-                          options={productsData?.data.data.map((product) => ({
+                          options={productsData?.data?.data?.map((product) => ({
                             value: product.id,
                             label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)} (${product.quantity} шт.)`,
                             searchText: `${product.name}`.trim()

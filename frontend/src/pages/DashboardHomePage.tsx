@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Package, Users, ShoppingCart, Receipt, TrendingUp, DollarSign, Calendar, Plus } from 'lucide-react';
+import { Package, Users, ShoppingCart, Receipt, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productsApi, recipientsApi, ordersApi, receiptsApi, dashboardApi, formatCurrency } from '../lib/api';
 import { Card } from '../components/ui/Card';
@@ -191,7 +191,6 @@ export const DashboardHomePage = () => {
               </p>
               <Link to="/products">
                 <Button>
-                  <Plus className="h-4 w-4 mr-2" />
                   {t('home.addFirstProduct')}
                 </Button>
               </Link>
@@ -232,7 +231,6 @@ export const DashboardHomePage = () => {
               </p>
               <Link to="/recipients">
                 <Button>
-                  <Plus className="h-4 w-4 mr-2" />
                   {t('home.addFirstRecipient')}
                 </Button>
               </Link>
@@ -279,7 +277,6 @@ export const DashboardHomePage = () => {
             </p>
             <Link to="/orders">
               <Button>
-                <Plus className="h-4 w-4 mr-2" />
                 {t('home.createFirstOrder')}
               </Button>
             </Link>

@@ -107,7 +107,8 @@ export const Pagination: React.FC<PaginationProps> = ({
           size="sm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="px-3"
+          className="px-3 disabled:opacity-40"
+          aria-label={t('common.previous')}
         >
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -147,7 +148,8 @@ export const Pagination: React.FC<PaginationProps> = ({
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="px-3"
+          className="px-3 disabled:opacity-40"
+          aria-label={t('common.next')}
         >
           <ChevronRight className="w-4 h-4" />
         </Button>

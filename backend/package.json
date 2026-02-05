@@ -19,6 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "echo 'No E2E tests configured'",
     "create-user": "ts-node src/scripts/create-user.ts",
+    "seed:demo": "ts-node src/scripts/seed-demo-data.ts",
+    "seed:clear": "ts-node src/scripts/seed-demo-data.ts -- --clear",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "yarn typeorm migration:generate -d src/config/ormconfig.ts",
     "migration:run": "yarn typeorm migration:run -d src/config/ormconfig.ts",

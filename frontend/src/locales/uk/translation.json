@@ -86,6 +86,8 @@
     "orderCancelled": "Замовлення успішно скасовано",
     "orderDeleted": "Замовлення успішно видалено",
     "failedToLoadOrders": "Не вдалося завантажити замовлення",
+    "loadErrorWarning": "Сервер може бути недоступний або сталася мережева помилка.",
+    "ordersNotLoadedTryCreating": "Замовлення не завантажено. Спробуйте створити нове замовлення.",
     "failedToConfirmOrder": "Не вдалося підтвердити замовлення",
     "failedToCancelOrder": "Не вдалося скасувати замовлення",
     "failedToDeleteOrder": "Не вдалося видалити замовлення",
@@ -340,7 +342,10 @@
     "totalTurnover": "Загальний оборот",
     "revenueDescription": "Чистий прибуток після витрат",
     "turnoverDescription": "Загальна сума продажів",
-    "receipts": "Чеки"
+    "receipts": "Чеки",
+    "addFirstProduct": "Додайте перший товар",
+    "addFirstRecipient": "Додайте першого отримувача",
+    "createFirstOrder": "Створіть перше замовлення"
   },
   "dashboard": {
     "title": "Панель керування",

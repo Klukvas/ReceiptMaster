@@ -20,6 +20,9 @@ export const envSchema = z.object({
   API_PREFIX: z.string().default("api/v1"),
   API_KEY: z.string().optional(),
 
+  // CORS (comma-separated list of allowed origins)
+  CORS_ORIGINS: z.string().optional(),
+
   // JWT
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default("24h"),
@@ -38,6 +41,8 @@ export const envSchema = z.object({
 
   // Telegram Bot
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_OWNER_USER_ID: z.string().uuid().optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

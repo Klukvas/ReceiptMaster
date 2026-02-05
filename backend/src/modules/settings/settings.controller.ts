@@ -14,8 +14,6 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
-import * as fs from "fs/promises";
-import * as path from "path";
 import { EnvConfig } from "../../config/env.schema";
 import { LogoStorageService } from "../../common/services/logo-storage.service";
 import { SettingsService } from "./services/settings.service";
@@ -106,58 +104,6 @@ export class SettingsController {
     } catch (error) {
       this.logger.error("Failed to retrieve logo from Object Storage:", error);
       return res.status(404).json({ message: "Logo not found" });
-    }
-  }
-
-  @Post("company-name")
-  async updateCompanyName(@Body() body: { companyName: string }) {
-    try {
-      const settingsPath = path.join(
-        process.cwd(),
-        "src",
-        "assets",
-        "settings.json",
-      );
-      const settings = {
-        companyName: body.companyName || "", // Allow empty company name
-        updatedAt: new Date().toISOString(),
-      };
-
-      await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
-
-      return {
-        message: "Company name updated successfully",
-        companyName: settings.companyName,
-      };
-    } catch (error) {
-      throw ApiErrors.INVALID_SETTINGS("company name");
-    }
-  }
-
-  @Get("company-name")
-  async getCompanyName() {
-    try {
-      const settingsPath = path.join(
-        process.cwd(),
-        "src",
-        "assets",
-        "settings.json",
-      );
-
-      try {
-        const settingsData = await fs.readFile(settingsPath, "utf-8");
-        const settings = JSON.parse(settingsData);
-        return {
-          companyName: settings.companyName || "",
-        };
-      } catch {
-        // If settings file doesn't exist, return empty string
-        return {
-          companyName: "",
-        };
-      }
-    } catch (error) {
-      throw ApiErrors.SETTINGS_NOT_FOUND();
     }
   }
 

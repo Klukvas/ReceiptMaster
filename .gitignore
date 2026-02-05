@@ -113,3 +113,43 @@ market_backup_*.sql
 
 # Scripts (use GitHub Actions instead)
 scripts/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+terraform.tfvars
+*.auto.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials.json
+secrets.json
+*.secrets
+.secrets/
+
+# Receipt files (stored locally during development)
+receipts/
+*/receipts/
+*.receipt.pdf
+
+# Database dumps
+*.sql
+!**/init.sql
+
+# Backup files
+*.bak
+*.backup

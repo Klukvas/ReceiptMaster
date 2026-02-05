@@ -7,6 +7,7 @@ import {
   Min,
   IsOptional,
   IsInt,
+  ArrayMinSize,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -48,6 +49,7 @@ export class CreateOrderDto {
     example: [{ productId: "123e4567-e89b-12d3-a456-426614174000", qty: 2 }],
   })
   @IsArray()
+  @ArrayMinSize(1, { message: "Order must contain at least one item" })
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];

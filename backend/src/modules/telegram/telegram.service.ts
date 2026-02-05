@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import {
+  Injectable,
+  BadRequestException,
+  Logger,
+  OnModuleDestroy,
+} from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
@@ -15,12 +20,21 @@ import {
 } from "./interfaces/telegram.interface";
 import { UserSession, UserState } from "./interfaces/cart.interface";
 
+// Session expiration time (4 hours in milliseconds)
+const SESSION_EXPIRATION_MS = 4 * 60 * 60 * 1000;
+// Maximum number of sessions to keep in memory
+const MAX_SESSIONS = 10000;
+// Cleanup interval (every 30 minutes)
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+
 @Injectable()
-export class TelegramService {
+export class TelegramService implements OnModuleDestroy {
   private readonly logger = new Logger(TelegramService.name);
   private readonly botToken: string;
+  private readonly botOwnerUserId: string;
   private readonly http: AxiosInstance;
   private userSessions: Map<number, UserSession> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(
     @InjectRepository(Recipient) private recipientsRepo: Repository<Recipient>,
@@ -32,6 +46,14 @@ export class TelegramService {
     this.botToken = process.env.TELEGRAM_BOT_TOKEN || "";
     if (!this.botToken) {
       throw ApiErrors.INTERNAL_SERVER_ERROR("TELEGRAM_BOT_TOKEN is not set");
+    }
+
+    // Bot owner user ID - the merchant whose products/orders the bot manages
+    this.botOwnerUserId = process.env.TELEGRAM_BOT_OWNER_USER_ID || "";
+    if (!this.botOwnerUserId) {
+      this.logger.warn(
+        "TELEGRAM_BOT_OWNER_USER_ID is not set. Telegram bot will not function properly.",
+      );
     }
     this.http = axios.create({
       baseURL: `https://api.telegram.org/bot${this.botToken}`,
@@ -51,6 +73,61 @@ export class TelegramService {
 
     // Create idempotency table for update_id if it doesn't exist (Postgres)
     void this.ensureUpdatesTable();
+
+    // Start periodic session cleanup to prevent memory leaks
+    this.startSessionCleanup();
+  }
+
+  /** Cleanup expired sessions to prevent memory leaks */
+  private startSessionCleanup() {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, CLEANUP_INTERVAL_MS);
+  }
+
+  /** Remove sessions that haven't been updated recently */
+  private cleanupExpiredSessions() {
+    const now = Date.now();
+    let expiredCount = 0;
+
+    for (const [userId, session] of this.userSessions.entries()) {
+      const lastActivity = session.cart.updatedAt.getTime();
+      if (now - lastActivity > SESSION_EXPIRATION_MS) {
+        this.userSessions.delete(userId);
+        expiredCount++;
+      }
+    }
+
+    // If still over limit, remove oldest sessions
+    if (this.userSessions.size > MAX_SESSIONS) {
+      const sessionsArray = Array.from(this.userSessions.entries());
+      sessionsArray.sort(
+        (a, b) => a[1].cart.updatedAt.getTime() - b[1].cart.updatedAt.getTime(),
+      );
+
+      const toRemove = sessionsArray.slice(
+        0,
+        this.userSessions.size - MAX_SESSIONS,
+      );
+      for (const [userId] of toRemove) {
+        this.userSessions.delete(userId);
+        expiredCount++;
+      }
+    }
+
+    if (expiredCount > 0) {
+      this.logger.log(
+        `Cleaned up ${expiredCount} expired sessions. Active: ${this.userSessions.size}`,
+      );
+    }
+  }
+
+  /** Cleanup on module destroy */
+  onModuleDestroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   /** Idempotency: table of processed update_id */
@@ -292,14 +369,21 @@ export class TelegramService {
 
   /** Create order from Telegram with transaction and locking */
   async createOrderFromTelegram(dto: CreateTelegramOrderDto): Promise<Order> {
+    if (!this.botOwnerUserId) {
+      throw ApiErrors.INTERNAL_SERVER_ERROR(
+        "Telegram bot is not configured properly (missing TELEGRAM_BOT_OWNER_USER_ID)",
+      );
+    }
+
     return this.dataSource.transaction(async (manager: EntityManager) => {
-      // 1) Recipient (find-or-create) by telegram_user_id
+      // 1) Recipient (find-or-create) by telegram_user_id, linked to bot owner
       const recipient = await this.findOrCreateRecipient(manager, dto.user);
 
       // 2) Load products + pessimistic locking to avoid inventory race conditions
+      // Only load products belonging to the bot owner
       const productIds = dto.items.map((i) => i.productId);
       const products = await manager.getRepository(Product).find({
-        where: { id: In(productIds) },
+        where: { id: In(productIds), user_id: this.botOwnerUserId },
         lock: { mode: "pessimistic_write" },
       });
       if (products.length !== productIds.length) {
@@ -330,14 +414,15 @@ export class TelegramService {
         subtotalCents += p.sale_price_cents * it.qty;
       }
 
-      // 4) Create order (MVP: immediately CONFIRMED; for payment — make RESERVED/WAITING_PAYMENT)
+      // 4) Create order linked to bot owner
       const order = manager.getRepository(Order).create({
         recipient_id: recipient.id,
-        status: OrderStatus.CONFIRMED, // or DRAFT → then CONFIRMED
+        status: OrderStatus.CONFIRMED,
         currency,
         subtotal_cents: subtotalCents,
         total_cents: subtotalCents,
-        created_by: "telegram_bot", // fix enum in model
+        created_by: "telegram_bot",
+        user_id: this.botOwnerUserId,
       });
       const savedOrder = await manager.getRepository(Order).save(order);
 
@@ -353,6 +438,7 @@ export class TelegramService {
           unit_price_cents: p.sale_price_cents,
           qty: it.qty,
           line_total_cents: lineTotal,
+          user_id: this.botOwnerUserId,
         });
         await manager.getRepository(OrderItem).save(oi);
 
@@ -374,8 +460,12 @@ export class TelegramService {
       phone?: string;
     },
   ): Promise<Recipient> {
+    // Find recipient by telegram_user_id and bot owner
     let recipient = await manager.getRepository(Recipient).findOne({
-      where: { telegram_user_id: user.telegram_user_id },
+      where: {
+        telegram_user_id: user.telegram_user_id,
+        user_id: this.botOwnerUserId,
+      },
     });
 
     if (recipient) {
@@ -404,6 +494,7 @@ export class TelegramService {
       ? nameParts.join(" ")
       : `Telegram User ${user.telegram_user_id}`;
 
+    // Create recipient linked to bot owner
     recipient = manager.getRepository(Recipient).create({
       name,
       telegram_user_id: user.telegram_user_id,
@@ -411,6 +502,7 @@ export class TelegramService {
       first_name: user.first_name || null,
       last_name: user.last_name || null,
       phone: user.phone || null,
+      user_id: this.botOwnerUserId,
     });
     return manager.getRepository(Recipient).save(recipient);
   }
@@ -530,7 +622,7 @@ export class TelegramService {
 
     for (const item of session.cart.items) {
       const product = await this.productsRepo.findOne({
-        where: { id: item.productId },
+        where: { id: item.productId, user_id: this.botOwnerUserId },
       });
 
       if (!product) {
@@ -623,9 +715,9 @@ export class TelegramService {
       const userId = callbackQuery.from.id;
       this.getOrCreateUserSession(userId);
 
-      // Get product information
+      // Get product information (only from bot owner's products)
       const product = await this.productsRepo.findOne({
-        where: { id: productId },
+        where: { id: productId, user_id: this.botOwnerUserId },
       });
 
       if (!product) {
@@ -711,9 +803,9 @@ export class TelegramService {
     }
 
     try {
-      // Get product information
+      // Get product information (only from bot owner's products)
       const product = await this.productsRepo.findOne({
-        where: { id: session.pendingProductId },
+        where: { id: session.pendingProductId, user_id: this.botOwnerUserId },
       });
 
       if (!product) {
@@ -849,11 +941,11 @@ export class TelegramService {
         return;
       }
 
-      // Check product availability before creating order
+      // Check product availability before creating order (filter by bot owner)
       const unavailableItems = [];
       for (const item of session.cart.items) {
         const product = await this.productsRepo.findOne({
-          where: { id: item.productId },
+          where: { id: item.productId, user_id: this.botOwnerUserId },
         });
 
         if (!product) {
@@ -938,10 +1030,18 @@ export class TelegramService {
 
   private async sendProductsList(chatId: number) {
     try {
-      // Get all products from database
+      if (!this.botOwnerUserId) {
+        await this.sendMessage(
+          chatId,
+          "❌ Бот не настроен. Обратитесь к администратору.",
+        );
+        return;
+      }
+
+      // Get products belonging to the bot owner
       const products = await this.productsRepo.find({
         order: { name: "ASC" },
-        where: { quantity: MoreThan(0) },
+        where: { quantity: MoreThan(0), user_id: this.botOwnerUserId },
       });
 
       if (products.length === 0) {

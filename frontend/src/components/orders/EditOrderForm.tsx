@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, Info } from 'lucide-react';
+import { X, Trash2, Info } from 'lucide-react';
 import { ordersApi, productsApi, recipientsApi, formatCurrency, type Order } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -86,7 +86,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   };
 
   const getProduct = (productId: string) => {
-    return productsData?.data.data.find(p => p.id === productId);
+    return productsData?.data?.data?.find(p => p.id === productId);
   };
 
   const calculateItemTotal = (item: OrderItem) => {
@@ -116,7 +116,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
               {t('orders.recipient')}
             </label>
             <Combobox
-              options={recipientsData?.data.data.map((recipient) => ({
+              options={recipientsData?.data?.data?.map((recipient) => ({
                 value: recipient.id,
                 label: `${recipient.name}${recipient.email ? ` (${recipient.email})` : ''}`,
                 searchText: `${recipient.name} ${recipient.email || ''} ${recipient.phone || ''}`.trim()
@@ -135,7 +135,6 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                 {t('orders.products')}
               </label>
               <Button type="button" size="sm" onClick={addItem}>
-                <Plus className="w-4 h-4 mr-1" />
                 {t('common.add')}
               </Button>
             </div>
@@ -145,7 +144,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                 <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                   <div className="flex-1">
                     <Combobox
-                      options={productsData?.data.data.map((product) => ({
+                      options={productsData?.data?.data?.map((product) => ({
                         value: product.id,
                         label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
                         searchText: `${product.name}`.trim()
@@ -167,71 +166,75 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       placeholder={t('orders.quantity')}
                     />
                   </div>
-                  {getProduct(item.productId) && (
-                    <div className="w-28">
-                      <div className="relative group">
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={priceInputs[index] !== undefined ? priceInputs[index] : (item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '')}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
-                            setPriceInputs(prev => ({ ...prev, [index]: value }));
-                            if (value === '' || value === '.' || value === '0.') {
-                              updateItem(index, 'unitPriceCents', undefined);
-                            } else if (value === '0') {
-                              updateItem(index, 'unitPriceCents', undefined);
-                            } else {
-                              const numValue = parseFloat(value);
-                              if (!isNaN(numValue) && numValue >= 0) {
+                  {(() => {
+                    const product = getProduct(item.productId);
+                    if (!product) return null;
+                    return (
+                      <div className="w-28">
+                        <div className="relative group">
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={priceInputs[index] !== undefined ? priceInputs[index] : (item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '')}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                              setPriceInputs(prev => ({ ...prev, [index]: value }));
+                              if (value === '' || value === '.' || value === '0.') {
+                                updateItem(index, 'unitPriceCents', undefined);
+                              } else if (value === '0') {
+                                updateItem(index, 'unitPriceCents', undefined);
+                              } else {
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0) {
+                                  const cents = Math.round(numValue * 100);
+                                  updateItem(index, 'unitPriceCents', cents);
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                              if (value && !isNaN(parseFloat(value)) && parseFloat(value) > 0) {
+                                const numValue = parseFloat(value);
                                 const cents = Math.round(numValue * 100);
                                 updateItem(index, 'unitPriceCents', cents);
+                                setPriceInputs(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[index];
+                                  return newState;
+                                });
+                              } else if (!value || value === '.') {
+                                updateItem(index, 'unitPriceCents', undefined);
+                                setPriceInputs(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[index];
+                                  return newState;
+                                });
                               }
-                            }
-                          }}
-                          onBlur={(e) => {
-                            const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
-                            if (value && !isNaN(parseFloat(value)) && parseFloat(value) > 0) {
-                              const numValue = parseFloat(value);
-                              const cents = Math.round(numValue * 100);
-                              updateItem(index, 'unitPriceCents', cents);
-                              setPriceInputs(prev => {
-                                const newState = { ...prev };
-                                delete newState[index];
-                                return newState;
-                              });
-                            } else if (!value || value === '.') {
-                              updateItem(index, 'unitPriceCents', undefined);
-                              setPriceInputs(prev => {
-                                const newState = { ...prev };
-                                delete newState[index];
-                                return newState;
-                              });
-                            }
-                          }}
-                          onFocus={() => {
-                            const currentValue = item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '';
-                            if (priceInputs[index] === undefined) {
-                              setPriceInputs(prev => ({ ...prev, [index]: currentValue }));
-                            }
-                          }}
-                          placeholder={formatCurrency(getProduct(item.productId)!.sale_price_cents, getProduct(item.productId)!.currency).replace(/[^\d.,]/g, '')}
-                          title={`${t('orders.customPriceTooltip')}. ${t('orders.customPriceDefault')}: ${formatCurrency(getProduct(item.productId)!.sale_price_cents, getProduct(item.productId)!.currency)}`}
-                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                        <Info 
-                          className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors pointer-events-none" 
-                        />
-                        {/* Custom tooltip */}
-                        <div className="absolute z-50 left-0 bottom-full mb-2 hidden group-hover:block px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
-                          {t('orders.customPriceTooltip')}
-                          <br />
-                          <span className="text-gray-300">{t('orders.customPriceDefault')}: {formatCurrency(getProduct(item.productId)!.sale_price_cents, getProduct(item.productId)!.currency)}</span>
-                          <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                            }}
+                            onFocus={() => {
+                              const currentValue = item.unitPriceCents !== undefined ? String(item.unitPriceCents / 100) : '';
+                              if (priceInputs[index] === undefined) {
+                                setPriceInputs(prev => ({ ...prev, [index]: currentValue }));
+                              }
+                            }}
+                            placeholder={formatCurrency(product.sale_price_cents, product.currency).replace(/[^\d.,]/g, '')}
+                            title={`${t('orders.customPriceTooltip')}. ${t('orders.customPriceDefault')}: ${formatCurrency(product.sale_price_cents, product.currency)}`}
+                            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <Info
+                            className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors pointer-events-none"
+                          />
+                          {/* Custom tooltip */}
+                          <div className="absolute z-50 left-0 bottom-full mb-2 hidden group-hover:block px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
+                            {t('orders.customPriceTooltip')}
+                            <br />
+                            <span className="text-gray-300">{t('orders.customPriceDefault')}: {formatCurrency(product.sale_price_cents, product.currency)}</span>
+                            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   <div className="w-28 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {formatCurrency(calculateItemTotal(item))}
                   </div>

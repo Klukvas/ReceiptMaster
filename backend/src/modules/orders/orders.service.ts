@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, HttpStatus } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In } from "typeorm";
 import { Order, OrderStatus } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
+import { IdempotencyKey } from "./entities/idempotency-key.entity";
 import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { CreateOrderDto } from "./dto/create-order.dto";
@@ -19,6 +20,15 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+// Idempotency key expiration time (24 hours)
+const IDEMPOTENCY_KEY_EXPIRATION_HOURS = 24;
+
+export interface IdempotencyResponse {
+  statusCode: number;
+  data: any;
+  isFromCache: boolean;
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -26,6 +36,8 @@ export class OrdersService {
     private ordersRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private orderItemsRepository: Repository<OrderItem>,
+    @InjectRepository(IdempotencyKey)
+    private idempotencyKeyRepository: Repository<IdempotencyKey>,
     @InjectRepository(Product)
     private productsRepository: Repository<Product>,
     @InjectRepository(Recipient)
@@ -35,8 +47,34 @@ export class OrdersService {
     private receiptsService: ReceiptsService,
   ) {}
 
-  async create(createOrderDto: CreateOrderDto, user: User): Promise<Order> {
-    return this.dataSource.transaction(async (manager) => {
+  async create(
+    createOrderDto: CreateOrderDto,
+    user: User,
+    idempotencyKey?: string,
+  ): Promise<IdempotencyResponse> {
+    // Check for existing idempotency key if provided
+    if (idempotencyKey) {
+      const existingKey = await this.idempotencyKeyRepository.findOne({
+        where: { key: idempotencyKey, user_id: user.id },
+      });
+
+      if (existingKey) {
+        // Check if the key has expired
+        if (existingKey.expires_at < new Date()) {
+          // Key expired, delete it and proceed with new request
+          await this.idempotencyKeyRepository.delete({ id: existingKey.id });
+        } else {
+          // Return cached response
+          return {
+            statusCode: existingKey.status_code,
+            data: existingKey.response,
+            isFromCache: true,
+          };
+        }
+      }
+    }
+
+    const order = await this.dataSource.transaction(async (manager) => {
       // Check recipient existence and ownership
       const recipient = await manager.findOne(Recipient, {
         where: { id: createOrderDto.recipientId, user_id: user.id },
@@ -45,10 +83,11 @@ export class OrdersService {
         throw ApiErrors.RECIPIENT_NOT_FOUND(createOrderDto.recipientId);
       }
 
-      // Get products and check their existence and ownership
+      // Get products with pessimistic locking to prevent race conditions
       const productIds = createOrderDto.items.map((item) => item.productId);
       const products = await manager.find(Product, {
         where: { id: In(productIds), user_id: user.id },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (products.length !== productIds.length) {
@@ -79,7 +118,7 @@ export class OrdersService {
       }
 
       // Create order with calculated amounts
-      const order = manager.create(Order, {
+      const newOrder = manager.create(Order, {
         recipient_id: createOrderDto.recipientId,
         status: OrderStatus.DRAFT,
         currency: currency,
@@ -89,7 +128,7 @@ export class OrdersService {
         user_id: user.id,
       });
 
-      const savedOrder = await manager.save(Order, order);
+      const savedOrder = await manager.save(Order, newOrder);
 
       // Create order items
       for (const itemDto of createOrderDto.items) {
@@ -115,8 +154,31 @@ export class OrdersService {
         await manager.save(Product, product);
       }
 
+      // Save idempotency key if provided
+      if (idempotencyKey) {
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + IDEMPOTENCY_KEY_EXPIRATION_HOURS);
+
+        const idempotencyRecord = manager.create(IdempotencyKey, {
+          key: idempotencyKey,
+          user_id: user.id,
+          order_id: savedOrder.id,
+          response: savedOrder,
+          status_code: HttpStatus.CREATED,
+          expires_at: expiresAt,
+        });
+
+        await manager.save(IdempotencyKey, idempotencyRecord);
+      }
+
       return savedOrder;
     });
+
+    return {
+      statusCode: HttpStatus.CREATED,
+      data: order,
+      isFromCache: false,
+    };
   }
 
   async findAll(
@@ -217,36 +279,42 @@ export class OrdersService {
 
       // If products are being updated
       if (updateOrderDto.items) {
-        // First, restore quantities from existing order items
+        // First, restore quantities from existing order items with pessimistic locking
         const existingOrderItems = await manager.find(OrderItem, {
           where: { order_id: id },
         });
 
+        // Collect all product IDs that need to be updated (old + new)
+        const oldProductIds = existingOrderItems.map((item) => item.product_id);
+        const newProductIds = updateOrderDto.items.map((item) => item.productId);
+        const allProductIds = [...new Set([...oldProductIds, ...newProductIds])];
+
+        // Lock all products that will be affected
+        const allProducts = await manager.find(Product, {
+          where: { id: In(allProductIds) },
+          lock: { mode: "pessimistic_write" },
+        });
+        const productMap = new Map(allProducts.map((p) => [p.id, p]));
+
+        // Restore quantities from existing order items
         for (const existingItem of existingOrderItems) {
-          const product = await manager.findOne(Product, {
-            where: { id: existingItem.product_id },
-          });
+          const product = productMap.get(existingItem.product_id);
           if (product) {
             product.quantity += existingItem.qty;
-            await manager.save(Product, product);
           }
         }
 
-        // Get products and check their existence and ownership
-        const productIds = updateOrderDto.items.map((item) => item.productId);
-        const products = await manager.find(Product, {
-          where: { id: In(productIds), user_id: user.id },
-        });
+        // Verify ownership of new products
+        const products = newProductIds.map((pid) => productMap.get(pid)).filter(Boolean) as Product[];
+        const ownedProducts = products.filter((p) => p.user_id === user.id);
 
-        if (products.length !== productIds.length) {
+        if (ownedProducts.length !== newProductIds.length) {
           throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
         }
 
-        const productMap = new Map(products.map((p) => [p.id, p]));
-
         // Check quantities and calculate new amounts
         let subtotalCents = 0;
-        const currency = products[0].currency; // Take currency from first product
+        const currency = ownedProducts[0].currency; // Take currency from first product
 
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
@@ -345,6 +413,7 @@ export class OrdersService {
 
   // Dashboard methods
   async getRevenueByProducts(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<
@@ -357,7 +426,7 @@ export class OrdersService {
     }>
   > {
     let query = `
-      SELECT 
+      SELECT
         oi.product_id,
         oi.product_name,
         SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
@@ -366,11 +435,11 @@ export class OrdersService {
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -394,13 +463,14 @@ export class OrdersService {
     return results.map((row) => ({
       product_id: row.product_id,
       product_name: row.product_name,
-      total_revenue_cents: parseInt(row.total_revenue_cents),
-      total_quantity: parseInt(row.total_quantity),
+      total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+      total_quantity: parseInt(row.total_quantity) || 0,
       currency: row.currency,
     }));
   }
 
   async getRevenueByRecipients(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<
@@ -413,7 +483,7 @@ export class OrdersService {
     }>
   > {
     let query = `
-      SELECT 
+      SELECT
         o.recipient_id,
         r.name as recipient_name,
         SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
@@ -423,11 +493,11 @@ export class OrdersService {
       INNER JOIN recipients r ON r.id = o.recipient_id
       INNER JOIN order_items oi ON oi.order_id = o.id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -451,13 +521,14 @@ export class OrdersService {
     return results.map((row) => ({
       recipient_id: row.recipient_id,
       recipient_name: row.recipient_name,
-      total_revenue_cents: parseInt(row.total_revenue_cents),
-      total_orders: parseInt(row.total_orders),
+      total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+      total_orders: parseInt(row.total_orders) || 0,
       currency: row.currency,
     }));
   }
 
   async getTotalRevenue(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<{
@@ -466,18 +537,18 @@ export class OrdersService {
     currency: string;
   }> {
     let query = `
-      SELECT 
+      SELECT
         SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
         COUNT(DISTINCT o.id) as total_orders,
         o.currency
       FROM orders o
       INNER JOIN order_items oi ON oi.order_id = o.id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -497,14 +568,15 @@ export class OrdersService {
     const result = results[0];
 
     return {
-      total_revenue_cents: result ? parseInt(result.total_revenue_cents) : 0,
-      total_orders: result ? parseInt(result.total_orders) : 0,
+      total_revenue_cents: result ? parseInt(result.total_revenue_cents) || 0 : 0,
+      total_orders: result ? parseInt(result.total_orders) || 0 : 0,
       currency: result?.currency || "UAH",
     };
   }
 
   // Методы для общего оборота (общая выручка без вычета себестоимости)
   async getTurnoverByProducts(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<
@@ -517,7 +589,7 @@ export class OrdersService {
     }>
   > {
     let query = `
-      SELECT 
+      SELECT
         oi.product_id,
         oi.product_name,
         SUM(oi.line_total_cents) as total_turnover_cents,
@@ -525,11 +597,11 @@ export class OrdersService {
         o.currency
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -553,13 +625,14 @@ export class OrdersService {
     return results.map((row) => ({
       product_id: row.product_id,
       product_name: row.product_name,
-      total_turnover_cents: parseInt(row.total_turnover_cents),
-      total_quantity: parseInt(row.total_quantity),
+      total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
+      total_quantity: parseInt(row.total_quantity) || 0,
       currency: row.currency,
     }));
   }
 
   async getTurnoverByRecipients(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<
@@ -572,7 +645,7 @@ export class OrdersService {
     }>
   > {
     let query = `
-      SELECT 
+      SELECT
         o.recipient_id,
         r.name as recipient_name,
         SUM(o.total_cents) as total_turnover_cents,
@@ -580,11 +653,11 @@ export class OrdersService {
         o.currency
       FROM orders o
       INNER JOIN recipients r ON r.id = o.recipient_id
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -608,13 +681,14 @@ export class OrdersService {
     return results.map((row) => ({
       recipient_id: row.recipient_id,
       recipient_name: row.recipient_name,
-      total_turnover_cents: parseInt(row.total_turnover_cents),
-      total_orders: parseInt(row.total_orders),
+      total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
+      total_orders: parseInt(row.total_orders) || 0,
       currency: row.currency,
     }));
   }
 
   async getTotalTurnover(
+    user: User,
     startDate?: Date,
     endDate?: Date,
   ): Promise<{
@@ -623,16 +697,16 @@ export class OrdersService {
     currency: string;
   }> {
     let query = `
-      SELECT 
+      SELECT
         SUM(o.total_cents) as total_turnover_cents,
         COUNT(o.id) as total_orders,
         o.currency
       FROM orders o
-      WHERE o.status = $1
+      WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED];
-    let paramIndex = 2;
+    const params: any[] = [OrderStatus.CONFIRMED, user.id];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND o.created_at >= $${paramIndex}`;
@@ -652,8 +726,8 @@ export class OrdersService {
     const result = results[0];
 
     return {
-      total_turnover_cents: result ? parseInt(result.total_turnover_cents) : 0,
-      total_orders: result ? parseInt(result.total_orders) : 0,
+      total_turnover_cents: result ? parseInt(result.total_turnover_cents) || 0 : 0,
+      total_orders: result ? parseInt(result.total_orders) || 0 : 0,
       currency: result?.currency || "UAH",
     };
   }

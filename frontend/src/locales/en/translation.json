@@ -92,6 +92,8 @@
     "orderCancelled": "Order cancelled successfully",
     "orderDeleted": "Order deleted successfully",
     "failedToLoadOrders": "Failed to load orders",
+    "loadErrorWarning": "The server may not be running or a network error occurred.",
+    "ordersNotLoadedTryCreating": "Orders not loaded. Try creating a new order.",
     "failedToConfirmOrder": "Failed to confirm order",
     "failedToCancelOrder": "Failed to cancel order",
     "failedToDeleteOrder": "Failed to delete order",
@@ -347,7 +349,10 @@
     "totalTurnover": "Total Turnover",
     "revenueDescription": "Net profit after costs",
     "turnoverDescription": "Total sales amount",
-    "receipts": "Receipts"
+    "receipts": "Receipts",
+    "addFirstProduct": "Add your first product",
+    "addFirstRecipient": "Add your first recipient",
+    "createFirstOrder": "Create your first order"
   },
   "dashboard": {
     "title": "Dashboard",

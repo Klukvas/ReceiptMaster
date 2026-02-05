@@ -12,7 +12,7 @@ services:
       - postgres_data_dev:/var/lib/postgresql/data
       - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"  # host 5433 to avoid conflict with local PostgreSQL on 5432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d market_db"]
       interval: 5s

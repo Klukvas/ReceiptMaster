@@ -6,7 +6,7 @@ on:
       force_recreate:
         description: 'Force recreate database (will lose data!)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:

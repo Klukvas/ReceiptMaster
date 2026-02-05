@@ -26,17 +26,20 @@ async function bootstrap() {
     exclude: ["tg/webhook", "tg/order"],
   });
 
-  // CORS
+  // CORS - configure via CORS_ORIGINS env variable (comma-separated list)
+  const corsOriginsEnv = configService.get("CORS_ORIGINS");
+  const corsOrigins = corsOriginsEnv
+    ? corsOriginsEnv.split(",").map((origin: string) => origin.trim())
+    : [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+      ];
+
   app.enableCors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:3000",
-      "http://116.203.176.71",
-      "https://116.203.176.71",
-    ],
+    origin: corsOrigins,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "Idempotency-Key"],
     credentials: true,
   });
 

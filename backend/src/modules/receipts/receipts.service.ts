@@ -93,52 +93,28 @@ export class ReceiptsService {
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
 
-      // Получаем информацию о компании из настроек
-      const companyInfoPartial = await this.settingsService.getCompanyInfo(user.id);
-      const companyInfo = {
-        companyName: companyInfoPartial.companyName || '',
-        companyAddress: companyInfoPartial.companyAddress,
-        companyEmail: companyInfoPartial.companyEmail,
-        companyPhone: companyInfoPartial.companyPhone,
-        companyTaxId: companyInfoPartial.companyTaxId,
-        companyIban: companyInfoPartial.companyIban,
-        companySwift: companyInfoPartial.companySwift,
-        companyWebsite: companyInfoPartial.companyWebsite,
-        companyTagline: companyInfoPartial.companyTagline,
-      };
+      // Получаем все настройки пользователя одним запросом
+      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
+      const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
 
-      // Получаем шаблон пользователя из настроек
-      const userTemplateId = await this.settingsService.getUserTemplate(user.id);
-      const receiptStyle = this.getReceiptStyleFromTemplateId(userTemplateId);
-      
-      // Получаем заголовок чека из настроек
-      const receiptTitle = await this.settingsService.getReceiptTitle(user.id);
-      
-      // Получаем язык шаблона из настроек
-      const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
-      
-      // Получаем footer настройки из настроек
-      const footerTitle = await this.settingsService.getFooterTitle(user.id);
-      const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
-      
-      this.logger.log(`Using template for user ${user.id}: ${userTemplateId} -> ${receiptStyle}`);
-      this.logger.log(`Using receipt title for user ${user.id}: ${receiptTitle}`);
-      this.logger.log(`Using template language for user ${user.id}: ${templateLanguage}`);
-      this.logger.log(`Using footer title for user ${user.id}: ${footerTitle || 'default'}`);
-      this.logger.log(`Using footer subtitle for user ${user.id}: ${footerSubtitle || 'default'}`);
+      this.logger.log(`Using template for user ${user.id}: ${pdfSettings.templateId} -> ${receiptStyle}`);
+      this.logger.log(`Using receipt title for user ${user.id}: ${pdfSettings.receiptTitle}`);
+      this.logger.log(`Using template language for user ${user.id}: ${pdfSettings.templateLanguage}`);
+      this.logger.log(`Using footer title for user ${user.id}: ${pdfSettings.footerTitle || 'default'}`);
+      this.logger.log(`Using footer subtitle for user ${user.id}: ${pdfSettings.footerSubtitle || 'default'}`);
 
       // Генерируем PDF с пользовательским шаблоном
       const { filePath, url } =
         await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
-          companyInfo,
+          pdfSettings.companyInfo,
           user.id,
           receiptStyle,
-          receiptTitle,
-          templateLanguage,
-          footerTitle,
-          footerSubtitle
+          pdfSettings.receiptTitle,
+          pdfSettings.templateLanguage,
+          pdfSettings.footerTitle,
+          pdfSettings.footerSubtitle
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -205,36 +181,21 @@ export class ReceiptsService {
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
 
-      // Получаем информацию о компании из настроек
-      const companyInfoPartial = await this.settingsService.getCompanyInfo(user.id);
-      const companyInfo = {
-        companyName: companyInfoPartial.companyName || '',
-        companyAddress: companyInfoPartial.companyAddress,
-        companyEmail: companyInfoPartial.companyEmail,
-        companyPhone: companyInfoPartial.companyPhone,
-        companyTaxId: companyInfoPartial.companyTaxId,
-        companyIban: companyInfoPartial.companyIban,
-        companySwift: companyInfoPartial.companySwift,
-        companyWebsite: companyInfoPartial.companyWebsite,
-        companyTagline: companyInfoPartial.companyTagline,
-      };
+      // Получаем все настройки пользователя одним запросом
+      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
 
-      // Получаем настройки для footer
-      const footerTitle = await this.settingsService.getFooterTitle(user.id);
-      const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
-
-      // Генерируем компактный PDF
+      // Генерируем компактный PDF (с использованием настроек пользователя кроме стиля)
       const { filePath, url } =
         await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
-          companyInfo,
+          pdfSettings.companyInfo,
           user.id,
           ReceiptStyle.COMPACT,
-          'Invoice',
-          'en',
-          footerTitle,
-          footerSubtitle
+          pdfSettings.receiptTitle,
+          pdfSettings.templateLanguage,
+          pdfSettings.footerTitle,
+          pdfSettings.footerSubtitle
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -301,28 +262,21 @@ export class ReceiptsService {
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
 
-      // Получаем информацию о компании из настроек
-      const companyInfoPartial = await this.settingsService.getCompanyInfo(user.id);
-      const companyInfo = {
-        companyName: companyInfoPartial.companyName || '',
-        companyAddress: companyInfoPartial.companyAddress,
-        companyEmail: companyInfoPartial.companyEmail,
-        companyPhone: companyInfoPartial.companyPhone,
-        companyTaxId: companyInfoPartial.companyTaxId,
-        companyIban: companyInfoPartial.companyIban,
-        companySwift: companyInfoPartial.companySwift,
-        companyWebsite: companyInfoPartial.companyWebsite,
-        companyTagline: companyInfoPartial.companyTagline,
-      };
+      // Получаем все настройки пользователя одним запросом
+      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
 
-      // Генерируем стандартный PDF
+      // Генерируем стандартный PDF (с использованием настроек пользователя кроме стиля)
       const { filePath, url } =
         await this.pdfGeneratorService.generateReceiptPdf(
           order,
           receiptNumber,
-          companyInfo,
+          pdfSettings.companyInfo,
           user.id,
-          ReceiptStyle.STANDARD
+          ReceiptStyle.STANDARD,
+          pdfSettings.receiptTitle,
+          pdfSettings.templateLanguage,
+          pdfSettings.footerTitle,
+          pdfSettings.footerSubtitle
         );
 
       // Вычисляем хеш файла для контроля целостности
@@ -441,33 +395,21 @@ export class ReceiptsService {
           throw ApiErrors.ORDER_NOT_FOUND(receipt.order_id);
         }
 
-        // Регенерируем PDF
-        const companyInfoPartial = await this.settingsService.getCompanyInfo(user.id);
-        const companyInfo = {
-          companyName: companyInfoPartial.companyName || '',
-          companyAddress: companyInfoPartial.companyAddress,
-          companyEmail: companyInfoPartial.companyEmail,
-          companyPhone: companyInfoPartial.companyPhone,
-          companyTaxId: companyInfoPartial.companyTaxId,
-          companyIban: companyInfoPartial.companyIban,
-          companySwift: companyInfoPartial.companySwift,
-          companyWebsite: companyInfoPartial.companyWebsite,
-          companyTagline: companyInfoPartial.companyTagline,
-        };
-        const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
-        const footerTitle = await this.settingsService.getFooterTitle(user.id);
-        const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
+        // Регенерируем PDF с использованием всех настроек пользователя
+        const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
+        const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
+
         const { filePath, url } =
           await this.pdfGeneratorService.generateReceiptPdf(
             order,
             receipt.number,
-            companyInfo,
+            pdfSettings.companyInfo,
             user.id,
-            ReceiptStyle.COMPACT,
-            'Invoice',
-            templateLanguage,
-            footerTitle,
-            footerSubtitle
+            receiptStyle,
+            pdfSettings.receiptTitle,
+            pdfSettings.templateLanguage,
+            pdfSettings.footerTitle,
+            pdfSettings.footerSubtitle
           );
 
         // Обновляем путь к файлу в базе данных
@@ -542,33 +484,21 @@ export class ReceiptsService {
       }
     }
 
-    // Регенерируем PDF
-    const companyInfoPartial = await this.settingsService.getCompanyInfo(user.id);
-    const companyInfo = {
-      companyName: companyInfoPartial.companyName || '',
-      companyAddress: companyInfoPartial.companyAddress,
-      companyEmail: companyInfoPartial.companyEmail,
-      companyPhone: companyInfoPartial.companyPhone,
-      companyTaxId: companyInfoPartial.companyTaxId,
-      companyIban: companyInfoPartial.companyIban,
-      companySwift: companyInfoPartial.companySwift,
-      companyWebsite: companyInfoPartial.companyWebsite,
-      companyTagline: companyInfoPartial.companyTagline,
-    };
-    const templateLanguage = await this.settingsService.getTemplateLanguage(user.id);
-    const footerTitle = await this.settingsService.getFooterTitle(user.id);
-    const footerSubtitle = await this.settingsService.getFooterSubtitle(user.id);
+    // Регенерируем PDF с использованием всех настроек пользователя
+    const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
+    const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
+
     const { filePath, url } =
       await this.pdfGeneratorService.generateReceiptPdf(
         order,
         receipt.number,
-        companyInfo,
+        pdfSettings.companyInfo,
         user.id,
-        ReceiptStyle.COMPACT,
-        'Invoice',
-        templateLanguage,
-        footerTitle,
-        footerSubtitle
+        receiptStyle,
+        pdfSettings.receiptTitle,
+        pdfSettings.templateLanguage,
+        pdfSettings.footerTitle,
+        pdfSettings.footerSubtitle
       );
 
     // Вычисляем хеш нового файла
@@ -654,29 +584,6 @@ export class ReceiptsService {
     } catch (error) {
       this.logger.error("Error ensuring receipt number function:", error);
       throw error;
-    }
-  }
-
-  private async getCompanyName(): Promise<string> {
-    try {
-      const settingsPath = path.join(
-        process.cwd(),
-        "src",
-        "assets",
-        "settings.json",
-      );
-
-      try {
-        const settingsData = await fs.readFile(settingsPath, "utf-8");
-        const settings = JSON.parse(settingsData);
-        return settings.companyName || "";
-      } catch {
-        // If settings file doesn't exist, return empty string
-        return "";
-      }
-    } catch (error) {
-      this.logger.error("Error reading company name:", error);
-      return "";
     }
   }
 

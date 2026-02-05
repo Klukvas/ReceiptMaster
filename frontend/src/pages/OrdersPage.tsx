@@ -10,8 +10,10 @@ import {
 } from '../components/orders';
 import { DeleteConfirmation, NotificationToast } from '../components/common';
 import { useOrders } from '../hooks/useOrders';
+import { useTranslation } from '../hooks/useTranslation';
 
 export const OrdersPage = () => {
+  const { t } = useTranslation();
   const {
     orders,
     isLoading,
@@ -105,8 +107,8 @@ export const OrdersPage = () => {
         isOpen={deleteConfirmation.isOpen}
         onClose={handleCancelDeleteOrder}
         onConfirm={handleConfirmDeleteOrder}
-        title="Delete Order"
-        message="Are you sure you want to delete this order? This action cannot be undone."
+        title={t('orders.deleteOrder')}
+        message={t('orders.deleteOrderMessage')}
         itemName={deleteConfirmation.order ? `Order #${deleteConfirmation.order.id.slice(0, 8)}...` : undefined}
         isLoading={isDeleting}
       />

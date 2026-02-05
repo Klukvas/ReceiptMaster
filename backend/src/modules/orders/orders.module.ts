@@ -4,13 +4,14 @@ import { OrdersService } from "./orders.service";
 import { OrdersController } from "./orders.controller";
 import { Order } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
+import { IdempotencyKey } from "./entities/idempotency-key.entity";
 import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { ReceiptsModule } from "../receipts/receipts.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, Product, Recipient]),
+    TypeOrmModule.forFeature([Order, OrderItem, IdempotencyKey, Product, Recipient]),
     ReceiptsModule,
   ],
   controllers: [OrdersController],

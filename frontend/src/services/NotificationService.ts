@@ -6,23 +6,36 @@ export interface Notification {
 export class NotificationService {
   private notifications: Notification[] = [];
   private listeners: Set<(notifications: Notification[]) => void> = new Set();
+  private timeouts: Map<Notification, NodeJS.Timeout> = new Map();
 
   addNotification(notification: Notification) {
     this.notifications.push(notification);
     this.notifyListeners();
-    
+
     // Auto-remove after 3 seconds
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       this.removeNotification(notification);
     }, 3000);
+    this.timeouts.set(notification, timeoutId);
   }
 
   removeNotification(notification: Notification) {
+    // Clear the timeout to prevent memory leaks
+    const timeoutId = this.timeouts.get(notification);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.timeouts.delete(notification);
+    }
+
     this.notifications = this.notifications.filter(n => n !== notification);
     this.notifyListeners();
   }
 
   clearNotifications() {
+    // Clear all timeouts
+    this.timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+    this.timeouts.clear();
+
     this.notifications = [];
     this.notifyListeners();
   }

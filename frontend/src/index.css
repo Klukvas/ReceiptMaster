@@ -48,3 +48,37 @@
 .table tbody tr:nth-child(even) {
   @apply bg-gray-50 dark:bg-gray-800/50;
 }
+
+/* Modal enter animation */
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-content-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-modal-backdrop {
+  animation: modal-backdrop-in 0.2s ease-out forwards;
+}
+
+.animate-modal-content {
+  animation: modal-content-in 0.2s ease-out forwards;
+}
+
+/* Focus visible for keyboard navigation (links) */
+a:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-gray-900 rounded-sm;
+}

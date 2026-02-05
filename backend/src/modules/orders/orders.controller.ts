@@ -10,7 +10,10 @@ import {
   Headers,
   Query,
   Request,
+  Res,
+  HttpStatus,
 } from "@nestjs/common";
+import { Response } from "express";
 import {
   ApiTags,
   ApiOperation,
@@ -18,7 +21,7 @@ import {
   ApiHeader,
   ApiQuery,
 } from "@nestjs/swagger";
-import { OrdersService, PaginatedResponse } from "./orders.service";
+import { OrdersService, PaginatedResponse, IdempotencyResponse } from "./orders.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
@@ -36,19 +39,31 @@ export class OrdersController {
   @Post()
   @ApiOperation({ summary: "Create order" })
   @ApiResponse({ status: 201, description: "Order successfully created" })
+  @ApiResponse({ status: 200, description: "Order returned from idempotency cache" })
   @ApiResponse({ status: 404, description: "Recipient or product not found" })
   @ApiHeader({
     name: "Idempotency-Key",
-    description: "Idempotency key to prevent order duplication",
+    description: "Idempotency key to prevent order duplication (valid for 24 hours)",
     required: false,
   })
-  create(
+  async create(
     @Body() createOrderDto: CreateOrderDto,
     @Request() req: { user: User },
-    @Headers("idempotency-key") _idempotencyKey?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
-  ) {
-    // TODO: Implement idempotency key validation
-    return this.ordersService.create(createOrderDto, req.user);
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Res() res: Response,
+  ): Promise<Response> {
+    const result: IdempotencyResponse = await this.ordersService.create(
+      createOrderDto,
+      req.user,
+      idempotencyKey,
+    );
+
+    // Set header to indicate if response was from cache
+    if (result.isFromCache) {
+      res.setHeader("X-Idempotency-Replayed", "true");
+    }
+
+    return res.status(result.statusCode).json(result.data);
   }
 
   @Get()
@@ -135,12 +150,13 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getRevenueByProducts(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getRevenueByProducts(start, end);
+    return this.ordersService.getRevenueByProducts(req.user, start, end);
   }
 
   @Get("dashboard/revenue-by-recipients")
@@ -157,12 +173,13 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getRevenueByRecipients(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getRevenueByRecipients(start, end);
+    return this.ordersService.getRevenueByRecipients(req.user, start, end);
   }
 
   @Get("dashboard/total-revenue")
@@ -179,12 +196,13 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getTotalRevenue(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTotalRevenue(start, end);
+    return this.ordersService.getTotalRevenue(req.user, start, end);
   }
 
   // Endpoints для общего оборота
@@ -202,12 +220,13 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getTurnoverByProducts(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTurnoverByProducts(start, end);
+    return this.ordersService.getTurnoverByProducts(req.user, start, end);
   }
 
   @Get("dashboard/turnover-by-recipients")
@@ -224,12 +243,13 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getTurnoverByRecipients(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTurnoverByRecipients(start, end);
+    return this.ordersService.getTurnoverByRecipients(req.user, start, end);
   }
 
   @Get("dashboard/total-turnover")
@@ -246,11 +266,12 @@ export class OrdersController {
     description: "End date for filtering (ISO string)",
   })
   getTotalTurnover(
+    @Request() req: { user: User },
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTotalTurnover(start, end);
+    return this.ordersService.getTotalTurnover(req.user, start, end);
   }
 }

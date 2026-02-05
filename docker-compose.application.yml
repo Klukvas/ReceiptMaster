@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+  # Run migrations before starting backend: docker-compose -f docker-compose.application.yml run --rm migrations
+  migrations:
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:latest
+    container_name: marketflow-migrations
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=${DB_HOST:-10.0.1.20}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-market_db}
+    command: ["yarn", "migration:run"]
+    networks:
+      - marketflow-network
+
   frontend:
     image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-frontend:latest
     container_name: marketflow-frontend
@@ -35,7 +50,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
-      - AUTO_RUN_MIGRATIONS=true
+      - AUTO_RUN_MIGRATIONS=false
       # S3 Object Storage Configuration
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
