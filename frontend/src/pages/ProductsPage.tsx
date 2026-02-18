@@ -32,7 +32,7 @@ export const ProductsPage = () => {
       header: t('products.productName'),
       sortable: true,
       render: (p) => (
-        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.name}</div>
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[200px]" title={p.name}>{p.name}</div>
       ),
     },
     {

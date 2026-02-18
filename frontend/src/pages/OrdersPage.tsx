@@ -89,7 +89,7 @@ export const OrdersPage = () => {
           {o.is_locked && (
             <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" title={t('orders.locked')} />
           )}
-          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[180px] block" title={o.recipient?.name || '-'}>
             {o.recipient?.name || '-'}
           </span>
         </div>

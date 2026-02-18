@@ -34,7 +34,7 @@ export const RecipientsPage = () => {
           />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              <span className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[180px] block" title={r.name}>
                 {r.name}
               </span>
               {(r.total_spent_cents ?? 0) > 1000000 && (
@@ -213,7 +213,7 @@ export const RecipientsPage = () => {
                   telegramLinked={!!r.telegram_user_id}
                 />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[180px]" title={r.name}>
                     {r.name}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
