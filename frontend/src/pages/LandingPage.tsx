@@ -64,15 +64,15 @@ export const LandingPage: React.FC = () => {
                 alt="ReceiptMaster"
                 className="h-8 w-8 object-contain"
               />
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
+              <span className="hidden sm:inline text-lg font-semibold text-gray-900 dark:text-white">
                 ReceiptMaster
               </span>
             </button>
 
             {/* Right actions */}
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <LanguageSwitcher />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <ThemeToggle compact />
+              <LanguageSwitcher compact />
 
               {isAuthenticated ? (
                 <>
