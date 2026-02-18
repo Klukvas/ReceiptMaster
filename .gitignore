@@ -141,10 +141,10 @@ secrets.json
 *.secrets
 .secrets/
 
-# Receipt files (stored locally during development)
-receipts/
-*/receipts/
+# Receipt PDF files (stored locally during development)
 *.receipt.pdf
+/receipts/
+/backend/receipts/
 
 # Database dumps
 *.sql
