@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-} from "@nestjs/common";
+import { Injectable, BadRequestException, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
@@ -454,7 +450,9 @@ export class TelegramService {
   }
 
   private async getOrCreateUserSession(userId: number): Promise<UserSession> {
-    const cached = await this.cacheService.get<UserSession>(this.sessionKey(userId));
+    const cached = await this.cacheService.get<UserSession>(
+      this.sessionKey(userId),
+    );
     if (cached) return cached;
 
     const session: UserSession = {
@@ -467,15 +465,26 @@ export class TelegramService {
         updatedAt: new Date(),
       },
     };
-    await this.cacheService.set(this.sessionKey(userId), session, SESSION_TTL_SECONDS);
+    await this.cacheService.set(
+      this.sessionKey(userId),
+      session,
+      SESSION_TTL_SECONDS,
+    );
     return session;
   }
 
-  private async updateUserSession(userId: number, updates: Partial<UserSession>): Promise<void> {
+  private async updateUserSession(
+    userId: number,
+    updates: Partial<UserSession>,
+  ): Promise<void> {
     const session = await this.getOrCreateUserSession(userId);
     Object.assign(session, updates);
     session.cart.updatedAt = new Date();
-    await this.cacheService.set(this.sessionKey(userId), session, SESSION_TTL_SECONDS);
+    await this.cacheService.set(
+      this.sessionKey(userId),
+      session,
+      SESSION_TTL_SECONDS,
+    );
   }
 
   // Command handlers

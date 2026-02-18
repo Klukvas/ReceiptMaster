@@ -81,12 +81,16 @@ export class LogoStorageService extends BaseObjectStorageService {
     }
 
     try {
-      this.logger.log(`Attempting to delete logo for user ${userId}, key: ${key}, bucket: ${this.bucket}`);
-      
+      this.logger.log(
+        `Attempting to delete logo for user ${userId}, key: ${key}, bucket: ${this.bucket}`,
+      );
+
       // Directly delete - S3 deleteObject is idempotent and won't error if file doesn't exist
       await this.deleteFile(this.bucket, key);
-      
-      this.logger.log(`Logo deletion completed successfully for user ${userId}`);
+
+      this.logger.log(
+        `Logo deletion completed successfully for user ${userId}`,
+      );
     } catch (error) {
       this.logger.error(
         `Failed to delete logo for user ${userId}: ${error.message}`,

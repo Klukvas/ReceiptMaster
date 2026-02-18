@@ -37,7 +37,11 @@ export class RecipientsService {
   async findAll(
     pagination: PaginationDto,
     user: User,
-  ): Promise<PaginatedResponse<Recipient & { total_spent_cents: number; order_count: number }>> {
+  ): Promise<
+    PaginatedResponse<
+      Recipient & { total_spent_cents: number; order_count: number }
+    >
+  > {
     const {
       offset = 0,
       limit = 10,
@@ -68,7 +72,10 @@ export class RecipientsService {
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 
-    const raw = await queryBuilder.offset(offset).limit(limit).getRawAndEntities();
+    const raw = await queryBuilder
+      .offset(offset)
+      .limit(limit)
+      .getRawAndEntities();
     const total = await queryBuilder.getCount();
 
     const data = raw.entities.map((entity, i) => ({

@@ -23,7 +23,6 @@ export class MigrationService implements OnApplicationBootstrap {
   private static readonly MIGRATION_LOCK_ID = 3_217_891_453;
 
   async onApplicationBootstrap() {
-    const nodeEnv = this.configService.get("NODE_ENV");
     const autoRunMigrations = this.configService.get("AUTO_RUN_MIGRATIONS");
 
     if (autoRunMigrations) {
@@ -44,10 +43,9 @@ export class MigrationService implements OnApplicationBootstrap {
     try {
       await queryRunner.connect();
       this.logger.log("Acquiring migration advisory lock…");
-      await queryRunner.query(
-        `SELECT pg_advisory_lock($1)`,
-        [MigrationService.MIGRATION_LOCK_ID],
-      );
+      await queryRunner.query(`SELECT pg_advisory_lock($1)`, [
+        MigrationService.MIGRATION_LOCK_ID,
+      ]);
 
       this.logger.log("Lock acquired — running migrations…");
       await this.dataSource.runMigrations();
@@ -57,10 +55,9 @@ export class MigrationService implements OnApplicationBootstrap {
       process.exit(1);
     } finally {
       try {
-        await queryRunner.query(
-          `SELECT pg_advisory_unlock($1)`,
-          [MigrationService.MIGRATION_LOCK_ID],
-        );
+        await queryRunner.query(`SELECT pg_advisory_unlock($1)`, [
+          MigrationService.MIGRATION_LOCK_ID,
+        ]);
       } catch {
         // lock auto-released when session ends
       }

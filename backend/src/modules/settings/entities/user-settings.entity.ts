@@ -1,14 +1,20 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from "typeorm";
 
-@Entity('user_settings')
+@Entity("user_settings")
 export class UserSettings {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column({ unique: true })
   userId: string;
 
-  @Column({ default: 'standard' })
+  @Column({ default: "standard" })
   templateId: string;
 
   @Column({ nullable: true })
@@ -38,10 +44,10 @@ export class UserSettings {
   @Column({ nullable: true })
   companyTagline: string;
 
-  @Column({ default: 'Invoice' })
+  @Column({ default: "Invoice" })
   receiptTitle: string;
 
-  @Column({ default: 'en' })
+  @Column({ default: "en" })
   templateLanguage: string;
 
   @Column({ nullable: true })

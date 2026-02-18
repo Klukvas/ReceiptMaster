@@ -7,10 +7,7 @@ import { UserSettings } from "./entities/user-settings.entity";
 import { LogoStorageService } from "../../common/services/logo-storage.service";
 
 @Module({
-  imports: [
-    ConfigModule,
-    TypeOrmModule.forFeature([UserSettings])
-  ],
+  imports: [ConfigModule, TypeOrmModule.forFeature([UserSettings])],
   controllers: [SettingsController],
   providers: [SettingsService, LogoStorageService],
   exports: [SettingsService, LogoStorageService],

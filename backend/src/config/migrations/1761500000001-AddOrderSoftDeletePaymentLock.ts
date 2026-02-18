@@ -35,7 +35,9 @@ export class AddOrderSoftDeletePaymentLock1761500000001
     await queryRunner.query(`DROP INDEX "IDX_orders_not_deleted"`);
     await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "is_locked"`);
     await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "deleted_at"`);
-    await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "payment_status"`);
+    await queryRunner.query(
+      `ALTER TABLE "orders" DROP COLUMN "payment_status"`,
+    );
     await queryRunner.query(`DROP TYPE "payment_status_enum"`);
   }
 }

@@ -11,7 +11,6 @@ import {
   Query,
   Request,
   Res,
-  HttpStatus,
 } from "@nestjs/common";
 import { Response } from "express";
 import {
@@ -44,11 +43,15 @@ export class OrdersController {
   @Post()
   @ApiOperation({ summary: "Create order" })
   @ApiResponse({ status: 201, description: "Order successfully created" })
-  @ApiResponse({ status: 200, description: "Order returned from idempotency cache" })
+  @ApiResponse({
+    status: 200,
+    description: "Order returned from idempotency cache",
+  })
   @ApiResponse({ status: 404, description: "Recipient or product not found" })
   @ApiHeader({
     name: "Idempotency-Key",
-    description: "Idempotency key to prevent order duplication (valid for 24 hours)",
+    description:
+      "Idempotency key to prevent order duplication (valid for 24 hours)",
     required: false,
   })
   async create(
@@ -96,9 +99,21 @@ export class OrdersController {
   @Get()
   @ApiOperation({ summary: "Get orders list" })
   @ApiResponse({ status: 200, description: "Orders list retrieved" })
-  @ApiQuery({ name: "status", required: false, description: "Filter by order status" })
-  @ApiQuery({ name: "minAmount", required: false, description: "Minimum order total in cents" })
-  @ApiQuery({ name: "maxAmount", required: false, description: "Maximum order total in cents" })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    description: "Filter by order status",
+  })
+  @ApiQuery({
+    name: "minAmount",
+    required: false,
+    description: "Minimum order total in cents",
+  })
+  @ApiQuery({
+    name: "maxAmount",
+    required: false,
+    description: "Maximum order total in cents",
+  })
   findAll(
     @Query() paginationDto: PaginationDto,
     @Query() dateRange: DateRangeDto,
@@ -167,16 +182,25 @@ export class OrdersController {
   @Get("dashboard/daily-revenue")
   @ApiOperation({ summary: "Get daily revenue/turnover for sparkline" })
   @ApiResponse({ status: 200, description: "Daily revenue data retrieved" })
-  @ApiQuery({ name: "days", required: false, description: "Number of days (default 7)" })
+  @ApiQuery({
+    name: "days",
+    required: false,
+    description: "Number of days (default 7)",
+  })
   getDailyRevenue(
     @Request() req: { user: User },
     @Query("days") days?: string,
   ) {
-    return this.ordersService.getDailyRevenue(req.user, days ? parseInt(days) : 7);
+    return this.ordersService.getDailyRevenue(
+      req.user,
+      days ? parseInt(days) : 7,
+    );
   }
 
   @Get("dashboard/status-summary")
-  @ApiOperation({ summary: "Get order status summary (draft/confirmed/cancelled counts)" })
+  @ApiOperation({
+    summary: "Get order status summary (draft/confirmed/cancelled counts)",
+  })
   @ApiResponse({ status: 200, description: "Order status summary retrieved" })
   getOrderStatusSummary(@Request() req: { user: User }) {
     return this.ordersService.getOrderStatusSummary(req.user);

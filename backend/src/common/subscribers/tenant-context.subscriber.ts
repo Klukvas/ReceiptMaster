@@ -1,5 +1,11 @@
 import { AsyncLocalStorage } from "async_hooks";
-import { EventSubscriber, EntitySubscriberInterface, InsertEvent, UpdateEvent, RemoveEvent } from "typeorm";
+import {
+  EventSubscriber,
+  EntitySubscriberInterface,
+  InsertEvent,
+  UpdateEvent,
+  RemoveEvent,
+} from "typeorm";
 
 /**
  * Async-local store that holds the current tenant (user) ID for the
@@ -21,7 +27,9 @@ export const tenantStore = new AsyncLocalStorage<{ userId: string }>();
  */
 @EventSubscriber()
 export class TenantContextSubscriber implements EntitySubscriberInterface {
-  private async setTenantContext(queryRunner: { query: (q: string, p?: any[]) => Promise<any> }): Promise<void> {
+  private async setTenantContext(queryRunner: {
+    query: (q: string, p?: any[]) => Promise<any>;
+  }): Promise<void> {
     const ctx = tenantStore.getStore();
     if (ctx?.userId) {
       await queryRunner.query(

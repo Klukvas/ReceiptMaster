@@ -36,8 +36,6 @@ export const OrderLineItem = ({
   onUpdate,
   onRemove,
 }: OrderLineItemProps) => {
-  const { t } = useTranslation();
-
   const product = item.productId
     ? products.find((p) => p.id === item.productId)
     : undefined;
@@ -47,7 +45,6 @@ export const OrderLineItem = ({
     return (
       <ProductSearchCard
         products={products}
-        index={index}
         canRemove={canRemove}
         onSelect={(productId) => onUpdate(index, 'productId', productId)}
         onRemove={() => onRemove(index)}
@@ -75,7 +72,6 @@ export const OrderLineItem = ({
 
 interface ProductSearchCardProps {
   products: Product[];
-  index: number;
   canRemove: boolean;
   onSelect: (productId: string) => void;
   onRemove: () => void;
@@ -83,7 +79,6 @@ interface ProductSearchCardProps {
 
 const ProductSearchCard = ({
   products,
-  index,
   canRemove,
   onSelect,
   onRemove,

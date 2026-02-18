@@ -138,10 +138,7 @@ export class UsersService {
   }
 
   async revokeRefreshToken(token: string): Promise<void> {
-    await this.refreshTokenRepository.update(
-      { token },
-      { revoked: true },
-    );
+    await this.refreshTokenRepository.update({ token }, { revoked: true });
   }
 
   async revokeAllUserTokens(userId: string): Promise<void> {
@@ -163,7 +160,10 @@ export class UsersService {
     });
   }
 
-  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<Omit<User, "password">> {
+  async updateProfile(
+    userId: string,
+    updateProfileDto: UpdateProfileDto,
+  ): Promise<Omit<User, "password">> {
     const { email } = updateProfileDto;
 
     const existingUser = await this.userRepository.findOne({
@@ -188,11 +188,17 @@ export class UsersService {
     return userWithoutPassword;
   }
 
-  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<void> {
     const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
 
     if (newPassword !== confirmPassword) {
-      throw ApiErrors.VALIDATION_ERROR("password", "Новый пароль и подтверждение не совпадают");
+      throw ApiErrors.VALIDATION_ERROR(
+        "password",
+        "Новый пароль и подтверждение не совпадают",
+      );
     }
 
     const user = await this.userRepository.findOne({
@@ -203,14 +209,23 @@ export class UsersService {
       throw ApiErrors.USER_NOT_FOUND(userId);
     }
 
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
     if (!isCurrentPasswordValid) {
-      throw ApiErrors.VALIDATION_ERROR("currentPassword", "Текущий пароль неверен");
+      throw ApiErrors.VALIDATION_ERROR(
+        "currentPassword",
+        "Текущий пароль неверен",
+      );
     }
 
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      throw ApiErrors.VALIDATION_ERROR("newPassword", "Новый пароль должен отличаться от текущего");
+      throw ApiErrors.VALIDATION_ERROR(
+        "newPassword",
+        "Новый пароль должен отличаться от текущего",
+      );
     }
 
     const saltRounds = 10;

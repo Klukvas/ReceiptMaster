@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MoreVertical, Edit, XCircle, Printer, FileText, Trash2,
-  Download, CheckCircle, Eye, Copy,
+  Download, CheckCircle, Eye,
 } from 'lucide-react';
 import type { Order } from '../../lib/api';
 import { useTranslation } from '../../hooks/useTranslation';

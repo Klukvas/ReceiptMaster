@@ -59,8 +59,7 @@ export class ProductsService {
       });
     }
 
-    const sortColumn =
-      PRODUCT_SORTABLE_COLUMNS[sortBy] || "product.created_at";
+    const sortColumn = PRODUCT_SORTABLE_COLUMNS[sortBy] || "product.created_at";
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 
@@ -123,7 +122,10 @@ export class ProductsService {
     });
   }
 
-  async removeBulk(ids: string[], user: User): Promise<{ deleted: number; skipped: string[] }> {
+  async removeBulk(
+    ids: string[],
+    user: User,
+  ): Promise<{ deleted: number; skipped: string[] }> {
     const skipped: string[] = [];
     let deleted = 0;
 

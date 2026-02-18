@@ -87,9 +87,13 @@ export abstract class BaseObjectStorageService {
 
       this.logger.log(`Deleting file from S3: bucket=${bucket}, key=${key}`);
       const result = await this.s3.deleteObject(params).promise();
-      this.logger.log(`File deleted successfully from S3: ${key}, result: ${JSON.stringify(result)}`);
+      this.logger.log(
+        `File deleted successfully from S3: ${key}, result: ${JSON.stringify(result)}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to delete file from S3: bucket=${bucket}, key=${key}, error: ${error.message}`);
+      this.logger.error(
+        `Failed to delete file from S3: bucket=${bucket}, key=${key}, error: ${error.message}`,
+      );
       this.logger.error(`Error stack: ${(error as any)?.stack}`);
       throw error;
     }

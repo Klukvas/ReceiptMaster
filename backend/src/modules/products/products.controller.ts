@@ -51,7 +51,11 @@ export class ProductsController {
   @Get("low-stock")
   @ApiOperation({ summary: "Get products with low stock" })
   @ApiResponse({ status: 200, description: "Low stock products retrieved" })
-  @ApiQuery({ name: "threshold", required: false, description: "Stock threshold (default 10)" })
+  @ApiQuery({
+    name: "threshold",
+    required: false,
+    description: "Stock threshold (default 10)",
+  })
   getLowStock(
     @Request() req: { user: User },
     @Query("threshold") threshold?: string,
@@ -85,10 +89,7 @@ export class ProductsController {
   @Delete("bulk")
   @ApiOperation({ summary: "Bulk delete products" })
   @ApiResponse({ status: 200, description: "Products deleted" })
-  removeBulk(
-    @Body() body: { ids: string[] },
-    @Request() req: { user: User },
-  ) {
+  removeBulk(@Body() body: { ids: string[] }, @Request() req: { user: User }) {
     return this.productsService.removeBulk(body.ids, req.user);
   }
 

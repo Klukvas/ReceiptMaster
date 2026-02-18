@@ -39,7 +39,11 @@ export class CacheService implements OnModuleDestroy {
     }
   }
 
-  async set(key: string, value: unknown, ttlSeconds: number = 300): Promise<void> {
+  async set(
+    key: string,
+    value: unknown,
+    ttlSeconds: number = 300,
+  ): Promise<void> {
     try {
       await this.redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
     } catch (error) {
@@ -72,7 +76,10 @@ export class CacheService implements OnModuleDestroy {
         }
       } while (cursor !== "0");
     } catch (error) {
-      this.logger.error(`Cache DELBYPAT error for "${pattern}":`, error.message);
+      this.logger.error(
+        `Cache DELBYPAT error for "${pattern}":`,
+        error.message,
+      );
     }
   }
 

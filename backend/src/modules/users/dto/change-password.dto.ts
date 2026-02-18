@@ -27,4 +27,3 @@ export class ChangePasswordDto {
   @MinLength(6, { message: "Пароль должен содержать минимум 6 символов" })
   confirmPassword: string;
 }
-

@@ -133,7 +133,9 @@ export class SettingsController {
         userId: req.user.id,
       };
     } catch (error) {
-      this.logger.error(`Failed to delete logo for user ${req.user.id}: ${error.message}`);
+      this.logger.error(
+        `Failed to delete logo for user ${req.user.id}: ${error.message}`,
+      );
       throw ApiErrors.FILE_DELETE_FAILED("logo");
     }
   }
@@ -141,14 +143,14 @@ export class SettingsController {
   @Get("templates")
   getAvailableTemplates() {
     return {
-      data: Object.values(TEMPLATE_METADATA).map(template => ({
+      data: Object.values(TEMPLATE_METADATA).map((template) => ({
         id: template.id,
         name: template.name,
         description: template.description,
         category: template.category,
         features: template.features,
-        colors: template.colors
-      }))
+        colors: template.colors,
+      })),
     };
   }
 
@@ -162,10 +164,10 @@ export class SettingsController {
   @Post("template")
   async updateTemplateSettings(
     @Request() req: { user: User },
-    @Body() body: { templateId: string }
+    @Body() body: { templateId: string },
   ) {
     await this.settingsService.setUserTemplate(req.user.id, body.templateId);
-    return { message: 'Template setting updated successfully' };
+    return { message: "Template setting updated successfully" };
   }
 
   @Get("receipt-title")
@@ -177,55 +179,62 @@ export class SettingsController {
   @Post("receipt-title")
   async updateReceiptTitle(
     @Request() req: { user: User },
-    @Body() body: { title: string }
+    @Body() body: { title: string },
   ) {
     await this.settingsService.setReceiptTitle(req.user.id, body.title);
-    return { message: 'Receipt title updated successfully' };
+    return { message: "Receipt title updated successfully" };
   }
 
   @Get("template-language")
   async getTemplateLanguage(@Request() req: { user: User }) {
-    const language = await this.settingsService.getTemplateLanguage(req.user.id);
+    const language = await this.settingsService.getTemplateLanguage(
+      req.user.id,
+    );
     return { data: { language } };
   }
 
   @Post("template-language")
   async updateTemplateLanguage(
     @Request() req: { user: User },
-    @Body() body: { language: string }
+    @Body() body: { language: string },
   ) {
     await this.settingsService.setTemplateLanguage(req.user.id, body.language);
-    return { message: 'Template language updated successfully' };
+    return { message: "Template language updated successfully" };
   }
 
   @Get("footer-title")
   async getFooterTitle(@Request() req: { user: User }) {
     const footerTitle = await this.settingsService.getFooterTitle(req.user.id);
-    return { data: { footerTitle: footerTitle || '' } };
+    return { data: { footerTitle: footerTitle || "" } };
   }
 
   @Post("footer-title")
   async updateFooterTitle(
     @Request() req: { user: User },
-    @Body() body: { footerTitle: string }
+    @Body() body: { footerTitle: string },
   ) {
     await this.settingsService.setFooterTitle(req.user.id, body.footerTitle);
-    return { message: 'Footer title updated successfully' };
+    return { message: "Footer title updated successfully" };
   }
 
   @Get("footer-subtitle")
   async getFooterSubtitle(@Request() req: { user: User }) {
-    const footerSubtitle = await this.settingsService.getFooterSubtitle(req.user.id);
-    return { data: { footerSubtitle: footerSubtitle || '' } };
+    const footerSubtitle = await this.settingsService.getFooterSubtitle(
+      req.user.id,
+    );
+    return { data: { footerSubtitle: footerSubtitle || "" } };
   }
 
   @Post("footer-subtitle")
   async updateFooterSubtitle(
     @Request() req: { user: User },
-    @Body() body: { footerSubtitle: string }
+    @Body() body: { footerSubtitle: string },
   ) {
-    await this.settingsService.setFooterSubtitle(req.user.id, body.footerSubtitle);
-    return { message: 'Footer subtitle updated successfully' };
+    await this.settingsService.setFooterSubtitle(
+      req.user.id,
+      body.footerSubtitle,
+    );
+    return { message: "Footer subtitle updated successfully" };
   }
 
   @Get("company-info")
@@ -237,7 +246,8 @@ export class SettingsController {
   @Post("company-info")
   async updateCompanyInfo(
     @Request() req: { user: User },
-    @Body() body: {
+    @Body()
+    body: {
       companyName?: string;
       companyAddress?: string;
       companyEmail?: string;
@@ -247,9 +257,9 @@ export class SettingsController {
       companySwift?: string;
       companyWebsite?: string;
       companyTagline?: string;
-    }
+    },
   ) {
     await this.settingsService.updateCompanyInfo(req.user.id, body);
-    return { message: 'Company information updated successfully' };
+    return { message: "Company information updated successfully" };
   }
 }

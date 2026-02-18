@@ -10,7 +10,13 @@ import {
   Request,
   Logger,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBearerAuth,
+} from "@nestjs/swagger";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
@@ -157,14 +163,15 @@ export class ReceiptsController {
   }
 
   @Post("test-preview")
-  @ApiOperation({ summary: "Generate a test receipt PDF preview using current user settings" })
+  @ApiOperation({
+    summary: "Generate a test receipt PDF preview using current user settings",
+  })
   @ApiResponse({ status: 200, description: "Test PDF generated" })
-  async testPreview(
-    @Request() req: { user: User },
-    @Res() res: Response,
-  ) {
+  async testPreview(@Request() req: { user: User }, @Res() res: Response) {
     try {
-      const pdfBuffer = await this.receiptsService.generateTestReceipt(req.user);
+      const pdfBuffer = await this.receiptsService.generateTestReceipt(
+        req.user,
+      );
       res.set({
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="test-receipt.pdf"',

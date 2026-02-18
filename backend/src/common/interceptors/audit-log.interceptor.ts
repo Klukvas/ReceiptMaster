@@ -35,7 +35,8 @@ export class AuditLogInterceptor implements NestInterceptor {
           action,
           entityType,
           entityId: entityId || responseData?.id,
-          newValues: method !== "DELETE" ? this.sanitize(request.body) : undefined,
+          newValues:
+            method !== "DELETE" ? this.sanitize(request.body) : undefined,
           ipAddress: request.ip,
           userAgent: request.headers["user-agent"]?.substring(0, 500),
           requestId: request["requestId"],
@@ -45,9 +46,16 @@ export class AuditLogInterceptor implements NestInterceptor {
   }
 
   private mapAction(method: string, handlerName: string): string {
-    if (handlerName.startsWith("create") || handlerName.startsWith("register")) return "CREATE";
-    if (handlerName.startsWith("update") || handlerName.startsWith("confirm") || handlerName.startsWith("cancel")) return "UPDATE";
-    if (handlerName.startsWith("delete") || handlerName.startsWith("remove")) return "DELETE";
+    if (handlerName.startsWith("create") || handlerName.startsWith("register"))
+      return "CREATE";
+    if (
+      handlerName.startsWith("update") ||
+      handlerName.startsWith("confirm") ||
+      handlerName.startsWith("cancel")
+    )
+      return "UPDATE";
+    if (handlerName.startsWith("delete") || handlerName.startsWith("remove"))
+      return "DELETE";
     if (handlerName.startsWith("void")) return "VOID";
     if (method === "POST") return "CREATE";
     if (method === "PUT" || method === "PATCH") return "UPDATE";
@@ -58,7 +66,13 @@ export class AuditLogInterceptor implements NestInterceptor {
   private sanitize(body: Record<string, any>): Record<string, any> | undefined {
     if (!body || typeof body !== "object") return undefined;
     const sanitized = { ...body };
-    const sensitiveFields = ["password", "currentPassword", "newPassword", "confirmPassword", "refresh_token"];
+    const sensitiveFields = [
+      "password",
+      "currentPassword",
+      "newPassword",
+      "confirmPassword",
+      "refresh_token",
+    ];
     for (const field of sensitiveFields) {
       if (field in sanitized) {
         sanitized[field] = "***";

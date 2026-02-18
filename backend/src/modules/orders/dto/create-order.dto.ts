@@ -25,7 +25,8 @@ export class CreateOrderItemDto {
   qty: number;
 
   @ApiProperty({
-    description: "Цена за единицу в копейках (опционально, по умолчанию используется цена из продукта)",
+    description:
+      "Цена за единицу в копейках (опционально, по умолчанию используется цена из продукта)",
     example: 99900,
     required: false,
   })

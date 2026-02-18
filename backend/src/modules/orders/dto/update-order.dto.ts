@@ -26,7 +26,8 @@ export class UpdateOrderItemDto {
   qty: number;
 
   @ApiProperty({
-    description: "Unit price in cents (optional, defaults to product sale price)",
+    description:
+      "Unit price in cents (optional, defaults to product sale price)",
     example: 99900,
     required: false,
   })

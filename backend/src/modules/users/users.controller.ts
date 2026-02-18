@@ -105,7 +105,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: "Unauthorized" })
   async updateProfile(
     @Request() req,
-    @Body() updateProfileDto: UpdateProfileDto
+    @Body() updateProfileDto: UpdateProfileDto,
   ): Promise<Omit<User, "password">> {
     return this.usersService.updateProfile(req.user.id, updateProfileDto);
   }
@@ -119,7 +119,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: "Unauthorized" })
   async changePassword(
     @Request() req,
-    @Body() changePasswordDto: ChangePasswordDto
+    @Body() changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     await this.usersService.changePassword(req.user.id, changePasswordDto);
     return { message: "Password changed successfully" };

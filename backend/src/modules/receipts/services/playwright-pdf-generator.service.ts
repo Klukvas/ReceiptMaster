@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { chromium, Browser } from 'playwright';
-import * as fs from 'fs/promises';
+import { Injectable, Logger } from "@nestjs/common";
+import { chromium, Browser } from "playwright";
+import * as fs from "fs/promises";
 
 @Injectable()
 export class PlaywrightPdfGenerator {
@@ -9,68 +9,71 @@ export class PlaywrightPdfGenerator {
 
   async initialize(): Promise<void> {
     if (!this.browser) {
-      this.logger.log('Initializing Playwright browser...');
+      this.logger.log("Initializing Playwright browser...");
       this.browser = await chromium.launch({
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
-        ]
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--disable-gpu",
+        ],
       });
-      this.logger.log('Playwright browser initialized');
+      this.logger.log("Playwright browser initialized");
     }
   }
 
   async generatePdf(html: string, options: PdfOptions = {}): Promise<Buffer> {
     await this.initialize();
-    
+
     if (!this.browser) {
-      throw new Error('Browser not initialized');
+      throw new Error("Browser not initialized");
     }
 
     const page = await this.browser.newPage();
-    
+
     try {
       // Set content and wait for it to load
-      await page.setContent(html, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
+      await page.setContent(html, {
+        waitUntil: "networkidle",
+        timeout: 30000,
       });
 
       // Emulate print media for consistent styling
-      await page.emulateMedia({ media: 'print' });
+      await page.emulateMedia({ media: "print" });
 
       // Generate PDF with optimized settings
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         margin: {
-          top: '20mm',
-          bottom: '20mm',
-          left: '15mm',
-          right: '15mm'
+          top: "20mm",
+          bottom: "20mm",
+          left: "15mm",
+          right: "15mm",
         },
         printBackground: true,
         preferCSSPageSize: false,
         displayHeaderFooter: false,
-        ...options
+        ...options,
       });
 
-      this.logger.log('PDF generated successfully');
+      this.logger.log("PDF generated successfully");
       return pdfBuffer;
     } catch (error) {
-      this.logger.error('Error generating PDF:', error);
+      this.logger.error("Error generating PDF:", error);
       throw error;
     } finally {
       await page.close();
     }
   }
 
-  async generatePdfFromFile(htmlFilePath: string, options: PdfOptions = {}): Promise<Buffer> {
-    const html = await fs.readFile(htmlFilePath, 'utf-8');
+  async generatePdfFromFile(
+    htmlFilePath: string,
+    options: PdfOptions = {},
+  ): Promise<Buffer> {
+    const html = await fs.readFile(htmlFilePath, "utf-8");
     return this.generatePdf(html, options);
   }
 
@@ -78,7 +81,7 @@ export class PlaywrightPdfGenerator {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
-      this.logger.log('Playwright browser closed');
+      this.logger.log("Playwright browser closed");
     }
   }
 
@@ -88,7 +91,7 @@ export class PlaywrightPdfGenerator {
 }
 
 export interface PdfOptions {
-  format?: 'A4' | 'A3' | 'A2' | 'A1' | 'A0' | 'Letter' | 'Legal' | 'Tabloid';
+  format?: "A4" | "A3" | "A2" | "A1" | "A0" | "Letter" | "Legal" | "Tabloid";
   margin?: {
     top?: string;
     bottom?: string;

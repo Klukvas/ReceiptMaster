@@ -1,8 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { ShoppingCart, Lock, Plus } from 'lucide-react';
+import { ShoppingCart, Lock } from 'lucide-react';
 import { ordersApi, formatCurrency, formatDate, type Order } from '../lib/api';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
 import { DataTable } from '../components/ui/DataTable';
 import {
   CreateOrderModal,
@@ -230,25 +228,6 @@ export const OrdersPage = () => {
       </div>
     </div>
   ), [t, handleConfirm, handleCancel, handleDownloadReceipt, handlePrintReceipt, handleGenerateReceipt, handleDeleteOrder, isDeleting, setSelectedOrder, setEditingOrder]);
-
-  // Empty state with CTA
-  const emptyState = (
-    <div className="flex flex-col items-center py-16 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-        <ShoppingCart className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-      </div>
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-        {t('orders.emptyTitle')}
-      </h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-sm">
-        {t('orders.emptyDescription')}
-      </p>
-      <Button onClick={() => setShowForm(true)}>
-        <Plus className="w-4 h-4 mr-1.5" />
-        {t('orders.createOrder')}
-      </Button>
-    </div>
-  );
 
   // Filter bar rendered above the DataTable
   const filterBar = (

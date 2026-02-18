@@ -12,7 +12,13 @@ import { ReceiptsModule } from "../receipts/receipts.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, IdempotencyKey, Product, Recipient]),
+    TypeOrmModule.forFeature([
+      Order,
+      OrderItem,
+      IdempotencyKey,
+      Product,
+      Recipient,
+    ]),
     ReceiptsModule,
   ],
   controllers: [OrdersController],

@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { UserSettings } from '../entities/user-settings.entity';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { UserSettings } from "../entities/user-settings.entity";
 
 @Injectable()
 export class SettingsService {
@@ -28,7 +28,7 @@ export class SettingsService {
     const settings = await this.userSettingsRepository.findOne({
       where: { userId },
     });
-    return settings?.templateId || 'standard';
+    return settings?.templateId || "standard";
   }
 
   async setUserTemplate(userId: string, templateId: string): Promise<void> {
@@ -43,7 +43,10 @@ export class SettingsService {
     });
   }
 
-  async updateUserSettings(userId: string, updates: Partial<UserSettings>): Promise<UserSettings> {
+  async updateUserSettings(
+    userId: string,
+    updates: Partial<UserSettings>,
+  ): Promise<UserSettings> {
     const settings = await this.getOrCreateSettings(userId);
     Object.assign(settings, updates);
     return this.userSettingsRepository.save(settings);
@@ -53,7 +56,7 @@ export class SettingsService {
     const settings = await this.userSettingsRepository.findOne({
       where: { userId },
     });
-    return settings?.receiptTitle || 'Invoice';
+    return settings?.receiptTitle || "Invoice";
   }
 
   async setReceiptTitle(userId: string, title: string): Promise<void> {
@@ -66,7 +69,7 @@ export class SettingsService {
     const settings = await this.userSettingsRepository.findOne({
       where: { userId },
     });
-    return settings?.templateLanguage || 'en';
+    return settings?.templateLanguage || "en";
   }
 
   async setTemplateLanguage(userId: string, language: string): Promise<void> {
@@ -95,7 +98,10 @@ export class SettingsService {
     return settings?.subFooterText || undefined;
   }
 
-  async setFooterSubtitle(userId: string, footerSubtitle: string): Promise<void> {
+  async setFooterSubtitle(
+    userId: string,
+    footerSubtitle: string,
+  ): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
     settings.subFooterText = footerSubtitle;
     await this.userSettingsRepository.save(settings);
@@ -107,30 +113,42 @@ export class SettingsService {
     });
 
     return {
-      companyName: settings?.companyName || '',
-      companyAddress: settings?.companyAddress || '',
-      companyEmail: settings?.companyEmail || '',
-      companyPhone: settings?.companyPhone || '',
-      companyTaxId: settings?.companyTaxId || '',
-      companyIban: settings?.companyIban || '',
-      companySwift: settings?.companySwift || '',
-      companyWebsite: settings?.companyWebsite || '',
-      companyTagline: settings?.companyTagline || '',
+      companyName: settings?.companyName || "",
+      companyAddress: settings?.companyAddress || "",
+      companyEmail: settings?.companyEmail || "",
+      companyPhone: settings?.companyPhone || "",
+      companyTaxId: settings?.companyTaxId || "",
+      companyIban: settings?.companyIban || "",
+      companySwift: settings?.companySwift || "",
+      companyWebsite: settings?.companyWebsite || "",
+      companyTagline: settings?.companyTagline || "",
     };
   }
 
-  async updateCompanyInfo(userId: string, companyInfo: Partial<UserSettings>): Promise<void> {
+  async updateCompanyInfo(
+    userId: string,
+    companyInfo: Partial<UserSettings>,
+  ): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
 
-    if (companyInfo.companyName !== undefined) settings.companyName = companyInfo.companyName;
-    if (companyInfo.companyAddress !== undefined) settings.companyAddress = companyInfo.companyAddress;
-    if (companyInfo.companyEmail !== undefined) settings.companyEmail = companyInfo.companyEmail;
-    if (companyInfo.companyPhone !== undefined) settings.companyPhone = companyInfo.companyPhone;
-    if (companyInfo.companyTaxId !== undefined) settings.companyTaxId = companyInfo.companyTaxId;
-    if (companyInfo.companyIban !== undefined) settings.companyIban = companyInfo.companyIban;
-    if (companyInfo.companySwift !== undefined) settings.companySwift = companyInfo.companySwift;
-    if (companyInfo.companyWebsite !== undefined) settings.companyWebsite = companyInfo.companyWebsite;
-    if (companyInfo.companyTagline !== undefined) settings.companyTagline = companyInfo.companyTagline;
+    if (companyInfo.companyName !== undefined)
+      settings.companyName = companyInfo.companyName;
+    if (companyInfo.companyAddress !== undefined)
+      settings.companyAddress = companyInfo.companyAddress;
+    if (companyInfo.companyEmail !== undefined)
+      settings.companyEmail = companyInfo.companyEmail;
+    if (companyInfo.companyPhone !== undefined)
+      settings.companyPhone = companyInfo.companyPhone;
+    if (companyInfo.companyTaxId !== undefined)
+      settings.companyTaxId = companyInfo.companyTaxId;
+    if (companyInfo.companyIban !== undefined)
+      settings.companyIban = companyInfo.companyIban;
+    if (companyInfo.companySwift !== undefined)
+      settings.companySwift = companyInfo.companySwift;
+    if (companyInfo.companyWebsite !== undefined)
+      settings.companyWebsite = companyInfo.companyWebsite;
+    if (companyInfo.companyTagline !== undefined)
+      settings.companyTagline = companyInfo.companyTagline;
 
     await this.userSettingsRepository.save(settings);
   }
@@ -163,7 +181,7 @@ export class SettingsService {
 
     return {
       companyInfo: {
-        companyName: settings?.companyName || '',
+        companyName: settings?.companyName || "",
         companyAddress: settings?.companyAddress || undefined,
         companyEmail: settings?.companyEmail || undefined,
         companyPhone: settings?.companyPhone || undefined,
@@ -173,9 +191,9 @@ export class SettingsService {
         companyWebsite: settings?.companyWebsite || undefined,
         companyTagline: settings?.companyTagline || undefined,
       },
-      templateId: settings?.templateId || 'standard',
-      receiptTitle: settings?.receiptTitle || 'Invoice',
-      templateLanguage: settings?.templateLanguage || 'en',
+      templateId: settings?.templateId || "standard",
+      receiptTitle: settings?.receiptTitle || "Invoice",
+      templateLanguage: settings?.templateLanguage || "en",
       footerTitle: settings?.footerText || undefined,
       footerSubtitle: settings?.subFooterText || undefined,
     };

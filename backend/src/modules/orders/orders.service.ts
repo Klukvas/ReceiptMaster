@@ -56,7 +56,11 @@ export class OrdersService {
     await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
   }
 
-  private dashboardCacheKey(method: string, userId: string, ...args: unknown[]): string {
+  private dashboardCacheKey(
+    method: string,
+    userId: string,
+    ...args: unknown[]
+  ): string {
     return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
   }
 
@@ -69,10 +73,9 @@ export class OrdersService {
     const result = await this.dataSource.transaction(async (manager) => {
       // Acquire advisory lock if idempotency key is provided (prevents race conditions)
       if (idempotencyKey) {
-        await manager.query(
-          `SELECT pg_advisory_xact_lock(hashtext($1))`,
-          [idempotencyKey],
-        );
+        await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+          idempotencyKey,
+        ]);
 
         const existingKey = await manager.findOne(IdempotencyKey, {
           where: { key: idempotencyKey, user_id: user.id },
@@ -128,7 +131,8 @@ export class OrdersService {
         }
 
         // Use custom price if provided, otherwise use product's sale price
-        const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+        const unitPriceCents =
+          itemDto.unitPriceCents ?? product.sale_price_cents;
         const lineTotalCents = unitPriceCents * itemDto.qty;
         subtotalCents += lineTotalCents;
       }
@@ -150,7 +154,8 @@ export class OrdersService {
       for (const itemDto of createOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
         // Use custom price if provided, otherwise use product's sale price
-        const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+        const unitPriceCents =
+          itemDto.unitPriceCents ?? product.sale_price_cents;
         const lineTotalCents = unitPriceCents * itemDto.qty;
 
         const orderItem = manager.create(OrderItem, {
@@ -173,7 +178,9 @@ export class OrdersService {
       // Save idempotency key if provided
       if (idempotencyKey) {
         const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + IDEMPOTENCY_KEY_EXPIRATION_HOURS);
+        expiresAt.setHours(
+          expiresAt.getHours() + IDEMPOTENCY_KEY_EXPIRATION_HOURS,
+        );
 
         const idempotencyRecord = manager.create(IdempotencyKey, {
           key: idempotencyKey,
@@ -261,8 +268,7 @@ export class OrdersService {
       });
     }
 
-    const sortColumn =
-      ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
+    const sortColumn = ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 
@@ -356,8 +362,12 @@ export class OrdersService {
 
         // Collect all product IDs that need to be updated (old + new)
         const oldProductIds = existingOrderItems.map((item) => item.product_id);
-        const newProductIds = updateOrderDto.items.map((item) => item.productId);
-        const allProductIds = [...new Set([...oldProductIds, ...newProductIds])];
+        const newProductIds = updateOrderDto.items.map(
+          (item) => item.productId,
+        );
+        const allProductIds = [
+          ...new Set([...oldProductIds, ...newProductIds]),
+        ];
 
         // Lock all products that will be affected
         const allProducts = await manager.find(Product, {
@@ -375,7 +385,9 @@ export class OrdersService {
         }
 
         // Verify ownership of new products
-        const products = newProductIds.map((pid) => productMap.get(pid)).filter(Boolean) as Product[];
+        const products = newProductIds
+          .map((pid) => productMap.get(pid))
+          .filter(Boolean) as Product[];
         const ownedProducts = products.filter((p) => p.user_id === user.id);
 
         if (ownedProducts.length !== newProductIds.length) {
@@ -398,7 +410,8 @@ export class OrdersService {
           }
 
           // Use custom price if provided, otherwise use product's sale price
-          const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+          const unitPriceCents =
+            itemDto.unitPriceCents ?? product.sale_price_cents;
           const lineTotalCents = unitPriceCents * itemDto.qty;
           subtotalCents += lineTotalCents;
         }
@@ -415,7 +428,8 @@ export class OrdersService {
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
           // Use custom price if provided, otherwise use product's sale price
-          const unitPriceCents = itemDto.unitPriceCents ?? product.sale_price_cents;
+          const unitPriceCents =
+            itemDto.unitPriceCents ?? product.sale_price_cents;
           const lineTotalCents = unitPriceCents * itemDto.qty;
 
           const orderItem = manager.create(OrderItem, {
@@ -577,7 +591,10 @@ export class OrdersService {
     return result;
   }
 
-  private async cachedDashboard<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  private async cachedDashboard<T>(
+    key: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     const cached = await this.cacheService.get<T>(key);
     if (cached) return cached;
     const result = await fn();
@@ -599,9 +616,14 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey("revenueByProducts", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "revenueByProducts",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         oi.product_id,
         oi.product_name,
@@ -614,35 +636,35 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += `
+      query += `
       GROUP BY oi.product_id, oi.product_name, o.currency
       ORDER BY total_revenue_cents DESC
     `;
 
-    const results = await this.dataSource.query(query, params);
+      const results = await this.dataSource.query(query, params);
 
-    return results.map((row) => ({
-      product_id: row.product_id,
-      product_name: row.product_name,
-      total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
-      total_quantity: parseInt(row.total_quantity) || 0,
-      currency: row.currency,
-    }));
+      return results.map((row) => ({
+        product_id: row.product_id,
+        product_name: row.product_name,
+        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+        total_quantity: parseInt(row.total_quantity) || 0,
+        currency: row.currency,
+      }));
     });
   }
 
@@ -659,9 +681,14 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey("revenueByRecipients", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "revenueByRecipients",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         o.recipient_id,
         r.name as recipient_name,
@@ -675,35 +702,35 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += `
+      query += `
       GROUP BY o.recipient_id, r.name, o.currency
       ORDER BY total_revenue_cents DESC
     `;
 
-    const results = await this.dataSource.query(query, params);
+      const results = await this.dataSource.query(query, params);
 
-    return results.map((row) => ({
-      recipient_id: row.recipient_id,
-      recipient_name: row.recipient_name,
-      total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
-      total_orders: parseInt(row.total_orders) || 0,
-      currency: row.currency,
-    }));
+      return results.map((row) => ({
+        recipient_id: row.recipient_id,
+        recipient_name: row.recipient_name,
+        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+        total_orders: parseInt(row.total_orders) || 0,
+        currency: row.currency,
+      }));
     });
   }
 
@@ -716,9 +743,14 @@ export class OrdersService {
     total_orders: number;
     currency: string;
   }> {
-    const cacheKey = this.dashboardCacheKey("totalRevenue", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "totalRevenue",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
         COUNT(DISTINCT o.id) as total_orders,
@@ -729,31 +761,33 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += ` GROUP BY o.currency`;
+      query += ` GROUP BY o.currency`;
 
-    const results = await this.dataSource.query(query, params);
-    const result = results[0];
+      const results = await this.dataSource.query(query, params);
+      const result = results[0];
 
-    return {
-      total_revenue_cents: result ? parseInt(result.total_revenue_cents) || 0 : 0,
-      total_orders: result ? parseInt(result.total_orders) || 0 : 0,
-      currency: result?.currency || "UAH",
-    };
+      return {
+        total_revenue_cents: result
+          ? parseInt(result.total_revenue_cents) || 0
+          : 0,
+        total_orders: result ? parseInt(result.total_orders) || 0 : 0,
+        currency: result?.currency || "UAH",
+      };
     });
   }
 
@@ -771,9 +805,14 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey("turnoverByProducts", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "turnoverByProducts",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         oi.product_id,
         oi.product_name,
@@ -785,35 +824,35 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += `
+      query += `
       GROUP BY oi.product_id, oi.product_name, o.currency
       ORDER BY total_turnover_cents DESC
     `;
 
-    const results = await this.dataSource.query(query, params);
+      const results = await this.dataSource.query(query, params);
 
-    return results.map((row) => ({
-      product_id: row.product_id,
-      product_name: row.product_name,
-      total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
-      total_quantity: parseInt(row.total_quantity) || 0,
-      currency: row.currency,
-    }));
+      return results.map((row) => ({
+        product_id: row.product_id,
+        product_name: row.product_name,
+        total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
+        total_quantity: parseInt(row.total_quantity) || 0,
+        currency: row.currency,
+      }));
     });
   }
 
@@ -830,9 +869,14 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey("turnoverByRecipients", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "turnoverByRecipients",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         o.recipient_id,
         r.name as recipient_name,
@@ -844,35 +888,35 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += `
+      query += `
       GROUP BY o.recipient_id, r.name, o.currency
       ORDER BY total_turnover_cents DESC
     `;
 
-    const results = await this.dataSource.query(query, params);
+      const results = await this.dataSource.query(query, params);
 
-    return results.map((row) => ({
-      recipient_id: row.recipient_id,
-      recipient_name: row.recipient_name,
-      total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
-      total_orders: parseInt(row.total_orders) || 0,
-      currency: row.currency,
-    }));
+      return results.map((row) => ({
+        recipient_id: row.recipient_id,
+        recipient_name: row.recipient_name,
+        total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
+        total_orders: parseInt(row.total_orders) || 0,
+        currency: row.currency,
+      }));
     });
   }
 
@@ -885,9 +929,14 @@ export class OrdersService {
     total_orders: number;
     currency: string;
   }> {
-    const cacheKey = this.dashboardCacheKey("totalTurnover", user.id, startDate, endDate);
+    const cacheKey = this.dashboardCacheKey(
+      "totalTurnover",
+      user.id,
+      startDate,
+      endDate,
+    );
     return this.cachedDashboard(cacheKey, async () => {
-    let query = `
+      let query = `
       SELECT
         SUM(o.total_cents) as total_turnover_cents,
         COUNT(o.id) as total_orders,
@@ -896,42 +945,46 @@ export class OrdersService {
       WHERE o.status = $1 AND o.user_id = $2
     `;
 
-    const params: any[] = [OrderStatus.CONFIRMED, user.id];
-    let paramIndex = 3;
+      const params: any[] = [OrderStatus.CONFIRMED, user.id];
+      let paramIndex = 3;
 
-    if (startDate) {
-      query += ` AND o.created_at >= $${paramIndex}`;
-      params.push(startDate);
-      paramIndex++;
-    }
+      if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex}`;
+        params.push(startDate);
+        paramIndex++;
+      }
 
-    if (endDate) {
-      query += ` AND o.created_at <= $${paramIndex}`;
-      params.push(endDate);
-      paramIndex++;
-    }
+      if (endDate) {
+        query += ` AND o.created_at <= $${paramIndex}`;
+        params.push(endDate);
+        paramIndex++;
+      }
 
-    query += ` GROUP BY o.currency`;
+      query += ` GROUP BY o.currency`;
 
-    const results = await this.dataSource.query(query, params);
-    const result = results[0];
+      const results = await this.dataSource.query(query, params);
+      const result = results[0];
 
-    return {
-      total_turnover_cents: result ? parseInt(result.total_turnover_cents) || 0 : 0,
-      total_orders: result ? parseInt(result.total_orders) || 0 : 0,
-      currency: result?.currency || "UAH",
-    };
+      return {
+        total_turnover_cents: result
+          ? parseInt(result.total_turnover_cents) || 0
+          : 0,
+        total_orders: result ? parseInt(result.total_orders) || 0 : 0,
+        currency: result?.currency || "UAH",
+      };
     });
   }
 
   async getDailyRevenue(
     user: User,
     days: number = 7,
-  ): Promise<Array<{ date: string; revenue_cents: number; turnover_cents: number }>> {
+  ): Promise<
+    Array<{ date: string; revenue_cents: number; turnover_cents: number }>
+  > {
     const cacheKey = this.dashboardCacheKey("dailyRevenue", user.id, days);
     return this.cachedDashboard(cacheKey, async () => {
-    const results = await this.dataSource.query(
-      `
+      const results = await this.dataSource.query(
+        `
       SELECT
         d.date::text as date,
         COALESCE(SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty), 0)::integer as revenue_cents,
@@ -950,14 +1003,14 @@ export class OrdersService {
       GROUP BY d.date
       ORDER BY d.date ASC
       `,
-      [days, user.id],
-    );
+        [days, user.id],
+      );
 
-    return results.map((row) => ({
-      date: row.date,
-      revenue_cents: parseInt(row.revenue_cents) || 0,
-      turnover_cents: parseInt(row.turnover_cents) || 0,
-    }));
+      return results.map((row) => ({
+        date: row.date,
+        revenue_cents: parseInt(row.revenue_cents) || 0,
+        turnover_cents: parseInt(row.turnover_cents) || 0,
+      }));
     });
   }
 
@@ -966,8 +1019,8 @@ export class OrdersService {
   ): Promise<{ draft: number; confirmed: number; cancelled: number }> {
     const cacheKey = this.dashboardCacheKey("statusSummary", user.id);
     return this.cachedDashboard(cacheKey, async () => {
-    const results = await this.dataSource.query(
-      `
+      const results = await this.dataSource.query(
+        `
       SELECT
         status,
         COUNT(*)::integer as count
@@ -975,16 +1028,17 @@ export class OrdersService {
       WHERE user_id = $1 AND deleted_at IS NULL
       GROUP BY status
       `,
-      [user.id],
-    );
+        [user.id],
+      );
 
-    const summary = { draft: 0, confirmed: 0, cancelled: 0 };
-    for (const row of results) {
-      if (row.status in summary) {
-        summary[row.status as keyof typeof summary] = parseInt(row.count) || 0;
+      const summary = { draft: 0, confirmed: 0, cancelled: 0 };
+      for (const row of results) {
+        if (row.status in summary) {
+          summary[row.status as keyof typeof summary] =
+            parseInt(row.count) || 0;
+        }
       }
-    }
-    return summary;
+      return summary;
     });
   }
 }

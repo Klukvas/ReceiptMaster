@@ -6,7 +6,10 @@ import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
-import { PdfGeneratorService, ReceiptStyle } from "./services/pdf-generator.service";
+import {
+  PdfGeneratorService,
+  ReceiptStyle,
+} from "./services/pdf-generator.service";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
@@ -45,28 +48,30 @@ export class ReceiptsService {
 
   private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
     switch (templateId) {
-      case 'standard':
+      case "standard":
         return ReceiptStyle.STANDARD;
-      case 'compact':
+      case "compact":
         return ReceiptStyle.COMPACT;
-      case 'classic':
+      case "classic":
         return ReceiptStyle.CLASSIC;
-      case 'modern':
+      case "modern":
         return ReceiptStyle.MODERN;
-      case 'elegant':
+      case "elegant":
         return ReceiptStyle.ELEGANT;
-      case 'vintage':
+      case "vintage":
         return ReceiptStyle.VINTAGE;
-      case 'tech':
+      case "tech":
         return ReceiptStyle.TECH;
-      case 'wave':
+      case "wave":
         return ReceiptStyle.WAVE;
-      case 'minimal':
+      case "minimal":
         return ReceiptStyle.MINIMAL;
-      case 'corporate':
+      case "corporate":
         return ReceiptStyle.CORPORATE;
       default:
-        this.logger.warn(`Unknown template ID: ${templateId}, falling back to COMPACT`);
+        this.logger.warn(
+          `Unknown template ID: ${templateId}, falling back to COMPACT`,
+        );
         return ReceiptStyle.COMPACT;
     }
   }
@@ -154,7 +159,9 @@ export class ReceiptsService {
 
   async generateTestReceipt(user: User): Promise<Buffer> {
     const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-    const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
+    const receiptStyle = this.getReceiptStyleFromTemplateId(
+      pdfSettings.templateId,
+    );
 
     const mockOrder = {
       id: "00000000-0000-0000-0000-000000000000",
@@ -179,9 +186,36 @@ export class ReceiptsService {
         user_id: user.id,
       } as any,
       items: [
-        { id: "i1", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p1", product_name: "Website Development", unit_price_cents: 1500000, qty: 1, line_total_cents: 1500000, user_id: user.id },
-        { id: "i2", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p2", product_name: "Logo Design", unit_price_cents: 350000, qty: 1, line_total_cents: 350000, user_id: user.id },
-        { id: "i3", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p3", product_name: "Technical Support", unit_price_cents: 200000, qty: 1, line_total_cents: 200000, user_id: user.id },
+        {
+          id: "i1",
+          order_id: "00000000-0000-0000-0000-000000000000",
+          product_id: "p1",
+          product_name: "Website Development",
+          unit_price_cents: 1500000,
+          qty: 1,
+          line_total_cents: 1500000,
+          user_id: user.id,
+        },
+        {
+          id: "i2",
+          order_id: "00000000-0000-0000-0000-000000000000",
+          product_id: "p2",
+          product_name: "Logo Design",
+          unit_price_cents: 350000,
+          qty: 1,
+          line_total_cents: 350000,
+          user_id: user.id,
+        },
+        {
+          id: "i3",
+          order_id: "00000000-0000-0000-0000-000000000000",
+          product_id: "p3",
+          product_name: "Technical Support",
+          unit_price_cents: 200000,
+          qty: 1,
+          line_total_cents: 200000,
+          user_id: user.id,
+        },
       ] as any,
       receipts: [] as any,
     } as Order;
@@ -202,13 +236,27 @@ export class ReceiptsService {
     if (filePath.startsWith("object-storage://")) {
       const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
       if (!parsed) {
-        throw ApiErrors.VALIDATION_ERROR("pdf_path", `Invalid path: ${filePath}`);
+        throw ApiErrors.VALIDATION_ERROR(
+          "pdf_path",
+          `Invalid path: ${filePath}`,
+        );
       }
-      pdfBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
-      try { await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key); } catch { /* cleanup */ }
+      pdfBuffer = await this.pdfStorageService.downloadFile(
+        parsed.bucket,
+        parsed.key,
+      );
+      try {
+        await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key);
+      } catch {
+        /* cleanup */
+      }
     } else {
       pdfBuffer = await fs.readFile(filePath);
-      try { await fs.unlink(filePath); } catch { /* cleanup */ }
+      try {
+        await fs.unlink(filePath);
+      } catch {
+        /* cleanup */
+      }
     }
 
     return pdfBuffer;
@@ -237,9 +285,15 @@ export class ReceiptsService {
       const savedReceipt = await manager.save(Receipt, receipt);
 
       // Unlock the order so it can be modified again
-      await manager.update(Order, { id: receipt.order_id }, { is_locked: false });
+      await manager.update(
+        Order,
+        { id: receipt.order_id },
+        { is_locked: false },
+      );
 
-      this.logger.log(`Receipt ${receipt.number} voided. Order ${receipt.order_id} unlocked.`);
+      this.logger.log(
+        `Receipt ${receipt.number} voided. Order ${receipt.order_id} unlocked.`,
+      );
 
       return savedReceipt;
     });
@@ -328,8 +382,12 @@ export class ReceiptsService {
         }
 
         // Регенерируем PDF с использованием всех настроек пользователя
-        const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-        const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
+        const pdfSettings = await this.settingsService.getAllPdfSettings(
+          user.id,
+        );
+        const receiptStyle = this.getReceiptStyleFromTemplateId(
+          pdfSettings.templateId,
+        );
 
         const { filePath, url } =
           await this.pdfGeneratorService.generateReceiptPdf(
@@ -341,7 +399,7 @@ export class ReceiptsService {
             pdfSettings.receiptTitle,
             pdfSettings.templateLanguage,
             pdfSettings.footerTitle,
-            pdfSettings.footerSubtitle
+            pdfSettings.footerSubtitle,
           );
 
         // Обновляем путь к файлу в базе данных
@@ -418,20 +476,21 @@ export class ReceiptsService {
 
     // Регенерируем PDF с использованием всех настроек пользователя
     const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-    const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
+    const receiptStyle = this.getReceiptStyleFromTemplateId(
+      pdfSettings.templateId,
+    );
 
-    const { filePath, url } =
-      await this.pdfGeneratorService.generateReceiptPdf(
-        order,
-        receipt.number,
-        pdfSettings.companyInfo,
-        user.id,
-        receiptStyle,
-        pdfSettings.receiptTitle,
-        pdfSettings.templateLanguage,
-        pdfSettings.footerTitle,
-        pdfSettings.footerSubtitle
-      );
+    const { filePath, url } = await this.pdfGeneratorService.generateReceiptPdf(
+      order,
+      receipt.number,
+      pdfSettings.companyInfo,
+      user.id,
+      receiptStyle,
+      pdfSettings.receiptTitle,
+      pdfSettings.templateLanguage,
+      pdfSettings.footerTitle,
+      pdfSettings.footerSubtitle,
+    );
 
     // Вычисляем хеш нового файла
     let fileBuffer: Buffer;

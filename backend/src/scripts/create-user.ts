@@ -13,9 +13,7 @@ import { randomBytes } from "crypto";
 
 function randomAlphanumeric(length: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  return [...randomBytes(length)]
-    .map((b) => chars[b % chars.length])
-    .join("");
+  return [...randomBytes(length)].map((b) => chars[b % chars.length]).join("");
 }
 
 function randomInt(min: number, max: number): number {
@@ -58,31 +56,156 @@ const SEED_PRODUCTS = [
 ];
 
 const SEED_RECIPIENTS = [
-  { name: "ТОВ Рога та Копита", email: "office@roga-kopyta.ua", phone: "+380441234567", address: "м. Київ, вул. Хрещатик, 1" },
-  { name: "ПП Петренко І.В.", email: "petrenko@gmail.com", phone: "+380671112233", address: "м. Львів, вул. Франка, 15" },
-  { name: "ФОП Сидоренко О.П.", email: "sydorenko@ukr.net", phone: "+380931234567", address: "м. Одеса, вул. Дерибасівська, 22" },
-  { name: "ТОВ Зелений Луг", email: "info@greenmeadow.ua", phone: "+380502223344", address: "м. Харків, пр. Науки, 45" },
-  { name: "ПП Коваленко М.С.", email: "koval@i.ua", phone: "+380633334455", address: "м. Дніпро, вул. Яворницького, 30" },
-  { name: "ТОВ ТехноМаркет", email: "sales@technomarket.ua", phone: "+380444445566", address: "м. Київ, вул. Велика Васильківська, 72" },
-  { name: "ФОП Мельник Т.І.", email: "melnyk.t@gmail.com", phone: "+380967778899", address: "м. Вінниця, вул. Соборна, 50" },
-  { name: "ТОВ Агро-Сервіс", email: "agro@agroservis.ua", phone: "+380561112233", address: "м. Полтава, вул. Европейська, 10" },
-  { name: "ПП Шевченко В.В.", email: "shevchenko.v@ukr.net", phone: "+380931234500", address: "м. Запоріжжя, пр. Соборний, 100" },
-  { name: "ТОВ Мрія", email: "info@mriya.ua", phone: "+380672223344", address: "м. Чернігів, вул. Шевченка, 5" },
-  { name: "ФОП Бондаренко А.О.", email: "bondar@gmail.com", phone: "+380504445566", address: "м. Суми, вул. Петропавлівська, 18" },
-  { name: "ТОВ Еко-Продукт", email: "eco@ecoproduct.ua", phone: "+380635556677", address: "м. Черкаси, бул. Шевченка, 200" },
-  { name: "ПП Ткаченко Л.М.", email: "tkachenko@i.ua", phone: "+380937778899", address: "м. Житомир, вул. Київська, 77" },
-  { name: "ТОВ Вінниця-Хліб", email: "bread@vinnytsia.ua", phone: "+380431112233", address: "м. Вінниця, вул. Козицького, 25" },
-  { name: "ФОП Савченко І.П.", email: "savchenko.i@gmail.com", phone: "+380661234567", address: "м. Кропивницький, вул. Преображенська, 12" },
-  { name: "ТОВ Регіон Постач", email: "region@region.ua", phone: "+380574445566", address: "м. Миколаїв, вул. Адміральська, 30" },
-  { name: "ПП Грищенко О.К.", email: "hryshchenko@ukr.net", phone: "+380937778800", address: "м. Херсон, вул. Ушакова, 45" },
-  { name: "ТОВ Південний", email: "info@pivdennyi.ua", phone: "+380482223344", address: "м. Одеса, вул. Пушкінська, 20" },
-  { name: "ФОП Лисенко П.С.", email: "lysenko.p@gmail.com", phone: "+380501112233", address: "м. Чернівці, вул. Главна, 88" },
-  { name: "ТОВ Карпати Трейд", email: "trade@karpaty.ua", phone: "+380324445566", address: "м. Івано-Франківськ, вул. Незалежності, 15" },
-  { name: "ПП Кравченко Н.В.", email: "kravchenko@i.ua", phone: "+380967778811", address: "м. Луцьк, вул. Винниченка, 33" },
-  { name: "ТОВ Славутич", email: "slavutych@slavutych.ua", phone: "+380462223355", address: "м. Чернігів, пр. Перемоги, 100" },
-  { name: "ФОП Олійник Р.М.", email: "oliynyk@gmail.com", phone: "+380631234567", address: "м. Рівне, вул. Соборна, 42" },
-  { name: "ТОВ Тернопіль-Холд", email: "hold@ternopil.ua", phone: "+380352223344", address: "м. Тернопіль, вул. Руська, 20" },
-  { name: "ПП Марченко С.О.", email: "marchenko.s@ukr.net", phone: "+380931112244", address: "м. Ужгород, вул. Корзо, 5" },
+  {
+    name: "ТОВ Рога та Копита",
+    email: "office@roga-kopyta.ua",
+    phone: "+380441234567",
+    address: "м. Київ, вул. Хрещатик, 1",
+  },
+  {
+    name: "ПП Петренко І.В.",
+    email: "petrenko@gmail.com",
+    phone: "+380671112233",
+    address: "м. Львів, вул. Франка, 15",
+  },
+  {
+    name: "ФОП Сидоренко О.П.",
+    email: "sydorenko@ukr.net",
+    phone: "+380931234567",
+    address: "м. Одеса, вул. Дерибасівська, 22",
+  },
+  {
+    name: "ТОВ Зелений Луг",
+    email: "info@greenmeadow.ua",
+    phone: "+380502223344",
+    address: "м. Харків, пр. Науки, 45",
+  },
+  {
+    name: "ПП Коваленко М.С.",
+    email: "koval@i.ua",
+    phone: "+380633334455",
+    address: "м. Дніпро, вул. Яворницького, 30",
+  },
+  {
+    name: "ТОВ ТехноМаркет",
+    email: "sales@technomarket.ua",
+    phone: "+380444445566",
+    address: "м. Київ, вул. Велика Васильківська, 72",
+  },
+  {
+    name: "ФОП Мельник Т.І.",
+    email: "melnyk.t@gmail.com",
+    phone: "+380967778899",
+    address: "м. Вінниця, вул. Соборна, 50",
+  },
+  {
+    name: "ТОВ Агро-Сервіс",
+    email: "agro@agroservis.ua",
+    phone: "+380561112233",
+    address: "м. Полтава, вул. Европейська, 10",
+  },
+  {
+    name: "ПП Шевченко В.В.",
+    email: "shevchenko.v@ukr.net",
+    phone: "+380931234500",
+    address: "м. Запоріжжя, пр. Соборний, 100",
+  },
+  {
+    name: "ТОВ Мрія",
+    email: "info@mriya.ua",
+    phone: "+380672223344",
+    address: "м. Чернігів, вул. Шевченка, 5",
+  },
+  {
+    name: "ФОП Бондаренко А.О.",
+    email: "bondar@gmail.com",
+    phone: "+380504445566",
+    address: "м. Суми, вул. Петропавлівська, 18",
+  },
+  {
+    name: "ТОВ Еко-Продукт",
+    email: "eco@ecoproduct.ua",
+    phone: "+380635556677",
+    address: "м. Черкаси, бул. Шевченка, 200",
+  },
+  {
+    name: "ПП Ткаченко Л.М.",
+    email: "tkachenko@i.ua",
+    phone: "+380937778899",
+    address: "м. Житомир, вул. Київська, 77",
+  },
+  {
+    name: "ТОВ Вінниця-Хліб",
+    email: "bread@vinnytsia.ua",
+    phone: "+380431112233",
+    address: "м. Вінниця, вул. Козицького, 25",
+  },
+  {
+    name: "ФОП Савченко І.П.",
+    email: "savchenko.i@gmail.com",
+    phone: "+380661234567",
+    address: "м. Кропивницький, вул. Преображенська, 12",
+  },
+  {
+    name: "ТОВ Регіон Постач",
+    email: "region@region.ua",
+    phone: "+380574445566",
+    address: "м. Миколаїв, вул. Адміральська, 30",
+  },
+  {
+    name: "ПП Грищенко О.К.",
+    email: "hryshchenko@ukr.net",
+    phone: "+380937778800",
+    address: "м. Херсон, вул. Ушакова, 45",
+  },
+  {
+    name: "ТОВ Південний",
+    email: "info@pivdennyi.ua",
+    phone: "+380482223344",
+    address: "м. Одеса, вул. Пушкінська, 20",
+  },
+  {
+    name: "ФОП Лисенко П.С.",
+    email: "lysenko.p@gmail.com",
+    phone: "+380501112233",
+    address: "м. Чернівці, вул. Главна, 88",
+  },
+  {
+    name: "ТОВ Карпати Трейд",
+    email: "trade@karpaty.ua",
+    phone: "+380324445566",
+    address: "м. Івано-Франківськ, вул. Незалежності, 15",
+  },
+  {
+    name: "ПП Кравченко Н.В.",
+    email: "kravchenko@i.ua",
+    phone: "+380967778811",
+    address: "м. Луцьк, вул. Винниченка, 33",
+  },
+  {
+    name: "ТОВ Славутич",
+    email: "slavutych@slavutych.ua",
+    phone: "+380462223355",
+    address: "м. Чернігів, пр. Перемоги, 100",
+  },
+  {
+    name: "ФОП Олійник Р.М.",
+    email: "oliynyk@gmail.com",
+    phone: "+380631234567",
+    address: "м. Рівне, вул. Соборна, 42",
+  },
+  {
+    name: "ТОВ Тернопіль-Холд",
+    email: "hold@ternopil.ua",
+    phone: "+380352223344",
+    address: "м. Тернопіль, вул. Руська, 20",
+  },
+  {
+    name: "ПП Марченко С.О.",
+    email: "marchenko.s@ukr.net",
+    phone: "+380931112244",
+    address: "м. Ужгород, вул. Корзо, 5",
+  },
 ];
 
 const SIX_MONTHS = 6;
@@ -102,7 +225,8 @@ async function createUser() {
 
   try {
     const email =
-      process.argv[2] || `seed-${Date.now()}-${randomAlphanumeric(6)}@example.com`;
+      process.argv[2] ||
+      `seed-${Date.now()}-${randomAlphanumeric(6)}@example.com`;
     const password = process.argv[3] || randomAlphanumeric(12);
 
     await usersService.register({ email, password });
@@ -147,12 +271,17 @@ async function createUser() {
       for (let j = 0; j < numItems; j++) {
         const product = randomElement(products);
         const qty = randomInt(1, 3);
-        chosenProducts.set(product.id, (chosenProducts.get(product.id) ?? 0) + qty);
+        chosenProducts.set(
+          product.id,
+          (chosenProducts.get(product.id) ?? 0) + qty,
+        );
       }
-      const items = Array.from(chosenProducts.entries()).map(([productId, qty]) => ({
-        productId,
-        qty,
-      }));
+      const items = Array.from(chosenProducts.entries()).map(
+        ([productId, qty]) => ({
+          productId,
+          qty,
+        }),
+      );
 
       const result = await ordersService.create(
         { recipientId: recipient.id, items },

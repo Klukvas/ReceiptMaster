@@ -211,7 +211,9 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `DROP INDEX IF EXISTS "public"."IDX_c884e321f927d5b86aac7c8f9e"`,
     );
     await queryRunner.query(`ALTER TABLE "receipts" DROP COLUMN "status"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."receipts_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."receipts_status_enum"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "receipts" ADD "status" character varying(20) NOT NULL DEFAULT 'generated'`,
     );
@@ -228,7 +230,9 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `ALTER TABLE "users" ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP`,
     );
     await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "currency"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."products_currency_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."products_currency_enum"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "products" ADD "currency" character varying(3) NOT NULL DEFAULT 'UAH'`,
     );
@@ -236,7 +240,9 @@ export class AddUserRelationsToProductsAndRecipients1761176062970
       `ALTER TABLE "products" ALTER COLUMN "purchase_price_cents" SET DEFAULT '0'`,
     );
     await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "status"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."orders_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."orders_status_enum"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "orders" ADD "status" character varying(20) NOT NULL DEFAULT 'draft'`,
     );
