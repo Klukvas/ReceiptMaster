@@ -25,24 +25,96 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor to handle auth errors
+// Add response interceptor to handle auth errors with refresh token retry
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: unknown) => void }> = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+const clearAuthAndRedirect = () => {
+  document.cookie = 'auth_token=; Max-Age=0; path=/; SameSite=Lax';
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('refresh_token');
+  delete api.defaults.headers.common['Authorization'];
+  window.location.href = '/';
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
     const status = error.response?.status;
-    const url = error.config?.url || '';
-    const isPublicEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
-    if (status === 401 && !isPublicEndpoint) {
-      // Clear token and redirect to landing
-      // Remove token from cookie (and localStorage for safety)
-      document.cookie = 'auth_token=; Max-Age=0; path=/; SameSite=Lax';
-      localStorage.removeItem('auth_token');
-      delete api.defaults.headers.common['Authorization'];
-      window.location.href = '/';
+    const url = originalRequest?.url || '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh');
+
+    if (status === 401 && !isAuthEndpoint && !originalRequest._retry) {
+      const refreshToken = localStorage.getItem('refresh_token');
+
+      if (!refreshToken) {
+        clearAuthAndRedirect();
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const response = await api.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken });
+        const { access_token, refresh_token: newRefreshToken } = response.data;
+
+        localStorage.setItem('auth_token', access_token);
+        localStorage.setItem('refresh_token', newRefreshToken);
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+        processQueue(null, access_token);
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        clearAuthAndRedirect();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
+
     return Promise.reject(error);
   }
 );
+
+// Shared pagination types
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface PaginationParams {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
 
 // Data types
 export interface Product {
@@ -62,6 +134,9 @@ export interface Recipient {
   email?: string;
   phone?: string;
   address?: string;
+  telegram_user_id?: string;
+  total_spent_cents?: number;
+  order_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -79,11 +154,14 @@ export interface Order {
   id: string;
   recipient_id: string;
   status: 'draft' | 'confirmed' | 'cancelled';
+  payment_status: 'unpaid' | 'paid' | 'refunded';
   subtotal_cents: number;
   total_cents: number;
   currency: string;
+  is_locked: boolean;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
   recipient: Recipient;
   items: OrderItem[];
   receipts: Receipt[];
@@ -96,12 +174,31 @@ export interface Receipt {
   pdf_url?: string;
   pdf_path?: string;
   hash?: string;
-  status: 'generated' | 'void';
+  status: 'processing' | 'generated' | 'void';
+  progress: number;
+  error_message?: string;
+  html_snapshot?: string;
+  template_id?: string;
+  template_version?: number;
+  voided_at?: string;
+  void_reason?: string;
   created_at: string;
   order: Order;
 }
 
 // Dashboard types
+export interface DailyRevenue {
+  date: string;
+  revenue_cents: number;
+  turnover_cents: number;
+}
+
+export interface OrderStatusSummary {
+  draft: number;
+  confirmed: number;
+  cancelled: number;
+}
+
 export interface RevenueByProduct {
   product_id: string;
   product_name: string;
@@ -160,6 +257,7 @@ export interface RegisterRequest {
 
 export interface AuthResponse {
   access_token: string;
+  refresh_token: string;
   user: {
     id: string;
     email: string;
@@ -175,23 +273,29 @@ export interface User {
 export const authApi = {
   login: (data: LoginRequest) =>
     api.post<AuthResponse>('/auth/login', data),
-  
+
   register: (data: RegisterRequest) =>
     api.post<AuthResponse>('/auth/register', data),
-  
+
+  refresh: (refresh_token: string) =>
+    api.post<AuthResponse>('/auth/refresh', { refresh_token }),
+
+  logout: (refresh_token: string) =>
+    api.post<{ message: string }>('/auth/logout', { refresh_token }),
+
   getProfile: () =>
     api.get<User>('/auth/profile'),
-  
+
   updateProfile: (data: { email: string }) =>
     api.patch<User>('/auth/profile', data),
-  
+
   changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
     api.post<{ message: string }>('/auth/change-password', data),
 };
 
 export const productsApi = {
-  getAll: (params?: { limit?: number; offset?: number }) =>
-    api.get<{ data: Product[]; total: number }>('/products', { params }),
+  getAll: (params?: PaginationParams) =>
+    api.get<PaginatedResponse<Product>>('/products', { params }),
   
   getById: (id: string) =>
     api.get<Product>(`/products/${id}`),
@@ -204,11 +308,17 @@ export const productsApi = {
   
   delete: (id: string) =>
     api.delete(`/products/${id}`),
+
+  getLowStock: (threshold?: number) =>
+    api.get<Product[]>(`/products/low-stock`, { params: { threshold } }),
+
+  bulkDelete: (ids: string[]) =>
+    api.delete<{ deleted: number; skipped: string[] }>('/products/bulk', { data: { ids } }),
 };
 
 export const recipientsApi = {
-  getAll: (params?: { limit?: number; offset?: number }) =>
-    api.get<{ data: Recipient[]; total: number }>('/recipients', { params }),
+  getAll: (params?: PaginationParams) =>
+    api.get<PaginatedResponse<Recipient>>('/recipients', { params }),
   
   getById: (id: string) =>
     api.get<Recipient>(`/recipients/${id}`),
@@ -224,8 +334,8 @@ export const recipientsApi = {
 };
 
 export const ordersApi = {
-  getAll: (params?: { limit?: number; offset?: number; status?: string }) =>
-    api.get<{ data: Order[]; total: number; offset: number; limit: number }>('/orders', { params }),
+  getAll: (params?: PaginationParams & { status?: string; startDate?: string; endDate?: string; minAmount?: number; maxAmount?: number }) =>
+    api.get<PaginatedResponse<Order>>('/orders', { params }),
   
   getById: (id: string) =>
     api.get<Order>(`/orders/${id}`),
@@ -244,26 +354,39 @@ export const ordersApi = {
   
   delete: (id: string) =>
     api.delete(`/orders/${id}`),
+
+  batchApprove: (orderIds: string[]) =>
+    api.post<{ approved: number }>('/orders/batch-approve', { orderIds }),
+
+  batchDelete: (orderIds: string[]) =>
+    api.post<{ deleted: number }>('/orders/batch-delete', { orderIds }),
 };
 
 export const dashboardApi = {
+  // Sparkline / summary
+  getDailyRevenue: (days?: number) =>
+    api.get<DailyRevenue[]>('/orders/dashboard/daily-revenue', { params: { days } }),
+
+  getOrderStatusSummary: () =>
+    api.get<OrderStatusSummary>('/orders/dashboard/status-summary'),
+
   // Revenue methods (income - with cost deduction)
   getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<RevenueByProduct[]>('/orders/dashboard/revenue-by-products', { params }),
-  
+
   getRevenueByRecipients: (params?: { startDate?: string; endDate?: string }) =>
     api.get<RevenueByRecipient[]>('/orders/dashboard/revenue-by-recipients', { params }),
-  
+
   getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TotalRevenue>('/orders/dashboard/total-revenue', { params }),
 
   // Turnover methods (turnover - without cost deduction)
   getTurnoverByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TurnoverByProduct[]>('/orders/dashboard/turnover-by-products', { params }),
-  
+
   getTurnoverByRecipients: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TurnoverByRecipient[]>('/orders/dashboard/turnover-by-recipients', { params }),
-  
+
   getTotalTurnover: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TotalTurnover>('/orders/dashboard/total-turnover', { params }),
 };
@@ -289,6 +412,12 @@ export const receiptsApi = {
   
   regenerate: (id: string) =>
     api.post<Receipt>(`/receipts/${id}/regenerate`),
+
+  void: (id: string, reason: string) =>
+    api.post<Receipt>(`/receipts/${id}/void`, { reason }),
+
+  testPreview: () =>
+    api.post('/receipts/test-preview', {}, { responseType: 'blob' }),
 };
 
 export const settingsApi = {

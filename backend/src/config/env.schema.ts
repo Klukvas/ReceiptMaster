@@ -13,6 +13,10 @@ export const envSchema = z.object({
   DB_PASSWORD: z.string().default("postgres"),
   DB_NAME: z.string().default("market_db"),
 
+  // Redis
+  REDIS_HOST: z.string().default("localhost"),
+  REDIS_PORT: z.coerce.number().default(6379),
+
   // Auto migrations
   AUTO_RUN_MIGRATIONS: z.coerce.boolean().default(true),
 

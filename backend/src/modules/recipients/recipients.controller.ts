@@ -10,7 +10,7 @@ import {
   UseGuards,
   Request,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { RecipientsService } from "./recipients.service";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
@@ -19,6 +19,7 @@ import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 
 @ApiTags("recipients")
+@ApiBearerAuth("bearer")
 @Controller("recipients")
 @UseGuards(JwtAuthGuard)
 export class RecipientsController {

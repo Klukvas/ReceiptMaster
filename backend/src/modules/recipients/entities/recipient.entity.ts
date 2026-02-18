@@ -7,11 +7,13 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Order } from "../../orders/entities/order.entity";
 import { User } from "../../users/entities/user.entity";
 
 @Entity("recipients")
+@Index(["user_id", "phone"])
 export class Recipient {
   @PrimaryGeneratedColumn("uuid")
   id: string;

@@ -1,6 +1,19 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsPositive, Max, Min } from "class-validator";
+import {
+  IsOptional,
+  IsPositive,
+  Max,
+  Min,
+  IsString,
+  IsEnum,
+  MaxLength,
+} from "class-validator";
 import { Type } from "class-transformer";
+
+export enum SortOrder {
+  ASC = "ASC",
+  DESC = "DESC",
+}
 
 export class PaginationDto {
   @ApiPropertyOptional({
@@ -25,4 +38,29 @@ export class PaginationDto {
   @Type(() => Number)
   @Min(0)
   offset?: number = 0;
+
+  @ApiPropertyOptional({
+    description: "Поисковый запрос",
+    maxLength: 255,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  search?: string;
+
+  @ApiPropertyOptional({
+    description: "Поле для сортировки",
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({
+    description: "Направление сортировки: ASC или DESC",
+    enum: SortOrder,
+    default: SortOrder.DESC,
+  })
+  @IsOptional()
+  @IsEnum(SortOrder)
+  sortOrder?: SortOrder = SortOrder.DESC;
 }

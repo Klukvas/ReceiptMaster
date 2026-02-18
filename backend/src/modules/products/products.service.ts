@@ -5,8 +5,17 @@ import { Repository, DataSource } from "typeorm";
 import { Product } from "./entities/product.entity";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
-import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
+import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+
+const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
+  name: "product.name",
+  purchase_price_cents: "product.purchase_price_cents",
+  sale_price_cents: "product.sale_price_cents",
+  quantity: "product.quantity",
+  created_at: "product.created_at",
+};
 
 @Injectable()
 export class ProductsService {
@@ -31,16 +40,36 @@ export class ProductsService {
   async findAll(
     pagination: PaginationDto,
     user: User,
-  ): Promise<{ data: Product[]; total: number }> {
-    const [data, total] = await this.productsRepository
+  ): Promise<PaginatedResponse<Product>> {
+    const {
+      offset = 0,
+      limit = 10,
+      search,
+      sortBy,
+      sortOrder = SortOrder.DESC,
+    } = pagination;
+
+    const queryBuilder = this.productsRepository
       .createQueryBuilder("product")
-      .where("product.user_id = :userId", { userId: user.id })
-      .orderBy("product.created_at", "DESC")
-      .skip(pagination.offset)
-      .take(pagination.limit)
+      .where("product.user_id = :userId", { userId: user.id });
+
+    if (search && search.trim()) {
+      queryBuilder.andWhere("product.name ILIKE :search", {
+        search: `%${search.trim()}%`,
+      });
+    }
+
+    const sortColumn =
+      PRODUCT_SORTABLE_COLUMNS[sortBy] || "product.created_at";
+    const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
+    queryBuilder.orderBy(sortColumn, direction);
+
+    const [data, total] = await queryBuilder
+      .skip(offset)
+      .take(limit)
       .getManyAndCount();
 
-    return { data, total };
+    return { data, total, offset, limit };
   }
 
   async findOne(id: string, user: User): Promise<Product> {
@@ -92,5 +121,33 @@ export class ProductsService {
       // Затем удаляем сам товар
       await manager.delete(Product, { id });
     });
+  }
+
+  async removeBulk(ids: string[], user: User): Promise<{ deleted: number; skipped: string[] }> {
+    const skipped: string[] = [];
+    let deleted = 0;
+
+    for (const id of ids) {
+      try {
+        await this.remove(id, user);
+        deleted++;
+      } catch {
+        skipped.push(id);
+      }
+    }
+
+    return { deleted, skipped };
+  }
+
+  async getLowStockProducts(
+    user: User,
+    threshold: number = 10,
+  ): Promise<Product[]> {
+    return this.productsRepository
+      .createQueryBuilder("product")
+      .where("product.user_id = :userId", { userId: user.id })
+      .andWhere("product.quantity <= :threshold", { threshold })
+      .orderBy("product.quantity", "ASC")
+      .getMany();
   }
 }

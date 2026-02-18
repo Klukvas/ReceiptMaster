@@ -7,8 +7,10 @@ import {
   Min,
   IsOptional,
   IsInt,
+  IsEnum,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaymentStatus } from "../entities/order.entity";
 
 export class UpdateOrderItemDto {
   @ApiProperty({
@@ -55,4 +57,13 @@ export class UpdateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => UpdateOrderItemDto)
   items?: UpdateOrderItemDto[];
+
+  @ApiProperty({
+    description: "Payment status",
+    enum: PaymentStatus,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PaymentStatus)
+  paymentStatus?: PaymentStatus;
 }

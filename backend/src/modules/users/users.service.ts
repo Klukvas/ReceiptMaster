@@ -5,26 +5,46 @@ import { Repository } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
+import * as crypto from "crypto";
 import { User } from "./entities/user.entity";
+import { RefreshToken } from "./entities/refresh-token.entity";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
+const REFRESH_TOKEN_EXPIRATION_DAYS = 30;
+
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(RefreshToken)
+    private refreshTokenRepository: Repository<RefreshToken>,
     private jwtService: JwtService,
     private configService: ConfigService,
   ) {}
 
+  private async createRefreshToken(userId: string): Promise<string> {
+    const token = crypto.randomBytes(64).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRATION_DAYS);
+
+    const refreshToken = this.refreshTokenRepository.create({
+      token,
+      user_id: userId,
+      expires_at: expiresAt,
+    });
+
+    await this.refreshTokenRepository.save(refreshToken);
+    return token;
+  }
+
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const { email, password } = registerDto;
 
-    // Проверяем, существует ли пользователь с таким email
     const existingUser = await this.userRepository.findOne({
       where: { email },
     });
@@ -33,11 +53,9 @@ export class UsersService {
       throw ApiErrors.USER_ALREADY_EXISTS(registerDto.email);
     }
 
-    // Хешируем пароль
     const saltRounds = 10;
     const _hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Создаем нового пользователя
     const user = this.userRepository.create({
       email,
       password: _hashedPassword,
@@ -45,12 +63,13 @@ export class UsersService {
 
     const savedUser = await this.userRepository.save(user);
 
-    // Генерируем JWT токен
     const payload = { sub: savedUser.id, email: savedUser.email };
     const access_token = this.jwtService.sign(payload);
+    const refresh_token = await this.createRefreshToken(savedUser.id);
 
     return {
       access_token,
+      refresh_token,
       user: {
         id: savedUser.id,
         email: savedUser.email,
@@ -61,7 +80,6 @@ export class UsersService {
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
-    // Находим пользователя по email
     const user = await this.userRepository.findOne({
       where: { email },
     });
@@ -70,23 +88,67 @@ export class UsersService {
       throw ApiErrors.INVALID_CREDENTIALS();
     }
 
-    // Проверяем пароль
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw ApiErrors.INVALID_CREDENTIALS();
     }
 
-    // Генерируем JWT токен
     const payload = { sub: user.id, email: user.email };
     const access_token = this.jwtService.sign(payload);
+    const refresh_token = await this.createRefreshToken(user.id);
 
     return {
       access_token,
+      refresh_token,
       user: {
         id: user.id,
         email: user.email,
       },
     };
+  }
+
+  async refreshToken(token: string): Promise<AuthResponseDto> {
+    const existing = await this.refreshTokenRepository.findOne({
+      where: { token, revoked: false },
+      relations: ["user"],
+    });
+
+    if (!existing || existing.expires_at < new Date()) {
+      throw ApiErrors.UNAUTHORIZED();
+    }
+
+    // Revoke old token (rotation)
+    existing.revoked = true;
+    await this.refreshTokenRepository.save(existing);
+
+    // Issue new tokens
+    const user = existing.user;
+    const payload = { sub: user.id, email: user.email };
+    const access_token = this.jwtService.sign(payload);
+    const refresh_token = await this.createRefreshToken(user.id);
+
+    return {
+      access_token,
+      refresh_token,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+    };
+  }
+
+  async revokeRefreshToken(token: string): Promise<void> {
+    await this.refreshTokenRepository.update(
+      { token },
+      { revoked: true },
+    );
+  }
+
+  async revokeAllUserTokens(userId: string): Promise<void> {
+    await this.refreshTokenRepository.update(
+      { user_id: userId, revoked: false },
+      { revoked: true },
+    );
   }
 
   async findById(id: string): Promise<User | null> {
@@ -104,7 +166,6 @@ export class UsersService {
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<Omit<User, "password">> {
     const { email } = updateProfileDto;
 
-    // Проверяем, не занят ли email другим пользователем
     const existingUser = await this.userRepository.findOne({
       where: { email },
     });
@@ -113,10 +174,8 @@ export class UsersService {
       throw ApiErrors.USER_ALREADY_EXISTS(email);
     }
 
-    // Обновляем пользователя
     await this.userRepository.update(userId, { email });
 
-    // Возвращаем обновленного пользователя без пароля
     const updatedUser = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -132,12 +191,10 @@ export class UsersService {
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
     const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
 
-    // Проверяем, что новый пароль и подтверждение совпадают
     if (newPassword !== confirmPassword) {
       throw ApiErrors.VALIDATION_ERROR("password", "Новый пароль и подтверждение не совпадают");
     }
 
-    // Находим пользователя
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -146,23 +203,22 @@ export class UsersService {
       throw ApiErrors.USER_NOT_FOUND(userId);
     }
 
-    // Проверяем текущий пароль
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       throw ApiErrors.VALIDATION_ERROR("currentPassword", "Текущий пароль неверен");
     }
 
-    // Проверяем, что новый пароль отличается от текущего
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
       throw ApiErrors.VALIDATION_ERROR("newPassword", "Новый пароль должен отличаться от текущего");
     }
 
-    // Хешируем новый пароль
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    // Обновляем пароль
     await this.userRepository.update(userId, { password: hashedPassword });
+
+    // Revoke all refresh tokens on password change
+    await this.revokeAllUserTokens(userId);
   }
 }

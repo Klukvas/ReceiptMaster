@@ -66,6 +66,12 @@ export const ApiErrors = {
       "ORDER_CANNOT_BE_MODIFIED",
       400,
     ),
+  BATCH_ORDERS_NOT_ALL_DRAFT: (ids: string[]) =>
+    new ApiErrorResponse(
+      `Only draft orders can be approved. Non-draft order IDs: ${ids.join(", ")}`,
+      "BATCH_ORDERS_NOT_ALL_DRAFT",
+      400,
+    ),
 
   // Receipt errors
   RECEIPT_NOT_FOUND: (id: string) =>

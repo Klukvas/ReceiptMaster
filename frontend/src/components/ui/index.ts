@@ -3,6 +3,7 @@ export { Card } from './Card';
 export { Input } from './Input';
 export { Combobox } from './Combobox';
 export { Pagination } from './Pagination';
+export { DataTable } from './DataTable';
 export { Tabs } from './Tabs';
 export { ThemeToggle } from './ThemeToggle';
 export { DropdownMenu } from './DropdownMenu';

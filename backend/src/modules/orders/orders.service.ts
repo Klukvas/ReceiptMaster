@@ -9,16 +9,20 @@ import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
-import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
+import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { ReceiptsService } from "../receipts/receipts.service";
+import { CacheService } from "../../common/services/cache.service";
 import { User } from "../users/entities/user.entity";
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  offset: number;
-  limit: number;
-}
+const DASHBOARD_CACHE_TTL = 300; // 5 minutes
+
+const ORDER_SORTABLE_COLUMNS: Record<string, string> = {
+  created_at: "order.created_at",
+  total_cents: "order.total_cents",
+  status: "order.status",
+  recipient_name: "recipient.name",
+};
 
 // Idempotency key expiration time (24 hours)
 const IDEMPOTENCY_KEY_EXPIRATION_HOURS = 24;
@@ -45,36 +49,48 @@ export class OrdersService {
     @InjectDataSource()
     private dataSource: DataSource,
     private receiptsService: ReceiptsService,
+    private cacheService: CacheService,
   ) {}
+
+  private async invalidateDashboardCache(userId: string): Promise<void> {
+    await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+  }
+
+  private dashboardCacheKey(method: string, userId: string, ...args: unknown[]): string {
+    return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
+  }
 
   async create(
     createOrderDto: CreateOrderDto,
     user: User,
     idempotencyKey?: string,
   ): Promise<IdempotencyResponse> {
-    // Check for existing idempotency key if provided
-    if (idempotencyKey) {
-      const existingKey = await this.idempotencyKeyRepository.findOne({
-        where: { key: idempotencyKey, user_id: user.id },
-      });
+    // Advisory lock + idempotency check + order creation in a single transaction
+    const result = await this.dataSource.transaction(async (manager) => {
+      // Acquire advisory lock if idempotency key is provided (prevents race conditions)
+      if (idempotencyKey) {
+        await manager.query(
+          `SELECT pg_advisory_xact_lock(hashtext($1))`,
+          [idempotencyKey],
+        );
 
-      if (existingKey) {
-        // Check if the key has expired
-        if (existingKey.expires_at < new Date()) {
-          // Key expired, delete it and proceed with new request
-          await this.idempotencyKeyRepository.delete({ id: existingKey.id });
-        } else {
-          // Return cached response
-          return {
-            statusCode: existingKey.status_code,
-            data: existingKey.response,
-            isFromCache: true,
-          };
+        const existingKey = await manager.findOne(IdempotencyKey, {
+          where: { key: idempotencyKey, user_id: user.id },
+        });
+
+        if (existingKey) {
+          if (existingKey.expires_at < new Date()) {
+            await manager.delete(IdempotencyKey, { id: existingKey.id });
+          } else {
+            return {
+              statusCode: existingKey.status_code,
+              data: existingKey.response,
+              isFromCache: true,
+            } as IdempotencyResponse;
+          }
         }
       }
-    }
 
-    const order = await this.dataSource.transaction(async (manager) => {
       // Check recipient existence and ownership
       const recipient = await manager.findOne(Recipient, {
         where: { id: createOrderDto.recipientId, user_id: user.id },
@@ -171,46 +187,91 @@ export class OrdersService {
         await manager.save(IdempotencyKey, idempotencyRecord);
       }
 
-      return savedOrder;
+      return {
+        statusCode: HttpStatus.CREATED,
+        data: savedOrder,
+        isFromCache: false,
+      } as IdempotencyResponse;
     });
 
-    return {
-      statusCode: HttpStatus.CREATED,
-      data: order,
-      isFromCache: false,
-    };
+    if (!result.isFromCache) {
+      await this.invalidateDashboardCache(user.id);
+    }
+
+    return result;
   }
 
   async findAll(
     paginationDto: PaginationDto,
     user: User,
     status?: OrderStatus,
+    filters?: {
+      startDate?: Date;
+      endDate?: Date;
+      minAmount?: number;
+      maxAmount?: number;
+    },
   ): Promise<PaginatedResponse<Order>> {
-    const { offset = 0, limit = 10 } = paginationDto;
-    const skip = offset;
+    const {
+      offset = 0,
+      limit = 10,
+      search,
+      sortBy,
+      sortOrder = SortOrder.DESC,
+    } = paginationDto;
 
     const queryBuilder = this.ordersRepository
       .createQueryBuilder("order")
       .leftJoinAndSelect("order.recipient", "recipient")
       .leftJoinAndSelect("order.items", "items")
       .leftJoinAndSelect("order.receipts", "receipts")
-      .where("order.user_id = :userId", { userId: user.id })
-      .orderBy("order.created_at", "DESC")
-      .skip(skip)
-      .take(limit);
+      .where("order.user_id = :userId", { userId: user.id });
 
     if (status) {
       queryBuilder.andWhere("order.status = :status", { status });
     }
 
-    const [data, total] = await queryBuilder.getManyAndCount();
+    if (search && search.trim()) {
+      queryBuilder.andWhere("recipient.name ILIKE :search", {
+        search: `%${search.trim()}%`,
+      });
+    }
 
-    return {
-      data,
-      total,
-      offset: skip,
-      limit: limit,
-    };
+    if (filters?.startDate) {
+      queryBuilder.andWhere("order.created_at >= :startDate", {
+        startDate: filters.startDate,
+      });
+    }
+
+    if (filters?.endDate) {
+      queryBuilder.andWhere("order.created_at <= :endDate", {
+        endDate: filters.endDate,
+      });
+    }
+
+    if (filters?.minAmount !== undefined) {
+      queryBuilder.andWhere("order.total_cents >= :minAmount", {
+        minAmount: filters.minAmount,
+      });
+    }
+
+    if (filters?.maxAmount !== undefined) {
+      queryBuilder.andWhere("order.total_cents <= :maxAmount", {
+        maxAmount: filters.maxAmount,
+      });
+    }
+
+    const sortColumn =
+      ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
+    const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
+    queryBuilder.orderBy(sortColumn, direction);
+
+    const [data, total] = await queryBuilder
+      .skip(offset)
+      .take(limit)
+      .getManyAndCount();
+
+    return { data, total, offset, limit };
   }
 
   async findOne(id: string, user: User): Promise<Order> {
@@ -232,7 +293,9 @@ export class OrdersService {
     }
 
     order.status = OrderStatus.CONFIRMED;
-    return this.ordersRepository.save(order);
+    const saved = await this.ordersRepository.save(order);
+    await this.invalidateDashboardCache(user.id);
+    return saved;
   }
 
   async cancel(id: string, user: User): Promise<Order> {
@@ -243,7 +306,9 @@ export class OrdersService {
     }
 
     order.status = OrderStatus.CANCELLED;
-    return this.ordersRepository.save(order);
+    const saved = await this.ordersRepository.save(order);
+    await this.invalidateDashboardCache(user.id);
+    return saved;
   }
 
   async update(
@@ -263,6 +328,11 @@ export class OrdersService {
 
       // Can only edit orders in "draft" status
       if (order.status !== OrderStatus.DRAFT) {
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
+      }
+
+      // Cannot edit locked orders (receipt has been generated)
+      if (order.is_locked) {
         throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
       }
 
@@ -366,6 +436,11 @@ export class OrdersService {
         }
       }
 
+      // Update payment status if provided
+      if (updateOrderDto.paymentStatus) {
+        order.payment_status = updateOrderDto.paymentStatus;
+      }
+
       // Save order
       await manager.save(Order, order);
 
@@ -383,10 +458,9 @@ export class OrdersService {
       throw ApiErrors.ORDER_NOT_FOUND(id);
     }
 
-    // Allow deletion of orders in any status
-    // Delete order and related elements in transaction
+    // Soft delete: restore product quantities and mark as deleted
     await this.dataSource.transaction(async (manager) => {
-      // Restore product quantities before deleting order items
+      // Restore product quantities
       const orderItems = await manager.find(OrderItem, {
         where: { order_id: id },
       });
@@ -401,14 +475,114 @@ export class OrdersService {
         }
       }
 
-      // Delete receipt files and records first
-      await this.receiptsService.deleteReceiptFilesForOrder(id);
-
-      // Delete order items
-      await manager.delete(OrderItem, { order_id: id });
-      // Delete the order itself
-      await manager.delete(Order, { id });
+      // Soft delete the order (sets deleted_at timestamp)
+      await manager.softDelete(Order, { id });
     });
+  }
+
+  async markAsLocked(orderId: string, user: User): Promise<void> {
+    await this.ordersRepository.update(
+      { id: orderId, user_id: user.id },
+      { is_locked: true },
+    );
+  }
+
+  async unlockOrder(orderId: string, user: User): Promise<void> {
+    await this.ordersRepository.update(
+      { id: orderId, user_id: user.id },
+      { is_locked: false },
+    );
+  }
+
+  async approveBatch(
+    orderIds: string[],
+    user: User,
+  ): Promise<{ approved: number }> {
+    // Deduplicate IDs
+    const uniqueIds = [...new Set(orderIds)];
+
+    const result = await this.dataSource.transaction(async (manager) => {
+      const orders = await manager.find(Order, {
+        where: { id: In(uniqueIds), user_id: user.id },
+      });
+
+      if (orders.length !== uniqueIds.length) {
+        const foundIds = new Set(orders.map((o) => o.id));
+        const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
+        throw ApiErrors.ORDER_NOT_FOUND(missingIds.join(", "));
+      }
+
+      const nonDraftOrders = orders.filter(
+        (o) => o.status !== OrderStatus.DRAFT,
+      );
+      if (nonDraftOrders.length > 0) {
+        throw ApiErrors.BATCH_ORDERS_NOT_ALL_DRAFT(
+          nonDraftOrders.map((o) => o.id),
+        );
+      }
+
+      await manager.update(
+        Order,
+        { id: In(uniqueIds), user_id: user.id },
+        { status: OrderStatus.CONFIRMED },
+      );
+
+      return { approved: orders.length };
+    });
+
+    await this.invalidateDashboardCache(user.id);
+    return result;
+  }
+
+  async deleteBatch(
+    orderIds: string[],
+    user: User,
+  ): Promise<{ deleted: number }> {
+    const uniqueIds = [...new Set(orderIds)];
+
+    const result = await this.dataSource.transaction(async (manager) => {
+      const orders = await manager.find(Order, {
+        where: { id: In(uniqueIds), user_id: user.id },
+      });
+
+      if (orders.length !== uniqueIds.length) {
+        const foundIds = new Set(orders.map((o) => o.id));
+        const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
+        throw ApiErrors.ORDER_NOT_FOUND(missingIds.join(", "));
+      }
+
+      // Restore product quantities for all order items
+      for (const order of orders) {
+        const orderItems = await manager.find(OrderItem, {
+          where: { order_id: order.id },
+        });
+
+        for (const orderItem of orderItems) {
+          const product = await manager.findOne(Product, {
+            where: { id: orderItem.product_id },
+          });
+          if (product) {
+            product.quantity += orderItem.qty;
+            await manager.save(Product, product);
+          }
+        }
+      }
+
+      await manager.softDelete(Order, { id: In(uniqueIds) });
+
+      return { deleted: orders.length };
+    });
+
+    await this.invalidateDashboardCache(user.id);
+    return result;
+  }
+
+  private async cachedDashboard<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const cached = await this.cacheService.get<T>(key);
+    if (cached) return cached;
+    const result = await fn();
+    await this.cacheService.set(key, result, DASHBOARD_CACHE_TTL);
+    return result;
   }
 
   // Dashboard methods
@@ -425,6 +599,8 @@ export class OrdersService {
       currency: string;
     }>
   > {
+    const cacheKey = this.dashboardCacheKey("revenueByProducts", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         oi.product_id,
@@ -467,6 +643,7 @@ export class OrdersService {
       total_quantity: parseInt(row.total_quantity) || 0,
       currency: row.currency,
     }));
+    });
   }
 
   async getRevenueByRecipients(
@@ -482,6 +659,8 @@ export class OrdersService {
       currency: string;
     }>
   > {
+    const cacheKey = this.dashboardCacheKey("revenueByRecipients", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         o.recipient_id,
@@ -525,6 +704,7 @@ export class OrdersService {
       total_orders: parseInt(row.total_orders) || 0,
       currency: row.currency,
     }));
+    });
   }
 
   async getTotalRevenue(
@@ -536,6 +716,8 @@ export class OrdersService {
     total_orders: number;
     currency: string;
   }> {
+    const cacheKey = this.dashboardCacheKey("totalRevenue", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
@@ -572,6 +754,7 @@ export class OrdersService {
       total_orders: result ? parseInt(result.total_orders) || 0 : 0,
       currency: result?.currency || "UAH",
     };
+    });
   }
 
   // Методы для общего оборота (общая выручка без вычета себестоимости)
@@ -588,6 +771,8 @@ export class OrdersService {
       currency: string;
     }>
   > {
+    const cacheKey = this.dashboardCacheKey("turnoverByProducts", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         oi.product_id,
@@ -629,6 +814,7 @@ export class OrdersService {
       total_quantity: parseInt(row.total_quantity) || 0,
       currency: row.currency,
     }));
+    });
   }
 
   async getTurnoverByRecipients(
@@ -644,6 +830,8 @@ export class OrdersService {
       currency: string;
     }>
   > {
+    const cacheKey = this.dashboardCacheKey("turnoverByRecipients", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         o.recipient_id,
@@ -685,6 +873,7 @@ export class OrdersService {
       total_orders: parseInt(row.total_orders) || 0,
       currency: row.currency,
     }));
+    });
   }
 
   async getTotalTurnover(
@@ -696,6 +885,8 @@ export class OrdersService {
     total_orders: number;
     currency: string;
   }> {
+    const cacheKey = this.dashboardCacheKey("totalTurnover", user.id, startDate, endDate);
+    return this.cachedDashboard(cacheKey, async () => {
     let query = `
       SELECT
         SUM(o.total_cents) as total_turnover_cents,
@@ -730,5 +921,70 @@ export class OrdersService {
       total_orders: result ? parseInt(result.total_orders) || 0 : 0,
       currency: result?.currency || "UAH",
     };
+    });
+  }
+
+  async getDailyRevenue(
+    user: User,
+    days: number = 7,
+  ): Promise<Array<{ date: string; revenue_cents: number; turnover_cents: number }>> {
+    const cacheKey = this.dashboardCacheKey("dailyRevenue", user.id, days);
+    return this.cachedDashboard(cacheKey, async () => {
+    const results = await this.dataSource.query(
+      `
+      SELECT
+        d.date::text as date,
+        COALESCE(SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty), 0)::integer as revenue_cents,
+        COALESCE(SUM(oi.line_total_cents), 0)::integer as turnover_cents
+      FROM generate_series(
+        CURRENT_DATE - ($1 - 1) * INTERVAL '1 day',
+        CURRENT_DATE,
+        '1 day'
+      ) AS d(date)
+      LEFT JOIN orders o ON DATE(o.created_at) = d.date
+        AND o.status = 'confirmed'
+        AND o.user_id = $2
+        AND o.deleted_at IS NULL
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN products p ON p.id = oi.product_id
+      GROUP BY d.date
+      ORDER BY d.date ASC
+      `,
+      [days, user.id],
+    );
+
+    return results.map((row) => ({
+      date: row.date,
+      revenue_cents: parseInt(row.revenue_cents) || 0,
+      turnover_cents: parseInt(row.turnover_cents) || 0,
+    }));
+    });
+  }
+
+  async getOrderStatusSummary(
+    user: User,
+  ): Promise<{ draft: number; confirmed: number; cancelled: number }> {
+    const cacheKey = this.dashboardCacheKey("statusSummary", user.id);
+    return this.cachedDashboard(cacheKey, async () => {
+    const results = await this.dataSource.query(
+      `
+      SELECT
+        status,
+        COUNT(*)::integer as count
+      FROM orders
+      WHERE user_id = $1 AND deleted_at IS NULL
+      GROUP BY status
+      `,
+      [user.id],
+    );
+
+    const summary = { draft: 0, confirmed: 0, cancelled: 0 };
+    for (const row of results) {
+      if (row.status in summary) {
+        summary[row.status as keyof typeof summary] = parseInt(row.count) || 0;
+      }
+    }
+    return summary;
+    });
   }
 }

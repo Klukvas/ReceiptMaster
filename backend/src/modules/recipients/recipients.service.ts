@@ -5,8 +5,16 @@ import { Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
-import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
+import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+
+const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
+  name: "recipient.name",
+  email: "recipient.email",
+  phone: "recipient.phone",
+  created_at: "recipient.created_at",
+};
 
 @Injectable()
 export class RecipientsService {
@@ -29,15 +37,47 @@ export class RecipientsService {
   async findAll(
     pagination: PaginationDto,
     user: User,
-  ): Promise<{ data: Recipient[]; total: number }> {
-    const [data, total] = await this.recipientsRepository.findAndCount({
-      where: { user_id: user.id },
-      order: { created_at: "DESC" },
-      skip: pagination.offset,
-      take: pagination.limit,
-    });
+  ): Promise<PaginatedResponse<Recipient & { total_spent_cents: number; order_count: number }>> {
+    const {
+      offset = 0,
+      limit = 10,
+      search,
+      sortBy,
+      sortOrder = SortOrder.DESC,
+    } = pagination;
 
-    return { data, total };
+    const queryBuilder = this.recipientsRepository
+      .createQueryBuilder("recipient")
+      .leftJoin("recipient.orders", "order", "order.status = :confirmed", {
+        confirmed: "confirmed",
+      })
+      .addSelect("COALESCE(SUM(order.total_cents), 0)", "total_spent_cents")
+      .addSelect("COUNT(order.id)", "order_count")
+      .where("recipient.user_id = :userId", { userId: user.id })
+      .groupBy("recipient.id");
+
+    if (search && search.trim()) {
+      queryBuilder.andWhere(
+        "(recipient.name ILIKE :search OR recipient.email ILIKE :search OR recipient.phone ILIKE :search)",
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    const sortColumn =
+      RECIPIENT_SORTABLE_COLUMNS[sortBy] || "recipient.created_at";
+    const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
+    queryBuilder.orderBy(sortColumn, direction);
+
+    const raw = await queryBuilder.offset(offset).limit(limit).getRawAndEntities();
+    const total = await queryBuilder.getCount();
+
+    const data = raw.entities.map((entity, i) => ({
+      ...entity,
+      total_spent_cents: parseInt(raw.raw[i]?.total_spent_cents || "0", 10),
+      order_count: parseInt(raw.raw[i]?.order_count || "0", 10),
+    }));
+
+    return { data, total, offset, limit };
   }
 
   async findOne(id: string, user: User): Promise<Recipient> {

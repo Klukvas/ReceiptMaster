@@ -14,7 +14,8 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  // ApiBearerAuth,
+  ApiQuery,
+  ApiBearerAuth,
 } from "@nestjs/swagger";
 import { ProductsService } from "./products.service";
 import { CreateProductDto } from "./dto/create-product.dto";
@@ -24,6 +25,7 @@ import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 
 @ApiTags("products")
+@ApiBearerAuth("bearer")
 @Controller("products")
 @UseGuards(JwtAuthGuard)
 export class ProductsController {
@@ -46,6 +48,20 @@ export class ProductsController {
     return this.productsService.findAll(pagination, req.user);
   }
 
+  @Get("low-stock")
+  @ApiOperation({ summary: "Get products with low stock" })
+  @ApiResponse({ status: 200, description: "Low stock products retrieved" })
+  @ApiQuery({ name: "threshold", required: false, description: "Stock threshold (default 10)" })
+  getLowStock(
+    @Request() req: { user: User },
+    @Query("threshold") threshold?: string,
+  ) {
+    return this.productsService.getLowStockProducts(
+      req.user,
+      threshold ? parseInt(threshold) : 10,
+    );
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить товар по ID" })
   @ApiResponse({ status: 200, description: "Товар найден" })
@@ -64,6 +80,16 @@ export class ProductsController {
     @Request() req: { user: User },
   ) {
     return this.productsService.update(id, updateProductDto, req.user);
+  }
+
+  @Delete("bulk")
+  @ApiOperation({ summary: "Bulk delete products" })
+  @ApiResponse({ status: 200, description: "Products deleted" })
+  removeBulk(
+    @Body() body: { ids: string[] },
+    @Request() req: { user: User },
+  ) {
+    return this.productsService.removeBulk(body.ids, req.user);
   }
 
   @Delete(":id")

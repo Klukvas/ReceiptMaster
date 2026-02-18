@@ -5,7 +5,8 @@ import { Button } from './Button';
 interface ComboboxOption {
   value: string;
   label: string;
-  searchText?: string; // Дополнительный текст для поиска
+  subtitle?: string;
+  searchText?: string;
 }
 
 interface ComboboxProps {
@@ -14,6 +15,7 @@ interface ComboboxProps {
   onChange: (value: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
+  noResultsText?: string;
   className?: string;
   disabled?: boolean;
   required?: boolean;
@@ -30,6 +32,7 @@ export const Combobox = ({
   disabled = false,
   required = false,
   onClear,
+  noResultsText,
 }: ComboboxProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,10 +52,11 @@ export const Combobox = ({
 
   // Фильтруем опции по поисковому запросу
   const filteredOptions = options.filter(option => {
-    const searchText = searchTerm.toLowerCase();
-    const labelMatch = option.label.toLowerCase().includes(searchText);
-    const searchTextMatch = option.searchText?.toLowerCase().includes(searchText);
-    return labelMatch || searchTextMatch;
+    const query = searchTerm.toLowerCase();
+    const labelMatch = option.label.toLowerCase().includes(query);
+    const searchTextMatch = option.searchText?.toLowerCase().includes(query);
+    const subtitleMatch = option.subtitle?.toLowerCase().includes(query);
+    return labelMatch || searchTextMatch || subtitleMatch;
   });
 
   // Находим выбранную опцию
@@ -225,9 +229,9 @@ export const Combobox = ({
       <div
         ref={inputRef}
         className={`
-          w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 flex items-center justify-between cursor-pointer
+          w-full h-11 px-3.5 border rounded-xl bg-white dark:bg-gray-700/80 text-gray-900 dark:text-gray-100 focus:outline-none transition-all duration-200 flex items-center justify-between cursor-pointer
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-          ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}
+          ${isOpen ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-500/20 dark:ring-blue-500/30 shadow-sm' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}
         `}
         onClick={toggleOpen}
         onKeyDown={handleContainerKeyDown}
@@ -273,24 +277,24 @@ export const Combobox = ({
         </div>
       </div>
 
-      {/* Выпадающий список */}
+      {/* Dropdown */}
       {isOpen && (
-        <div 
-          className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto"
+        <div
+          className="absolute z-50 w-full mt-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600/80 rounded-xl shadow-lg shadow-gray-200/50 dark:shadow-black/30 animate-dropdown-in overflow-hidden"
         >
-          <ul ref={listRef} role="listbox" className="py-1">
+          <ul ref={listRef} role="listbox" className="py-1 max-h-60 overflow-auto scrollbar-thin">
             {filteredOptions.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                Ничего не найдено
+              <li className="px-3.5 py-4 text-sm text-center text-gray-400 dark:text-gray-500">
+                {noResultsText || 'Nothing found'}
               </li>
             ) : (
               filteredOptions.map((option, index) => (
                 <li
                   key={option.value}
                   className={`
-                    px-3 py-2 text-sm cursor-pointer transition-colors
-                    ${index === highlightedIndex ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'}
-                    ${option.value === value ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-900 dark:text-blue-200 font-medium' : ''}
+                    px-3.5 py-2.5 text-sm cursor-pointer transition-colors
+                    ${index === highlightedIndex ? 'bg-blue-50 dark:bg-blue-900/25' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}
+                    ${option.value === value ? 'bg-blue-50 dark:bg-blue-900/30 font-medium' : ''}
                   `}
                   onClick={() => selectOption(option)}
                   onMouseDown={(e) => {
@@ -301,7 +305,10 @@ export const Combobox = ({
                   role="option"
                   aria-selected={option.value === value}
                 >
-                  {option.label}
+                  <span className="text-gray-900 dark:text-gray-100">{option.label}</span>
+                  {option.subtitle && (
+                    <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5">{option.subtitle}</span>
+                  )}
                 </li>
               ))
             )}

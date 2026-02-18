@@ -1,2 +1,9 @@
 export { RevenueDashboard } from './RevenueDashboard';
 export { TurnoverDashboard } from './TurnoverDashboard';
+export { AnalyticsHeader } from './AnalyticsHeader';
+export { AnalyticsFilterBar } from './AnalyticsFilterBar';
+export { KPIPrimaryCard } from './KPIPrimaryCard';
+export { KPISecondaryCard } from './KPISecondaryCard';
+export { TopRecipientsList } from './TopRecipientsList';
+export { RevenueChart } from './RevenueChart';
+export { TopProductsChart } from './TopProductsChart';

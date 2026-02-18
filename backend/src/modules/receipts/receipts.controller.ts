@@ -3,19 +3,21 @@ import {
   Get,
   Post,
   Param,
+  Body,
   Res,
   UseGuards,
   Query,
   Request,
   Logger,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from "@nestjs/swagger";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 
 @ApiTags("receipts")
+@ApiBearerAuth("bearer")
 @Controller("receipts")
 @UseGuards(JwtAuthGuard)
 export class ReceiptsController {
@@ -139,6 +141,39 @@ export class ReceiptsController {
     @Query("printer") printer?: string,
   ) {
     return this.receiptsService.printReceipt(id, req.user, printer);
+  }
+
+  @Post(":id/void")
+  @ApiOperation({ summary: "Void a receipt and unlock the order" })
+  @ApiResponse({ status: 200, description: "Receipt voided successfully" })
+  @ApiResponse({ status: 400, description: "Receipt is already voided" })
+  @ApiResponse({ status: 404, description: "Receipt not found" })
+  async voidReceipt(
+    @Param("id") id: string,
+    @Body() body: { reason: string },
+    @Request() req: { user: User },
+  ) {
+    return this.receiptsService.voidReceipt(id, req.user, body.reason);
+  }
+
+  @Post("test-preview")
+  @ApiOperation({ summary: "Generate a test receipt PDF preview using current user settings" })
+  @ApiResponse({ status: 200, description: "Test PDF generated" })
+  async testPreview(
+    @Request() req: { user: User },
+    @Res() res: Response,
+  ) {
+    try {
+      const pdfBuffer = await this.receiptsService.generateTestReceipt(req.user);
+      res.set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'inline; filename="test-receipt.pdf"',
+        "Content-Length": pdfBuffer.length.toString(),
+      });
+      res.send(pdfBuffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   }
 
   @Post(":id/regenerate")

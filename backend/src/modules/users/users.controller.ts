@@ -13,6 +13,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from "@nestjs/swagger";
+import { ThrottlerGuard, Throttle } from "@nestjs/throttler";
 import { UsersService } from "./users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
@@ -28,38 +29,69 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post("register")
-  @ApiOperation({ summary: "Регистрация нового пользователя" })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @ApiOperation({ summary: "Register a new user" })
   @ApiResponse({
     status: 201,
-    description: "Пользователь успешно зарегистрирован",
+    description: "User registered successfully",
     type: AuthResponseDto,
   })
   @ApiResponse({
     status: 409,
-    description: "Пользователь с таким email уже существует",
+    description: "User with this email already exists",
   })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return this.usersService.register(registerDto);
   }
 
   @Post("login")
-  @ApiOperation({ summary: "Вход в систему" })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @ApiOperation({ summary: "Login" })
   @ApiResponse({
     status: 200,
-    description: "Успешный вход в систему",
+    description: "Login successful",
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: "Неверные учетные данные" })
+  @ApiResponse({ status: 401, description: "Invalid credentials" })
+  @ApiResponse({ status: 429, description: "Too many login attempts" })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.usersService.login(loginDto);
   }
 
+  @Post("refresh")
+  @ApiOperation({ summary: "Refresh access token using refresh token" })
+  @ApiResponse({
+    status: 200,
+    description: "Tokens refreshed successfully",
+    type: AuthResponseDto,
+  })
+  @ApiResponse({ status: 401, description: "Invalid or expired refresh token" })
+  async refresh(
+    @Body() body: { refresh_token: string },
+  ): Promise<AuthResponseDto> {
+    return this.usersService.refreshToken(body.refresh_token);
+  }
+
+  @Post("logout")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("bearer")
+  @ApiOperation({ summary: "Logout and revoke refresh token" })
+  @ApiResponse({ status: 200, description: "Logged out successfully" })
+  async logout(
+    @Body() body: { refresh_token: string },
+  ): Promise<{ message: string }> {
+    await this.usersService.revokeRefreshToken(body.refresh_token);
+    return { message: "Logged out successfully" };
+  }
+
   @Get("profile")
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "Получить профиль текущего пользователя" })
-  @ApiResponse({ status: 200, description: "Профиль пользователя", type: User })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiBearerAuth("bearer")
+  @ApiOperation({ summary: "Get current user profile" })
+  @ApiResponse({ status: 200, description: "User profile", type: User })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   async getProfile(@Request() req): Promise<Omit<User, "password">> {
     const { password: _password, ...userWithoutPassword } = req.user;
     return userWithoutPassword;
@@ -67,10 +99,10 @@ export class UsersController {
 
   @Patch("profile")
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "Обновить профиль текущего пользователя" })
-  @ApiResponse({ status: 200, description: "Профиль обновлен", type: User })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiBearerAuth("bearer")
+  @ApiOperation({ summary: "Update current user profile" })
+  @ApiResponse({ status: 200, description: "Profile updated", type: User })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   async updateProfile(
     @Request() req,
     @Body() updateProfileDto: UpdateProfileDto
@@ -80,16 +112,16 @@ export class UsersController {
 
   @Post("change-password")
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "Изменить пароль текущего пользователя" })
-  @ApiResponse({ status: 200, description: "Пароль успешно изменен" })
-  @ApiResponse({ status: 400, description: "Ошибка валидации" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiBearerAuth("bearer")
+  @ApiOperation({ summary: "Change current user password" })
+  @ApiResponse({ status: 200, description: "Password changed successfully" })
+  @ApiResponse({ status: 400, description: "Validation error" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   async changePassword(
     @Request() req,
     @Body() changePasswordDto: ChangePasswordDto
   ): Promise<{ message: string }> {
     await this.usersService.changePassword(req.user.id, changePasswordDto);
-    return { message: "Пароль успешно изменен" };
+    return { message: "Password changed successfully" };
   }
 }

@@ -1,10 +1,19 @@
-import { Module } from "@nestjs/common";
+import { Module, MiddlewareConsumer, NestModule } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { APP_FILTER } from "@nestjs/core";
+import { ScheduleModule } from "@nestjs/schedule";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { APP_FILTER, APP_INTERCEPTOR } from "@nestjs/core";
 import { envSchema } from "./config/env.schema";
-// import { createDataSource } from "./config/database.config";
 import { GlobalExceptionFilter } from "./common/filters/GlobalExceptionFilter";
+import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
+import { TenantMiddleware } from "./common/middleware/tenant.middleware";
+import { TenantContextSubscriber } from "./common/subscribers/tenant-context.subscriber";
+import { AuditLogInterceptor } from "./common/interceptors/audit-log.interceptor";
+import { AuditLogService } from "./common/services/audit-log.service";
+import { AuditLog } from "./common/entities/audit-log.entity";
+import { CacheModule } from "./common/modules/cache.module";
+import { QueueModule } from "./common/modules/queue.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RecipientsModule } from "./modules/recipients/recipients.module";
 import { OrdersModule } from "./modules/orders/orders.module";
@@ -45,12 +54,18 @@ import { MigrationService } from "./common/services/migration.service";
           database: configService.get("DB_NAME"),
           entities: [__dirname + "/**/*.entity{.ts,.js}"],
           migrations: [__dirname + "/config/migrations/*{.ts,.js}"],
+          subscribers: [TenantContextSubscriber],
           synchronize: false,
           logging: process.env.NODE_ENV === "development",
         };
       },
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    TypeOrmModule.forFeature([AuditLog]),
+    CacheModule,
+    QueueModule,
     ProductsModule,
     RecipientsModule,
     OrdersModule,
@@ -65,7 +80,17 @@ import { MigrationService } from "./common/services/migration.service";
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+    AuditLogService,
     MigrationService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes("*");
+    consumer.apply(TenantMiddleware).forRoutes("*");
+  }
+}

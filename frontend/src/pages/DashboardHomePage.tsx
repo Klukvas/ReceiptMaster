@@ -4,46 +4,50 @@ import { Link } from 'react-router-dom';
 import { productsApi, recipientsApi, ordersApi, receiptsApi, dashboardApi, formatCurrency } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { SkeletonCard } from '../components/ui/Skeleton';
+import { StatCard } from '../components/dashboard/StatCard';
+import { RevenueSparkline } from '../components/dashboard/RevenueSparkline';
+import { OrderStatusSummary } from '../components/dashboard/OrderStatusSummary';
+import { LowStockWidget } from '../components/dashboard/LowStockWidget';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAuth } from '../hooks/useAuth';
 
 export const DashboardHomePage = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  
-  // Загружаем данные для статистики
-  const { data: productsData } = useQuery({
+
+  const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.getAll({ limit: 5 }),
   });
 
-  const { data: recipientsData } = useQuery({
+  const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
     queryKey: ['recipients'],
     queryFn: () => recipientsApi.getAll({ limit: 5 }),
   });
 
-  const { data: ordersData } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['orders'],
     queryFn: () => ordersApi.getAll({ limit: 5 }),
   });
 
-  const { data: receiptsData } = useQuery({
+  const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
     queryKey: ['receipts'],
     queryFn: () => receiptsApi.getAll(),
   });
 
-  // Загружаем общую статистику доходов
-  const { data: totalRevenue } = useQuery({
+  const { data: totalRevenue, isLoading: revenueLoading } = useQuery({
     queryKey: ['totalRevenue'],
     queryFn: () => dashboardApi.getTotalRevenue(),
   });
 
-  const { data: totalTurnover } = useQuery({
+  const { data: totalTurnover, isLoading: turnoverLoading } = useQuery({
     queryKey: ['totalTurnover'],
     queryFn: () => dashboardApi.getTotalTurnover(),
   });
 
-  // Основная статистика
+  const statsLoading = productsLoading || recipientsLoading || ordersLoading || receiptsLoading;
+
   const stats = [
     {
       name: t('navigation.products'),
@@ -79,29 +83,9 @@ export const DashboardHomePage = () => {
     },
   ];
 
-  // Финансовая статистика
-  const financialStats = [
-    {
-      name: t('home.totalRevenue'),
-      value: formatCurrency(totalRevenue?.data?.total || 0),
-      description: t('home.revenueDescription'),
-      icon: DollarSign,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 dark:bg-green-900/30',
-    },
-    {
-      name: t('home.totalTurnover'),
-      value: formatCurrency(totalTurnover?.data?.total || 0),
-      description: t('home.turnoverDescription'),
-      icon: TrendingUp,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-    },
-  ];
-
   return (
     <div className="space-y-8">
-      {/* Приветствие */}
+      {/* Welcome banner */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
         <h1 className="text-3xl font-bold mb-2">
           {t('home.welcome')}, {user?.email?.split('@')[0]}!
@@ -109,56 +93,58 @@ export const DashboardHomePage = () => {
         <p className="text-blue-100 text-lg">{t('home.subtitle')}</p>
       </div>
 
-      {/* Основная статистика */}
+      {/* Entity count cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <Link key={stat.name} to={stat.href}>
-            <Card className="hover:shadow-lg transition-shadow duration-200 cursor-pointer">
-              <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {stat.name}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {stat.value}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
+        {statsLoading
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+          : stats.map((stat) => (
+              <StatCard key={stat.name} {...stat} />
+            ))}
       </div>
 
-      {/* Финансовая статистика */}
+      {/* Financial summary */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {financialStats.map((stat) => (
-          <Card key={stat.name}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {stat.name}
-                </p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
-                  {stat.value}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {stat.description}
-                </p>
-              </div>
-              <div className={`p-4 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={`h-8 w-8 ${stat.color}`} />
-              </div>
-            </div>
-          </Card>
-        ))}
+        {revenueLoading || turnoverLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard
+              name={t('home.totalRevenue')}
+              value={formatCurrency(totalRevenue?.data?.total_revenue_cents || 0, totalRevenue?.data?.currency)}
+              description={t('home.revenueDescription')}
+              icon={DollarSign}
+              color="text-green-600"
+              bgColor="bg-green-100 dark:bg-green-900/30"
+            />
+            <StatCard
+              name={t('home.totalTurnover')}
+              value={formatCurrency(totalTurnover?.data?.total_turnover_cents || 0, totalTurnover?.data?.currency)}
+              description={t('home.turnoverDescription')}
+              icon={TrendingUp}
+              color="text-blue-600"
+              bgColor="bg-blue-100 dark:bg-blue-900/30"
+            />
+          </>
+        )}
       </div>
 
-      {/* Последние данные */}
+      {/* Charts row: sparkline + order status donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <RevenueSparkline />
+        </div>
+        <OrderStatusSummary />
+      </div>
+
+      {/* Low stock widget */}
+      <LowStockWidget />
+
+      {/* Latest data */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Последние товары */}
+        {/* Latest products */}
         <Card title={t('home.latestProducts')}>
           {productsData?.data?.data && productsData.data.data.length > 0 ? (
             <div className="space-y-3">
@@ -169,11 +155,11 @@ export const DashboardHomePage = () => {
                       {product.name}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {formatCurrency(product.price)}
+                      {formatCurrency(product.sale_price_cents)}
                     </p>
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {product.stock} {t('common.items')}
+                    {product.quantity} {t('orders.pieces', 'pcs')}
                   </div>
                 </div>
               ))}
@@ -187,7 +173,7 @@ export const DashboardHomePage = () => {
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {t('home.noProducts')}
+                {t('home.noProducts', 'No products yet')}
               </p>
               <Link to="/products">
                 <Button>
@@ -198,7 +184,7 @@ export const DashboardHomePage = () => {
           )}
         </Card>
 
-        {/* Последние получатели */}
+        {/* Latest recipients */}
         <Card title={t('home.latestRecipients')}>
           {recipientsData?.data?.data && recipientsData.data.data.length > 0 ? (
             <div className="space-y-3">
@@ -227,7 +213,7 @@ export const DashboardHomePage = () => {
             <div className="text-center py-8">
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {t('home.noRecipients')}
+                {t('home.noRecipients', 'No recipients yet')}
               </p>
               <Link to="/recipients">
                 <Button>
@@ -239,7 +225,7 @@ export const DashboardHomePage = () => {
         </Card>
       </div>
 
-      {/* Последние заказы */}
+      {/* Latest orders */}
       <Card title={t('home.latestOrders')}>
         {ordersData?.data?.data && ordersData.data.data.length > 0 ? (
           <div className="space-y-3">
@@ -247,15 +233,15 @@ export const DashboardHomePage = () => {
               <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">
-                    {t('home.order')} #{order.id.slice(-8)}
+                    {t('home.order', 'Order')} #{order.id.slice(-8)}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(order.createdAt).toLocaleDateString()}
+                    {new Date(order.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="font-medium text-gray-900 dark:text-white">
-                    {formatCurrency(order.total)}
+                    {formatCurrency(order.total_cents)}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {order.status}
@@ -273,7 +259,7 @@ export const DashboardHomePage = () => {
           <div className="text-center py-8">
             <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {t('home.noOrders')}
+              {t('home.noOrders', 'No orders yet')}
             </p>
             <Link to="/orders">
               <Button>
@@ -284,7 +270,7 @@ export const DashboardHomePage = () => {
         )}
       </Card>
 
-      {/* Быстрые действия */}
+      {/* Quick actions */}
       <Card title={t('home.quickActions')}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link to="/products">

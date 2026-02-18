@@ -5,6 +5,7 @@ import { recipientsApi, type Recipient } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface RecipientFormProps {
   recipient?: Recipient | null;
@@ -12,6 +13,7 @@ interface RecipientFormProps {
 }
 
 export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -51,7 +53,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const data = {
       ...formData,
       email: formData.email || undefined,
@@ -73,7 +75,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       <Card className="w-full max-w-md mx-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {recipient ? 'Редактировать получателя' : 'Добавить получателя'}
+            {recipient ? t('recipients.editRecipient') : t('recipients.createRecipient')}
           </h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -82,28 +84,28 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Имя"
+            label={t('recipients.name')}
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
 
           <Input
-            label="Email"
+            label={t('recipients.email')}
             type="email"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
 
           <Input
-            label="Телефон"
+            label={t('recipients.phone')}
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Адрес
+              {t('recipients.address')}
             </label>
             <textarea
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
@@ -114,10 +116,10 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
 
           <div className="flex space-x-3 pt-4">
             <Button type="submit" disabled={isLoading} className="flex-1">
-              {isLoading ? 'Сохранение...' : recipient ? 'Обновить' : 'Создать'}
+              {isLoading ? t('recipients.saving') : recipient ? t('recipients.update') : t('common.create')}
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
           </div>
         </form>

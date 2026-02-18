@@ -2,22 +2,28 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 import { AppModule } from "./app.module";
 import { EnvConfig } from "./config/env.schema";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // WebSocket adapter (Socket.IO)
+  app.useWebSocketAdapter(new IoAdapter(app));
+
   const configService = app.get(ConfigService<EnvConfig>);
   const apiPrefix = configService.get("API_PREFIX");
   const port = configService.get("PORT");
 
-  // Global validation (strict for API routes)
+  // Global validation — whitelist strips unknown properties silently.
+  // forbidNonWhitelisted is NOT used because multiple @Query() DTOs
+  // (e.g. PaginationDto + DateRangeDto) each receive all query params
+  // and would reject each other's fields.
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
       whitelist: true,
-      forbidNonWhitelisted: true,
     }),
   );
 
@@ -50,9 +56,15 @@ async function bootstrap() {
 
   // Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle("Market Service API")
-    .setDescription("MVP trading service on NestJS")
+    .setTitle("ReceiptMaster API")
+    .setDescription(
+      "Multi-tenant SaaS API for managing products, recipients, orders, receipts, and analytics.",
+    )
     .setVersion("1.0")
+    .addBearerAuth(
+      { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      "bearer",
+    )
     .addApiKey({ type: "apiKey", name: "X-API-Key", in: "header" }, "api-key")
     .build();
 

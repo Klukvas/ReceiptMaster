@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Save, X } from 'lucide-react';
+import { FileText, Save, X, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { settingsApi } from '../../lib/api';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
+import { SettingsSection } from './SettingsSection';
 import { useTranslation } from '../../hooks/useTranslation';
 
 export const FooterCustomizer = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     footerTitle: '',
     footerSubtitle: '',
   });
 
-  // Get current footer settings
   const { data: footerTitleData, isLoading: isLoadingTitle } = useQuery({
     queryKey: ['footerTitle'],
     queryFn: async () => {
@@ -41,34 +40,26 @@ export const FooterCustomizer = () => {
     refetchOnMount: true,
   });
 
-  // Update form data when settings are loaded
   useEffect(() => {
     if (footerTitleData?.footerTitle !== undefined) {
-      setFormData(prev => ({
-        ...prev,
-        footerTitle: footerTitleData.footerTitle || '',
-      }));
+      setFormData(prev => ({ ...prev, footerTitle: footerTitleData.footerTitle || '' }));
     }
   }, [footerTitleData]);
 
   useEffect(() => {
     if (footerSubtitleData?.footerSubtitle !== undefined) {
-      setFormData(prev => ({
-        ...prev,
-        footerSubtitle: footerSubtitleData.footerSubtitle || '',
-      }));
+      setFormData(prev => ({ ...prev, footerSubtitle: footerSubtitleData.footerSubtitle || '' }));
     }
   }, [footerSubtitleData]);
 
-  // Update mutations
   const updateFooterTitleMutation = useMutation({
     mutationFn: (footerTitle: string) => settingsApi.updateFooterTitle(footerTitle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['footerTitle'] });
-      toast.success(t('settings.footerTitleUpdated') || 'Footer title updated successfully');
+      toast.success(t('settings.footerTitleUpdated', 'Footer title updated successfully'));
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || t('settings.footerTitleUpdateFailed') || 'Failed to update footer title');
+      toast.error(error.response?.data?.message || t('settings.footerTitleUpdateFailed', 'Failed to update footer title'));
     },
   });
 
@@ -76,29 +67,25 @@ export const FooterCustomizer = () => {
     mutationFn: (footerSubtitle: string) => settingsApi.updateFooterSubtitle(footerSubtitle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['footerSubtitle'] });
-      toast.success(t('settings.footerSubtitleUpdated') || 'Footer subtitle updated successfully');
+      toast.success(t('settings.footerSubtitleUpdated', 'Footer subtitle updated successfully'));
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || t('settings.footerSubtitleUpdateFailed') || 'Failed to update footer subtitle');
+      toast.error(error.response?.data?.message || t('settings.footerSubtitleUpdateFailed', 'Failed to update footer subtitle'));
     },
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     updateFooterTitleMutation.mutate(formData.footerTitle);
     updateFooterSubtitleMutation.mutate(formData.footerSubtitle);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    // Reset to current values
     setFormData({
       footerTitle: footerTitleData?.footerTitle || '',
       footerSubtitle: footerSubtitleData?.footerSubtitle || '',
@@ -110,86 +97,75 @@ export const FooterCustomizer = () => {
   const isSaving = updateFooterTitleMutation.isPending || updateFooterSubtitleMutation.isPending;
 
   return (
-    <Card
-      title={
-        <div className="flex items-center space-x-2">
-          <FileText className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          <span>{t('settings.footerCustomization') || 'Footer Customization'}</span>
-        </div>
+    <SettingsSection
+      title={t('settings.footerCustomization', 'Footer Customization')}
+      description={t('settings.footerCustomizationDescription', 'Customize the footer title and subtitle that appear on your invoices and receipts')}
+      icon={<FileText className="h-5 w-5" />}
+      actions={
+        !isEditing && !isLoading ? (
+          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            {t('common.edit', 'Edit')}
+          </Button>
+        ) : undefined
       }
     >
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        {t('settings.footerCustomizationDescription') || 'Customize the footer title and subtitle that appear on your invoices and receipts'}
-      </p>
       {isLoading ? (
-        <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-          {t('common.loading') || 'Loading...'}
+        <div className="space-y-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-10 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-4">
           <div>
             <Input
-              label={t('settings.footerTitle') || 'Footer Title'}
+              label={t('settings.footerTitle', 'Footer Title')}
               name="footerTitle"
               value={formData.footerTitle}
               onChange={handleInputChange}
-              placeholder={t('settings.footerTitlePlaceholder') || 'e.g., Thank you for your purchase!'}
+              placeholder={t('settings.footerTitlePlaceholder', 'e.g., Thank you for your purchase!')}
               disabled={!isEditing}
             />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {t('settings.footerTitleHint') || 'This text will appear as the main footer title on your receipts'}
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+              {t('settings.footerTitleHint', 'This text will appear as the main footer title on your receipts')}
             </p>
           </div>
 
           <div>
             <Input
-              label={t('settings.footerSubtitle') || 'Footer Subtitle'}
+              label={t('settings.footerSubtitle', 'Footer Subtitle')}
               name="footerSubtitle"
               value={formData.footerSubtitle}
               onChange={handleInputChange}
-              placeholder={t('settings.footerSubtitlePlaceholder') || 'e.g., If you have any questions, please contact us.'}
+              placeholder={t('settings.footerSubtitlePlaceholder', 'e.g., If you have any questions, please contact us.')}
               disabled={!isEditing}
             />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {t('settings.footerSubtitleHint') || 'This text will appear as the footer subtitle on your receipts'}
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+              {t('settings.footerSubtitleHint', 'This text will appear as the footer subtitle on your receipts')}
             </p>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            {isEditing ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={handleCancel}
-                  disabled={isSaving}
-                  className="flex items-center space-x-2"
-                >
-                  <X className="h-4 w-4" />
-                  <span>{t('common.cancel') || 'Cancel'}</span>
+          {isEditing && (
+            <>
+              <div className="border-t border-gray-100 dark:border-gray-700/40" />
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  {t('common.cancel', 'Cancel')}
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex items-center space-x-2"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{isSaving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}</span>
+                <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  {isSaving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
                 </Button>
-              </>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={() => setIsEditing(true)}
-                className="flex items-center space-x-2"
-              >
-                <FileText className="h-4 w-4" />
-                <span>{t('common.edit') || 'Edit'}</span>
-              </Button>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       )}
-    </Card>
+    </SettingsSection>
   );
 };
-

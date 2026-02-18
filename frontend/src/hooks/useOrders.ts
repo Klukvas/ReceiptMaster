@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type Order } from '../lib/api';
 import { orderService } from '../services/OrderService';
 import { receiptService } from '../services/ReceiptService';
@@ -8,7 +8,7 @@ import { useNotifications } from './useNotifications';
 export const useOrders = () => {
   const queryClient = useQueryClient();
   const { notifications } = useNotifications();
-  
+
   // UI State
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -18,19 +18,14 @@ export const useOrders = () => {
     order: Order | null;
   }>({ isOpen: false, order: null });
 
+  // Selection state
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+
   // Load printers on mount
   useEffect(() => {
     receiptService.loadPrinters();
   }, []);
-
-  // Fetch orders
-  const { data: ordersData, isLoading, error: ordersError } = useQuery({
-    queryKey: ['orders'],
-    queryFn: () => orderService.getAllOrders(50),
-  });
-
-  // Ensure orders is always an array
-  const orders = Array.isArray(ordersData) ? ordersData : [];
 
   // Mutations
   const confirmMutation = useMutation({
@@ -60,6 +55,23 @@ export const useOrders = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+
+  const batchApproveMutation = useMutation({
+    mutationFn: (orderIds: string[]) => orderService.batchApproveOrders(orderIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setSelectedKeys(new Set());
+    },
+  });
+
+  const batchDeleteMutation = useMutation({
+    mutationFn: (orderIds: string[]) => orderService.batchDeleteOrders(orderIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setSelectedKeys(new Set());
+      setBulkDeleteConfirm(false);
     },
   });
 
@@ -108,12 +120,28 @@ export const useOrders = () => {
     receiptService.handlePrintReceipt(receiptId);
   };
 
+  // Batch action handlers
+  const handleBatchApprove = () => {
+    batchApproveMutation.mutate(Array.from(selectedKeys));
+  };
+
+  const handleBatchDelete = () => {
+    batchDeleteMutation.mutate(Array.from(selectedKeys));
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    setBulkDeleteConfirm(true);
+  };
+
+  const handleBulkDeleteCancel = () => {
+    setBulkDeleteConfirm(false);
+  };
+
+  const clearSelection = () => {
+    setSelectedKeys(new Set());
+  };
+
   return {
-    // Data
-    orders,
-    isLoading,
-    error: ordersError,
-    
     // UI State
     showForm,
     setShowForm,
@@ -122,10 +150,15 @@ export const useOrders = () => {
     selectedOrder,
     setSelectedOrder,
     deleteConfirmation,
-    
+
+    // Selection state
+    selectedKeys,
+    setSelectedKeys,
+    bulkDeleteConfirm,
+
     // Notifications
     notifications,
-    
+
     // Actions
     handleConfirm,
     handleCancel,
@@ -135,11 +168,20 @@ export const useOrders = () => {
     handleGenerateReceipt,
     handleDownloadReceipt,
     handlePrintReceipt,
-    
+
+    // Batch actions
+    handleBatchApprove,
+    handleBatchDelete,
+    handleBulkDeleteConfirm,
+    handleBulkDeleteCancel,
+    clearSelection,
+
     // Loading states
     isConfirming: confirmMutation.isPending,
     isCancelling: cancelMutation.isPending,
     isDeleting: deleteOrderMutation.isPending,
     isGeneratingReceipt: generateReceiptMutation.isPending,
+    isBatchApproving: batchApproveMutation.isPending,
+    isBatchDeleting: batchDeleteMutation.isPending,
   };
 };

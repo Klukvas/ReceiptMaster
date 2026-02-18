@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   OneToMany,
   JoinColumn,
@@ -20,9 +21,17 @@ export enum OrderStatus {
   CANCELLED = "cancelled",
 }
 
+export enum PaymentStatus {
+  UNPAID = "unpaid",
+  PAID = "paid",
+  REFUNDED = "refunded",
+}
+
 @Entity("orders")
 @Index(["recipient_id"])
 @Index(["created_at"])
+@Index(["user_id", "status"])
+@Index(["user_id", "created_at"])
 export class Order {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -57,6 +66,19 @@ export class Order {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @DeleteDateColumn()
+  deleted_at?: Date;
+
+  @Column({
+    type: "enum",
+    enum: PaymentStatus,
+    default: PaymentStatus.UNPAID,
+  })
+  payment_status: PaymentStatus;
+
+  @Column({ type: "boolean", default: false })
+  is_locked: boolean;
 
   @ManyToOne(() => Recipient, (recipient) => recipient.orders, {
     onDelete: "CASCADE",

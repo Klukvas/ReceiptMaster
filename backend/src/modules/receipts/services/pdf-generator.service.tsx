@@ -80,7 +80,7 @@ export class PdfGeneratorService {
     language: string = 'en',
     footerTitle?: string,
     footerSubtitle?: string
-  ): Promise<{ filePath: string; url: string }> {
+  ): Promise<{ filePath: string; url: string; html: string }> {
     try {
       this.logger.log(`Starting ${style} PDF generation using Playwright...`);
       this.logger.log('Order ID:', order.id);
@@ -179,7 +179,7 @@ export class PdfGeneratorService {
 
       this.logger.log(`${style} PDF receipt generated: ${filePath}`);
 
-      return { filePath, url };
+      return { filePath, url, html };
     } catch (error) {
       this.logger.error(`Error during ${style} PDF generation:`, error);
       this.logger.error('Error details:', JSON.stringify(error, null, 2));

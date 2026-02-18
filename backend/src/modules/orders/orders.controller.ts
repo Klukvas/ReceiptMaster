@@ -20,17 +20,22 @@ import {
   ApiResponse,
   ApiHeader,
   ApiQuery,
+  ApiBearerAuth,
 } from "@nestjs/swagger";
-import { OrdersService, PaginatedResponse, IdempotencyResponse } from "./orders.service";
+import { OrdersService, IdempotencyResponse } from "./orders.service";
+import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
+import { BatchOrderIdsDto } from "./dto/batch-orders.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { DateRangeDto } from "../../common/dto/date-range.dto";
 import { OrderStatus } from "./entities/order.entity";
 import { Order } from "./entities/order.entity";
 import { User } from "../users/entities/user.entity";
 
 @ApiTags("orders")
+@ApiBearerAuth("bearer")
 @Controller("orders")
 @UseGuards(JwtAuthGuard)
 export class OrdersController {
@@ -66,26 +71,49 @@ export class OrdersController {
     return res.status(result.statusCode).json(result.data);
   }
 
+  @Post("batch-approve")
+  @ApiOperation({ summary: "Batch approve orders" })
+  @ApiResponse({ status: 200, description: "Orders approved" })
+  @ApiResponse({ status: 400, description: "Some orders cannot be approved" })
+  async batchApprove(
+    @Body() dto: BatchOrderIdsDto,
+    @Request() req: { user: User },
+  ): Promise<{ approved: number }> {
+    return this.ordersService.approveBatch(dto.orderIds, req.user);
+  }
+
+  @Post("batch-delete")
+  @ApiOperation({ summary: "Batch delete orders" })
+  @ApiResponse({ status: 200, description: "Orders deleted" })
+  @ApiResponse({ status: 400, description: "Some orders cannot be deleted" })
+  async batchDelete(
+    @Body() dto: BatchOrderIdsDto,
+    @Request() req: { user: User },
+  ): Promise<{ deleted: number }> {
+    return this.ordersService.deleteBatch(dto.orderIds, req.user);
+  }
+
   @Get()
   @ApiOperation({ summary: "Get orders list" })
   @ApiResponse({ status: 200, description: "Orders list retrieved" })
-  @ApiQuery({
-    name: "offset",
-    required: false,
-    description: "Pagination offset",
-  })
-  @ApiQuery({ name: "limit", required: false, description: "Items per page" })
-  @ApiQuery({
-    name: "status",
-    required: false,
-    description: "Filter by order status",
-  })
+  @ApiQuery({ name: "status", required: false, description: "Filter by order status" })
+  @ApiQuery({ name: "minAmount", required: false, description: "Minimum order total in cents" })
+  @ApiQuery({ name: "maxAmount", required: false, description: "Maximum order total in cents" })
   findAll(
     @Query() paginationDto: PaginationDto,
+    @Query() dateRange: DateRangeDto,
     @Request() req: { user: User },
     @Query("status") status?: OrderStatus,
+    @Query("minAmount") minAmount?: string,
+    @Query("maxAmount") maxAmount?: string,
   ): Promise<PaginatedResponse<Order>> {
-    return this.ordersService.findAll(paginationDto, req.user, status);
+    const filters = {
+      startDate: dateRange.startDateParsed,
+      endDate: dateRange.endDateParsed,
+      minAmount: minAmount ? parseInt(minAmount) : undefined,
+      maxAmount: maxAmount ? parseInt(maxAmount) : undefined,
+    };
+    return this.ordersService.findAll(paginationDto, req.user, status, filters);
   }
 
   @Get(":id")
@@ -136,142 +164,105 @@ export class OrdersController {
     return this.ordersService.remove(id, req.user);
   }
 
+  @Get("dashboard/daily-revenue")
+  @ApiOperation({ summary: "Get daily revenue/turnover for sparkline" })
+  @ApiResponse({ status: 200, description: "Daily revenue data retrieved" })
+  @ApiQuery({ name: "days", required: false, description: "Number of days (default 7)" })
+  getDailyRevenue(
+    @Request() req: { user: User },
+    @Query("days") days?: string,
+  ) {
+    return this.ordersService.getDailyRevenue(req.user, days ? parseInt(days) : 7);
+  }
+
+  @Get("dashboard/status-summary")
+  @ApiOperation({ summary: "Get order status summary (draft/confirmed/cancelled counts)" })
+  @ApiResponse({ status: 200, description: "Order status summary retrieved" })
+  getOrderStatusSummary(@Request() req: { user: User }) {
+    return this.ordersService.getOrderStatusSummary(req.user);
+  }
+
   @Get("dashboard/revenue-by-products")
   @ApiOperation({ summary: "Get revenue by products" })
   @ApiResponse({ status: 200, description: "Revenue by products retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getRevenueByProducts(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getRevenueByProducts(req.user, start, end);
+    return this.ordersService.getRevenueByProducts(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 
   @Get("dashboard/revenue-by-recipients")
   @ApiOperation({ summary: "Get revenue by recipients" })
   @ApiResponse({ status: 200, description: "Revenue by recipients retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getRevenueByRecipients(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getRevenueByRecipients(req.user, start, end);
+    return this.ordersService.getRevenueByRecipients(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 
   @Get("dashboard/total-revenue")
   @ApiOperation({ summary: "Get total revenue" })
   @ApiResponse({ status: 200, description: "Total revenue retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getTotalRevenue(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTotalRevenue(req.user, start, end);
+    return this.ordersService.getTotalRevenue(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 
-  // Endpoints для общего оборота
   @Get("dashboard/turnover-by-products")
   @ApiOperation({ summary: "Get turnover by products" })
   @ApiResponse({ status: 200, description: "Turnover by products retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getTurnoverByProducts(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTurnoverByProducts(req.user, start, end);
+    return this.ordersService.getTurnoverByProducts(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 
   @Get("dashboard/turnover-by-recipients")
   @ApiOperation({ summary: "Get turnover by recipients" })
   @ApiResponse({ status: 200, description: "Turnover by recipients retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getTurnoverByRecipients(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTurnoverByRecipients(req.user, start, end);
+    return this.ordersService.getTurnoverByRecipients(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 
   @Get("dashboard/total-turnover")
   @ApiOperation({ summary: "Get total turnover" })
   @ApiResponse({ status: 200, description: "Total turnover retrieved" })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Start date for filtering (ISO string)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "End date for filtering (ISO string)",
-  })
   getTotalTurnover(
     @Request() req: { user: User },
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query() dateRange: DateRangeDto,
   ) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
-    return this.ordersService.getTotalTurnover(req.user, start, end);
+    return this.ordersService.getTotalTurnover(
+      req.user,
+      dateRange.startDateParsed,
+      dateRange.endDateParsed,
+    );
   }
 }

@@ -31,6 +31,18 @@ services:
     networks:
       - marketflow-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: marketflow-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
   backend:
     image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:latest
     container_name: marketflow-backend
@@ -44,6 +56,8 @@ services:
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-market_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - API_PREFIX=api/v1
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
@@ -61,6 +75,8 @@ services:
       - TEMP_BUCKET=${TEMP_BUCKET:-marketflow-storage}
     volumes:
       - receipts:/app/receipts
+    depends_on:
+      - redis
     restart: unless-stopped
     networks:
       - marketflow-network

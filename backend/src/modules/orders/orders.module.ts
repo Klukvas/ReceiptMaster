@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { OrdersService } from "./orders.service";
 import { OrdersController } from "./orders.controller";
+import { IdempotencyCleanupService } from "./idempotency-cleanup.service";
 import { Order } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
 import { IdempotencyKey } from "./entities/idempotency-key.entity";
@@ -15,7 +16,7 @@ import { ReceiptsModule } from "../receipts/receipts.module";
     ReceiptsModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, IdempotencyCleanupService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

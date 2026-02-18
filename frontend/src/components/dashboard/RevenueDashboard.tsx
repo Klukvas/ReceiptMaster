@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Package, Users, DollarSign } from 'lucide-react';
+import { DollarSign, ShoppingCart, CalendarDays } from 'lucide-react';
 import { dashboardApi, formatCurrency } from '../../lib/api';
-import { Card } from '../ui/Card';
+import { SkeletonCard } from '../ui/Skeleton';
+import { RevenueChart } from './RevenueChart';
+import { TopProductsChart } from './TopProductsChart';
+import { TopRecipientsList } from './TopRecipientsList';
+import { KPIPrimaryCard } from './KPIPrimaryCard';
+import { KPISecondaryCard } from './KPISecondaryCard';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface RevenueDashboardProps {
   dateRange: {
@@ -11,149 +17,120 @@ interface RevenueDashboardProps {
 }
 
 export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
+  const { t } = useTranslation();
+  const params = {
+    startDate: dateRange.startDate || undefined,
+    endDate: dateRange.endDate || undefined,
+  };
+
   const { data: totalRevenue, isLoading: totalRevenueLoading } = useQuery({
     queryKey: ['dashboard', 'total-revenue', dateRange.startDate, dateRange.endDate],
-    queryFn: () => dashboardApi.getTotalRevenue({
-      startDate: dateRange.startDate || undefined,
-      endDate: dateRange.endDate || undefined
-    }),
+    queryFn: () => dashboardApi.getTotalRevenue(params),
   });
 
   const { data: revenueByProducts, isLoading: productsLoading } = useQuery({
     queryKey: ['dashboard', 'revenue-by-products', dateRange.startDate, dateRange.endDate],
-    queryFn: () => dashboardApi.getRevenueByProducts({
-      startDate: dateRange.startDate || undefined,
-      endDate: dateRange.endDate || undefined
-    }),
+    queryFn: () => dashboardApi.getRevenueByProducts(params),
   });
 
   const { data: revenueByRecipients, isLoading: recipientsLoading } = useQuery({
     queryKey: ['dashboard', 'revenue-by-recipients', dateRange.startDate, dateRange.endDate],
-    queryFn: () => dashboardApi.getRevenueByRecipients({
-      startDate: dateRange.startDate || undefined,
-      endDate: dateRange.endDate || undefined
-    }),
+    queryFn: () => dashboardApi.getRevenueByRecipients(params),
   });
 
-  const isLoading = totalRevenueLoading || productsLoading || recipientsLoading;
+  const summaryLoading = totalRevenueLoading;
+
+  const productChartData = (revenueByProducts?.data || []).map((p) => ({
+    name: p.product_name,
+    value: p.total_revenue_cents / 100,
+    quantity: p.total_quantity,
+  }));
+
+  const recipientChartData = (revenueByRecipients?.data || []).map((r) => ({
+    name: r.recipient_name,
+    value: r.total_revenue_cents / 100,
+    quantity: r.total_orders,
+  }));
+
+  const recipientListData = (revenueByRecipients?.data || []).map((r) => ({
+    recipient_id: r.recipient_id,
+    recipient_name: r.recipient_name,
+    total_cents: r.total_revenue_cents,
+    total_orders: r.total_orders,
+    currency: r.currency,
+  }));
+
+  const periodText =
+    dateRange.startDate && dateRange.endDate
+      ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
+      : t('dashboard.allTime', 'All time');
 
   return (
     <div className="space-y-6">
-      {/* General statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900/30">
-              <DollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Общий доход</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {isLoading ? '...' : formatCurrency(totalRevenue?.data?.total_revenue_cents || 0, totalRevenue?.data?.currency)}
-              </p>
-            </div>
+      {/* KPI section */}
+      {summaryLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="sm:col-span-2"><SkeletonCard /></div>
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="sm:col-span-2">
+            <KPIPrimaryCard
+              label={t('dashboard.totalRevenue')}
+              value={formatCurrency(totalRevenue?.data?.total_revenue_cents || 0, totalRevenue?.data?.currency)}
+              icon={<DollarSign className="h-5 w-5" />}
+              accentColor="green"
+            />
           </div>
-        </Card>
+          <KPISecondaryCard
+            label={t('dashboard.totalOrders')}
+            value={String(totalRevenue?.data?.total_orders || 0)}
+            icon={<ShoppingCart className="h-4 w-4" />}
+          />
+          <KPISecondaryCard
+            label={t('dashboard.period', 'Period')}
+            value={periodText}
+            icon={<CalendarDays className="h-4 w-4" />}
+          />
+        </div>
+      )}
 
-        <Card>
-          <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Всего заказов</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {isLoading ? '...' : totalRevenue?.data?.total_orders || 0}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-              <Package className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Период</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {dateRange.startDate && dateRange.endDate 
-                  ? `${new Date(dateRange.startDate).toLocaleDateString('ru-RU')} - ${new Date(dateRange.endDate).toLocaleDateString('ru-RU')}`
-                  : 'Все время'
-                }
-              </p>
-            </div>
-          </div>
-        </Card>
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <RevenueChart
+          title={t('dashboard.revenueByProduct')}
+          data={productChartData}
+          isLoading={productsLoading}
+          color="#10b981"
+          emptyMessage={t('dashboard.noData')}
+        />
+        <TopProductsChart
+          title={t('dashboard.topProductsByQty', 'Top Products by Quantity')}
+          data={productChartData}
+          isLoading={productsLoading}
+          color="#8b5cf6"
+          emptyMessage={t('dashboard.noData')}
+        />
       </div>
 
-      {/* Доходы по продуктам */}
-      <Card title="Доходы по продуктам">
-        {isLoading ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">Загрузка...</div>
-        ) : revenueByProducts && revenueByProducts.data.length > 0 ? (
-          <div className="space-y-3">
-            {revenueByProducts.data.map((product, index) => (
-              <div key={product.product_id || `product-${index}`} className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 mr-3">
-                    <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{product.product_name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Продано: {product.total_quantity} шт.
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    {formatCurrency(product.total_revenue_cents, product.currency)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            Нет данных о доходах по продуктам
-          </div>
-        )}
-      </Card>
-
-      {/* Доходы по получателям */}
-      <Card title="Доходы по получателям">
-        {isLoading ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">Загрузка...</div>
-        ) : revenueByRecipients && revenueByRecipients.data.length > 0 ? (
-          <div className="space-y-3">
-            {revenueByRecipients.data.map((recipient, index) => (
-              <div key={recipient.recipient_id || `recipient-${index}`} className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 mr-3">
-                    <Users className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{recipient.recipient_name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Заказов: {recipient.total_orders}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    {formatCurrency(recipient.total_revenue_cents, recipient.currency)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            Нет данных о доходах по получателям
-          </div>
-        )}
-      </Card>
+      {/* Recipients row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <RevenueChart
+          title={t('dashboard.revenueByRecipient')}
+          data={recipientChartData}
+          isLoading={recipientsLoading}
+          color="#10b981"
+          emptyMessage={t('dashboard.noData')}
+        />
+        <TopRecipientsList
+          recipients={recipientListData}
+          isLoading={recipientsLoading}
+          emptyMessage={t('dashboard.noData')}
+          accentColor="green"
+        />
+      </div>
     </div>
   );
 };

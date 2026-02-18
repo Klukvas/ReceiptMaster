@@ -1,4 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bullmq";
+import { Queue } from "bullmq";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
@@ -14,6 +16,10 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
 import { SettingsService } from "../settings/services/settings.service";
+import {
+  RECEIPT_GENERATION_QUEUE,
+  ReceiptGenerationJobData,
+} from "./receipt-generation.processor";
 
 const execAsync = promisify(exec);
 
@@ -33,6 +39,8 @@ export class ReceiptsService {
     private dataSource: DataSource,
     private configService: ConfigService,
     private settingsService: SettingsService,
+    @InjectQueue(RECEIPT_GENERATION_QUEUE)
+    private receiptQueue: Queue<ReceiptGenerationJobData>,
   ) {}
 
   private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
@@ -79,11 +87,18 @@ export class ReceiptsService {
         throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       }
 
-      // Проверяем, что чек еще не создан
+      // Проверяем, что чек еще не создан (generated or already processing)
       const existingReceipt = await manager.findOne(Receipt, {
-        where: { order_id: orderId, status: ReceiptStatus.GENERATED },
+        where: [
+          { order_id: orderId, status: ReceiptStatus.GENERATED },
+          { order_id: orderId, status: ReceiptStatus.PROCESSING },
+        ],
       });
       if (existingReceipt) {
+        if (existingReceipt.status === ReceiptStatus.PROCESSING) {
+          // Already being generated, return the in-progress receipt
+          return existingReceipt;
+        }
         throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
       }
 
@@ -93,223 +108,140 @@ export class ReceiptsService {
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
 
-      // Получаем все настройки пользователя одним запросом
-      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-      const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
-
-      this.logger.log(`Using template for user ${user.id}: ${pdfSettings.templateId} -> ${receiptStyle}`);
-      this.logger.log(`Using receipt title for user ${user.id}: ${pdfSettings.receiptTitle}`);
-      this.logger.log(`Using template language for user ${user.id}: ${pdfSettings.templateLanguage}`);
-      this.logger.log(`Using footer title for user ${user.id}: ${pdfSettings.footerTitle || 'default'}`);
-      this.logger.log(`Using footer subtitle for user ${user.id}: ${pdfSettings.footerSubtitle || 'default'}`);
-
-      // Генерируем PDF с пользовательским шаблоном
-      const { filePath, url } =
-        await this.pdfGeneratorService.generateReceiptPdf(
-          order,
-          receiptNumber,
-          pdfSettings.companyInfo,
-          user.id,
-          receiptStyle,
-          pdfSettings.receiptTitle,
-          pdfSettings.templateLanguage,
-          pdfSettings.footerTitle,
-          pdfSettings.footerSubtitle
-        );
-
-      // Вычисляем хеш файла для контроля целостности
-      let fileBuffer: Buffer;
-      if (filePath.startsWith("object-storage://")) {
-        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
-        if (!parsed) {
-          throw ApiErrors.VALIDATION_ERROR(
-            "pdf_path",
-            `Invalid object storage path: ${filePath}`,
-          );
-        }
-        fileBuffer = await this.pdfStorageService.downloadFile(
-          parsed.bucket,
-          parsed.key,
-        );
-      } else {
-        fileBuffer = await fs.readFile(filePath);
-      }
-      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-
-      // Создаем запись о чеке
+      // Create receipt record with PROCESSING status
       const receipt = manager.create(Receipt, {
         order_id: orderId,
         number: receiptNumber,
-        pdf_path: filePath,
-        pdf_url: url,
-        hash,
-        status: ReceiptStatus.GENERATED,
+        status: ReceiptStatus.PROCESSING,
         user_id: user.id,
       });
 
-      return manager.save(Receipt, receipt);
+      const savedReceipt = await manager.save(Receipt, receipt);
+
+      // Enqueue background PDF generation job
+      await this.receiptQueue.add(
+        "generate",
+        {
+          receiptId: savedReceipt.id,
+          orderId,
+          userId: user.id,
+        },
+        {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+          removeOnComplete: 100,
+          removeOnFail: 200,
+        },
+      );
+
+      this.logger.log(
+        `Receipt ${receiptNumber} queued for generation (order ${orderId})`,
+      );
+
+      return savedReceipt;
     });
   }
 
   async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
-    return this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа и принадлежность пользователю
-      const order = await manager.findOne(Order, {
-        where: { id: orderId, user_id: user.id },
-        relations: ["recipient", "items"],
-      });
-      if (!order) {
-        throw ApiErrors.ORDER_NOT_FOUND(orderId);
-      }
-
-      // Проверяем статус заказа
-      if (order.status !== OrderStatus.CONFIRMED) {
-        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
-      }
-
-      // Проверяем, что чек еще не создан
-      const existingReceipt = await manager.findOne(Receipt, {
-        where: { order_id: orderId, status: ReceiptStatus.GENERATED },
-      });
-      if (existingReceipt) {
-        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
-      }
-
-      // Очищаем старые чеки перед созданием нового
-      await this.cleanupOldReceipts(manager);
-
-      // Генерируем номер чека
-      const receiptNumber = await this.generateReceiptNumber();
-
-      // Получаем все настройки пользователя одним запросом
-      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-
-      // Генерируем компактный PDF (с использованием настроек пользователя кроме стиля)
-      const { filePath, url } =
-        await this.pdfGeneratorService.generateReceiptPdf(
-          order,
-          receiptNumber,
-          pdfSettings.companyInfo,
-          user.id,
-          ReceiptStyle.COMPACT,
-          pdfSettings.receiptTitle,
-          pdfSettings.templateLanguage,
-          pdfSettings.footerTitle,
-          pdfSettings.footerSubtitle
-        );
-
-      // Вычисляем хеш файла для контроля целостности
-      let fileBuffer: Buffer;
-      if (filePath.startsWith("object-storage://")) {
-        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
-        if (!parsed) {
-          throw ApiErrors.VALIDATION_ERROR(
-            "pdf_path",
-            `Invalid object storage path: ${filePath}`,
-          );
-        }
-        fileBuffer = await this.pdfStorageService.downloadFile(
-          parsed.bucket,
-          parsed.key,
-        );
-      } else {
-        fileBuffer = await fs.readFile(filePath);
-      }
-      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-
-      // Создаем запись о чеке
-      const receipt = manager.create(Receipt, {
-        order_id: orderId,
-        number: receiptNumber,
-        pdf_path: filePath,
-        pdf_url: url,
-        hash,
-        status: ReceiptStatus.GENERATED,
-        user_id: user.id,
-      });
-
-      return manager.save(Receipt, receipt);
-    });
+    // Delegates to generateReceipt — template style is determined by user settings
+    return this.generateReceipt(orderId, user);
   }
 
   async generateStandardReceipt(orderId: string, user: User): Promise<Receipt> {
-    return this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа и принадлежность пользователю
-      const order = await manager.findOne(Order, {
-        where: { id: orderId, user_id: user.id },
-        relations: ["recipient", "items"],
-      });
-      if (!order) {
-        throw ApiErrors.ORDER_NOT_FOUND(orderId);
-      }
+    // Delegates to generateReceipt — template style is determined by user settings
+    return this.generateReceipt(orderId, user);
+  }
 
-      // Проверяем статус заказа
-      if (order.status !== OrderStatus.CONFIRMED) {
-        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
-      }
+  async generateTestReceipt(user: User): Promise<Buffer> {
+    const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
+    const receiptStyle = this.getReceiptStyleFromTemplateId(pdfSettings.templateId);
 
-      // Проверяем, что чек еще не создан
-      const existingReceipt = await manager.findOne(Receipt, {
-        where: { order_id: orderId, status: ReceiptStatus.GENERATED },
-      });
-      if (existingReceipt) {
-        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
-      }
-
-      // Очищаем старые чеки перед созданием нового
-      await this.cleanupOldReceipts(manager);
-
-      // Генерируем номер чека
-      const receiptNumber = await this.generateReceiptNumber();
-
-      // Получаем все настройки пользователя одним запросом
-      const pdfSettings = await this.settingsService.getAllPdfSettings(user.id);
-
-      // Генерируем стандартный PDF (с использованием настроек пользователя кроме стиля)
-      const { filePath, url } =
-        await this.pdfGeneratorService.generateReceiptPdf(
-          order,
-          receiptNumber,
-          pdfSettings.companyInfo,
-          user.id,
-          ReceiptStyle.STANDARD,
-          pdfSettings.receiptTitle,
-          pdfSettings.templateLanguage,
-          pdfSettings.footerTitle,
-          pdfSettings.footerSubtitle
-        );
-
-      // Вычисляем хеш файла для контроля целостности
-      let fileBuffer: Buffer;
-      if (filePath.startsWith("object-storage://")) {
-        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
-        if (!parsed) {
-          throw ApiErrors.VALIDATION_ERROR(
-            "pdf_path",
-            `Invalid object storage path: ${filePath}`,
-          );
-        }
-        fileBuffer = await this.pdfStorageService.downloadFile(
-          parsed.bucket,
-          parsed.key,
-        );
-      } else {
-        fileBuffer = await fs.readFile(filePath);
-      }
-      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-
-      // Создаем запись о чеке
-      const receipt = manager.create(Receipt, {
-        order_id: orderId,
-        number: receiptNumber,
-        pdf_path: filePath,
-        pdf_url: url,
-        hash,
-        status: ReceiptStatus.GENERATED,
+    const mockOrder = {
+      id: "00000000-0000-0000-0000-000000000000",
+      recipient_id: "00000000-0000-0000-0000-000000000000",
+      status: OrderStatus.CONFIRMED,
+      subtotal_cents: 2050000,
+      total_cents: 2050000,
+      currency: "UAH",
+      created_by: "test",
+      user_id: user.id,
+      created_at: new Date(),
+      updated_at: new Date(),
+      is_locked: false,
+      payment_status: "unpaid" as any,
+      user: user,
+      recipient: {
+        id: "00000000-0000-0000-0000-000000000000",
+        name: "John Doe",
+        email: "john.doe@example.com",
+        phone: "+380501234567",
+        address: "123 Main St, Kyiv, 01001",
         user_id: user.id,
+      } as any,
+      items: [
+        { id: "i1", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p1", product_name: "Website Development", unit_price_cents: 1500000, qty: 1, line_total_cents: 1500000, user_id: user.id },
+        { id: "i2", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p2", product_name: "Logo Design", unit_price_cents: 350000, qty: 1, line_total_cents: 350000, user_id: user.id },
+        { id: "i3", order_id: "00000000-0000-0000-0000-000000000000", product_id: "p3", product_name: "Technical Support", unit_price_cents: 200000, qty: 1, line_total_cents: 200000, user_id: user.id },
+      ] as any,
+      receipts: [] as any,
+    } as Order;
+
+    const { filePath } = await this.pdfGeneratorService.generateReceiptPdf(
+      mockOrder,
+      "TEST-000001",
+      pdfSettings.companyInfo,
+      user.id,
+      receiptStyle,
+      pdfSettings.receiptTitle,
+      pdfSettings.templateLanguage,
+      pdfSettings.footerTitle,
+      pdfSettings.footerSubtitle,
+    );
+
+    let pdfBuffer: Buffer;
+    if (filePath.startsWith("object-storage://")) {
+      const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
+      if (!parsed) {
+        throw ApiErrors.VALIDATION_ERROR("pdf_path", `Invalid path: ${filePath}`);
+      }
+      pdfBuffer = await this.pdfStorageService.downloadFile(parsed.bucket, parsed.key);
+      try { await this.pdfStorageService.deleteFile(parsed.bucket, parsed.key); } catch { /* cleanup */ }
+    } else {
+      pdfBuffer = await fs.readFile(filePath);
+      try { await fs.unlink(filePath); } catch { /* cleanup */ }
+    }
+
+    return pdfBuffer;
+  }
+
+  async voidReceipt(id: string, user: User, reason: string): Promise<Receipt> {
+    return this.dataSource.transaction(async (manager) => {
+      const receipt = await manager.findOne(Receipt, {
+        where: { id, user_id: user.id },
+        relations: ["order"],
       });
 
-      return manager.save(Receipt, receipt);
+      if (!receipt) {
+        throw ApiErrors.RECEIPT_NOT_FOUND(id);
+      }
+
+      if (receipt.status === ReceiptStatus.VOID) {
+        throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
+      }
+
+      // Void the receipt
+      receipt.status = ReceiptStatus.VOID;
+      receipt.voided_at = new Date();
+      receipt.void_reason = reason;
+
+      const savedReceipt = await manager.save(Receipt, receipt);
+
+      // Unlock the order so it can be modified again
+      await manager.update(Order, { id: receipt.order_id }, { is_locked: false });
+
+      this.logger.log(`Receipt ${receipt.number} voided. Order ${receipt.order_id} unlocked.`);
+
+      return savedReceipt;
     });
   }
 

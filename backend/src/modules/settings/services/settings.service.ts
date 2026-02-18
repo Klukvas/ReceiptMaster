@@ -10,212 +10,134 @@ export class SettingsService {
     private userSettingsRepository: Repository<UserSettings>,
   ) {}
 
+  /**
+   * Get existing settings for a user, or create a new empty record.
+   * All setter methods use this to avoid duplicating the getOrCreate logic.
+   */
+  private async getOrCreateSettings(userId: string): Promise<UserSettings> {
+    const existing = await this.userSettingsRepository.findOne({
+      where: { userId },
+    });
+    if (existing) return existing;
+
+    const created = this.userSettingsRepository.create({ userId });
+    return this.userSettingsRepository.save(created);
+  }
+
   async getUserTemplate(userId: string): Promise<string> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
-
-    const templateId = settings?.templateId || 'standard';
-    console.log(`getUserTemplate for user ${userId}: found settings:`, settings, 'returning templateId:', templateId);
-    return templateId;
+    return settings?.templateId || 'standard';
   }
 
   async setUserTemplate(userId: string, templateId: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.templateId = templateId;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        templateId
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
+    const settings = await this.getOrCreateSettings(userId);
+    settings.templateId = templateId;
+    await this.userSettingsRepository.save(settings);
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
     return this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
   }
 
-  async updateUserSettings(userId: string, settings: Partial<UserSettings>): Promise<UserSettings> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      Object.assign(existingSettings, settings);
-      return this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        ...settings
-      });
-      return this.userSettingsRepository.save(newSettings);
-    }
+  async updateUserSettings(userId: string, updates: Partial<UserSettings>): Promise<UserSettings> {
+    const settings = await this.getOrCreateSettings(userId);
+    Object.assign(settings, updates);
+    return this.userSettingsRepository.save(settings);
   }
 
   async getReceiptTitle(userId: string): Promise<string> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
     return settings?.receiptTitle || 'Invoice';
   }
 
   async setReceiptTitle(userId: string, title: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.receiptTitle = title;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        receiptTitle: title
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
+    const settings = await this.getOrCreateSettings(userId);
+    settings.receiptTitle = title;
+    await this.userSettingsRepository.save(settings);
   }
 
   async getTemplateLanguage(userId: string): Promise<string> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
     return settings?.templateLanguage || 'en';
   }
 
+  async setTemplateLanguage(userId: string, language: string): Promise<void> {
+    const settings = await this.getOrCreateSettings(userId);
+    settings.templateLanguage = language;
+    await this.userSettingsRepository.save(settings);
+  }
+
   async getFooterTitle(userId: string): Promise<string | undefined> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
     return settings?.footerText || undefined;
   }
 
+  async setFooterTitle(userId: string, footerTitle: string): Promise<void> {
+    const settings = await this.getOrCreateSettings(userId);
+    settings.footerText = footerTitle;
+    await this.userSettingsRepository.save(settings);
+  }
+
   async getFooterSubtitle(userId: string): Promise<string | undefined> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
     return settings?.subFooterText || undefined;
   }
 
-  async setFooterTitle(userId: string, footerTitle: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.footerText = footerTitle;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        footerText: footerTitle
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
-  }
-
   async setFooterSubtitle(userId: string, footerSubtitle: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.subFooterText = footerSubtitle;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        subFooterText: footerSubtitle
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
-  }
-
-  async setTemplateLanguage(userId: string, language: string): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
-
-    if (existingSettings) {
-      existingSettings.templateLanguage = language;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        templateLanguage: language
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
+    const settings = await this.getOrCreateSettings(userId);
+    settings.subFooterText = footerSubtitle;
+    await this.userSettingsRepository.save(settings);
   }
 
   async getCompanyInfo(userId: string): Promise<Partial<UserSettings>> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
-    
-    if (!settings) {
-      return {
-        companyName: '',
-        companyAddress: '',
-        companyEmail: '',
-        companyPhone: '',
-        companyTaxId: '',
-        companyIban: '',
-        companySwift: '',
-        companyWebsite: '',
-        companyTagline: '',
-      };
-    }
 
     return {
-      companyName: settings.companyName || '',
-      companyAddress: settings.companyAddress || '',
-      companyEmail: settings.companyEmail || '',
-      companyPhone: settings.companyPhone || '',
-      companyTaxId: settings.companyTaxId || '',
-      companyIban: settings.companyIban || '',
-      companySwift: settings.companySwift || '',
-      companyWebsite: settings.companyWebsite || '',
-      companyTagline: settings.companyTagline || '',
+      companyName: settings?.companyName || '',
+      companyAddress: settings?.companyAddress || '',
+      companyEmail: settings?.companyEmail || '',
+      companyPhone: settings?.companyPhone || '',
+      companyTaxId: settings?.companyTaxId || '',
+      companyIban: settings?.companyIban || '',
+      companySwift: settings?.companySwift || '',
+      companyWebsite: settings?.companyWebsite || '',
+      companyTagline: settings?.companyTagline || '',
     };
   }
 
   async updateCompanyInfo(userId: string, companyInfo: Partial<UserSettings>): Promise<void> {
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId }
-    });
+    const settings = await this.getOrCreateSettings(userId);
 
-    if (existingSettings) {
-      if (companyInfo.companyName !== undefined) existingSettings.companyName = companyInfo.companyName;
-      if (companyInfo.companyAddress !== undefined) existingSettings.companyAddress = companyInfo.companyAddress;
-      if (companyInfo.companyEmail !== undefined) existingSettings.companyEmail = companyInfo.companyEmail;
-      if (companyInfo.companyPhone !== undefined) existingSettings.companyPhone = companyInfo.companyPhone;
-      if (companyInfo.companyTaxId !== undefined) existingSettings.companyTaxId = companyInfo.companyTaxId;
-      if (companyInfo.companyIban !== undefined) existingSettings.companyIban = companyInfo.companyIban;
-      if (companyInfo.companySwift !== undefined) existingSettings.companySwift = companyInfo.companySwift;
-      if (companyInfo.companyWebsite !== undefined) existingSettings.companyWebsite = companyInfo.companyWebsite;
-      if (companyInfo.companyTagline !== undefined) existingSettings.companyTagline = companyInfo.companyTagline;
-      await this.userSettingsRepository.save(existingSettings);
-    } else {
-      const newSettings = this.userSettingsRepository.create({
-        userId,
-        ...companyInfo
-      });
-      await this.userSettingsRepository.save(newSettings);
-    }
+    if (companyInfo.companyName !== undefined) settings.companyName = companyInfo.companyName;
+    if (companyInfo.companyAddress !== undefined) settings.companyAddress = companyInfo.companyAddress;
+    if (companyInfo.companyEmail !== undefined) settings.companyEmail = companyInfo.companyEmail;
+    if (companyInfo.companyPhone !== undefined) settings.companyPhone = companyInfo.companyPhone;
+    if (companyInfo.companyTaxId !== undefined) settings.companyTaxId = companyInfo.companyTaxId;
+    if (companyInfo.companyIban !== undefined) settings.companyIban = companyInfo.companyIban;
+    if (companyInfo.companySwift !== undefined) settings.companySwift = companyInfo.companySwift;
+    if (companyInfo.companyWebsite !== undefined) settings.companyWebsite = companyInfo.companyWebsite;
+    if (companyInfo.companyTagline !== undefined) settings.companyTagline = companyInfo.companyTagline;
+
+    await this.userSettingsRepository.save(settings);
   }
 
   /**
-   * Get all PDF-related settings in a single database query
-   * This optimizes the N+1 query problem when generating receipts
+   * Get all PDF-related settings in a single database query.
+   * This optimizes the N+1 query problem when generating receipts.
    */
   async getAllPdfSettings(userId: string): Promise<{
     companyInfo: {
@@ -236,7 +158,7 @@ export class SettingsService {
     footerSubtitle?: string;
   }> {
     const settings = await this.userSettingsRepository.findOne({
-      where: { userId }
+      where: { userId },
     });
 
     return {

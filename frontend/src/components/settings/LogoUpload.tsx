@@ -1,48 +1,41 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, X, Trash2 } from 'lucide-react';
+import { Upload, X, Trash2, ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { settingsApi } from '../../lib/api';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-// import { Input } from '../ui/Input';
+import { SettingsSection } from './SettingsSection';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export const LogoUpload = () => {
+  const { t } = useTranslation();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // const [companyName, setCompanyName] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  // Get current logo
   const { refetch: refetchLogo, isSuccess: hasLogo, error: logoError, data: logoData, isLoading: logoLoading } = useQuery({
     queryKey: ['logo'],
     queryFn: () => settingsApi.getLogo(),
-    enabled: true, // Auto-fetch logo
-    retry: false, // Don't retry on 404
-    staleTime: 0, // Always consider data stale
-    gcTime: 0, // Don't cache in memory after unmount
+    enabled: true,
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 
-  // Create blob URL for logo display
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if logo was deleted (404 error)
     const isDeleted = logoError && (logoError as any)?.response?.status === 404;
-    
+
     if (logoData && hasLogo && !logoError && !isDeleted) {
-      // Create blob URL from the data
-      // logoData.data is the Blob when responseType is 'blob'
       const url = URL.createObjectURL(logoData.data);
       setLogoUrl(url);
-      
-      // Cleanup function to revoke the URL when component unmounts or logo changes
       return () => {
         URL.revokeObjectURL(url);
       };
     } else {
-      // Clear logo URL if there's no data or there's an error (including 404)
       if (logoUrl) {
         URL.revokeObjectURL(logoUrl);
       }
@@ -50,230 +43,222 @@ export const LogoUpload = () => {
     }
   }, [logoData, hasLogo, logoError]);
 
-  // Company name UI removed
-
   const uploadMutation = useMutation({
     mutationFn: settingsApi.uploadLogo,
     onSuccess: () => {
       setSelectedFile(null);
       setPreviewUrl(null);
       refetchLogo();
-      toast.success('Логотип успешно загружен!');
+      toast.success(t('settings.logoUploaded', 'Logo uploaded successfully'));
     },
     onError: () => {
-      toast.error('Ошибка при загрузке логотипа');
+      toast.error(t('settings.failedToUploadLogo', 'Failed to upload logo'));
     },
   });
-
-  // Removed company name mutation
 
   const deleteLogoMutation = useMutation({
     mutationFn: settingsApi.deleteLogo,
     onSuccess: async () => {
-      // Clear logo URL immediately
       if (logoUrl) {
         URL.revokeObjectURL(logoUrl);
       }
       setLogoUrl(null);
-      // Aggressively remove all cached queries and invalidate
       queryClient.removeQueries({ queryKey: ['logo'] });
       queryClient.cancelQueries({ queryKey: ['logo'] });
-      // Force refetch with cache busting
       await queryClient.refetchQueries({ queryKey: ['logo'] });
-      toast.success('Логотип успешно удален!');
+      toast.success(t('settings.logoDeleted', 'Logo deleted successfully'));
     },
     onError: () => {
-      toast.error('Ошибка при удалении логотипа');
+      toast.error(t('settings.failedToDeleteLogo', 'Failed to delete logo'));
     },
   });
 
+  const validateAndSetFile = useCallback((file: File) => {
+    if (!file.type.match(/^image\/(jpg|jpeg|png|gif|svg\+xml)$/)) {
+      toast.error(t('settings.logoInvalidType', 'Please select an image file (JPG, PNG, GIF, SVG)'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('settings.logoTooLarge', 'File size must not exceed 5MB'));
+      return;
+    }
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  }, [t]);
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.match(/^image\/(jpg|jpeg|png|gif|svg)$/)) {
-        alert('Пожалуйста, выберите файл изображения (JPG, PNG, GIF, SVG)');
-        return;
-      }
-
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Размер файла не должен превышать 5MB');
-        return;
-      }
-
-      setSelectedFile(file);
-      
-      // Create preview URL
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    }
+    if (file) validateAndSetFile(file);
   };
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) validateAndSetFile(file);
+  }, [validateAndSetFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
   const handleUpload = () => {
-    if (selectedFile) {
-      uploadMutation.mutate(selectedFile);
-    }
+    if (selectedFile) uploadMutation.mutate(selectedFile);
   };
 
   const handleRemove = () => {
     setSelectedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-
-  // Removed company name handlers
-
   const handleDeleteLogo = () => {
-    if (confirm('Вы уверены, что хотите удалить логотип?')) {
+    if (confirm(t('settings.confirmDeleteLogo', 'Are you sure you want to delete the logo?'))) {
       deleteLogoMutation.mutate();
     }
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const hasCurrentLogo = !logoLoading && logoUrl && hasLogo && !logoError;
+
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Настройки компании
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            Настройте название компании и логотип для отображения в PDF чеках.
-          </p>
-        </div>
-
-        
-
-        {/* Logo Upload Section */}
-        <div>
-          <h4 className="text-md font-medium text-gray-900 dark:text-white mb-2">
-            Логотип компании
-          </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            Загрузите логотип для отображения в PDF чеках. Поддерживаются форматы: JPG, PNG, GIF, SVG. Максимальный размер: 5MB.
-          </p>
-        </div>
-
-        {/* Current Logo Display - Only show if logo exists or is loading */}
-        {(logoLoading || (logoUrl && hasLogo && !logoError)) && (
-          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
-            <div className="text-center">
-              <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-                Текущий логотип
-              </h4>
-              {logoLoading ? (
-                <div className="space-y-4">
-                  <div className="mx-auto h-32 w-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                    <div className="text-gray-400 dark:text-gray-500 text-sm">Загрузка...</div>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Загрузка логотипа...
-                  </p>
-                </div>
-              ) : logoUrl && hasLogo && !logoError && logoUrl !== null ? (
-                <div className="space-y-4">
-                  <div className="relative inline-block">
-                    <img
-                      key={logoUrl || 'no-logo'}
-                      src={logoUrl || undefined}
-                      alt="Current logo"
-                      className="mx-auto h-32 w-32 object-contain border-2 border-gray-200 dark:border-gray-600 rounded-lg shadow-sm"
-                      onError={(e) => {
-                        console.error('Failed to load logo image');
-                        e.currentTarget.style.display = 'none';
-                      }}
-                      onLoad={() => {
-                        // Image loaded successfully
-                      }}
-                    />
-                    <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                      Активен
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-green-600 dark:text-green-400 font-medium">
-                      ✓ Логотип загружен и используется в документах
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Логотип отображается в PDF чеках и других документах
-                    </p>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={handleDeleteLogo}
-                    disabled={deleteLogoMutation.isPending}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    {deleteLogoMutation.isPending ? 'Удаление...' : 'Удалить логотип'}
-                  </Button>
-                </div>
-              ) : null}
+    <SettingsSection
+      title={t('settings.logoTitle', 'Company Logo')}
+      description={t('settings.logoDescription', 'Upload your company logo to display on PDF receipts and documents.')}
+      icon={<ImageIcon className="h-5 w-5" />}
+    >
+      {/* Current Logo Display */}
+      {(logoLoading || hasCurrentLogo) && (
+        <div className="flex items-center gap-5 rounded-lg border border-gray-200 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-800/30 p-4">
+          {logoLoading ? (
+            <div className="h-20 w-20 shrink-0 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+          ) : (
+            <div className="relative shrink-0">
+              <img
+                key={logoUrl || 'no-logo'}
+                src={logoUrl || undefined}
+                alt="Company logo"
+                className="h-20 w-20 rounded-lg border border-gray-200 dark:border-gray-600 object-contain bg-white dark:bg-gray-700 shadow-sm"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <div className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-green-500 border-2 border-white dark:border-gray-800" />
             </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-900 dark:text-white">
+              {t('settings.logoActive', 'Logo active')}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {t('settings.logoInDocuments', 'Displayed on all PDF receipts and documents')}
+            </p>
           </div>
-        )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteLogo}
+            disabled={deleteLogoMutation.isPending}
+            className="shrink-0 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/40 hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            {deleteLogoMutation.isPending
+              ? t('common.deleting', 'Deleting...')
+              : t('settings.deleteLogo', 'Delete')}
+          </Button>
+        </div>
+      )}
 
-        {/* File Upload: show only when no current logo */}
-        {!logoLoading && !(logoUrl && hasLogo && !logoError) && (
-          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
-            <div className="text-center">
-              {previewUrl ? (
-                <div className="space-y-4">
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="mx-auto h-24 w-24 object-contain border border-gray-200 dark:border-gray-600 rounded"
-                  />
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {selectedFile?.name}
-                  </p>
-                  <div className="flex justify-center space-x-2">
-                    <Button
-                      onClick={handleUpload}
-                      disabled={uploadMutation.isPending}
-                      size="sm"
-                    >
-                      {uploadMutation.isPending ? 'Загрузка...' : 'Загрузить'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={handleRemove}
-                      size="sm"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                    Выберите файл логотипа
-                  </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-2"
-                  >
-                    Выбрать файл
-                  </Button>
-                </div>
-              )}
+      {/* Upload Area */}
+      {!logoLoading && !hasCurrentLogo && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          className={`relative rounded-lg border-2 border-dashed transition-all duration-200 ${
+            isDragging
+              ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10 dark:border-blue-500/50'
+              : previewUrl
+                ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/30'
+                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 bg-gray-50/50 dark:bg-gray-800/20'
+          }`}
+        >
+          {previewUrl && selectedFile ? (
+            <div className="flex items-center gap-4 p-4">
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="h-16 w-16 rounded-lg border border-gray-200 dark:border-gray-600 object-contain bg-white dark:bg-gray-700"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {selectedFile.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {formatFileSize(selectedFile.size)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={handleUpload}
+                  disabled={uploadMutation.isPending}
+                >
+                  {uploadMutation.isPending
+                    ? t('settings.uploading', 'Uploading...')
+                    : t('settings.uploadLogo', 'Upload')}
+                </Button>
+                <button
+                  onClick={handleRemove}
+                  className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-
-      </div>
-    </Card>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex w-full flex-col items-center py-8 px-4 cursor-pointer"
+            >
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl transition-colors ${
+                isDragging
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  : 'bg-gray-100 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500'
+              }`}>
+                <Upload className="h-6 w-6" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t('settings.dragDropOrClick', 'Drag & drop or click to upload')}
+              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t('settings.supportedFormats', 'JPG, PNG, GIF, SVG up to 5MB')}
+              </p>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </div>
+      )}
+    </SettingsSection>
   );
 };

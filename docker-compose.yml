@@ -21,6 +21,19 @@ services:
     networks:
       - market_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: market_redis_dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - market_network
+
   backend:
     build:
       context: ./backend
@@ -34,6 +47,8 @@ services:
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=market_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - API_PREFIX=api/v1
       - API_KEY=dev-api-key
       - JWT_SECRET=pSPmil4N/FLgTDuIOhrGY17ne5Vk454z4dSa/shpbvQ=
@@ -55,6 +70,8 @@ services:
       - "3000:3000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: ["yarn", "start:dev"]
     networks:

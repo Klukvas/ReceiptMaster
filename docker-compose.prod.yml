@@ -16,6 +16,16 @@ services:
     networks:
       - market_network
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - market_network
+
   backend:
     image: market-backend:latest
     environment:
@@ -26,10 +36,12 @@ services:
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - API_PREFIX=api/v1
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - AUTO_RUN_MIGRATIONS=false
+      - AUTO_RUN_MIGRATIONS=true
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
@@ -37,10 +49,13 @@ services:
       - LOGOS_BUCKET=${LOGOS_BUCKET}
       - RECEIPTS_BUCKET=${RECEIPTS_BUCKET}
       - TEMP_BUCKET=${TEMP_BUCKET}
-    ports:
-      - "3000:3000"
+    # No host port mapping — accessed via nginx only.
+    # Scale horizontally: docker compose up --scale backend=3
+    deploy:
+      replicas: 1
     depends_on:
       - postgres
+      - redis
     networks:
       - market_network
 

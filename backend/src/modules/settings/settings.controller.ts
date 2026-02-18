@@ -10,6 +10,7 @@ import {
   Request,
   Logger,
 } from "@nestjs/common";
+import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
@@ -21,6 +22,8 @@ import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { TEMPLATE_METADATA } from "../receipts/templates/metadata";
 
+@ApiTags("settings")
+@ApiBearerAuth("bearer")
 @Controller("settings")
 @UseGuards(JwtAuthGuard)
 export class SettingsController {

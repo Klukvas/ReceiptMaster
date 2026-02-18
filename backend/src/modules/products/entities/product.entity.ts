@@ -7,6 +7,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { OrderItem } from "../../orders/entities/order-item.entity";
 import { User } from "../../users/entities/user.entity";
@@ -16,6 +17,7 @@ export enum Currency {
 }
 
 @Entity("products")
+@Index(["user_id", "name"])
 export class Product {
   @PrimaryGeneratedColumn("uuid")
   id: string;

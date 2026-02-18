@@ -93,6 +93,32 @@ export class OrderService {
       }
     });
   }
+
+  async batchApproveOrders(orderIds: string[]): Promise<{ approved: number }> {
+    try {
+      const response = await ordersApi.batchApprove(orderIds);
+      notificationService.success(`${response.data.approved} orders approved`);
+      return response.data;
+    } catch (error) {
+      const apiError = parseApiError(error);
+      console.error('Error batch approving orders:', apiError);
+      notificationService.error(apiError.message);
+      throw error;
+    }
+  }
+
+  async batchDeleteOrders(orderIds: string[]): Promise<{ deleted: number }> {
+    try {
+      const response = await ordersApi.batchDelete(orderIds);
+      notificationService.success(`${response.data.deleted} orders deleted`);
+      return response.data;
+    } catch (error) {
+      const apiError = parseApiError(error);
+      console.error('Error batch deleting orders:', apiError);
+      notificationService.error(apiError.message);
+      throw error;
+    }
+  }
 }
 
 // Singleton instance
