@@ -35,8 +35,34 @@ jobs:
       - name: Run linting
         run: yarn lint
 
-      - name: Run tests
-        run: yarn test
+      - name: Run tests with coverage
+        run: yarn test:cov
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          retention-days: 14
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f ../coverage/coverage-summary.json ]; then
+            echo "## Backend Test Coverage" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const r = require('../coverage/coverage-summary.json').total;
+              const fmt = (v) => v.pct + '%';
+              console.log('| Metric | Coverage |');
+              console.log('|--------|----------|');
+              console.log('| Statements | ' + fmt(r.statements) + ' |');
+              console.log('| Branches | ' + fmt(r.branches) + ' |');
+              console.log('| Functions | ' + fmt(r.functions) + ' |');
+              console.log('| Lines | ' + fmt(r.lines) + ' |');
+            " >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Build application
         run: yarn build

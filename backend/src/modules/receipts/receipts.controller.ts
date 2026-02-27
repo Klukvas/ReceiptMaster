@@ -118,7 +118,7 @@ export class ReceiptsController {
 
       res.set({
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": `inline; filename="${filename}"`,
         "Content-Length": buffer.length.toString(),
         "Cache-Control": "no-cache",
         Pragma: "no-cache",
