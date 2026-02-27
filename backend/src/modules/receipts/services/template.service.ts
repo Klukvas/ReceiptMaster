@@ -141,7 +141,7 @@ export class TemplateService {
         const translationPath = path.join(translationsPath, `${lang}.json`);
         const translationContent = await fs.readFile(translationPath, "utf-8");
         const translationData = JSON.parse(translationContent);
-        this.translations.set(lang, translationData.corporate);
+        this.translations.set(lang, translationData);
       }
 
       this.logger.log("Translations loaded successfully");
@@ -255,6 +255,8 @@ export class TemplateService {
     const translations =
       this.translations.get(language) || this.translations.get("en") || {};
 
+    const locale = TemplateService.getLocaleForLanguage(language);
+
     return {
       companyName: companyInfo.companyName || "",
       companyAddress: companyInfo.companyAddress,
@@ -269,8 +271,8 @@ export class TemplateService {
       logoPath,
       receiptTitle,
       receiptNumber,
-      orderDate: new Date(order.created_at).toLocaleString("ru-RU"),
-      generatedAt: new Date().toLocaleString("ru-RU"),
+      orderDate: new Date(order.created_at).toLocaleString(locale),
+      generatedAt: new Date().toLocaleString(locale),
       recipientName: order.recipient.name,
       recipientEmail: order.recipient.email || undefined,
       recipientPhone: order.recipient.phone || undefined,
@@ -289,5 +291,14 @@ export class TemplateService {
       footerTitle,
       footerSubtitle,
     };
+  }
+
+  static getLocaleForLanguage(language: string): string {
+    const localeMap: Record<string, string> = {
+      en: "en-US",
+      ru: "ru-RU",
+      uk: "uk-UA",
+    };
+    return localeMap[language] || "en-US";
   }
 }

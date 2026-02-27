@@ -1,10 +1,48 @@
-import { Controller, Post, Get, Body, Res, Query } from "@nestjs/common";
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Res,
+  Query,
+  UseGuards,
+  BadRequestException,
+  HttpException,
+  Logger,
+} from "@nestjs/common";
 import { Response } from "express";
 import { TemplateService, ReceiptTemplate } from "../services/template.service";
 import { PlaywrightPdfGenerator } from "../services/playwright-pdf-generator.service";
+import { JwtAuthGuard } from "../../users/guards/jwt-auth.guard";
+
+const VALID_TEMPLATES = new Set(Object.values(ReceiptTemplate));
+const VALID_LANGUAGES = new Set(["en", "ru", "uk"]);
+
+function validateTemplate(value: string | undefined): ReceiptTemplate {
+  const name = value || "standard";
+  if (!VALID_TEMPLATES.has(name as ReceiptTemplate)) {
+    throw new BadRequestException(
+      `Invalid template: "${name}". Valid values: ${[...VALID_TEMPLATES].join(", ")}`,
+    );
+  }
+  return name as ReceiptTemplate;
+}
+
+function validateLanguage(value: string | undefined): string {
+  const lang = value || "en";
+  if (!VALID_LANGUAGES.has(lang)) {
+    throw new BadRequestException(
+      `Invalid language: "${lang}". Valid values: ${[...VALID_LANGUAGES].join(", ")}`,
+    );
+  }
+  return lang;
+}
 
 @Controller("pdf-test")
+@UseGuards(JwtAuthGuard)
 export class PdfTestController {
+  private readonly logger = new Logger(PdfTestController.name);
+
   constructor(
     private templateService: TemplateService,
     private playwrightPdfGenerator: PlaywrightPdfGenerator,
@@ -17,8 +55,14 @@ export class PdfTestController {
     @Query("language") language: string,
     @Res() res: Response,
   ) {
+    const validatedTemplate = validateTemplate(template);
+    const validatedLanguage = validateLanguage(language);
     return this.generateTestPdf(
-      { template, withLogo: withLogo === "true", language },
+      {
+        template: validatedTemplate,
+        withLogo: withLogo === "true",
+        language: validatedLanguage,
+      },
       res,
     );
   }
@@ -31,18 +75,22 @@ export class PdfTestController {
     @Res() res: Response,
   ) {
     try {
-      const testData = this.getTestData(withLogo === "true", language || "en");
-      const templateName = template || "standard";
-      const templateEnum = templateName as ReceiptTemplate;
+      const validatedTemplate = validateTemplate(template);
+      const validatedLanguage = validateLanguage(language);
+      const testData = this.getTestData(withLogo === "true", validatedLanguage);
       const html = await this.templateService.renderTemplate(
-        templateEnum,
+        validatedTemplate,
         testData,
       );
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(html);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error("Failed to preview template", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   }
 
@@ -75,8 +123,12 @@ export class PdfTestController {
       ...logoData,
       receiptTitle: "Invoice",
       receiptNumber: "2025-000123",
-      orderDate: new Date().toLocaleString("ru-RU"),
-      generatedAt: new Date().toLocaleString("ru-RU"),
+      orderDate: new Date().toLocaleString(
+        TemplateService.getLocaleForLanguage(language),
+      ),
+      generatedAt: new Date().toLocaleString(
+        TemplateService.getLocaleForLanguage(language),
+      ),
       recipientName: "Олександр Петренко",
       recipientEmail: "oleksandr.petrenko@example.com",
       recipientPhone: "+380501234567",
@@ -111,81 +163,183 @@ export class PdfTestController {
 
   private getTranslations(language: string) {
     // Fallback translations in case the service hasn't loaded them yet
-    const fallbackTranslations = {
+    const fallbackTranslations: Record<string, Record<string, string>> = {
       en: {
+        date: "Date:",
+        invoiceDate: "Invoice Date:",
+        invoiceNo: "Invoice No:",
+        due: "Due",
+        recipient: "Recipient:",
+        email: "Email:",
+        phone: "Phone:",
+        address: "Address:",
+        billTo: "Bill To",
+        billedTo: "Billed To",
+        from: "From",
+        fromLabel: "From:",
+        billToLabel: "Bill To:",
+        item: "Item",
+        description: "Description",
+        productName: "Product Name",
+        qty: "Qty",
+        unit: "Unit",
+        unitPrice: "Unit Price",
+        price: "Price",
+        rate: "Rate",
+        tax: "Tax",
+        amount: "Amount",
+        subtotal: "Subtotal",
+        subTotal: "Sub Total:",
+        total: "Total",
+        grandTotal: "Grand Total",
+        invoiceTotal: "Invoice Total",
+        summary: "Summary",
+        discount: "Discount",
+        shipping: "Shipping",
+        notes: "Notes",
+        terms: "Terms",
+        paymentInfo: "Payment Info",
+        payment: "Payment",
+        scanToPay: "Scan to pay",
+        thankYou: "Thank you for your purchase!",
+        footerMessage: "If you have any questions, please contact us.",
+        generatedAt: "Receipt generated:",
+        note: "Note:",
         debitMemo: "Debit Memo",
         taxInvoice: "TAX INVOICE",
         original: "Original",
-        invoiceNo: "Invoice No :",
-        date: "Date :",
         srNo: "SrNo",
-        productName: "Product Name",
-        qty: "Qty",
-        rate: "Rate",
-        amount: "Amount",
-        subTotal: "Sub Total:",
         gstinNo: "GSTIN No:",
         billAmount: "Bill Amount: Thirty Thousand Forty Four Only",
         centralTax: "Central Tax (9.00 %):",
         stateTax: "State Tax (9.00 %):",
-        grandTotal: "Grand Total",
-        note: "Note:",
         termsAndConditions: "Terms & Conditions:",
         terms1: "Goods once sold will not be taken back.",
         terms2:
           "Our risk and responsibility ceases as soon as the goods are delivered to the carrier.",
         forCompany: "For, {{companyName}}",
         authorisedSignatory: "(Authorised Signatory)",
+        taxId: "Tax ID",
+        iban: "IBAN",
+        swift: "SWIFT",
       },
       ru: {
+        date: "Дата:",
+        invoiceDate: "Дата счета:",
+        invoiceNo: "Номер счета:",
+        due: "Срок",
+        recipient: "Получатель:",
+        email: "Email:",
+        phone: "Телефон:",
+        address: "Адрес:",
+        billTo: "Получатель",
+        billedTo: "Получатель",
+        from: "Отправитель",
+        fromLabel: "От:",
+        billToLabel: "Кому:",
+        item: "Товар",
+        description: "Описание",
+        productName: "Наименование товара",
+        qty: "Кол-во",
+        unit: "Ед.",
+        unitPrice: "Цена за ед.",
+        price: "Цена",
+        rate: "Цена",
+        tax: "Налог",
+        amount: "Сумма",
+        subtotal: "Промежуточный итог",
+        subTotal: "Промежуточный итог:",
+        total: "Итого",
+        grandTotal: "Общий итог",
+        invoiceTotal: "Сумма счета",
+        summary: "Итоги",
+        discount: "Скидка",
+        shipping: "Доставка",
+        notes: "Примечания",
+        terms: "Условия",
+        paymentInfo: "Информация об оплате",
+        payment: "Оплата",
+        scanToPay: "Сканируйте для оплаты",
+        thankYou: "Спасибо за покупку!",
+        footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
+        generatedAt: "Чек сгенерирован:",
+        note: "Примечание:",
         debitMemo: "Дебетовая записка",
         taxInvoice: "НАЛОГОВАЯ НАКЛАДНАЯ",
         original: "Оригинал",
-        invoiceNo: "Номер счета :",
-        date: "Дата :",
         srNo: "№",
-        productName: "Наименование товара",
-        qty: "Кол-во",
-        rate: "Цена",
-        amount: "Сумма",
-        subTotal: "Промежуточный итог:",
         gstinNo: "Налоговый номер:",
         billAmount: "Сумма счета: Тридцать тысяч сорок четыре только",
         centralTax: "Центральный налог (9.00 %):",
         stateTax: "Государственный налог (9.00 %):",
-        grandTotal: "Общий итог",
-        note: "Примечание:",
         termsAndConditions: "Условия и положения:",
         terms1: "Товары после продажи не принимаются обратно.",
         terms2:
           "Наш риск и ответственность прекращаются, как только товары доставлены перевозчику.",
         forCompany: "За, {{companyName}}",
         authorisedSignatory: "(Уполномоченная подпись)",
+        taxId: "Налоговый номер",
+        iban: "IBAN",
+        swift: "SWIFT",
       },
       uk: {
+        date: "Дата:",
+        invoiceDate: "Дата рахунку:",
+        invoiceNo: "Номер рахунку:",
+        due: "Термін",
+        recipient: "Одержувач:",
+        email: "Email:",
+        phone: "Телефон:",
+        address: "Адреса:",
+        billTo: "Одержувач",
+        billedTo: "Одержувач",
+        from: "Відправник",
+        fromLabel: "Від:",
+        billToLabel: "Кому:",
+        item: "Товар",
+        description: "Опис",
+        productName: "Назва товару",
+        qty: "Кількість",
+        unit: "Од.",
+        unitPrice: "Ціна за од.",
+        price: "Ціна",
+        rate: "Ціна",
+        tax: "Податок",
+        amount: "Сума",
+        subtotal: "Проміжний підсумок",
+        subTotal: "Проміжний підсумок:",
+        total: "Разом",
+        grandTotal: "Загальний підсумок",
+        invoiceTotal: "Сума рахунку",
+        summary: "Підсумки",
+        discount: "Знижка",
+        shipping: "Доставка",
+        notes: "Примітки",
+        terms: "Умови",
+        paymentInfo: "Інформація про оплату",
+        payment: "Оплата",
+        scanToPay: "Скануйте для оплати",
+        thankYou: "Дякуємо за покупку!",
+        footerMessage: "Якщо у вас є питання, будь ласка, зв'яжіться з нами.",
+        generatedAt: "Чек згенеровано:",
+        note: "Примітка:",
         debitMemo: "Дебетова записка",
         taxInvoice: "ПОДАТКОВА НАКЛАДНА",
         original: "Оригінал",
-        invoiceNo: "Номер рахунку :",
-        date: "Дата :",
         srNo: "№",
-        productName: "Назва товару",
-        qty: "Кількість",
-        rate: "Ціна",
-        amount: "Сума",
-        subTotal: "Проміжний підсумок:",
         gstinNo: "Податковий номер:",
         billAmount: "Сума рахунку: Тридцять тисяч сорок чотири тільки",
         centralTax: "Центральний податок (9.00 %):",
         stateTax: "Державний податок (9.00 %):",
-        grandTotal: "Загальний підсумок",
-        note: "Примітка:",
         termsAndConditions: "Умови та положення:",
         terms1: "Товари після продажу не приймаються назад.",
         terms2:
           "Наш ризик та відповідальність припиняються, як тільки товари доставлені перевізнику.",
         forCompany: "За, {{companyName}}",
         authorisedSignatory: "(Уповноважений підпис)",
+        taxId: "Податковий номер",
+        iban: "IBAN",
+        swift: "SWIFT",
       },
     };
 
@@ -198,16 +352,16 @@ export class PdfTestController {
     @Res() res: Response,
   ) {
     try {
+      const validatedTemplate = validateTemplate(body.template);
+      const validatedLanguage = validateLanguage(body.language);
       const testData = this.getTestData(
         body.withLogo !== false,
-        body.language || "en",
+        validatedLanguage,
       );
 
       // Render HTML template
-      const templateName = body.template || "standard";
-      const template = templateName as ReceiptTemplate;
       const html = await this.templateService.renderTemplate(
-        template,
+        validatedTemplate,
         testData,
       );
 
@@ -224,7 +378,11 @@ export class PdfTestController {
       // Send PDF
       res.send(pdfBuffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error("Failed to generate test PDF", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   }
 }

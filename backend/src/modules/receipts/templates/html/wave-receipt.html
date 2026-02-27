@@ -350,10 +350,10 @@
                     <span class="meta-label">№</span> <span class="meta-value">{{receiptNumber}}</span>
                 </div>
                 <div class="meta-item">
-                    <span class="meta-label">Date</span> <span class="meta-value">{{orderDate}}</span>
+                    <span class="meta-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span> <span class="meta-value">{{orderDate}}</span>
                 </div>
                 <div class="meta-item">
-                    <span class="meta-label">Due</span> <span class="meta-value">{{dueDate}}</span>
+                    <span class="meta-label">{{#if translations.due}}{{translations.due}}{{else}}Due{{/if}}</span> <span class="meta-value">{{dueDate}}</span>
                 </div>
             </div>
         </div>
@@ -361,7 +361,7 @@
         <!-- Company Info -->
         <div class="company-info">
             <div class="info-section">
-                <div class="section-title">Bill To</div>
+                <div class="section-title">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
                 <div class="info-content">
                     <div class="info-line"><strong>{{recipientName}}</strong></div>
                     {{#if recipientAddress}}
@@ -373,7 +373,7 @@
                 </div>
             </div>
             <div class="info-section">
-                <div class="section-title">From</div>
+                <div class="section-title">{{#if translations.from}}{{translations.from}}{{else}}From{{/if}}</div>
                 <div class="info-content">
                     <div class="info-line"><strong>{{companyName}}</strong></div>
                     {{#if companyTagline}}
@@ -408,10 +408,10 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-item">Item</th>
-                    <th class="col-qty">Qty</th>
-                    <th class="col-price">Price</th>
-                    <th class="col-amount">Amount</th>
+                    <th class="col-item">{{#if translations.item}}{{translations.item}}{{else}}Item{{/if}}</th>
+                    <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
+                    <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -430,12 +430,12 @@
         <div class="totals-section">
             <table class="totals-table">
                 <tr>
-                    <td>Subtotal</td>
+                    <td>{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</td>
                     <td>{{subtotal}}</td>
                 </tr>
                 {{#if discount}}
                 <tr class="discount-row">
-                    <td>Discount ({{discountLabel}})</td>
+                    <td>{{#if translations.discount}}{{translations.discount}}{{else}}Discount{{/if}} ({{discountLabel}})</td>
                     <td>-{{discount}}</td>
                 </tr>
                 {{/if}}
@@ -446,7 +446,7 @@
                 </tr>
                 {{/each}}
                 <tr class="grand-total">
-                    <td>Total</td>
+                    <td>{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</td>
                     <td>{{total}}</td>
                 </tr>
             </table>
@@ -455,7 +455,7 @@
         <!-- Notes -->
         {{#if notes}}
         <div class="notes-section">
-            <div class="notes-title">Notes</div>
+            <div class="notes-title">{{#if translations.notes}}{{translations.notes}}{{else}}Notes{{/if}}</div>
             <div class="notes-content">{{notes}}</div>
         </div>
         {{/if}}
@@ -470,7 +470,7 @@
                 {{/if}}
                 {{else}}
                 {{#if terms}}
-                <div class="terms-title">Terms</div>
+                <div class="terms-title">{{#if translations.terms}}{{translations.terms}}{{else}}Terms{{/if}}</div>
                 <div class="terms-content">{{terms}}</div>
                 {{/if}}
                 {{/if}}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Фіскальний чек</title>
+    <title>Receipt</title>
     <style>
         @page {
             size: A4;
@@ -265,28 +265,28 @@
         <!-- Order Info -->
         <div class="order-info">
             <div class="info-row">
-                <span class="info-label">Дата:</span>
+                <span class="info-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
                 <span class="info-value">{{orderDate}}</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Одержувач:</span>
+                <span class="info-label">{{#if translations.recipient}}{{translations.recipient}}{{else}}Recipient:{{/if}}</span>
                 <span class="info-value">{{recipientName}}</span>
             </div>
             {{#if recipientEmail}}
             <div class="info-row">
-                <span class="info-label">Email:</span>
+                <span class="info-label">{{#if translations.email}}{{translations.email}}{{else}}Email:{{/if}}</span>
                 <span class="info-value">{{recipientEmail}}</span>
             </div>
             {{/if}}
             {{#if recipientPhone}}
             <div class="info-row">
-                <span class="info-label">Телефон:</span>
+                <span class="info-label">{{#if translations.phone}}{{translations.phone}}{{else}}Phone:{{/if}}</span>
                 <span class="info-value">{{recipientPhone}}</span>
             </div>
             {{/if}}
             {{#if recipientAddress}}
             <div class="info-row">
-                <span class="info-label">Адреса:</span>
+                <span class="info-label">{{#if translations.address}}{{translations.address}}{{else}}Address:{{/if}}</span>
                 <span class="info-value">{{recipientAddress}}</span>
             </div>
             {{/if}}
@@ -296,10 +296,10 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-description">Опис товару</th>
-                    <th class="col-qty">Кількість</th>
-                    <th class="col-price">Ціна</th>
-                    <th class="col-total">Сума</th>
+                    <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
+                    <th class="col-total">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -317,11 +317,11 @@
         <!-- Totals -->
         <div class="totals-section">
             <div class="subtotal-row">
-                <span class="subtotal-label">Проміжний підсумок:</span>
+                <span class="subtotal-label">{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
                 <span class="subtotal-value">{{subtotal}}</span>
             </div>
             <div class="total-row">
-                <span class="total-label">РАЗОМ:</span>
+                <span class="total-label">{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</span>
                 <span class="total-value">{{total}}</span>
             </div>
         </div>
@@ -331,12 +331,12 @@
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
             {{else}}
-            <div class="footer-title">Дякуємо за покупку!</div>
+            <div class="footer-title">{{#if translations.thankYou}}{{translations.thankYou}}{{else}}Thank you for your purchase!{{/if}}</div>
             {{/if}}
             {{#if footerSubtitle}}
             <div class="footer-text">{{footerSubtitle}}</div>
             {{else}}
-            <div class="footer-text">Якщо у вас є питання, будь ласка, зв'яжіться з нами.</div>
+            <div class="footer-text">{{#if translations.footerMessage}}{{translations.footerMessage}}{{else}}If you have any questions, please contact us.{{/if}}</div>
             {{/if}}
             
             <div class="footer-company-info">
@@ -363,7 +363,7 @@
                 {{/if}}
             </div>
             
-            <div class="footer-timestamp">Чек згенеровано: {{generatedAt}}</div>
+            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Receipt generated:{{/if}} {{generatedAt}}</div>
         </div>
     </div>
 </body>

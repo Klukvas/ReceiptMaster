@@ -272,7 +272,7 @@
         <div class="company-info">
             <div class="info-block">
                 <div class="info-line">
-                    <span class="info-label">From:</span>
+                    <span class="info-label">{{#if translations.fromLabel}}{{translations.fromLabel}}{{else}}From:{{/if}}</span>
                     <span><strong>{{companyName}}</strong></span>
                     {{#if companyTagline}}
                     <span class="info-separator">—</span>
@@ -310,7 +310,7 @@
             </div>
             <div class="info-block">
                 <div class="info-line">
-                    <span class="info-label">Bill To:</span>
+                    <span class="info-label">{{#if translations.billToLabel}}{{translations.billToLabel}}{{else}}Bill To:{{/if}}</span>
                     <span>{{recipientName}}</span>
                     <span class="info-separator">—</span>
                     <span>{{recipientAddress}}</span>
@@ -326,10 +326,10 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-description">Description</th>
-                    <th class="col-qty">Qty</th>
-                    <th class="col-unit-price">Unit Price</th>
-                    <th class="col-amount">Amount</th>
+                    <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
+                    <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -353,7 +353,7 @@
         <div class="totals-section">
             <table class="totals-table">
                 <tr>
-                    <td>Subtotal</td>
+                    <td>{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</td>
                     <td>{{subtotal}}</td>
                 </tr>
                 {{#each taxes}}
@@ -363,7 +363,7 @@
                 </tr>
                 {{/each}}
                 <tr class="grand-total">
-                    <td>Total</td>
+                    <td>{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</td>
                     <td>{{total}}</td>
                 </tr>
             </table>

@@ -1,20 +1,21 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-const API_KEY = import.meta.env.VITE_API_KEY || 'your-secret-key-here';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
+const API_KEY = import.meta.env.VITE_API_KEY || "your-secret-key-here";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': API_KEY,
+    "Content-Type": "application/json",
+    "X-API-Key": API_KEY,
   },
 });
 
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem("auth_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,12 +23,15 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Add response interceptor to handle auth errors with refresh token retry
 let isRefreshing = false;
-let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: unknown) => void }> = [];
+let failedQueue: Array<{
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
 
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -41,11 +45,11 @@ const processQueue = (error: unknown, token: string | null = null) => {
 };
 
 const clearAuthAndRedirect = () => {
-  document.cookie = 'auth_token=; Max-Age=0; path=/; SameSite=Lax';
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('refresh_token');
-  delete api.defaults.headers.common['Authorization'];
-  window.location.href = '/';
+  document.cookie = "auth_token=; Max-Age=0; path=/; SameSite=Lax";
+  localStorage.removeItem("auth_token");
+  localStorage.removeItem("refresh_token");
+  delete api.defaults.headers.common["Authorization"];
+  window.location.href = "/";
 };
 
 api.interceptors.response.use(
@@ -53,11 +57,14 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-    const url = originalRequest?.url || '';
-    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh');
+    const url = originalRequest?.url || "";
+    const isAuthEndpoint =
+      url.includes("/auth/login") ||
+      url.includes("/auth/register") ||
+      url.includes("/auth/refresh");
 
     if (status === 401 && !isAuthEndpoint && !originalRequest._retry) {
-      const refreshToken = localStorage.getItem('refresh_token');
+      const refreshToken = localStorage.getItem("refresh_token");
 
       if (!refreshToken) {
         clearAuthAndRedirect();
@@ -77,12 +84,14 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await api.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken });
+        const response = await api.post<AuthResponse>("/auth/refresh", {
+          refresh_token: refreshToken,
+        });
         const { access_token, refresh_token: newRefreshToken } = response.data;
 
-        localStorage.setItem('auth_token', access_token);
-        localStorage.setItem('refresh_token', newRefreshToken);
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        localStorage.setItem("auth_token", access_token);
+        localStorage.setItem("refresh_token", newRefreshToken);
+        api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
 
         processQueue(null, access_token);
@@ -97,7 +106,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // Shared pagination types
@@ -113,7 +122,7 @@ export interface PaginationParams {
   offset?: number;
   search?: string;
   sortBy?: string;
-  sortOrder?: 'ASC' | 'DESC';
+  sortOrder?: "ASC" | "DESC";
 }
 
 // Data types
@@ -153,8 +162,8 @@ export interface OrderItem {
 export interface Order {
   id: string;
   recipient_id: string;
-  status: 'draft' | 'confirmed' | 'cancelled';
-  payment_status: 'unpaid' | 'paid' | 'refunded';
+  status: "draft" | "confirmed" | "cancelled";
+  payment_status: "unpaid" | "paid" | "refunded";
   subtotal_cents: number;
   total_cents: number;
   currency: string;
@@ -174,7 +183,7 @@ export interface Receipt {
   pdf_url?: string;
   pdf_path?: string;
   hash?: string;
-  status: 'processing' | 'generated' | 'void';
+  status: "processing" | "generated" | "void";
   progress: number;
   error_message?: string;
   html_snapshot?: string;
@@ -271,179 +280,208 @@ export interface User {
 
 // API methods
 export const authApi = {
-  login: (data: LoginRequest) =>
-    api.post<AuthResponse>('/auth/login', data),
+  login: (data: LoginRequest) => api.post<AuthResponse>("/auth/login", data),
 
   register: (data: RegisterRequest) =>
-    api.post<AuthResponse>('/auth/register', data),
+    api.post<AuthResponse>("/auth/register", data),
 
   refresh: (refresh_token: string) =>
-    api.post<AuthResponse>('/auth/refresh', { refresh_token }),
+    api.post<AuthResponse>("/auth/refresh", { refresh_token }),
 
   logout: (refresh_token: string) =>
-    api.post<{ message: string }>('/auth/logout', { refresh_token }),
+    api.post<{ message: string }>("/auth/logout", { refresh_token }),
 
-  getProfile: () =>
-    api.get<User>('/auth/profile'),
+  getProfile: () => api.get<User>("/auth/profile"),
 
   updateProfile: (data: { email: string }) =>
-    api.patch<User>('/auth/profile', data),
+    api.patch<User>("/auth/profile", data),
 
-  changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
-    api.post<{ message: string }>('/auth/change-password', data),
+  changePassword: (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => api.post<{ message: string }>("/auth/change-password", data),
 };
 
 export const productsApi = {
   getAll: (params?: PaginationParams) =>
-    api.get<PaginatedResponse<Product>>('/products', { params }),
-  
-  getById: (id: string) =>
-    api.get<Product>(`/products/${id}`),
-  
-  create: (data: Omit<Product, 'id' | 'created_at' | 'updated_at'>) =>
-    api.post<Product>('/products', data),
-  
-  update: (id: string, data: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>) =>
-    api.patch<Product>(`/products/${id}`, data),
-  
-  delete: (id: string) =>
-    api.delete(`/products/${id}`),
+    api.get<PaginatedResponse<Product>>("/products", { params }),
+
+  getById: (id: string) => api.get<Product>(`/products/${id}`),
+
+  create: (data: Omit<Product, "id" | "created_at" | "updated_at">) =>
+    api.post<Product>("/products", data),
+
+  update: (
+    id: string,
+    data: Partial<Omit<Product, "id" | "created_at" | "updated_at">>,
+  ) => api.patch<Product>(`/products/${id}`, data),
+
+  delete: (id: string) => api.delete(`/products/${id}`),
 
   getLowStock: (threshold?: number) =>
     api.get<Product[]>(`/products/low-stock`, { params: { threshold } }),
 
   bulkDelete: (ids: string[]) =>
-    api.delete<{ deleted: number; skipped: string[] }>('/products/bulk', { data: { ids } }),
+    api.delete<{ deleted: number; skipped: string[] }>("/products/bulk", {
+      data: { ids },
+    }),
 };
 
 export const recipientsApi = {
   getAll: (params?: PaginationParams) =>
-    api.get<PaginatedResponse<Recipient>>('/recipients', { params }),
-  
-  getById: (id: string) =>
-    api.get<Recipient>(`/recipients/${id}`),
-  
-  create: (data: Omit<Recipient, 'id' | 'created_at' | 'updated_at'>) =>
-    api.post<Recipient>('/recipients', data),
-  
-  update: (id: string, data: Partial<Omit<Recipient, 'id' | 'created_at' | 'updated_at'>>) =>
-    api.patch<Recipient>(`/recipients/${id}`, data),
-  
-  delete: (id: string) =>
-    api.delete(`/recipients/${id}`),
+    api.get<PaginatedResponse<Recipient>>("/recipients", { params }),
+
+  getById: (id: string) => api.get<Recipient>(`/recipients/${id}`),
+
+  create: (data: Omit<Recipient, "id" | "created_at" | "updated_at">) =>
+    api.post<Recipient>("/recipients", data),
+
+  update: (
+    id: string,
+    data: Partial<Omit<Recipient, "id" | "created_at" | "updated_at">>,
+  ) => api.patch<Recipient>(`/recipients/${id}`, data),
+
+  delete: (id: string) => api.delete(`/recipients/${id}`),
 };
 
 export const ordersApi = {
-  getAll: (params?: PaginationParams & { status?: string; startDate?: string; endDate?: string; minAmount?: number; maxAmount?: number }) =>
-    api.get<PaginatedResponse<Order>>('/orders', { params }),
-  
-  getById: (id: string) =>
-    api.get<Order>(`/orders/${id}`),
-  
-  create: (data: { recipientId: string; items: { productId: string; qty: number; unitPriceCents?: number }[] }) =>
-    api.post<Order>('/orders', data),
-  
-  update: (id: string, data: { recipientId?: string; items?: { productId: string; qty: number; unitPriceCents?: number }[] }) =>
-    api.patch<Order>(`/orders/${id}`, data),
-  
-  confirm: (id: string) =>
-    api.patch<Order>(`/orders/${id}/confirm`),
-  
-  cancel: (id: string) =>
-    api.patch<Order>(`/orders/${id}/cancel`),
-  
-  delete: (id: string) =>
-    api.delete(`/orders/${id}`),
+  getAll: (
+    params?: PaginationParams & {
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+      minAmount?: number;
+      maxAmount?: number;
+    },
+  ) => api.get<PaginatedResponse<Order>>("/orders", { params }),
+
+  getById: (id: string) => api.get<Order>(`/orders/${id}`),
+
+  create: (data: {
+    recipientId: string;
+    items: { productId: string; qty: number; unitPriceCents?: number }[];
+  }) => api.post<Order>("/orders", data),
+
+  update: (
+    id: string,
+    data: {
+      recipientId?: string;
+      items?: { productId: string; qty: number; unitPriceCents?: number }[];
+    },
+  ) => api.patch<Order>(`/orders/${id}`, data),
+
+  confirm: (id: string) => api.patch<Order>(`/orders/${id}/confirm`),
+
+  cancel: (id: string) => api.patch<Order>(`/orders/${id}/cancel`),
+
+  delete: (id: string) => api.delete(`/orders/${id}`),
 
   batchApprove: (orderIds: string[]) =>
-    api.post<{ approved: number }>('/orders/batch-approve', { orderIds }),
+    api.post<{ approved: number }>("/orders/batch-approve", { orderIds }),
 
   batchDelete: (orderIds: string[]) =>
-    api.post<{ deleted: number }>('/orders/batch-delete', { orderIds }),
+    api.post<{ deleted: number }>("/orders/batch-delete", { orderIds }),
 };
 
 export const dashboardApi = {
   // Sparkline / summary
   getDailyRevenue: (days?: number) =>
-    api.get<DailyRevenue[]>('/orders/dashboard/daily-revenue', { params: { days } }),
+    api.get<DailyRevenue[]>("/orders/dashboard/daily-revenue", {
+      params: { days },
+    }),
 
   getOrderStatusSummary: () =>
-    api.get<OrderStatusSummary>('/orders/dashboard/status-summary'),
+    api.get<OrderStatusSummary>("/orders/dashboard/status-summary"),
 
   // Revenue methods (income - with cost deduction)
   getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<RevenueByProduct[]>('/orders/dashboard/revenue-by-products', { params }),
+    api.get<RevenueByProduct[]>("/orders/dashboard/revenue-by-products", {
+      params,
+    }),
 
   getRevenueByRecipients: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<RevenueByRecipient[]>('/orders/dashboard/revenue-by-recipients', { params }),
+    api.get<RevenueByRecipient[]>("/orders/dashboard/revenue-by-recipients", {
+      params,
+    }),
 
   getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<TotalRevenue>('/orders/dashboard/total-revenue', { params }),
+    api.get<TotalRevenue>("/orders/dashboard/total-revenue", { params }),
 
   // Turnover methods (turnover - without cost deduction)
   getTurnoverByProducts: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<TurnoverByProduct[]>('/orders/dashboard/turnover-by-products', { params }),
+    api.get<TurnoverByProduct[]>("/orders/dashboard/turnover-by-products", {
+      params,
+    }),
 
-  getTurnoverByRecipients: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<TurnoverByRecipient[]>('/orders/dashboard/turnover-by-recipients', { params }),
+  getTurnoverByRecipients: (params?: {
+    startDate?: string;
+    endDate?: string;
+  }) =>
+    api.get<TurnoverByRecipient[]>("/orders/dashboard/turnover-by-recipients", {
+      params,
+    }),
 
   getTotalTurnover: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<TotalTurnover>('/orders/dashboard/total-turnover', { params }),
+    api.get<TotalTurnover>("/orders/dashboard/total-turnover", { params }),
 };
 
 export const receiptsApi = {
-  getAll: () =>
-    api.get<Receipt[]>('/receipts'),
-  
+  getAll: () => api.get<Receipt[]>("/receipts"),
+
   create: (orderId: string) =>
     api.post<Receipt>(`/receipts/orders/${orderId}/receipt`),
-  
-  getById: (id: string) =>
-    api.get<Receipt>(`/receipts/${id}`),
-  
+
+  getById: (id: string) => api.get<Receipt>(`/receipts/${id}`),
+
   getPdf: (id: string) =>
-    api.get(`/receipts/${id}/pdf`, { responseType: 'blob' }),
-  
-  getPrinters: () =>
-    api.get<{ printers: string[] }>('/receipts/printers'),
-  
+    api.get(`/receipts/${id}/pdf`, { responseType: "blob" }),
+
+  getPrinters: () => api.get<{ printers: string[] }>("/receipts/printers"),
+
   print: (id: string, printer?: string) =>
-    api.post<{ success: boolean; message: string }>(`/receipts/${id}/print${printer ? `?printer=${encodeURIComponent(printer)}` : ''}`),
-  
-  regenerate: (id: string) =>
-    api.post<Receipt>(`/receipts/${id}/regenerate`),
+    api.post<{ success: boolean; message: string }>(
+      `/receipts/${id}/print${printer ? `?printer=${encodeURIComponent(printer)}` : ""}`,
+    ),
+
+  regenerate: (id: string) => api.post<Receipt>(`/receipts/${id}/regenerate`),
 
   void: (id: string, reason: string) =>
     api.post<Receipt>(`/receipts/${id}/void`, { reason }),
 
   testPreview: () =>
-    api.post('/receipts/test-preview', {}, { responseType: 'blob' }),
+    api.post("/receipts/test-preview", {}, { responseType: "blob" }),
+
+  getTemplatePreviewHtml: (templateId: string, language: string) => {
+    const params = new URLSearchParams({ template: templateId, language });
+    return api.get<string>(`/pdf-test/preview-template?${params}`, {
+      responseType: "text",
+      transformResponse: [(data: string) => data],
+    });
+  },
 };
 
 export const settingsApi = {
   uploadLogo: (file: File) => {
     const formData = new FormData();
-    formData.append('logo', file);
-    return api.post('/settings/logo/upload', formData, {
+    formData.append("logo", file);
+    return api.post("/settings/logo/upload", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
   },
-  
-  getLogo: () =>
-    api.get('/settings/logo', { responseType: 'blob' }),
 
-  deleteLogo: () =>
-    api.post('/settings/logo/delete'),
+  getLogo: () => api.get("/settings/logo", { responseType: "blob" }),
 
+  deleteLogo: () => api.post("/settings/logo/delete"),
 
   // Template settings
   getTemplateSettings: () =>
-    api.get<{ templateId: string }>('/settings/template'),
+    api.get<{ templateId: string }>("/settings/template"),
 
   updateTemplateSettings: (templateId: string) =>
-    api.post('/settings/template', { templateId }),
+    api.post("/settings/template", { templateId }),
 
   getAvailableTemplates: () =>
     api.get<{
@@ -459,34 +497,33 @@ export const settingsApi = {
           accent: string;
         };
       }>;
-    }>('/settings/templates'),
+    }>("/settings/templates"),
 
   // Template language settings
   getTemplateLanguage: () =>
-    api.get<{ language: string }>('/settings/template-language'),
+    api.get<{ language: string }>("/settings/template-language"),
 
   updateTemplateLanguage: (language: string) =>
-    api.post('/settings/template-language', { language }),
+    api.post("/settings/template-language", { language }),
 
   // Footer settings
   getFooterTitle: () =>
-    api.get<{ footerTitle: string }>('/settings/footer-title'),
+    api.get<{ footerTitle: string }>("/settings/footer-title"),
 
   updateFooterTitle: (footerTitle: string) =>
-    api.post('/settings/footer-title', { footerTitle }),
+    api.post("/settings/footer-title", { footerTitle }),
 
   getFooterSubtitle: () =>
-    api.get<{ footerSubtitle: string }>('/settings/footer-subtitle'),
+    api.get<{ footerSubtitle: string }>("/settings/footer-subtitle"),
 
   updateFooterSubtitle: (footerSubtitle: string) =>
-    api.post('/settings/footer-subtitle', { footerSubtitle }),
+    api.post("/settings/footer-subtitle", { footerSubtitle }),
 
   // Receipt title settings
-  getReceiptTitle: () =>
-    api.get<{ title: string }>('/settings/receipt-title'),
+  getReceiptTitle: () => api.get<{ title: string }>("/settings/receipt-title"),
 
   updateReceiptTitle: (title: string) =>
-    api.post('/settings/receipt-title', { title }),
+    api.post("/settings/receipt-title", { title }),
 
   // Company information
   getCompanyInfo: () =>
@@ -500,7 +537,7 @@ export const settingsApi = {
       companySwift: string;
       companyWebsite: string;
       companyTagline: string;
-    }>('/settings/company-info'),
+    }>("/settings/company-info"),
 
   updateCompanyInfo: (companyInfo: {
     companyName?: string;
@@ -512,28 +549,27 @@ export const settingsApi = {
     companySwift?: string;
     companyWebsite?: string;
     companyTagline?: string;
-  }) =>
-    api.post('/settings/company-info', companyInfo),
+  }) => api.post("/settings/company-info", companyInfo),
 };
 
 // Formatting utilities
-export const formatCurrency = (cents: number, currency: string = 'UAH') => {
+export const formatCurrency = (cents: number, currency: string = "UAH") => {
   const amount = cents / 100;
-  return new Intl.NumberFormat('uk-UA', {
-    style: 'currency',
+  return new Intl.NumberFormat("uk-UA", {
+    style: "currency",
     currency: currency,
     minimumFractionDigits: 2,
   }).format(amount);
 };
 
 export const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('ru-RU');
+  return new Date(dateString).toLocaleString("ru-RU");
 };
 
 // Parsing utilities
 // Converts a user-entered currency amount (e.g., "99.99" or "99,99") to integer cents
 export const amountToCents = (amount: string | number): number => {
-  if (typeof amount === 'number') {
+  if (typeof amount === "number") {
     if (!Number.isFinite(amount)) return 0;
     return Math.round(amount * 100);
   }
@@ -541,8 +577,8 @@ export const amountToCents = (amount: string | number): number => {
   const normalized = amount
     .toString()
     .trim()
-    .replace(/\s+/g, '')
-    .replace(',', '.');
+    .replace(/\s+/g, "")
+    .replace(",", ".");
   const parsed = parseFloat(normalized);
   if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return 0;
   return Math.round(parsed * 100);

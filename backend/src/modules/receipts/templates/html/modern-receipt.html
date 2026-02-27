@@ -354,12 +354,12 @@
                         <span class="meta-value">{{receiptNumber}}</span>
                     </div>
                     <div class="meta-item">
-                        <span class="meta-label">Date</span>
+                        <span class="meta-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
                         <span class="meta-value">{{orderDate}}</span>
                     </div>
                     {{#if dueDate}}
                     <div class="meta-item">
-                        <span class="meta-label">Due</span>
+                        <span class="meta-label">{{#if translations.due}}{{translations.due}}{{else}}Due{{/if}}</span>
                         <span class="meta-value">{{dueDate}}</span>
                     </div>
                     {{/if}}
@@ -379,7 +379,7 @@
         <!-- Company Info -->
         <div class="company-info">
             <div class="info-card">
-                <div class="card-title">Bill To</div>
+                <div class="card-title">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
                 <div class="info-content">
                     <div class="info-line"><strong>{{recipientName}}</strong></div>
                     {{#if recipientAddress}}
@@ -391,7 +391,7 @@
                 </div>
             </div>
             <div class="info-card">
-                <div class="card-title">From</div>
+                <div class="card-title">{{#if translations.from}}{{translations.from}}{{else}}From{{/if}}</div>
                 <div class="info-content">
                     <div class="info-line"><strong>{{companyName}}</strong></div>
                     {{#if companyTagline}}
@@ -432,11 +432,11 @@
         <table class="items-table">
             <thead>
                 <tr>
-                    <th class="col-item">Item</th>
-                    <th class="col-qty">Qty</th>
-                    <th class="col-price">Price</th>
-                    <th class="col-tax">Tax</th>
-                    <th class="col-total">Total</th>
+                    <th class="col-item">{{#if translations.item}}{{translations.item}}{{else}}Item{{/if}}</th>
+                    <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
+                    <th class="col-tax">{{#if translations.tax}}{{translations.tax}}{{else}}Tax{{/if}}</th>
+                    <th class="col-total">{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -455,10 +455,10 @@
         <!-- Totals -->
         <div class="totals-section">
             <div class="totals-card">
-                <div class="totals-title">Summary</div>
+                <div class="totals-title">{{#if translations.summary}}{{translations.summary}}{{else}}Summary{{/if}}</div>
                 <table class="totals-table">
                     <tr>
-                        <td>Subtotal</td>
+                        <td>{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</td>
                         <td>{{subtotal}}</td>
                     </tr>
                     {{#each discounts}}
@@ -475,12 +475,12 @@
                     {{/each}}
                     {{#if shipping}}
                     <tr>
-                        <td>Shipping</td>
+                        <td>{{#if translations.shipping}}{{translations.shipping}}{{else}}Shipping{{/if}}</td>
                         <td>{{shipping}}</td>
                     </tr>
                     {{/if}}
                     <tr class="grand-total">
-                        <td>Grand Total</td>
+                        <td>{{#if translations.grandTotal}}{{translations.grandTotal}}{{else}}Grand Total{{/if}}</td>
                         <td>{{total}}</td>
                     </tr>
                 </table>
@@ -497,24 +497,24 @@
                 {{/if}}
                 {{else}}
                 {{#if notes}}
-                <div class="notes-title">Notes</div>
+                <div class="notes-title">{{#if translations.notes}}{{translations.notes}}{{else}}Notes{{/if}}</div>
                 <div class="notes-content">{{notes}}</div>
                 {{/if}}
                 {{/if}}
                 
                 {{#if paymentInfo}}
-                <div class="notes-title" style="margin-top: 16px;">Payment Info</div>
+                <div class="notes-title" style="margin-top: 16px;">{{#if translations.paymentInfo}}{{translations.paymentInfo}}{{else}}Payment Info{{/if}}</div>
                 <div class="notes-content">{{paymentInfo}}</div>
                 {{/if}}
             </div>
             
             {{#if qrUri}}
             <div class="payment-section">
-                <div class="payment-title">Payment</div>
+                <div class="payment-title">{{#if translations.payment}}{{translations.payment}}{{else}}Payment{{/if}}</div>
                 <div class="qr-code">
                     <img src="{{qrUri}}" alt="QR Code" style="max-width: 100%; max-height: 100%;">
                 </div>
-                <div class="qr-label">Scan to pay</div>
+                <div class="qr-label">{{#if translations.scanToPay}}{{translations.scanToPay}}{{else}}Scan to pay{{/if}}</div>
             </div>
             {{/if}}
         </div>

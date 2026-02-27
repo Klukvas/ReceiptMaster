@@ -164,6 +164,105 @@ describe('TemplateService', () => {
 
       expect(result.companyName).toBe('');
     });
+
+    it('should use en-US locale for English language', () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        '2025-000001',
+        mockCompanyInfo,
+        false,
+        undefined,
+        'Invoice',
+        'en',
+      );
+
+      const expectedDate = new Date('2025-01-15T10:00:00Z').toLocaleString('en-US');
+      expect(result.orderDate).toBe(expectedDate);
+    });
+
+    it('should use ru-RU locale for Russian language', () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        '2025-000001',
+        mockCompanyInfo,
+        false,
+        undefined,
+        'Invoice',
+        'ru',
+      );
+
+      const expectedDate = new Date('2025-01-15T10:00:00Z').toLocaleString('ru-RU');
+      expect(result.orderDate).toBe(expectedDate);
+    });
+
+    it('should use uk-UA locale for Ukrainian language', () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        '2025-000001',
+        mockCompanyInfo,
+        false,
+        undefined,
+        'Invoice',
+        'uk',
+      );
+
+      const expectedDate = new Date('2025-01-15T10:00:00Z').toLocaleString('uk-UA');
+      expect(result.orderDate).toBe(expectedDate);
+    });
+
+    it('should fallback to en-US locale for unknown language', () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        '2025-000001',
+        mockCompanyInfo,
+        false,
+        undefined,
+        'Invoice',
+        'fr',
+      );
+
+      const expectedDate = new Date('2025-01-15T10:00:00Z').toLocaleString('en-US');
+      expect(result.orderDate).toBe(expectedDate);
+    });
+  });
+
+  describe('loadTranslations', () => {
+    const fs = require('fs/promises');
+
+    it('should load flat JSON translations without corporate wrapper', async () => {
+      const flatTranslations = JSON.stringify({
+        date: 'Date:',
+        billTo: 'Bill To',
+        item: 'Item',
+        qty: 'Qty',
+        total: 'Total',
+      });
+
+      fs.readFile.mockResolvedValue(flatTranslations);
+
+      const freshService = new TemplateService();
+
+      // Wait for async loadTranslations to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const result = freshService.prepareTemplateData(
+        {
+          id: 'order-1',
+          currency: 'UAH',
+          created_at: new Date(),
+          subtotal_cents: 1000,
+          total_cents: 1000,
+          recipient: { name: 'Test', email: null, phone: null, address: null },
+          items: [],
+        } as any,
+        '2025-000001',
+        { companyName: 'Corp' },
+      );
+
+      expect(result.translations).toBeDefined();
+      expect(result.translations.date).toBe('Date:');
+      expect(result.translations.billTo).toBe('Bill To');
+    });
   });
 
   describe('loadTemplate', () => {
