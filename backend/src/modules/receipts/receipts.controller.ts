@@ -80,8 +80,25 @@ export class ReceiptsController {
   @Get()
   @ApiOperation({ summary: "Получить список всех чеков" })
   @ApiResponse({ status: 200, description: "Список чеков получен" })
-  findAll(@Request() req: { user: User }) {
-    return this.receiptsService.findAll(req.user);
+  @ApiQuery({ name: "offset", required: false, description: "Offset" })
+  @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
+  findAll(
+    @Request() req: { user: User },
+    @Query("offset") offset?: string,
+    @Query("limit") limit?: string,
+  ) {
+    const parsedOffset = offset ? parseInt(offset, 10) : undefined;
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    return this.receiptsService.findAll(req.user, {
+      offset:
+        Number.isFinite(parsedOffset) && parsedOffset! >= 0
+          ? parsedOffset
+          : undefined,
+      limit:
+        Number.isFinite(parsedLimit) && parsedLimit! > 0
+          ? parsedLimit
+          : undefined,
+    });
   }
 
   @Get(":id")

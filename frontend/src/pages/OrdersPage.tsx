@@ -1,7 +1,7 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { ShoppingCart, Lock } from 'lucide-react';
-import { ordersApi, formatCurrency, formatDate, type Order } from '../lib/api';
-import { DataTable } from '../components/ui/DataTable';
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { ShoppingCart, Lock } from "lucide-react";
+import { ordersApi, formatCurrency, formatDate, type Order } from "../lib/api";
+import { DataTable } from "../components/ui/DataTable";
 import {
   CreateOrderModal,
   EditOrderForm,
@@ -13,20 +13,29 @@ import {
   PaymentStatusBadge,
   OrdersFilterBar,
   OrderActionsMenu,
-} from '../components/orders';
-import { DeleteConfirmation, NotificationToast } from '../components/common';
-import { useOrders } from '../hooks/useOrders';
-import { useServerPagination, type ColumnDef } from '../hooks/useServerPagination';
-import { useTranslation } from '../hooks/useTranslation';
+} from "../components/orders";
+import { DeleteConfirmation, NotificationToast } from "../components/common";
+import { useOrders } from "../hooks/useOrders";
+import {
+  useServerPagination,
+  type ColumnDef,
+} from "../hooks/useServerPagination";
+import { useTranslation } from "../hooks/useTranslation";
+import { useSubscription } from "../hooks/useSubscription";
+import { isOrderLimitReached } from "../lib/subscriptionApi";
+import { UsageBar } from "../components/subscription/UsageBar";
+import { UpgradeModal } from "../components/subscription/UpgradeModal";
 
 export const OrdersPage = () => {
   const { t } = useTranslation();
-  const [statusFilter, setStatusFilter] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
+  const { status: subscriptionStatus } = useSubscription();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
 
   const {
     showForm,
@@ -70,83 +79,97 @@ export const OrdersPage = () => {
   }, [statusFilter, paymentFilter, startDate, endDate, minAmount, maxAmount]);
 
   const clearAllFilters = useCallback(() => {
-    setStatusFilter('');
-    setPaymentFilter('');
-    setStartDate('');
-    setEndDate('');
-    setMinAmount('');
-    setMaxAmount('');
+    setStatusFilter("");
+    setPaymentFilter("");
+    setStartDate("");
+    setEndDate("");
+    setMinAmount("");
+    setMaxAmount("");
   }, []);
 
-  const columns: ColumnDef<Order>[] = useMemo(() => [
-    {
-      key: 'recipient_name',
-      header: t('orders.recipient'),
-      sortable: true,
-      sortKey: 'recipient_name',
-      render: (o) => (
-        <div className="flex items-center gap-2">
-          {o.is_locked && (
-            <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" title={t('orders.locked')} />
-          )}
-          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[180px] block" title={o.recipient?.name || '-'}>
-            {o.recipient?.name || '-'}
+  const columns: ColumnDef<Order>[] = useMemo(
+    () => [
+      {
+        key: "recipient_name",
+        header: t("orders.recipient"),
+        sortable: true,
+        sortKey: "recipient_name",
+        render: (o) => (
+          <div className="flex items-center gap-2">
+            {o.is_locked && (
+              <Lock
+                className="w-3.5 h-3.5 text-amber-500 flex-shrink-0"
+                title={t("orders.locked")}
+              />
+            )}
+            <span
+              className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[180px] block"
+              title={o.recipient?.name || "-"}
+            >
+              {o.recipient?.name || "-"}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        header: t("orders.status"),
+        sortable: true,
+        render: (o) => <OrderStatusBadge order={o} />,
+      },
+      {
+        key: "payment_status",
+        header: t("orders.paymentStatus"),
+        sortable: false,
+        render: (o) => <PaymentStatusBadge status={o.payment_status} />,
+      },
+      {
+        key: "total_cents",
+        header: t("orders.total"),
+        sortable: true,
+        render: (o) => (
+          <div className="text-right">
+            <span className="text-base font-bold tabular-nums text-gray-900 dark:text-gray-50">
+              {formatCurrency(o.total_cents, o.currency)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "created_at",
+        header: t("orders.date"),
+        sortable: true,
+        render: (o) => (
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {formatDate(o.created_at)}
           </span>
-        </div>
-      ),
-    },
-    {
-      key: 'status',
-      header: t('orders.status'),
-      sortable: true,
-      render: (o) => <OrderStatusBadge order={o} />,
-    },
-    {
-      key: 'payment_status',
-      header: t('orders.paymentStatus'),
-      sortable: false,
-      render: (o) => <PaymentStatusBadge status={o.payment_status} />,
-    },
-    {
-      key: 'total_cents',
-      header: t('orders.total'),
-      sortable: true,
-      render: (o) => (
-        <div className="text-right">
-          <span className="text-base font-bold tabular-nums text-gray-900 dark:text-gray-50">
-            {formatCurrency(o.total_cents, o.currency)}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'created_at',
-      header: t('orders.date'),
-      sortable: true,
-      render: (o) => (
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {formatDate(o.created_at)}
-        </span>
-      ),
-    },
-  ], [t]);
+        ),
+      },
+    ],
+    [t],
+  );
 
   const pagination = useServerPagination<Order>({
-    queryKey: 'orders',
-    queryFn: (params) => ordersApi.getAll({
-      ...params,
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(paymentFilter ? { payment_status: paymentFilter } : {}),
-      ...(startDate ? { startDate } : {}),
-      ...(endDate ? { endDate } : {}),
-      ...(minAmount ? { minAmount: Math.round(parseFloat(minAmount) * 100) } : {}),
-      ...(maxAmount ? { maxAmount: Math.round(parseFloat(maxAmount) * 100) } : {}),
-    }),
+    queryKey: "orders",
+    queryFn: (params) =>
+      ordersApi.getAll({
+        ...params,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(paymentFilter ? { payment_status: paymentFilter } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        ...(minAmount
+          ? { minAmount: Math.round(parseFloat(minAmount) * 100) }
+          : {}),
+        ...(maxAmount
+          ? { maxAmount: Math.round(parseFloat(maxAmount) * 100) }
+          : {}),
+      }),
     columns,
-    defaultSortBy: 'created_at',
-    defaultSortOrder: 'DESC',
+    defaultSortBy: "created_at",
+    defaultSortOrder: "DESC",
     extraParams,
-    storageKeyPrefix: 'orders',
+    storageKeyPrefix: "orders",
   });
 
   // Clear selection when page or filters change
@@ -159,92 +182,142 @@ export const OrdersPage = () => {
     if (selectedKeys.size === 0) return false;
     return pagination.items
       .filter((o) => selectedKeys.has(o.id))
-      .every((o) => o.status === 'draft');
+      .every((o) => o.status === "draft");
   }, [selectedKeys, pagination.items]);
 
-  const renderOrderActions = useCallback((order: Order) => (
-    <OrderRowActions
-      order={order}
-      onView={setSelectedOrder}
-      onEdit={setEditingOrder}
-      onConfirm={handleConfirm}
-      onCancel={handleCancel}
-      onDelete={handleDeleteOrder}
-      onDownloadReceipt={handleDownloadReceipt}
-      onPrintReceipt={handlePrintReceipt}
-      onGenerateReceipt={handleGenerateReceipt}
-      isDeleting={isDeleting}
-    />
-  ), [handleConfirm, handleCancel, handleDownloadReceipt, handlePrintReceipt, handleGenerateReceipt, handleDeleteOrder, isDeleting, setSelectedOrder, setEditingOrder]);
+  const renderOrderActions = useCallback(
+    (order: Order) => (
+      <OrderRowActions
+        order={order}
+        onView={setSelectedOrder}
+        onEdit={setEditingOrder}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+        onDelete={handleDeleteOrder}
+        onDownloadReceipt={handleDownloadReceipt}
+        onPrintReceipt={handlePrintReceipt}
+        onGenerateReceipt={handleGenerateReceipt}
+        isDeleting={isDeleting}
+      />
+    ),
+    [
+      handleConfirm,
+      handleCancel,
+      handleDownloadReceipt,
+      handlePrintReceipt,
+      handleGenerateReceipt,
+      handleDeleteOrder,
+      isDeleting,
+      setSelectedOrder,
+      setEditingOrder,
+    ],
+  );
 
-  const renderOrderCard = useCallback((order: Order) => (
-    <div className="bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200/60 dark:border-gray-700/40 p-4 hover:shadow-md transition-shadow">
-      <div className="space-y-3">
-        {/* Top row: Recipient + Status */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              {order.is_locked && <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-                {order.recipient?.name || '-'}
-              </h3>
+  const renderOrderCard = useCallback(
+    (order: Order) => (
+      <div className="bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200/60 dark:border-gray-700/40 p-4 hover:shadow-md transition-shadow">
+        <div className="space-y-3">
+          {/* Top row: Recipient + Status */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {order.is_locked && (
+                  <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                )}
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  {order.recipient?.name || "-"}
+                </h3>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {formatDate(order.created_at)}
+              </p>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {formatDate(order.created_at)}
-            </p>
+            <OrderActionsMenu
+              order={order}
+              onView={setSelectedOrder}
+              onEdit={setEditingOrder}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+              onDelete={handleDeleteOrder}
+              onDownloadReceipt={handleDownloadReceipt}
+              onPrintReceipt={handlePrintReceipt}
+              onGenerateReceipt={handleGenerateReceipt}
+              isDeleting={isDeleting}
+            />
           </div>
-          <OrderActionsMenu
-            order={order}
-            onView={setSelectedOrder}
-            onEdit={setEditingOrder}
-            onConfirm={handleConfirm}
-            onCancel={handleCancel}
-            onDelete={handleDeleteOrder}
-            onDownloadReceipt={handleDownloadReceipt}
-            onPrintReceipt={handlePrintReceipt}
-            onGenerateReceipt={handleGenerateReceipt}
-            isDeleting={isDeleting}
-          />
-        </div>
 
-        {/* Status + Payment row */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <OrderStatusBadge order={order} />
-          <PaymentStatusBadge status={order.payment_status} />
-        </div>
+          {/* Status + Payment row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <OrderStatusBadge order={order} />
+            <PaymentStatusBadge status={order.payment_status} />
+          </div>
 
-        {/* Total - prominently displayed */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700/40">
-          <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">
-            {formatCurrency(order.total_cents, order.currency)}
-          </span>
-          <button
-            onClick={() => setSelectedOrder(order)}
-            className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
-          >
-            {t('orders.view')}
-          </button>
+          {/* Total - prominently displayed */}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700/40">
+            <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">
+              {formatCurrency(order.total_cents, order.currency)}
+            </span>
+            <button
+              onClick={() => setSelectedOrder(order)}
+              className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+            >
+              {t("orders.view")}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  ), [t, handleConfirm, handleCancel, handleDownloadReceipt, handlePrintReceipt, handleGenerateReceipt, handleDeleteOrder, isDeleting, setSelectedOrder, setEditingOrder]);
+    ),
+    [
+      t,
+      handleConfirm,
+      handleCancel,
+      handleDownloadReceipt,
+      handlePrintReceipt,
+      handleGenerateReceipt,
+      handleDeleteOrder,
+      isDeleting,
+      setSelectedOrder,
+      setEditingOrder,
+    ],
+  );
 
   // Filter bar rendered above the DataTable
   const filterBar = (
     <OrdersFilterBar
       statusFilter={statusFilter}
-      onStatusFilterChange={(v) => { setStatusFilter(v); pagination.setCurrentPage(1); }}
+      onStatusFilterChange={(v) => {
+        setStatusFilter(v);
+        pagination.setCurrentPage(1);
+      }}
       paymentFilter={paymentFilter}
-      onPaymentFilterChange={(v) => { setPaymentFilter(v); pagination.setCurrentPage(1); }}
+      onPaymentFilterChange={(v) => {
+        setPaymentFilter(v);
+        pagination.setCurrentPage(1);
+      }}
       startDate={startDate}
-      onStartDateChange={(v) => { setStartDate(v); pagination.setCurrentPage(1); }}
+      onStartDateChange={(v) => {
+        setStartDate(v);
+        pagination.setCurrentPage(1);
+      }}
       endDate={endDate}
-      onEndDateChange={(v) => { setEndDate(v); pagination.setCurrentPage(1); }}
+      onEndDateChange={(v) => {
+        setEndDate(v);
+        pagination.setCurrentPage(1);
+      }}
       minAmount={minAmount}
-      onMinAmountChange={(v) => { setMinAmount(v); pagination.setCurrentPage(1); }}
+      onMinAmountChange={(v) => {
+        setMinAmount(v);
+        pagination.setCurrentPage(1);
+      }}
       maxAmount={maxAmount}
-      onMaxAmountChange={(v) => { setMaxAmount(v); pagination.setCurrentPage(1); }}
-      onClearAll={() => { clearAllFilters(); pagination.setCurrentPage(1); }}
+      onMaxAmountChange={(v) => {
+        setMaxAmount(v);
+        pagination.setCurrentPage(1);
+      }}
+      onClearAll={() => {
+        clearAllFilters();
+        pagination.setCurrentPage(1);
+      }}
     />
   );
 
@@ -252,7 +325,22 @@ export const OrdersPage = () => {
     <div className="space-y-5">
       <NotificationToast notifications={notifications} />
 
-      <OrdersPageHeader onCreateOrder={() => setShowForm(true)} />
+      <OrdersPageHeader
+        onCreateOrder={() => {
+          if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
+            setUpgradeModalOpen(true);
+            return;
+          }
+          setShowForm(true);
+        }}
+      />
+      {subscriptionStatus && (
+        <UsageBar
+          current={subscriptionStatus.usage.ordersThisMonth}
+          max={subscriptionStatus.limits.maxOrdersPerMonth}
+          label={t("subscription.ordersUsage", "Orders this month")}
+        />
+      )}
 
       {filterBar}
 
@@ -281,10 +369,12 @@ export const OrdersPage = () => {
         selectable
         selectedKeys={selectedKeys}
         onSelectionChange={setSelectedKeys}
-        searchPlaceholder={t('orders.searchPlaceholder')}
-        emptyIcon={<ShoppingCart className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-2" />}
-        emptyMessage={t('orders.noOrders')}
-        emptySearchMessage={t('orders.noOrdersFound')}
+        searchPlaceholder={t("orders.searchPlaceholder")}
+        emptyIcon={
+          <ShoppingCart className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+        }
+        emptyMessage={t("orders.noOrders")}
+        emptySearchMessage={t("orders.noOrdersFound")}
         renderActions={renderOrderActions}
         renderCard={renderOrderCard}
       />
@@ -302,9 +392,7 @@ export const OrdersPage = () => {
         />
       )}
 
-      {showForm && (
-        <CreateOrderModal onClose={() => setShowForm(false)} />
-      )}
+      {showForm && <CreateOrderModal onClose={() => setShowForm(false)} />}
 
       {editingOrder && (
         <EditOrderForm
@@ -331,9 +419,13 @@ export const OrdersPage = () => {
         isOpen={deleteConfirmation.isOpen}
         onClose={handleCancelDeleteOrder}
         onConfirm={handleConfirmDeleteOrder}
-        title={t('orders.deleteOrder')}
-        message={t('orders.deleteOrderMessage')}
-        itemName={deleteConfirmation.order ? `Order #${deleteConfirmation.order.id.slice(0, 8)}...` : undefined}
+        title={t("orders.deleteOrder")}
+        message={t("orders.deleteOrderMessage")}
+        itemName={
+          deleteConfirmation.order
+            ? `Order #${deleteConfirmation.order.id.slice(0, 8)}...`
+            : undefined
+        }
         isLoading={isDeleting}
       />
 
@@ -342,9 +434,16 @@ export const OrdersPage = () => {
         isOpen={bulkDeleteConfirm}
         onClose={handleBulkDeleteCancel}
         onConfirm={handleBatchDelete}
-        title={t('orders.batchDeleteTitle')}
-        message={t('orders.batchDeleteMessage', { count: selectedKeys.size })}
+        title={t("orders.batchDeleteTitle")}
+        message={t("orders.batchDeleteMessage", { count: selectedKeys.size })}
         isLoading={isBatchDeleting}
+      />
+
+      {/* Upgrade modal */}
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        reason="orders"
       />
     </div>
   );

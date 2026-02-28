@@ -2,17 +2,50 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { UserSettings } from "../entities/user-settings.entity";
+import { CacheService } from "../../../common/services/cache.service";
+
+const SETTINGS_CACHE_TTL = 3600; // 1 hour
 
 @Injectable()
 export class SettingsService {
   constructor(
     @InjectRepository(UserSettings)
     private userSettingsRepository: Repository<UserSettings>,
+    private cacheService: CacheService,
   ) {}
+
+  private settingsCacheKey(userId: string): string {
+    return `settings:${userId}`;
+  }
+
+  private async invalidateCache(userId: string): Promise<void> {
+    await this.cacheService.del(this.settingsCacheKey(userId));
+  }
+
+  private async getCachedSettings(
+    userId: string,
+  ): Promise<UserSettings | null> {
+    const cached = await this.cacheService.get<UserSettings>(
+      this.settingsCacheKey(userId),
+    );
+    if (cached) return cached;
+
+    const settings = await this.userSettingsRepository.findOne({
+      where: { userId },
+    });
+    if (settings) {
+      await this.cacheService.set(
+        this.settingsCacheKey(userId),
+        settings,
+        SETTINGS_CACHE_TTL,
+      );
+    }
+    return settings;
+  }
 
   /**
    * Get existing settings for a user, or create a new empty record.
-   * All setter methods use this to avoid duplicating the getOrCreate logic.
+   * Always fetches from DB to avoid mutating cached objects.
    */
   private async getOrCreateSettings(userId: string): Promise<UserSettings> {
     const existing = await this.userSettingsRepository.findOne({
@@ -25,22 +58,18 @@ export class SettingsService {
   }
 
   async getUserTemplate(userId: string): Promise<string> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
     return settings?.templateId || "standard";
   }
 
   async setUserTemplate(userId: string, templateId: string): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
-    settings.templateId = templateId;
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({ ...settings, templateId });
+    await this.invalidateCache(userId);
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
-    return this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    return this.getCachedSettings(userId);
   }
 
   async updateUserSettings(
@@ -48,53 +77,56 @@ export class SettingsService {
     updates: Partial<UserSettings>,
   ): Promise<UserSettings> {
     const settings = await this.getOrCreateSettings(userId);
-    Object.assign(settings, updates);
-    return this.userSettingsRepository.save(settings);
+    const merged = { ...settings, ...updates, userId };
+    const saved = await this.userSettingsRepository.save(merged);
+    await this.invalidateCache(userId);
+    return saved;
   }
 
   async getReceiptTitle(userId: string): Promise<string> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
     return settings?.receiptTitle || "Invoice";
   }
 
   async setReceiptTitle(userId: string, title: string): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
-    settings.receiptTitle = title;
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({
+      ...settings,
+      receiptTitle: title,
+    });
+    await this.invalidateCache(userId);
   }
 
   async getTemplateLanguage(userId: string): Promise<string> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
     return settings?.templateLanguage || "en";
   }
 
   async setTemplateLanguage(userId: string, language: string): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
-    settings.templateLanguage = language;
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({
+      ...settings,
+      templateLanguage: language,
+    });
+    await this.invalidateCache(userId);
   }
 
   async getFooterTitle(userId: string): Promise<string | undefined> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
     return settings?.footerText || undefined;
   }
 
   async setFooterTitle(userId: string, footerTitle: string): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
-    settings.footerText = footerTitle;
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({
+      ...settings,
+      footerText: footerTitle,
+    });
+    await this.invalidateCache(userId);
   }
 
   async getFooterSubtitle(userId: string): Promise<string | undefined> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
     return settings?.subFooterText || undefined;
   }
 
@@ -103,14 +135,15 @@ export class SettingsService {
     footerSubtitle: string,
   ): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
-    settings.subFooterText = footerSubtitle;
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({
+      ...settings,
+      subFooterText: footerSubtitle,
+    });
+    await this.invalidateCache(userId);
   }
 
   async getCompanyInfo(userId: string): Promise<Partial<UserSettings>> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
 
     return {
       companyName: settings?.companyName || "",
@@ -131,30 +164,46 @@ export class SettingsService {
   ): Promise<void> {
     const settings = await this.getOrCreateSettings(userId);
 
+    const companyFields: Record<string, unknown> = {};
     if (companyInfo.companyName !== undefined)
-      settings.companyName = companyInfo.companyName;
+      companyFields.companyName = companyInfo.companyName;
     if (companyInfo.companyAddress !== undefined)
-      settings.companyAddress = companyInfo.companyAddress;
+      companyFields.companyAddress = companyInfo.companyAddress;
     if (companyInfo.companyEmail !== undefined)
-      settings.companyEmail = companyInfo.companyEmail;
+      companyFields.companyEmail = companyInfo.companyEmail;
     if (companyInfo.companyPhone !== undefined)
-      settings.companyPhone = companyInfo.companyPhone;
+      companyFields.companyPhone = companyInfo.companyPhone;
     if (companyInfo.companyTaxId !== undefined)
-      settings.companyTaxId = companyInfo.companyTaxId;
+      companyFields.companyTaxId = companyInfo.companyTaxId;
     if (companyInfo.companyIban !== undefined)
-      settings.companyIban = companyInfo.companyIban;
+      companyFields.companyIban = companyInfo.companyIban;
     if (companyInfo.companySwift !== undefined)
-      settings.companySwift = companyInfo.companySwift;
+      companyFields.companySwift = companyInfo.companySwift;
     if (companyInfo.companyWebsite !== undefined)
-      settings.companyWebsite = companyInfo.companyWebsite;
+      companyFields.companyWebsite = companyInfo.companyWebsite;
     if (companyInfo.companyTagline !== undefined)
-      settings.companyTagline = companyInfo.companyTagline;
+      companyFields.companyTagline = companyInfo.companyTagline;
 
-    await this.userSettingsRepository.save(settings);
+    await this.userSettingsRepository.save({ ...settings, ...companyFields });
+    await this.invalidateCache(userId);
+  }
+
+  async getOnboardingStatus(userId: string): Promise<{ completed: boolean }> {
+    const settings = await this.getOrCreateSettings(userId);
+    return { completed: settings.onboardingCompleted };
+  }
+
+  async completeOnboarding(userId: string): Promise<void> {
+    const settings = await this.getOrCreateSettings(userId);
+    await this.userSettingsRepository.save({
+      ...settings,
+      onboardingCompleted: true,
+    });
+    await this.invalidateCache(userId);
   }
 
   /**
-   * Get all PDF-related settings in a single database query.
+   * Get all PDF-related settings in a single call (cached).
    * This optimizes the N+1 query problem when generating receipts.
    */
   async getAllPdfSettings(userId: string): Promise<{
@@ -175,9 +224,7 @@ export class SettingsService {
     footerTitle?: string;
     footerSubtitle?: string;
   }> {
-    const settings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
+    const settings = await this.getCachedSettings(userId);
 
     return {
       companyInfo: {

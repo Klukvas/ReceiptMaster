@@ -127,6 +127,14 @@ export const ApiErrors = {
       409,
     ),
 
+  // Supplier errors
+  SUPPLIER_NOT_FOUND: (id: string) =>
+    new ApiErrorResponse(
+      `Supplier with id ${id} not found`,
+      "SUPPLIER_NOT_FOUND",
+      404,
+    ),
+
   // Settings errors
   SETTINGS_NOT_FOUND: () =>
     new ApiErrorResponse("Settings not found", "SETTINGS_NOT_FOUND", 404),
@@ -161,6 +169,26 @@ export const ApiErrors = {
       `Required field ${field} is missing`,
       "REQUIRED_FIELD_MISSING",
       400,
+    ),
+
+  // Subscription errors
+  PRODUCT_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Product limit exceeded. Your plan allows up to ${limit} products`,
+      "PRODUCT_LIMIT_EXCEEDED",
+      402,
+    ),
+  ORDER_MONTHLY_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Monthly order limit exceeded. Your plan allows up to ${limit} orders per month`,
+      "ORDER_MONTHLY_LIMIT_EXCEEDED",
+      402,
+    ),
+  TEMPLATE_PLAN_RESTRICTED: (templateId: string) =>
+    new ApiErrorResponse(
+      `Template "${templateId}" is not available on your current plan`,
+      "TEMPLATE_PLAN_RESTRICTED",
+      402,
     ),
 
   // General errors

@@ -8,6 +8,7 @@ import { UpdateProductDto } from "./dto/update-product.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import { SubscriptionService } from "../subscription/subscription.service";
 
 const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "product.name",
@@ -24,12 +25,15 @@ export class ProductsService {
     private productsRepository: Repository<Product>,
     @InjectDataSource()
     private dataSource: DataSource,
+    private subscriptionService: SubscriptionService,
   ) {}
 
   async create(
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
+    await this.subscriptionService.assertCanCreateProduct(user.id);
+
     const product = this.productsRepository.create({
       ...createProductDto,
       user_id: user.id,
@@ -144,12 +148,14 @@ export class ProductsService {
   async getLowStockProducts(
     user: User,
     threshold: number = 10,
+    limit: number = 50,
   ): Promise<Product[]> {
     return this.productsRepository
       .createQueryBuilder("product")
       .where("product.user_id = :userId", { userId: user.id })
       .andWhere("product.quantity <= :threshold", { threshold })
       .orderBy("product.quantity", "ASC")
+      .take(Math.min(limit, 100))
       .getMany();
   }
 }

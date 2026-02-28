@@ -21,6 +21,7 @@ import { SettingsService } from "./services/settings.service";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { TEMPLATE_METADATA } from "../receipts/templates/metadata";
+import { SubscriptionService } from "../subscription/subscription.service";
 
 @ApiTags("settings")
 @ApiBearerAuth("bearer")
@@ -33,6 +34,7 @@ export class SettingsController {
     private configService: ConfigService<EnvConfig>,
     private logoStorageService: LogoStorageService,
     private settingsService: SettingsService,
+    private subscriptionService: SubscriptionService,
   ) {}
 
   @Post("logo/upload")
@@ -140,8 +142,24 @@ export class SettingsController {
     }
   }
 
+  @Get("onboarding-status")
+  async getOnboardingStatus(@Request() req: { user: User }) {
+    const status = await this.settingsService.getOnboardingStatus(req.user.id);
+    return { data: status };
+  }
+
+  @Post("onboarding-complete")
+  async completeOnboarding(@Request() req: { user: User }) {
+    await this.settingsService.completeOnboarding(req.user.id);
+    return { data: { completed: true } };
+  }
+
   @Get("templates")
-  getAvailableTemplates() {
+  async getAvailableTemplates(@Request() req: { user: User }) {
+    const allowedIds = await this.subscriptionService.getAllowedTemplateIds(
+      req.user.id,
+    );
+
     return {
       data: Object.values(TEMPLATE_METADATA).map((template) => ({
         id: template.id,
@@ -150,6 +168,7 @@ export class SettingsController {
         category: template.category,
         features: template.features,
         colors: template.colors,
+        locked: allowedIds !== null && !allowedIds.includes(template.id),
       })),
     };
   }
@@ -166,6 +185,10 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { templateId: string },
   ) {
+    await this.subscriptionService.assertCanUseTemplate(
+      req.user.id,
+      body.templateId,
+    );
     await this.settingsService.setUserTemplate(req.user.id, body.templateId);
     return { message: "Template setting updated successfully" };
   }

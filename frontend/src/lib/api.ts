@@ -150,6 +150,20 @@ export interface Recipient {
   updated_at: string;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contact_person?: string;
+  notes?: string;
+  products?: Product[];
+  product_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface OrderItem {
   id: string;
   product_id: string;
@@ -345,6 +359,36 @@ export const recipientsApi = {
   delete: (id: string) => api.delete(`/recipients/${id}`),
 };
 
+export const suppliersApi = {
+  getAll: (params?: PaginationParams) =>
+    api.get<PaginatedResponse<Supplier>>("/suppliers", { params }),
+
+  getById: (id: string) => api.get<Supplier>(`/suppliers/${id}`),
+
+  create: (
+    data: Omit<
+      Supplier,
+      "id" | "created_at" | "updated_at" | "products" | "product_count"
+    > & {
+      productIds?: string[];
+    },
+  ) => api.post<Supplier>("/suppliers", data),
+
+  update: (
+    id: string,
+    data: Partial<
+      Omit<
+        Supplier,
+        "id" | "created_at" | "updated_at" | "products" | "product_count"
+      > & {
+        productIds?: string[];
+      }
+    >,
+  ) => api.patch<Supplier>(`/suppliers/${id}`, data),
+
+  delete: (id: string) => api.delete(`/suppliers/${id}`),
+};
+
 export const ordersApi = {
   getAll: (
     params?: PaginationParams & {
@@ -427,7 +471,11 @@ export const dashboardApi = {
 };
 
 export const receiptsApi = {
-  getAll: () => api.get<Receipt[]>("/receipts"),
+  getAll: (params?: { offset?: number; limit?: number }) =>
+    api.get<{ data: Receipt[]; total: number; offset: number; limit: number }>(
+      "/receipts",
+      { params },
+    ),
 
   create: (orderId: string) =>
     api.post<Receipt>(`/receipts/orders/${orderId}/receipt`),
@@ -538,6 +586,12 @@ export const settingsApi = {
       companyWebsite: string;
       companyTagline: string;
     }>("/settings/company-info"),
+
+  // Onboarding
+  getOnboardingStatus: () =>
+    api.get<{ completed: boolean }>("/settings/onboarding-status"),
+
+  completeOnboarding: () => api.post("/settings/onboarding-complete"),
 
   updateCompanyInfo: (companyInfo: {
     companyName?: string;

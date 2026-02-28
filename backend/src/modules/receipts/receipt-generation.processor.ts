@@ -23,7 +23,7 @@ export interface ReceiptGenerationJobData {
 
 export const RECEIPT_GENERATION_QUEUE = "receipt-generation";
 
-@Processor(RECEIPT_GENERATION_QUEUE)
+@Processor(RECEIPT_GENERATION_QUEUE, { concurrency: 3 })
 export class ReceiptGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(ReceiptGenerationProcessor.name);
 

@@ -32,7 +32,23 @@ export interface ReceiptFailedPayload {
 @WebSocketGateway({
   namespace: "/receipts",
   cors: {
-    origin: "*",
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      const corsEnv = process.env.CORS_ORIGINS;
+      if (!corsEnv) {
+        // No restriction configured — allow all
+        callback(null, true);
+        return;
+      }
+      const allowed = corsEnv.split(",").map((o) => o.trim());
+      if (!origin || allowed.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origin ${origin} not allowed`));
+      }
+    },
     credentials: true,
   },
 })

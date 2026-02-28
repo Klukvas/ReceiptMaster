@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Palette, Check, Eye } from "lucide-react";
+import { Palette, Check, Eye, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 import { settingsApi } from "../../lib/api";
 import { Button } from "../ui/Button";
@@ -8,6 +8,7 @@ import { SettingsSection } from "./SettingsSection";
 import { useTranslation } from "../../hooks/useTranslation";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
+import { UpgradeModal } from "../subscription/UpgradeModal";
 
 interface Template {
   id: string;
@@ -20,6 +21,7 @@ interface Template {
     secondary: string;
     accent: string;
   };
+  locked?: boolean;
 }
 
 const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
@@ -53,6 +55,7 @@ export const TemplateSelector = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [carouselOpen, setCarouselOpen] = useState(false);
   const [carouselInitialTemplate, setCarouselInitialTemplate] = useState("");
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const { data: currentTemplate, isLoading: isLoadingCurrent } =
     useQuery<TemplateSetting>({
       queryKey: ["templateSettings"],
@@ -100,6 +103,10 @@ export const TemplateSelector = () => {
       );
     },
     onError: (error: any) => {
+      if (error.response?.status === 402) {
+        setUpgradeModalOpen(true);
+        return;
+      }
       toast.error(
         error.response?.data?.message ||
           t("settings.templateUpdateFailed", "Failed to update template"),
@@ -115,6 +122,11 @@ export const TemplateSelector = () => {
   }, [currentTemplate, selectedTemplate]);
 
   const handleTemplateSelect = (templateId: string) => {
+    const template = templates?.find((tpl) => tpl.id === templateId);
+    if (template?.locked) {
+      setUpgradeModalOpen(true);
+      return;
+    }
     setSelectedTemplate(templateId);
   };
 
@@ -198,6 +210,7 @@ export const TemplateSelector = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {templatesList.map((template: Template) => {
           const isSelected = selectedTemplateId === template.id;
+          const isLocked = template.locked === true;
           const category =
             CATEGORY_STYLES[template.category] || CATEGORY_STYLES.business;
 
@@ -206,13 +219,22 @@ export const TemplateSelector = () => {
               key={template.id}
               onClick={() => handleTemplateSelect(template.id)}
               className={`group relative rounded-xl border-2 p-5 cursor-pointer transition-all duration-200 ${
-                isSelected
-                  ? "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10 shadow-sm shadow-blue-100 dark:shadow-blue-900/20"
-                  : "border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm"
+                isLocked
+                  ? "border-gray-200 dark:border-gray-700/60 opacity-75"
+                  : isSelected
+                    ? "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10 shadow-sm shadow-blue-100 dark:shadow-blue-900/20"
+                    : "border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm"
               }`}
             >
+              {/* Lock Indicator */}
+              {isLocked && (
+                <div className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white z-10">
+                  <Lock className="h-3 w-3" />
+                </div>
+              )}
+
               {/* Selected Indicator */}
-              {isSelected && (
+              {isSelected && !isLocked && (
                 <div className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-white">
                   <Check className="h-3 w-3" />
                 </div>
@@ -323,8 +345,14 @@ export const TemplateSelector = () => {
         templates={templatesList}
         initialTemplateId={carouselInitialTemplate}
         onSelectTemplate={(id) => {
-          setSelectedTemplate(id);
+          handleTemplateSelect(id);
         }}
+      />
+
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        reason="templates"
       />
     </SettingsSection>
   );

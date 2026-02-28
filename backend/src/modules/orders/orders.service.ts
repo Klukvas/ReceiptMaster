@@ -14,6 +14,7 @@ import { PaginatedResponse } from "../../common/interfaces/paginated-response.in
 import { ReceiptsService } from "../receipts/receipts.service";
 import { CacheService } from "../../common/services/cache.service";
 import { User } from "../users/entities/user.entity";
+import { SubscriptionService } from "../subscription/subscription.service";
 
 const DASHBOARD_CACHE_TTL = 300; // 5 minutes
 
@@ -50,6 +51,7 @@ export class OrdersService {
     private dataSource: DataSource,
     private receiptsService: ReceiptsService,
     private cacheService: CacheService,
+    private subscriptionService: SubscriptionService,
   ) {}
 
   private async invalidateDashboardCache(userId: string): Promise<void> {
@@ -71,6 +73,7 @@ export class OrdersService {
   ): Promise<IdempotencyResponse> {
     // Advisory lock + idempotency check + order creation in a single transaction
     const result = await this.dataSource.transaction(async (manager) => {
+      await this.subscriptionService.assertCanCreateOrderInTx(manager, user.id);
       // Acquire advisory lock if idempotency key is provided (prevents race conditions)
       if (idempotencyKey) {
         await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
@@ -231,7 +234,6 @@ export class OrdersService {
       .createQueryBuilder("order")
       .leftJoinAndSelect("order.recipient", "recipient")
       .leftJoinAndSelect("order.items", "items")
-      .leftJoinAndSelect("order.receipts", "receipts")
       .where("order.user_id = :userId", { userId: user.id });
 
     if (status) {
@@ -474,19 +476,22 @@ export class OrdersService {
 
     // Soft delete: restore product quantities and mark as deleted
     await this.dataSource.transaction(async (manager) => {
-      // Restore product quantities
       const orderItems = await manager.find(OrderItem, {
         where: { order_id: id },
       });
 
-      for (const orderItem of orderItems) {
-        const product = await manager.findOne(Product, {
-          where: { id: orderItem.product_id },
-        });
-        if (product) {
-          product.quantity += orderItem.qty;
-          await manager.save(Product, product);
-        }
+      // Aggregate quantity changes per product
+      const qtyUpdates = new Map<string, number>();
+      for (const item of orderItems) {
+        qtyUpdates.set(
+          item.product_id,
+          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
+        );
+      }
+
+      // Batch restore product quantities
+      for (const [productId, qty] of qtyUpdates) {
+        await manager.increment(Product, { id: productId }, "quantity", qty);
       }
 
       // Soft delete the order (sets deleted_at timestamp)
@@ -565,21 +570,23 @@ export class OrdersService {
         throw ApiErrors.ORDER_NOT_FOUND(missingIds.join(", "));
       }
 
-      // Restore product quantities for all order items
-      for (const order of orders) {
-        const orderItems = await manager.find(OrderItem, {
-          where: { order_id: order.id },
-        });
+      // Batch load all order items for all orders at once
+      const allOrderItems = await manager.find(OrderItem, {
+        where: { order_id: In(uniqueIds) },
+      });
 
-        for (const orderItem of orderItems) {
-          const product = await manager.findOne(Product, {
-            where: { id: orderItem.product_id },
-          });
-          if (product) {
-            product.quantity += orderItem.qty;
-            await manager.save(Product, product);
-          }
-        }
+      // Aggregate quantity changes per product
+      const qtyUpdates = new Map<string, number>();
+      for (const item of allOrderItems) {
+        qtyUpdates.set(
+          item.product_id,
+          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
+        );
+      }
+
+      // Batch restore product quantities
+      for (const [productId, qty] of qtyUpdates) {
+        await manager.increment(Product, { id: productId }, "quantity", qty);
       }
 
       await manager.softDelete(Order, { id: In(uniqueIds) });

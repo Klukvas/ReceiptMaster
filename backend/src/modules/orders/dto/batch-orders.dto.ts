@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsArray, IsUUID, ArrayMinSize } from "class-validator";
+import { IsArray, IsUUID, ArrayMinSize, ArrayMaxSize } from "class-validator";
 
 export class BatchOrderIdsDto {
   @ApiProperty({
@@ -9,6 +9,7 @@ export class BatchOrderIdsDto {
   })
   @IsArray()
   @ArrayMinSize(1, { message: "At least one order ID is required" })
+  @ArrayMaxSize(500, { message: "Maximum 500 orders per batch" })
   @IsUUID("4", { each: true })
   orderIds: string[];
 }

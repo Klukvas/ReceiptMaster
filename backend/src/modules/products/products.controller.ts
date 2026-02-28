@@ -56,13 +56,24 @@ export class ProductsController {
     required: false,
     description: "Stock threshold (default 10)",
   })
+  @ApiQuery({
+    name: "limit",
+    required: false,
+    description: "Max results (default 50, max 100)",
+  })
   getLowStock(
     @Request() req: { user: User },
     @Query("threshold") threshold?: string,
+    @Query("limit") limit?: string,
   ) {
+    const parsedThreshold = threshold ? parseInt(threshold, 10) : NaN;
+    const parsedLimit = limit ? parseInt(limit, 10) : NaN;
     return this.productsService.getLowStockProducts(
       req.user,
-      threshold ? parseInt(threshold) : 10,
+      Number.isFinite(parsedThreshold) && parsedThreshold >= 0
+        ? parsedThreshold
+        : 10,
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 50,
     );
   }
 

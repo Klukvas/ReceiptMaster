@@ -59,6 +59,9 @@ export class UserSettings {
   @Column({ nullable: true })
   headerText: string;
 
+  @Column({ default: false })
+  onboardingCompleted: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

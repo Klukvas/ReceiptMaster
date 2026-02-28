@@ -21,6 +21,8 @@ import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { UsersModule } from "./modules/users/users.module";
 import { SettingsModule } from "./modules/settings/settings.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
+import { SuppliersModule } from "./modules/suppliers/suppliers.module";
+import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { HealthController } from "./health.controller";
 import { MigrationService } from "./common/services/migration.service";
 
@@ -57,6 +59,12 @@ import { MigrationService } from "./common/services/migration.service";
           subscribers: [TenantContextSubscriber],
           synchronize: false,
           logging: process.env.NODE_ENV === "development",
+          extra: {
+            max: configService.get<number>("DB_POOL_MAX", 20),
+            min: configService.get<number>("DB_POOL_MIN", 2),
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 5000,
+          },
         };
       },
       inject: [ConfigService],
@@ -73,6 +81,8 @@ import { MigrationService } from "./common/services/migration.service";
     UsersModule,
     SettingsModule,
     TelegramModule,
+    SuppliersModule,
+    SubscriptionModule,
   ],
   controllers: [HealthController],
   providers: [

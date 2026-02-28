@@ -765,3 +765,75 @@ The backend is designed for horizontal scaling:
 | `TELEGRAM_WEBHOOK_SECRET` | Optional webhook verification token |
 | `VITE_API_URL` | Frontend API base URL |
 | `VITE_API_KEY` | Frontend API key |
+
+---
+
+## Roadmap
+
+### PDF & Document Features
+
+#### P0 — High Impact, Low Effort
+
+- [ ] **QR-code on receipt** — generate QR on each PDF linking to payment page or web-version of receipt (ref: Invoice Simple, Square, Fordeer)
+- [ ] **Watermarks (PAID / DRAFT / CANCELLED)** — visual overlay on PDF reflecting order/payment status (ref: Zoho Invoice, FreshBooks)
+- [ ] **Auto-email receipt to customer** — send PDF to recipient's email on order confirmation (ref: Order Printer Pro, Zoho, Square)
+
+#### P1 — High Impact, Medium Effort
+
+- [ ] **Packing Slip** — separate document type: order items without prices, for warehouse/courier (ref: Order Printer Pro, Oxilayer, Fordeer)
+- [ ] **Bulk PDF generation** — select multiple orders, generate all PDFs in one click, download as ZIP or print all (ref: Orderly Print)
+- [ ] **Estimates / Quotes** — pre-order document sent to customer, convertible to Order with one click (ref: Invoice Simple, Zoho, FreshBooks)
+- [ ] **Tax summary block** — separate section in PDF with VAT/tax breakdown: net, tax %, tax amount, gross (ref: Fordeer, Zoho)
+
+#### P2 — Medium Impact, Medium Effort
+
+- [ ] **Digital signature / stamp** — upload signature image or stamp, rendered on every PDF automatically (ref: Invoice Simple, Nova Invoice)
+- [ ] **Payment link in PDF** — clickable link inside PDF to pay online via LiqPay, Mono, or Stripe (ref: Square Invoices, Zoho)
+- [ ] **Due date & payment terms** — "Pay before..." field + terms (Net 15, Net 30), displayed on PDF (ref: FreshBooks, Zoho)
+- [ ] **Partial payment tracking** — show "Paid / Remaining balance" on PDF when partial payment received (ref: FreshBooks, Zoho)
+- [ ] **Credit Note (refund document)** — separate document linked to original receipt for returns/corrections (ref: Oxilayer, Zoho)
+
+#### P3 — Nice to Have
+
+- [ ] **Drag-and-drop template editor** — visual no-code constructor for placing blocks (logo, table, footer, QR) on canvas (ref: Oxilayer, Canva)
+- [ ] **Custom fields in templates** — user-defined fields (e.g. "Delivery date", "Manager") rendered on PDF (ref: Order Printer Pro, Fordeer)
+- [ ] **Conditional blocks** — show/hide template sections based on data, e.g. hide discount row if no discount (ref: Oxilayer)
+- [ ] **Recurring invoices** — auto-generate order + PDF on schedule (weekly, monthly) for repeat customers (ref: FreshBooks, Zoho)
+- [ ] **PDF merge** — combine multiple orders into a single PDF document (ref: Orderly Print)
+
+### General Features
+
+#### P1
+
+- [ ] **Roles & permissions** — Owner, Manager, Cashier roles with restricted access
+- [ ] **Discounts & promo codes** — percentage, fixed, per-product, per-order, per-customer
+- [ ] **Barcode / QR scanning** — scan product barcode to add to order
+- [ ] **Import / Export** — CSV/Excel import for products and customers
+
+#### P2
+
+- [ ] **Returns & refunds** — full/partial return with stock restoration
+- [ ] **Purchase Orders** — order stock from suppliers, auto-update inventory on receive
+- [ ] **Expense tracking** — business expenses + P&L report
+- [ ] **Email notifications** — low-stock alerts, order status changes
+- [ ] **Fiscal integration (Checkbox / pRRO)** — send receipts to UA tax authority
+
+#### P3
+
+- [ ] **Multi-location** — multiple warehouses/stores with per-location stock
+- [ ] **CRM enhancements** — customer tags, segments, communication history
+- [ ] **PWA / mobile app** — offline-capable, push notifications
+- [ ] **Customer portal** — web link for customer to view their orders and receipts
+
+### Competitive References
+
+| Competitor | Strength | URL |
+|---|---|---|
+| Order Printer Pro | Shopify PDF invoices, packing slips, bulk print | https://apps.shopify.com/order-printer-pro |
+| Fordeer | Auto PDF, multi-language, drag-drop editor | https://apps.shopify.com/fordeer-invoice-order-printer |
+| Oxilayer | Drag-drop editor, workflow automation | https://apps.shopify.com/pdf-printer |
+| Invoice Simple | QR payments, digital signature, mobile-first | https://apps.apple.com/us/app/invoice-simple-invoice-maker/id694831622 |
+| Square Invoices | Payment links, e-signatures, recurring | https://squareup.com/us/en/invoices |
+| Zoho Invoice | Free, auto-scan receipts, tax compliance | https://www.zoho.com/us/invoice/ |
+| FreshBooks | Expense tracking, receipt scanning, recurring | https://www.freshbooks.com/ |
+| Poster POS | UA market, fiscal integration | https://joinposter.com/ |

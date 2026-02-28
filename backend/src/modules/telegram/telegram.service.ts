@@ -572,14 +572,18 @@ export class TelegramService {
       return;
     }
 
-    // Check product availability and update cart
+    // Batch load all products at once instead of N+1 queries
+    const productIds = session.cart.items.map((item) => item.productId);
+    const products = await this.productsRepo.find({
+      where: { id: In(productIds), user_id: this.botOwnerUserId },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
     const updatedItems = [];
     const unavailableItems = [];
 
     for (const item of session.cart.items) {
-      const product = await this.productsRepo.findOne({
-        where: { id: item.productId, user_id: this.botOwnerUserId },
-      });
+      const product = productMap.get(item.productId);
 
       if (!product) {
         unavailableItems.push(`${item.name} (товар не найден)`);
@@ -897,12 +901,16 @@ export class TelegramService {
         return;
       }
 
-      // Check product availability before creating order (filter by bot owner)
+      // Batch load all products at once to check availability
+      const confirmProductIds = session.cart.items.map((i) => i.productId);
+      const confirmProducts = await this.productsRepo.find({
+        where: { id: In(confirmProductIds), user_id: this.botOwnerUserId },
+      });
+      const confirmProductMap = new Map(confirmProducts.map((p) => [p.id, p]));
+
       const unavailableItems = [];
       for (const item of session.cart.items) {
-        const product = await this.productsRepo.findOne({
-          where: { id: item.productId, user_id: this.botOwnerUserId },
-        });
+        const product = confirmProductMap.get(item.productId);
 
         if (!product) {
           unavailableItems.push(`${item.name} (товар не найден)`);

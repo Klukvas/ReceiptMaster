@@ -12,6 +12,8 @@ export const envSchema = z.object({
   DB_USERNAME: z.string().default("postgres"),
   DB_PASSWORD: z.string().default("postgres"),
   DB_NAME: z.string().default("market_db"),
+  DB_POOL_MAX: z.coerce.number().default(20),
+  DB_POOL_MIN: z.coerce.number().default(2),
 
   // Redis
   REDIS_HOST: z.string().default("localhost"),

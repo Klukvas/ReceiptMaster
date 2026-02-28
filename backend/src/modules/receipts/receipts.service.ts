@@ -15,7 +15,7 @@ import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
 import { SettingsService } from "../settings/services/settings.service";
@@ -24,12 +24,16 @@ import {
   ReceiptGenerationJobData,
 } from "./receipt-generation.processor";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/** Only allow alphanumeric, hyphens, underscores, dots, and spaces in printer names */
+const SAFE_PRINTER_NAME = /^[a-zA-Z0-9_\-. ]+$/;
 
 @Injectable()
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
-  private readonly MAX_RECEIPTS = 10; // Максимальное количество чеков
+  private readonly MAX_RECEIPTS = 10;
+  private receiptFunctionEnsuredPromise: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(Receipt)
@@ -77,7 +81,9 @@ export class ReceiptsService {
   }
 
   async generateReceipt(orderId: string, user: User): Promise<Receipt> {
-    return this.dataSource.transaction(async (manager) => {
+    let s3PathsToDelete: Array<{ bucket: string; key: string }> = [];
+
+    const savedReceipt = await this.dataSource.transaction(async (manager) => {
       // Проверяем существование заказа и принадлежность пользователю
       const order = await manager.findOne(Order, {
         where: { id: orderId, user_id: user.id },
@@ -107,8 +113,8 @@ export class ReceiptsService {
         throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
       }
 
-      // Очищаем старые чеки перед созданием нового
-      await this.cleanupOldReceipts(manager);
+      // Очищаем старые чеки перед созданием нового (S3 paths collected, not deleted yet)
+      s3PathsToDelete = await this.cleanupOldReceipts(manager, user.id);
 
       // Генерируем номер чека
       const receiptNumber = await this.generateReceiptNumber();
@@ -121,13 +127,13 @@ export class ReceiptsService {
         user_id: user.id,
       });
 
-      const savedReceipt = await manager.save(Receipt, receipt);
+      const result = await manager.save(Receipt, receipt);
 
       // Enqueue background PDF generation job
       await this.receiptQueue.add(
         "generate",
         {
-          receiptId: savedReceipt.id,
+          receiptId: result.id,
           orderId,
           userId: user.id,
         },
@@ -143,8 +149,13 @@ export class ReceiptsService {
         `Receipt ${receiptNumber} queued for generation (order ${orderId})`,
       );
 
-      return savedReceipt;
+      return result;
     });
+
+    // Delete S3 files outside the transaction to avoid holding locks during I/O
+    this.deleteS3FilesInBackground(s3PathsToDelete);
+
+    return savedReceipt;
   }
 
   async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
@@ -277,12 +288,13 @@ export class ReceiptsService {
         throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
       }
 
-      // Void the receipt
-      receipt.status = ReceiptStatus.VOID;
-      receipt.voided_at = new Date();
-      receipt.void_reason = reason;
-
-      const savedReceipt = await manager.save(Receipt, receipt);
+      // Void the receipt (immutable update)
+      const savedReceipt = await manager.save(Receipt, {
+        ...receipt,
+        status: ReceiptStatus.VOID,
+        voided_at: new Date(),
+        void_reason: reason,
+      });
 
       // Unlock the order so it can be modified again
       await manager.update(
@@ -299,12 +311,27 @@ export class ReceiptsService {
     });
   }
 
-  async findAll(user: User): Promise<Receipt[]> {
-    return this.receiptsRepository.find({
+  async findAll(
+    user: User,
+    options?: { offset?: number; limit?: number },
+  ): Promise<{
+    data: Receipt[];
+    total: number;
+    offset: number;
+    limit: number;
+  }> {
+    const offset = options?.offset ?? 0;
+    const limit = Math.min(options?.limit ?? 20, 100);
+
+    const [data, total] = await this.receiptsRepository.findAndCount({
       where: { user_id: user.id },
       relations: ["order", "order.recipient"],
       order: { created_at: "DESC" },
+      skip: offset,
+      take: limit,
     });
+
+    return { data, total, offset, limit };
   }
 
   async findOne(id: string, user: User): Promise<Receipt> {
@@ -402,10 +429,12 @@ export class ReceiptsService {
             pdfSettings.footerSubtitle,
           );
 
-        // Обновляем путь к файлу в базе данных
-        receipt.pdf_path = filePath;
-        receipt.pdf_url = url;
-        await this.receiptsRepository.save(receipt);
+        // Обновляем путь к файлу в базе данных (immutable update)
+        await this.receiptsRepository.save({
+          ...receipt,
+          pdf_path: filePath,
+          pdf_url: url,
+        });
 
         // Читаем новый файл
         let buffer: Buffer;
@@ -511,12 +540,13 @@ export class ReceiptsService {
     }
     const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
 
-    // Обновляем запись о чеке
-    receipt.pdf_path = filePath;
-    receipt.pdf_url = url;
-    receipt.hash = hash;
-
-    const updatedReceipt = await this.receiptsRepository.save(receipt);
+    // Обновляем запись о чеке (immutable update)
+    const updatedReceipt = await this.receiptsRepository.save({
+      ...receipt,
+      pdf_path: filePath,
+      pdf_url: url,
+      hash,
+    });
     this.logger.log(`PDF успешно регенерирован: ${filePath}`);
 
     return updatedReceipt;
@@ -542,125 +572,153 @@ export class ReceiptsService {
   }
 
   private async ensureReceiptNumberFunction(): Promise<void> {
-    try {
-      // Проверяем, существует ли функция
-      const checkResult = await this.dataSource.query(`
-        SELECT EXISTS (
-          SELECT 1 FROM pg_proc 
-          WHERE proname = 'generate_receipt_number'
-        ) as exists
+    if (!this.receiptFunctionEnsuredPromise) {
+      this.receiptFunctionEnsuredPromise =
+        this.doEnsureReceiptNumberFunction().catch((error) => {
+          // Reset so next call retries
+          this.receiptFunctionEnsuredPromise = null;
+          throw error;
+        });
+    }
+    return this.receiptFunctionEnsuredPromise;
+  }
+
+  private async doEnsureReceiptNumberFunction(): Promise<void> {
+    const checkResult = await this.dataSource.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_proc
+        WHERE proname = 'generate_receipt_number'
+      ) as exists
+    `);
+
+    if (!checkResult[0].exists) {
+      await this.dataSource.query(`
+        CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START 1
       `);
 
-      if (!checkResult[0].exists) {
-        // Создаем sequence если не существует
-        await this.dataSource.query(`
-          CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START 1
-        `);
-
-        // Создаем функцию
-        await this.dataSource.query(`
-          CREATE OR REPLACE FUNCTION generate_receipt_number()
-          RETURNS TEXT AS $$
-          DECLARE
-              year_part TEXT;
-              seq_part TEXT;
-          BEGIN
-              year_part := EXTRACT(YEAR FROM NOW())::TEXT;
-              seq_part := LPAD(nextval('receipt_number_seq')::TEXT, 6, '0');
-              RETURN year_part || '-' || seq_part;
-          END;
-          $$ LANGUAGE plpgsql
-        `);
-      }
-    } catch (error) {
-      this.logger.error("Error ensuring receipt number function:", error);
-      throw error;
+      await this.dataSource.query(`
+        CREATE OR REPLACE FUNCTION generate_receipt_number()
+        RETURNS TEXT AS $$
+        DECLARE
+            year_part TEXT;
+            seq_part TEXT;
+        BEGIN
+            year_part := EXTRACT(YEAR FROM NOW())::TEXT;
+            seq_part := LPAD(nextval('receipt_number_seq')::TEXT, 6, '0');
+            RETURN year_part || '-' || seq_part;
+        END;
+        $$ LANGUAGE plpgsql
+      `);
     }
   }
 
-  private async cleanupOldReceipts(manager: any): Promise<void> {
+  /**
+   * Collects old receipts for cleanup within a transaction.
+   * Returns S3 paths to delete AFTER the transaction commits.
+   */
+  private async cleanupOldReceipts(
+    manager: any,
+    userId: string,
+  ): Promise<Array<{ bucket: string; key: string }>> {
+    const s3PathsToDelete: Array<{ bucket: string; key: string }> = [];
+
     try {
-      // Получаем общее количество чеков
+      // Count only this user's generated receipts
       const totalReceipts = await manager.count(Receipt, {
-        where: { status: ReceiptStatus.GENERATED },
+        where: { status: ReceiptStatus.GENERATED, user_id: userId },
       });
 
-      // Если чеков больше максимального количества, удаляем старые
       if (totalReceipts >= this.MAX_RECEIPTS) {
-        // Получаем старые чеки (оставляем MAX_RECEIPTS-1 самых новых)
+        // Get oldest receipts for this user only
         const oldReceipts = await manager.find(Receipt, {
-          where: { status: ReceiptStatus.GENERATED },
+          where: { status: ReceiptStatus.GENERATED, user_id: userId },
           order: { created_at: "ASC" },
-          take: totalReceipts - (this.MAX_RECEIPTS - 1), // Удаляем все кроме MAX_RECEIPTS-1 самых новых
+          take: totalReceipts - (this.MAX_RECEIPTS - 1),
         });
 
-        // Удаляем файлы из object storage
+        // Collect S3 paths for deletion after transaction
         for (const receipt of oldReceipts) {
           if (
             receipt.pdf_path &&
             receipt.pdf_path.startsWith("object-storage://")
           ) {
-            try {
-              const parsed = this.pdfStorageService.parseObjectStoragePath(
-                receipt.pdf_path,
-              );
-              if (parsed) {
-                await this.pdfStorageService.deleteFile(
-                  parsed.bucket,
-                  parsed.key,
-                );
-                this.logger.log(
-                  `Deleted receipt file from object storage: ${receipt.pdf_path}`,
-                );
-              }
-            } catch (error) {
-              this.logger.warn(
-                `Failed to delete receipt file ${receipt.pdf_path}:`,
-                error,
-              );
+            const parsed = this.pdfStorageService.parseObjectStoragePath(
+              receipt.pdf_path,
+            );
+            if (parsed) {
+              s3PathsToDelete.push(parsed);
             }
           }
         }
 
-        // Удаляем записи из базы данных
+        // Delete DB records inside the transaction
         if (oldReceipts.length > 0) {
-          const receiptIds = oldReceipts.map((receipt) => receipt.id);
+          const receiptIds = oldReceipts.map((receipt: Receipt) => receipt.id);
           await manager.delete(Receipt, receiptIds);
-          this.logger.log(`Cleaned up ${oldReceipts.length} old receipts`);
+          this.logger.log(
+            `Cleaned up ${oldReceipts.length} old receipts for user ${userId}`,
+          );
         }
       }
     } catch (error) {
       this.logger.error("Error cleaning up old receipts:", error);
-      // Не прерываем создание чека из-за ошибки очистки
+      // Don't block receipt creation due to cleanup errors
     }
+
+    return s3PathsToDelete;
+  }
+
+  /**
+   * Deletes S3 files in background (fire-and-forget after transaction commit).
+   */
+  private deleteS3FilesInBackground(
+    paths: Array<{ bucket: string; key: string }>,
+  ): void {
+    if (paths.length === 0) return;
+
+    Promise.allSettled(
+      paths.map((p) => this.pdfStorageService.deleteFile(p.bucket, p.key)),
+    ).then((results) => {
+      const failed = results.filter(
+        (r): r is PromiseRejectedResult => r.status === "rejected",
+      );
+      if (failed.length > 0) {
+        this.logger.warn(
+          `Failed to delete ${failed.length}/${paths.length} old receipt files from S3: ${failed.map((f) => f.reason?.message ?? f.reason).join(", ")}`,
+        );
+      }
+    });
   }
 
   async getAvailablePrinters(): Promise<{ printers: string[] }> {
     try {
       const platform = process.platform;
-      let command: string;
+      let stdout: string;
 
-      if (platform === "darwin") {
-        // macOS
-        command = "lpstat -p | grep \"printer\" | awk '{print $2}'";
-      } else if (platform === "linux") {
-        // Linux
-        command = "lpstat -p | grep \"printer\" | awk '{print $2}'";
+      if (platform === "darwin" || platform === "linux") {
+        const result = await execFileAsync("lpstat", ["-p"]);
+        stdout = result.stdout;
+        // Parse "printer <name> ..." lines
+        const printers = stdout
+          .split("\n")
+          .filter((line) => line.includes("printer"))
+          .map((line) => line.split(/\s+/)[1])
+          .filter((name) => name && name.length > 0);
+        return { printers };
       } else if (platform === "win32") {
-        // Windows
-        command =
-          'powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"';
-      } else {
-        return { printers: [] };
+        const result = await execFileAsync("powershell", [
+          "-Command",
+          "Get-Printer | Select-Object -ExpandProperty Name",
+        ]);
+        stdout = result.stdout;
+        const printers = stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        return { printers };
       }
 
-      const { stdout } = await execAsync(command);
-      const printers = stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-
-      return { printers };
+      return { printers: [] };
     } catch (error) {
       this.logger.error("Error getting printers:", error);
       return { printers: [] };
@@ -672,8 +730,9 @@ export class ReceiptsService {
     user: User,
     printerName?: string,
   ): Promise<{ success: boolean; message: string }> {
+    let tempFilePath: string | null = null;
+
     try {
-      // Получаем чек
       const receipt = await this.findOne(receiptId, user);
 
       if (!receipt.pdf_path) {
@@ -706,12 +765,9 @@ export class ReceiptsService {
         throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
       }
 
-      // Для object storage файлов нужно сначала скачать их
-      let tempFilePath: string | null = null;
       let filePathToPrint = receipt.pdf_path;
 
       if (receipt.pdf_path.startsWith("object-storage://")) {
-        // Скачиваем файл из object storage во временную папку
         const parsed = this.pdfStorageService.parseObjectStoragePath(
           receipt.pdf_path,
         );
@@ -732,52 +788,49 @@ export class ReceiptsService {
           `receipt-${receipt.number}-${Date.now()}.pdf`,
         );
 
-        // Создаем папку temp если её нет
         await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
         await fs.writeFile(tempFilePath, fileBuffer);
         filePathToPrint = tempFilePath;
       }
 
-      // Определяем команду печати в зависимости от операционной системы
-      let printCommand: string;
+      // Validate printer name to prevent injection
+      if (printerName && !SAFE_PRINTER_NAME.test(printerName)) {
+        throw ApiErrors.VALIDATION_ERROR(
+          "printer",
+          "Invalid printer name. Only alphanumeric characters, hyphens, underscores, dots, and spaces are allowed.",
+        );
+      }
+
       const platform = process.platform;
+      let cmd: string;
+      let args: string[];
 
       if (platform === "darwin") {
-        // macOS
-        printCommand = printerName
-          ? `lpr -P "${printerName}" "${filePathToPrint}"`
-          : `lpr "${filePathToPrint}"`;
+        cmd = "lpr";
+        args = printerName
+          ? ["-P", printerName, filePathToPrint]
+          : [filePathToPrint];
       } else if (platform === "linux") {
-        // Linux
-        printCommand = printerName
-          ? `lp -d "${printerName}" "${filePathToPrint}"`
-          : `lp "${filePathToPrint}"`;
+        cmd = "lp";
+        args = printerName
+          ? ["-d", printerName, filePathToPrint]
+          : [filePathToPrint];
       } else if (platform === "win32") {
-        // Windows
-        printCommand = printerName
-          ? `powershell -Command "Start-Process -FilePath '${filePathToPrint}' -Verb Print -WindowStyle Hidden"`
-          : `powershell -Command "Start-Process -FilePath '${filePathToPrint}' -Verb Print -WindowStyle Hidden"`;
+        cmd = "powershell";
+        args = [
+          "-Command",
+          `Start-Process -FilePath '${filePathToPrint.replace(/'/g, "''")}' -Verb Print -WindowStyle Hidden`,
+        ];
       } else {
         throw ApiErrors.BAD_REQUEST(
           `Unsupported operating system: ${platform}`,
         );
       }
 
-      // Выполняем команду печати
       this.logger.log(
-        `Printing receipt ${receipt.number} with command: ${printCommand}`,
+        `Printing receipt ${receipt.number} via ${cmd} ${args.join(" ")}`,
       );
-      const { stderr } = await execAsync(printCommand);
-
-      // Удаляем временный файл если он был создан
-      if (tempFilePath) {
-        try {
-          await fs.unlink(tempFilePath);
-          this.logger.log(`Temporary file deleted: ${tempFilePath}`);
-        } catch (error) {
-          this.logger.warn(`Failed to delete temporary file: ${error.message}`);
-        }
-      }
+      const { stderr } = await execFileAsync(cmd, args);
 
       if (stderr && !stderr.includes("warning")) {
         this.logger.error("Print command stderr:", stderr);
@@ -793,8 +846,17 @@ export class ReceiptsService {
       this.logger.error("Error printing receipt:", error);
       return {
         success: false,
-        message: `Ошибка при печати чека: ${error.message}`,
+        message: "Ошибка при печати чека. Попробуйте ещё раз.",
       };
+    } finally {
+      // Always clean up temp file, even on error
+      if (tempFilePath) {
+        fs.unlink(tempFilePath).catch((err) => {
+          this.logger.warn(
+            `Failed to delete temporary file ${tempFilePath}: ${err.message}`,
+          );
+        });
+      }
     }
   }
 

@@ -9,6 +9,7 @@ import { IdempotencyKey } from "./entities/idempotency-key.entity";
 import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { ReceiptsModule } from "../receipts/receipts.module";
+import { SubscriptionModule } from "../subscription/subscription.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ReceiptsModule } from "../receipts/receipts.module";
       Recipient,
     ]),
     ReceiptsModule,
+    SubscriptionModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, IdempotencyCleanupService],
