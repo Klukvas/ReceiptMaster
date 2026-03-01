@@ -506,7 +506,7 @@ describe("ReceiptsService", () => {
         items: [],
       });
 
-      const result = await service.getReceiptPdf("receipt-1", mockUser);
+      const _result = await service.getReceiptPdf("receipt-1", mockUser);
 
       expect(pdfGeneratorService.generateReceiptPdf).toHaveBeenCalled();
     });
@@ -535,7 +535,7 @@ describe("ReceiptsService", () => {
         url: "https://s3/new.pdf",
       });
 
-      const result = await service.getReceiptPdf("receipt-1", mockUser);
+      const _result = await service.getReceiptPdf("receipt-1", mockUser);
 
       expect(pdfStorageService.downloadFile).toHaveBeenCalledWith(
         "new-bucket",
@@ -990,7 +990,7 @@ describe("ReceiptsService", () => {
         public_token: "some-token",
       });
 
-      const result = await service.revokePublicToken("receipt-1", mockUser);
+      const _result = await service.revokePublicToken("receipt-1", mockUser);
 
       expect(receiptsRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ public_token: null }),

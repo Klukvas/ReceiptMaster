@@ -232,7 +232,7 @@ describe("OrdersService", () => {
 
   describe("create", () => {
     it("should create order via transaction", async () => {
-      const createdOrder = {
+      const _createdOrder = {
         ...mockOrder,
         id: "new-order-1",
       };

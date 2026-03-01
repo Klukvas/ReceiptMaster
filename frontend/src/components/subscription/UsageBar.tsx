@@ -9,7 +9,7 @@ interface UsageBarProps {
 }
 
 export const UsageBar: React.FC<UsageBarProps> = ({ current, max, label }) => {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   if (max === null) return null;
 
@@ -29,7 +29,10 @@ export const UsageBar: React.FC<UsageBarProps> = ({ current, max, label }) => {
       </span>
       <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden min-w-[80px] max-w-[160px]">
         <div
-          className={clsx("h-full rounded-full transition-all duration-300", barColor)}
+          className={clsx(
+            "h-full rounded-full transition-all duration-300",
+            barColor,
+          )}
           style={{ width: `${percentage}%` }}
         />
       </div>

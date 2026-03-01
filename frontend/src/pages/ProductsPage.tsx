@@ -18,10 +18,7 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { isProductLimitReached } from "../lib/subscriptionApi";
 import { UsageBar } from "../components/subscription/UsageBar";
-import {
-  UpgradeModal,
-  type UpgradeReason,
-} from "../components/subscription/UpgradeModal";
+import { UpgradeModal } from "../components/subscription/UpgradeModal";
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);

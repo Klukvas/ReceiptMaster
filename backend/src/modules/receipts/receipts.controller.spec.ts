@@ -39,7 +39,7 @@ describe("ReceiptsController", () => {
 
   describe("createReceipt", () => {
     it("should create receipt for order", () => {
-      const result = controller.createReceipt("order-1", mockReq);
+      const _result = controller.createReceipt("order-1", mockReq);
       expect(receiptsService.generateReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
@@ -49,7 +49,7 @@ describe("ReceiptsController", () => {
 
   describe("createCompactReceipt", () => {
     it("should create compact receipt", () => {
-      const result = controller.createCompactReceipt("order-1", mockReq);
+      const _result = controller.createCompactReceipt("order-1", mockReq);
       expect(receiptsService.generateCompactReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
@@ -59,7 +59,7 @@ describe("ReceiptsController", () => {
 
   describe("createStandardReceipt", () => {
     it("should create standard receipt", () => {
-      const result = controller.createStandardReceipt("order-1", mockReq);
+      const _result = controller.createStandardReceipt("order-1", mockReq);
       expect(receiptsService.generateStandardReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
@@ -69,7 +69,7 @@ describe("ReceiptsController", () => {
 
   describe("findAll", () => {
     it("should return all receipts", () => {
-      const result = controller.findAll(mockReq, undefined, undefined);
+      const _result = controller.findAll(mockReq, undefined, undefined);
       expect(receiptsService.findAll).toHaveBeenCalledWith(mockUser, {
         offset: undefined,
         limit: undefined,
@@ -79,7 +79,7 @@ describe("ReceiptsController", () => {
 
   describe("findOne", () => {
     it("should return a single receipt", () => {
-      const result = controller.findOne("r1", mockReq);
+      const _result = controller.findOne("r1", mockReq);
       expect(receiptsService.findOne).toHaveBeenCalledWith("r1", mockUser);
     });
   });
@@ -151,7 +151,7 @@ describe("ReceiptsController", () => {
 
   describe("printReceipt", () => {
     it("should send receipt to printer", async () => {
-      const result = await controller.printReceipt("r1", mockReq, "HP");
+      const _result = await controller.printReceipt("r1", mockReq, "HP");
 
       expect(receiptsService.printReceipt).toHaveBeenCalledWith(
         "r1",
@@ -161,7 +161,7 @@ describe("ReceiptsController", () => {
     });
 
     it("should work without specifying printer", async () => {
-      const result = await controller.printReceipt("r1", mockReq);
+      const _result = await controller.printReceipt("r1", mockReq);
 
       expect(receiptsService.printReceipt).toHaveBeenCalledWith(
         "r1",
@@ -173,7 +173,7 @@ describe("ReceiptsController", () => {
 
   describe("voidReceipt", () => {
     it("should void a receipt with reason", async () => {
-      const result = await controller.voidReceipt(
+      const _result = await controller.voidReceipt(
         "r1",
         { reason: "Duplicate" },
         mockReq,
@@ -229,7 +229,7 @@ describe("ReceiptsController", () => {
 
   describe("regenerateReceiptPdf", () => {
     it("should regenerate PDF for receipt", async () => {
-      const result = await controller.regenerateReceiptPdf("r1", mockReq);
+      const _result = await controller.regenerateReceiptPdf("r1", mockReq);
 
       expect(receiptsService.regenerateReceiptPdf).toHaveBeenCalledWith(
         "r1",
@@ -255,7 +255,7 @@ describe("ReceiptsController", () => {
 
   describe("revokeShareReceipt", () => {
     it("should revoke public share link", async () => {
-      const result = await controller.revokeShareReceipt("r1", mockReq);
+      const _result = await controller.revokeShareReceipt("r1", mockReq);
 
       expect(receiptsService.revokePublicToken).toHaveBeenCalledWith(
         "r1",

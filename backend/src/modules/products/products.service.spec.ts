@@ -140,7 +140,7 @@ describe("ProductsService", () => {
     it("should update a product", async () => {
       productsRepo.findOne.mockResolvedValue({ ...mockProduct });
 
-      const result = await service.update(
+      const _result = await service.update(
         "prod-1",
         { name: "Updated Widget" } as any,
         mockUser,

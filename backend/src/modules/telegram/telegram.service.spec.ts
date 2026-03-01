@@ -1,6 +1,6 @@
 import { TelegramService } from "./telegram.service";
 import { UserState } from "./interfaces/cart.interface";
-import { OrderStatus } from "../orders/entities/order.entity";
+import { OrderStatus as _OrderStatus } from "../orders/entities/order.entity";
 
 // Mock axios with proper default export
 const mockHttpPost = jest.fn().mockResolvedValue({
