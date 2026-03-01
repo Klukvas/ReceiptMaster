@@ -77,7 +77,9 @@ describe("ReceiptsService", () => {
       find: jest.fn().mockResolvedValue([mockReceipt]),
       findAndCount: jest.fn().mockResolvedValue([[mockReceipt], 1]),
       findOne: jest.fn(),
+      findOneOrFail: jest.fn().mockResolvedValue(mockReceipt),
       save: jest.fn((data) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       delete: jest.fn(),
     };
 
@@ -301,6 +303,13 @@ describe("ReceiptsService", () => {
 
   describe("voidReceipt", () => {
     it("should void a receipt and unlock order", async () => {
+      const voidedReceipt = {
+        ...mockReceipt,
+        status: ReceiptStatus.VOID,
+        void_reason: "Duplicate",
+        voided_at: expect.any(Date),
+        order: mockOrder,
+      };
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
           findOne: jest.fn().mockResolvedValue({
@@ -308,6 +317,7 @@ describe("ReceiptsService", () => {
             status: ReceiptStatus.GENERATED,
             order: mockOrder,
           }),
+          findOneOrFail: jest.fn().mockResolvedValue(voidedReceipt),
           save: jest.fn((entity, data) => Promise.resolve(data)),
           update: jest.fn(),
         };
@@ -575,6 +585,9 @@ describe("ReceiptsService", () => {
         "Invoice",
         "en",
         "Thanks",
+        undefined,
+        undefined,
+        undefined,
         undefined,
       );
       expect(Buffer.isBuffer(result)).toBe(true);
@@ -989,11 +1002,16 @@ describe("ReceiptsService", () => {
         ...mockReceipt,
         public_token: "some-token",
       });
+      receiptsRepo.findOneOrFail.mockResolvedValue({
+        ...mockReceipt,
+        public_token: null,
+      });
 
-      const _result = await service.revokePublicToken("receipt-1", mockUser);
+      await service.revokePublicToken("receipt-1", mockUser);
 
-      expect(receiptsRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ public_token: null }),
+      expect(receiptsRepo.update).toHaveBeenCalledWith(
+        { id: "receipt-1" },
+        expect.objectContaining({ public_token: undefined }),
       );
     });
 

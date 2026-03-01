@@ -331,7 +331,7 @@ describe("SubscriptionService", () => {
 
       const result = await service.getAllowedTemplateIds(userId);
 
-      expect(result).toEqual(["standard", "compact", "minimal"]);
+      expect(result).toEqual(["standard", "compact", "minimal", "thermal"]);
     });
 
     it("should return null (all allowed) for pro plan", async () => {

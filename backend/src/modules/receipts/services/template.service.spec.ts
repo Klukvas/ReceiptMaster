@@ -8,12 +8,23 @@ jest.mock("fs/promises", () => ({
 }));
 
 // Mock handlebars
-jest.mock("handlebars", () => ({
-  registerHelper: jest.fn(),
-  compile: jest
-    .fn()
-    .mockReturnValue((data: any) => `<html>${JSON.stringify(data)}</html>`),
-}));
+jest.mock("handlebars", () => {
+  const instance = {
+    registerHelper: jest.fn(),
+    compile: jest
+      .fn()
+      .mockReturnValue((data: any) => `<html>${JSON.stringify(data)}</html>`),
+  };
+  return {
+    __esModule: true,
+    default: {
+      ...instance,
+      create: jest.fn().mockReturnValue(instance),
+    },
+    ...instance,
+    create: jest.fn().mockReturnValue(instance),
+  };
+});
 
 describe("TemplateService", () => {
   let service: TemplateService;
