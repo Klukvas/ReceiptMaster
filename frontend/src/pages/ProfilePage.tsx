@@ -1,13 +1,28 @@
-import React, { useState } from 'react';
-import { Mail, Lock, Save, Edit3, X, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { useTranslation } from '../hooks/useTranslation';
-import { authApi } from '../lib/api';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import {
+  Mail,
+  Lock,
+  Save,
+  Edit3,
+  X,
+  Eye,
+  EyeOff,
+  Crown,
+  Package,
+  ShoppingCart,
+  FileText,
+} from "lucide-react";
+import { clsx } from "clsx";
+import { useAuth } from "../hooks/useAuth";
+import { useTranslation } from "../hooks/useTranslation";
+import { useSubscription } from "../hooks/useSubscription";
+import { authApi } from "../lib/api";
+import toast from "react-hot-toast";
 
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { status: subscription, isLoading: subLoading } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -17,37 +32,37 @@ export const ProfilePage: React.FC = () => {
     confirm: false,
   });
   const [formData, setFormData] = useState({
-    email: user?.email || '',
+    email: user?.email || "",
   });
   const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleSave = async () => {
     if (!formData.email.trim()) {
-      toast.error(t('profile.fillAllFields'));
+      toast.error(t("profile.fillAllFields"));
       return;
     }
 
     setIsLoading(true);
     try {
       await authApi.updateProfile(formData);
-      toast.success(t('profile.profileUpdated'));
+      toast.success(t("profile.profileUpdated"));
       setIsEditing(false);
       // The auth context will need to be updated with the new user data
       window.location.reload(); // Simple refresh for now
     } catch (error: any) {
-      toast.error(error.response?.data?.message || t('profile.updateFailed'));
+      toast.error(error.response?.data?.message || t("profile.updateFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -55,47 +70,54 @@ export const ProfilePage: React.FC = () => {
 
   const handleCancel = () => {
     setFormData({
-      email: user?.email || '',
+      email: user?.email || "",
     });
     setIsEditing(false);
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPasswordData(prev => ({
+    setPasswordData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleChangePassword = async () => {
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      toast.error(t('profile.fillAllFields'));
+    if (
+      !passwordData.currentPassword ||
+      !passwordData.newPassword ||
+      !passwordData.confirmPassword
+    ) {
+      toast.error(t("profile.fillAllFields"));
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      toast.error(t('errors.passwordTooShort'));
+      toast.error(t("errors.passwordTooShort"));
       return;
     }
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error(t('errors.passwordsDoNotMatch'));
+      toast.error(t("errors.passwordsDoNotMatch"));
       return;
     }
 
     setIsLoading(true);
     try {
       await authApi.changePassword(passwordData);
-      toast.success(t('profile.passwordChanged'));
+      toast.success(t("profile.passwordChanged"));
       setIsChangingPassword(false);
       setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || t('profile.passwordChangeFailed');
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        t("profile.passwordChangeFailed");
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -105,14 +127,14 @@ export const ProfilePage: React.FC = () => {
   const handleCancelPasswordChange = () => {
     setIsChangingPassword(false);
     setPasswordData({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
     });
     setShowPasswords({ current: false, new: false, confirm: false });
   };
 
-  const initials = user?.email?.[0]?.toUpperCase() || 'U';
+  const initials = user?.email?.[0]?.toUpperCase() || "U";
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
@@ -120,10 +142,10 @@ export const ProfilePage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {t('profile.title')}
+            {t("profile.title")}
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            {t('profile.subtitle')}
+            {t("profile.subtitle")}
           </p>
         </div>
 
@@ -133,7 +155,7 @@ export const ProfilePage: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="text-center">
                 <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-2xl font-medium text-gray-700 dark:text-gray-200">
-                  {initials || '🧑'}
+                  {initials || "🧑"}
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {user?.email}
@@ -146,7 +168,7 @@ export const ProfilePage: React.FC = () => {
                   className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                 >
                   <Edit3 className="w-4 h-4 mr-2" />
-                  {t('profile.editProfile')}
+                  {t("profile.editProfile")}
                 </button>
 
                 <button
@@ -154,9 +176,85 @@ export const ProfilePage: React.FC = () => {
                   className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  {t('profile.changePassword')}
+                  {t("profile.changePassword")}
                 </button>
               </div>
+            </div>
+
+            {/* Subscription & Limits */}
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Crown className="w-5 h-5 text-amber-500" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {t("profile.subscription", "Subscription")}
+                </h3>
+              </div>
+
+              {subLoading ? (
+                <div className="space-y-3">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-2/3" />
+                </div>
+              ) : subscription ? (
+                <div className="space-y-4">
+                  {/* Plan badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("profile.currentPlan", "Plan")}
+                    </span>
+                    <span
+                      className={clsx(
+                        "text-xs font-semibold px-2 py-0.5 rounded-full",
+                        subscription.plan === "free"
+                          ? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                          : subscription.plan === "pro"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                      )}
+                    >
+                      {subscription.plan.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Products usage */}
+                  {subscription.limits.maxProducts !== null && (
+                    <LimitRow
+                      icon={<Package className="w-3.5 h-3.5" />}
+                      label={t("profile.products", "Products")}
+                      current={subscription.usage.productsCount}
+                      max={subscription.limits.maxProducts}
+                    />
+                  )}
+
+                  {/* Orders usage */}
+                  {subscription.limits.maxOrdersPerMonth !== null && (
+                    <LimitRow
+                      icon={<ShoppingCart className="w-3.5 h-3.5" />}
+                      label={t("profile.ordersPerMonth", "Orders / mo")}
+                      current={subscription.usage.ordersThisMonth}
+                      max={subscription.limits.maxOrdersPerMonth}
+                    />
+                  )}
+
+                  {/* Templates */}
+                  {subscription.limits.allowedTemplateIds !== null && (
+                    <LimitRow
+                      icon={<FileText className="w-3.5 h-3.5" />}
+                      label={t("profile.templates", "Templates")}
+                      current={subscription.limits.allowedTemplateIds.length}
+                      max={null}
+                    />
+                  )}
+
+                  {/* Unlimited indicators for paid plans */}
+                  {subscription.limits.maxProducts === null &&
+                    subscription.limits.maxOrdersPerMonth === null && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        {t("profile.unlimitedAccess", "Unlimited access")}
+                      </p>
+                    )}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -165,7 +263,9 @@ export const ProfilePage: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  {isEditing ? t('profile.editProfile') : t('profile.profileInformation')}
+                  {isEditing
+                    ? t("profile.editProfile")
+                    : t("profile.profileInformation")}
                 </h3>
               </div>
 
@@ -173,8 +273,11 @@ export const ProfilePage: React.FC = () => {
                 <form className="space-y-6">
                   {/* Email */}
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {t('auth.email')}
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                    >
+                      {t("auth.email")}
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -186,11 +289,11 @@ export const ProfilePage: React.FC = () => {
                         onChange={handleInputChange}
                         disabled={!isEditing}
                         className={`w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          isEditing 
-                            ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white' 
-                            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                          isEditing
+                            ? "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                         }`}
-                        placeholder={t('auth.email')}
+                        placeholder={t("auth.email")}
                       />
                     </div>
                   </div>
@@ -205,7 +308,7 @@ export const ProfilePage: React.FC = () => {
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <X className="w-4 h-4 mr-2 inline" />
-                        {t('common.cancel')}
+                        {t("common.cancel")}
                       </button>
                       <button
                         type="button"
@@ -214,7 +317,7 @@ export const ProfilePage: React.FC = () => {
                         className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <Save className="w-4 h-4 mr-2 inline" />
-                        {isLoading ? t('common.loading') : t('common.save')}
+                        {isLoading ? t("common.loading") : t("common.save")}
                       </button>
                     </div>
                   )}
@@ -227,15 +330,24 @@ export const ProfilePage: React.FC = () => {
               <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    {t('profile.changePassword')}
+                    {t("profile.changePassword")}
                   </h3>
                 </div>
                 <div className="p-6">
-                  <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }}>
+                  <form
+                    className="space-y-6"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleChangePassword();
+                    }}
+                  >
                     {/* Current Password */}
                     <div>
-                      <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {t('profile.currentPassword')}
+                      <label
+                        htmlFor="currentPassword"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        {t("profile.currentPassword")}
                       </label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -246,23 +358,35 @@ export const ProfilePage: React.FC = () => {
                           value={passwordData.currentPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder={t('profile.currentPassword')}
+                          placeholder={t("profile.currentPassword")}
                           required
                         />
                         <button
                           type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
+                          onClick={() =>
+                            setShowPasswords((prev) => ({
+                              ...prev,
+                              current: !prev.current,
+                            }))
+                          }
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
-                          {showPasswords.current ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                          {showPasswords.current ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
                         </button>
                       </div>
                     </div>
 
                     {/* New Password */}
                     <div>
-                      <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {t('profile.newPassword')}
+                      <label
+                        htmlFor="newPassword"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        {t("profile.newPassword")}
                       </label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -273,27 +397,39 @@ export const ProfilePage: React.FC = () => {
                           value={passwordData.newPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder={t('profile.newPassword')}
+                          placeholder={t("profile.newPassword")}
                           minLength={6}
                           required
                         />
                         <button
                           type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
+                          onClick={() =>
+                            setShowPasswords((prev) => ({
+                              ...prev,
+                              new: !prev.new,
+                            }))
+                          }
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
-                          {showPasswords.new ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                          {showPasswords.new ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
                         </button>
                       </div>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {t('profile.passwordMinLength')}
+                        {t("profile.passwordMinLength")}
                       </p>
                     </div>
 
                     {/* Confirm Password */}
                     <div>
-                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {t('profile.confirmPassword')}
+                      <label
+                        htmlFor="confirmPassword"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        {t("profile.confirmPassword")}
                       </label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -304,16 +440,25 @@ export const ProfilePage: React.FC = () => {
                           value={passwordData.confirmPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder={t('profile.confirmPassword')}
+                          placeholder={t("profile.confirmPassword")}
                           minLength={6}
                           required
                         />
                         <button
                           type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
+                          onClick={() =>
+                            setShowPasswords((prev) => ({
+                              ...prev,
+                              confirm: !prev.confirm,
+                            }))
+                          }
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
-                          {showPasswords.confirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                          {showPasswords.confirm ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -327,7 +472,7 @@ export const ProfilePage: React.FC = () => {
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <X className="w-4 h-4 mr-2 inline" />
-                        {t('common.cancel')}
+                        {t("common.cancel")}
                       </button>
                       <button
                         type="submit"
@@ -335,7 +480,9 @@ export const ProfilePage: React.FC = () => {
                         className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <Lock className="w-4 h-4 mr-2 inline" />
-                        {isLoading ? t('common.loading') : t('profile.changePassword')}
+                        {isLoading
+                          ? t("common.loading")
+                          : t("profile.changePassword")}
                       </button>
                     </div>
                   </form>
@@ -347,7 +494,7 @@ export const ProfilePage: React.FC = () => {
             <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  {t('profile.accountActions')}
+                  {t("profile.accountActions")}
                 </h3>
               </div>
               <div className="p-6">
@@ -355,17 +502,19 @@ export const ProfilePage: React.FC = () => {
                   <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div>
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                        {t('profile.deleteAccount')}
+                        {t("profile.deleteAccount")}
                       </h4>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {t('profile.deleteAccountDescription')}
+                        {t("profile.deleteAccountDescription")}
                       </p>
                     </div>
                     <button
-                      onClick={() => toast.error(t('profile.deleteAccountNotImplemented'))}
+                      onClick={() =>
+                        toast.error(t("profile.deleteAccountNotImplemented"))
+                      }
                       className="px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
-                      {t('profile.deleteAccount')}
+                      {t("profile.deleteAccount")}
                     </button>
                   </div>
                 </div>
@@ -374,6 +523,60 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const LimitRow = ({
+  icon,
+  label,
+  current,
+  max,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  current: number;
+  max: number | null;
+}) => {
+  const percentage = max !== null ? Math.min((current / max) * 100, 100) : 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          {icon}
+          {label}
+        </div>
+        <span
+          className={clsx(
+            "text-xs font-medium",
+            max === null
+              ? "text-gray-600 dark:text-gray-400"
+              : percentage >= 100
+                ? "text-red-600 dark:text-red-400"
+                : percentage >= 80
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-gray-600 dark:text-gray-400",
+          )}
+        >
+          {max !== null ? `${current}/${max}` : current}
+        </span>
+      </div>
+      {max !== null && (
+        <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={clsx(
+              "h-full rounded-full transition-all duration-300",
+              percentage >= 100
+                ? "bg-red-500"
+                : percentage >= 80
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
+            )}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 };

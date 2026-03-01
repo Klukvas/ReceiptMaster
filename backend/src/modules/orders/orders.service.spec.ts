@@ -11,6 +11,7 @@ import { ReceiptsService } from "../receipts/receipts.service";
 import { CacheService } from "../../common/services/cache.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
+import { SubscriptionService } from "../subscription/subscription.service";
 
 describe("OrdersService", () => {
   let service: OrdersService;
@@ -89,6 +90,13 @@ describe("OrdersService", () => {
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: ReceiptsService, useValue: receiptsService },
         { provide: CacheService, useValue: cacheService },
+        {
+          provide: SubscriptionService,
+          useValue: {
+            assertCanCreateOrder: jest.fn(),
+            assertCanCreateOrderInTx: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -462,31 +470,6 @@ describe("OrdersService", () => {
       ).rejects.toThrow(ApiErrorResponse);
     });
 
-    it("should update payment status", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const order = {
-          ...mockOrder,
-          status: OrderStatus.DRAFT,
-          is_locked: false,
-        };
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(order)
-            .mockResolvedValueOnce({ ...order, payment_status: "paid" }),
-          save: jest.fn((_, data) => Promise.resolve(data)),
-        };
-        return cb(manager);
-      });
-
-      const result = await service.update(
-        "order-1",
-        { paymentStatus: "paid" } as any,
-        mockUser,
-      );
-      expect(result).toBeDefined();
-    });
-
     it("should throw if product not owned by user", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
@@ -572,6 +555,7 @@ describe("OrdersService", () => {
           }),
           save: jest.fn(),
           softDelete: jest.fn(),
+          increment: jest.fn(),
         };
         return cb(manager);
       });
@@ -592,6 +576,7 @@ describe("OrdersService", () => {
           findOne: jest.fn().mockResolvedValue(null),
           save: jest.fn(),
           softDelete: jest.fn(),
+          increment: jest.fn(),
         };
         return cb(manager);
       });
@@ -615,6 +600,7 @@ describe("OrdersService", () => {
           }),
           save: jest.fn(),
           softDelete: jest.fn(),
+          increment: jest.fn(),
         };
         return cb(manager);
       });

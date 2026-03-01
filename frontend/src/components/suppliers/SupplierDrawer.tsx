@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Mail,
   Phone,
@@ -11,8 +12,14 @@ import {
   Edit,
   Trash2,
   User,
+  Loader2,
 } from "lucide-react";
-import { formatDate, formatCurrency, type Supplier } from "../../lib/api";
+import {
+  suppliersApi,
+  formatDate,
+  formatCurrency,
+  type Supplier,
+} from "../../lib/api";
 import { Drawer } from "../ui/Drawer";
 import { useTranslation } from "../../hooks/useTranslation";
 
@@ -35,20 +42,29 @@ export const SupplierDrawer = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
 
+  // Fetch full supplier with products relation
+  const { data: fullData, isLoading: isLoadingFull } = useQuery({
+    queryKey: ["supplier", supplier?.id],
+    queryFn: () => suppliersApi.getById(supplier!.id),
+    enabled: open && !!supplier?.id,
+  });
+
+  const fullSupplier = fullData?.data ?? supplier;
+
   const handleCopyAddress = useCallback(async () => {
-    if (!supplier?.address) return;
+    if (!fullSupplier?.address) return;
     try {
-      await navigator.clipboard.writeText(supplier.address);
+      await navigator.clipboard.writeText(fullSupplier.address);
       setAddressCopied(true);
       setTimeout(() => setAddressCopied(false), 2000);
     } catch {
       // clipboard API might not be available
     }
-  }, [supplier?.address]);
+  }, [fullSupplier?.address]);
 
   if (!supplier) return null;
 
-  const initials = supplier.name
+  const initials = fullSupplier.name
     .split(" ")
     .map((w) => w[0])
     .join("")
@@ -67,19 +83,19 @@ export const SupplierDrawer = ({
               </div>
               <div className="min-w-0 pt-0.5">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate leading-tight">
-                  {supplier.name}
+                  {fullSupplier.name}
                 </h2>
                 <div className="mt-1.5 space-y-1">
-                  {supplier.email && (
+                  {fullSupplier.email && (
                     <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
                       <Mail className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{supplier.email}</span>
+                      <span className="truncate">{fullSupplier.email}</span>
                     </div>
                   )}
-                  {supplier.phone && (
+                  {fullSupplier.phone && (
                     <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
                       <Phone className="h-3.5 w-3.5 shrink-0" />
-                      <span>{supplier.phone}</span>
+                      <span>{fullSupplier.phone}</span>
                     </div>
                   )}
                 </div>
@@ -104,7 +120,7 @@ export const SupplierDrawer = ({
                     {onEdit && (
                       <button
                         onClick={() => {
-                          onEdit(supplier);
+                          onEdit(fullSupplier);
                           setMenuOpen(false);
                           onClose();
                         }}
@@ -119,7 +135,7 @@ export const SupplierDrawer = ({
                         <div className="my-1 border-t border-gray-100 dark:border-gray-700/50" />
                         <button
                           onClick={() => {
-                            onDelete(supplier);
+                            onDelete(fullSupplier);
                             setMenuOpen(false);
                             onClose();
                           }}
@@ -138,7 +154,7 @@ export const SupplierDrawer = ({
         </div>
 
         {/* Contact Person */}
-        {supplier.contact_person && (
+        {fullSupplier.contact_person && (
           <div className="pt-4">
             <h3 className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">
               {t("suppliers.contactPerson")}
@@ -146,14 +162,14 @@ export const SupplierDrawer = ({
             <div className="flex items-center gap-2.5 bg-gray-50 dark:bg-gray-700/30 rounded-xl px-3.5 py-3">
               <User className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0" />
               <span className="text-sm text-gray-600 dark:text-gray-300">
-                {supplier.contact_person}
+                {fullSupplier.contact_person}
               </span>
             </div>
           </div>
         )}
 
         {/* Contact Information */}
-        {supplier.address && (
+        {fullSupplier.address && (
           <div className="pt-4">
             <h3 className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">
               {t("suppliers.contactInfo")}
@@ -162,7 +178,7 @@ export const SupplierDrawer = ({
               <div className="flex items-start gap-2.5 min-w-0">
                 <MapPin className="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0 mt-0.5" />
                 <span className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {supplier.address}
+                  {fullSupplier.address}
                 </span>
               </div>
               <button
@@ -181,14 +197,14 @@ export const SupplierDrawer = ({
         )}
 
         {/* Notes */}
-        {supplier.notes && (
+        {fullSupplier.notes && (
           <div className="pt-4">
             <h3 className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">
               {t("suppliers.notes")}
             </h3>
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl px-3.5 py-3">
               <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {supplier.notes}
+                {fullSupplier.notes}
               </p>
             </div>
           </div>
@@ -205,7 +221,7 @@ export const SupplierDrawer = ({
                 {t("suppliers.memberSince")}
               </span>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {formatDate(supplier.created_at)}
+                {formatDate(fullSupplier.created_at)}
               </p>
             </div>
           </div>
@@ -217,13 +233,17 @@ export const SupplierDrawer = ({
             <h3 className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
               {t("suppliers.linkedProducts")}
             </h3>
-            {supplier.products && supplier.products.length > 0 && (
+            {fullSupplier.products && fullSupplier.products.length > 0 && (
               <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700/50 px-1.5 py-0.5 rounded-md">
-                {supplier.products.length}
+                {fullSupplier.products.length}
               </span>
             )}
           </div>
-          {!supplier.products || supplier.products.length === 0 ? (
+          {isLoadingFull ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            </div>
+          ) : !fullSupplier.products || fullSupplier.products.length === 0 ? (
             <div className="text-center py-8 bg-gray-50/50 dark:bg-gray-700/20 rounded-xl">
               <Package className="h-8 w-8 text-gray-200 dark:text-gray-700 mx-auto mb-2.5" />
               <p className="text-sm text-gray-400 dark:text-gray-500">
@@ -232,7 +252,7 @@ export const SupplierDrawer = ({
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-700/40">
-              {supplier.products.map((product) => (
+              {fullSupplier.products.map((product) => (
                 <div
                   key={product.id}
                   className="flex items-center justify-between py-3 first:pt-0 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 -mx-1.5 px-1.5 rounded-lg transition-colors cursor-default"

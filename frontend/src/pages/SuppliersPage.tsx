@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { suppliersApi, type Supplier } from "../lib/api";
 import { Button } from "../components/ui/Button";
 import { DataTable } from "../components/ui/DataTable";
+import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { SupplierForm } from "../components/suppliers/SupplierForm";
 import { SupplierDrawer } from "../components/suppliers/SupplierDrawer";
 import { SupplierActionsMenu } from "../components/suppliers/SupplierActionsMenu";
@@ -18,6 +19,7 @@ export const SuppliersPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [drawerSupplier, setDrawerSupplier] = useState<Supplier | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
@@ -28,10 +30,7 @@ export const SuppliersPage = () => {
         header: t("suppliers.name"),
         sortable: true,
         render: (s) => (
-          <button
-            onClick={() => setDrawerSupplier(s)}
-            className="flex items-center gap-3 text-left group"
-          >
+          <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold text-xs shadow-sm shrink-0">
               {s.name
                 .split(" ")
@@ -42,7 +41,7 @@ export const SuppliersPage = () => {
             </div>
             <div className="min-w-0">
               <span
-                className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[180px] block"
+                className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[180px] block"
                 title={s.name}
               >
                 {s.name}
@@ -51,7 +50,7 @@ export const SuppliersPage = () => {
                 {s.email || s.phone || "\u00A0"}
               </p>
             </div>
-          </button>
+          </div>
         ),
       },
       {
@@ -124,6 +123,7 @@ export const SuppliersPage = () => {
     onSuccess: () => {
       toast.success(t("suppliers.supplierDeleted"));
       queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      setDeleteTarget(null);
     },
     onError: () => {
       toast.error(t("errors.badRequest"));
@@ -136,9 +136,7 @@ export const SuppliersPage = () => {
   };
 
   const handleDelete = (supplier: Supplier) => {
-    if (confirm(t("suppliers.deleteSupplierMessage"))) {
-      deleteMutation.mutate(supplier.id);
-    }
+    setDeleteTarget(supplier);
   };
 
   const handleFormClose = () => {
@@ -186,6 +184,7 @@ export const SuppliersPage = () => {
         visibleColumns={pagination.visibleColumns}
         onToggleColumn={pagination.toggleColumnVisibility}
         rowKey={(s) => s.id}
+        onRowClick={(s) => setDrawerSupplier(s)}
         showSearch
         showColumnToggle
         searchPlaceholder={t("suppliers.searchPlaceholder")}
@@ -278,6 +277,15 @@ export const SuppliersPage = () => {
           setDrawerSupplier(null);
           handleDelete(s);
         }}
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title={t("suppliers.deleteSupplier", "Delete Supplier")}
+        message={t("suppliers.deleteSupplierMessage")}
+        isLoading={deleteMutation.isPending}
       />
     </div>
   );

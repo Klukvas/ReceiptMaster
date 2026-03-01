@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Check } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { suppliersApi, productsApi, type Supplier, type Product } from '../../lib/api';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Card } from '../ui/Card';
-import { useTranslation } from '../../hooks/useTranslation';
+import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X, Check } from "lucide-react";
+import toast from "react-hot-toast";
+import {
+  suppliersApi,
+  productsApi,
+  type Supplier,
+  type Product,
+} from "../../lib/api";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { Card } from "../ui/Card";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface SupplierFormProps {
   supplier?: Supplier | null;
@@ -18,20 +23,20 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
   const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    contactPerson: '',
-    notes: '',
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    contactPerson: "",
+    notes: "",
     productIds: [] as string[],
   });
 
-  const [productSearch, setProductSearch] = useState('');
+  const [productSearch, setProductSearch] = useState("");
 
   // Fetch full supplier with products when editing
   const { data: fullSupplierData } = useQuery({
-    queryKey: ['supplier', supplier?.id],
+    queryKey: ["supplier", supplier?.id],
     queryFn: () => suppliersApi.getById(supplier!.id),
     enabled: !!supplier?.id,
   });
@@ -39,8 +44,8 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
   const fullSupplier = fullSupplierData?.data ?? supplier;
 
   const { data: productsData } = useQuery({
-    queryKey: ['products', 'all-for-selector'],
-    queryFn: () => productsApi.getAll({ limit: 500 }),
+    queryKey: ["products", "all-for-selector"],
+    queryFn: () => productsApi.getAll({ limit: 100 }),
   });
 
   const products: Product[] = productsData?.data?.data || [];
@@ -52,11 +57,11 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
     if (fullSupplier) {
       setFormData({
         name: fullSupplier.name,
-        email: fullSupplier.email || '',
-        phone: fullSupplier.phone || '',
-        address: fullSupplier.address || '',
-        contactPerson: fullSupplier.contact_person || '',
-        notes: fullSupplier.notes || '',
+        email: fullSupplier.email || "",
+        phone: fullSupplier.phone || "",
+        address: fullSupplier.address || "",
+        contactPerson: fullSupplier.contact_person || "",
+        notes: fullSupplier.notes || "",
         productIds: fullSupplier.products?.map((p) => p.id) || [],
       });
     }
@@ -65,25 +70,30 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
   const createMutation = useMutation({
     mutationFn: suppliersApi.create,
     onSuccess: () => {
-      toast.success(t('suppliers.supplierCreated'));
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast.success(t("suppliers.supplierCreated"));
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       onClose();
     },
     onError: () => {
-      toast.error(t('errors.badRequest'));
+      toast.error(t("errors.badRequest"));
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof suppliersApi.update>[1] }) =>
-      suppliersApi.update(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Parameters<typeof suppliersApi.update>[1];
+    }) => suppliersApi.update(id, data),
     onSuccess: () => {
-      toast.success(t('suppliers.supplierUpdated'));
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast.success(t("suppliers.supplierUpdated"));
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
       onClose();
     },
     onError: () => {
-      toast.error(t('errors.badRequest'));
+      toast.error(t("errors.badRequest"));
     },
   });
 
@@ -123,7 +133,9 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
       <Card className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {supplier ? t('suppliers.editSupplier') : t('suppliers.createSupplier')}
+            {supplier
+              ? t("suppliers.editSupplier")
+              : t("suppliers.createSupplier")}
           </h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -132,57 +144,72 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label={t('suppliers.name')}
+            label={t("suppliers.name")}
             value={formData.name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
             required
           />
 
           <Input
-            label={t('suppliers.email')}
+            label={t("suppliers.email")}
             type="email"
             value={formData.email}
-            onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, email: e.target.value }))
+            }
           />
 
           <Input
-            label={t('suppliers.phone')}
+            label={t("suppliers.phone")}
             value={formData.phone}
-            onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, phone: e.target.value }))
+            }
           />
 
           <Input
-            label={t('suppliers.contactPerson')}
+            label={t("suppliers.contactPerson")}
             value={formData.contactPerson}
-            onChange={(e) => setFormData((prev) => ({ ...prev, contactPerson: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                contactPerson: e.target.value,
+              }))
+            }
           />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('suppliers.address')}
+              {t("suppliers.address")}
             </label>
             <textarea
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
               value={formData.address}
-              onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, address: e.target.value }))
+              }
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('suppliers.notes')}
+              {t("suppliers.notes")}
             </label>
             <textarea
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 min-h-[60px] resize-none"
               value={formData.notes}
-              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, notes: e.target.value }))
+              }
             />
           </div>
 
           {/* Product multi-select */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('suppliers.products')}
+              {t("suppliers.products")}
               {formData.productIds.length > 0 && (
                 <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
                   ({formData.productIds.length})
@@ -191,7 +218,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
             </label>
             <input
               type="text"
-              placeholder={t('common.search')}
+              placeholder={t("common.search")}
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               className="w-full px-3 py-2 mb-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 text-sm"
@@ -199,7 +226,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
             <div className="max-h-[160px] overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg divide-y divide-gray-100 dark:divide-gray-700/50">
               {filteredProducts.length === 0 ? (
                 <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">
-                  {t('common.noResults')}
+                  {t("common.noResults")}
                 </p>
               ) : (
                 filteredProducts.map((product) => {
@@ -211,15 +238,15 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
                       onClick={() => toggleProduct(product.id)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                         selected
-                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                       }`}
                     >
                       <div
                         className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
                           selected
-                            ? 'bg-blue-600 border-blue-600'
-                            : 'border-gray-300 dark:border-gray-600'
+                            ? "bg-blue-600 border-blue-600"
+                            : "border-gray-300 dark:border-gray-600"
                         }`}
                       >
                         {selected && <Check className="w-3 h-3 text-white" />}
@@ -235,13 +262,13 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
           <div className="flex space-x-3 pt-4">
             <Button type="submit" disabled={isLoading} className="flex-1">
               {isLoading
-                ? t('suppliers.saving')
+                ? t("suppliers.saving")
                 : supplier
-                  ? t('suppliers.update')
-                  : t('common.create')}
+                  ? t("suppliers.update")
+                  : t("common.create")}
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
-              {t('common.cancel')}
+              {t("common.cancel")}
             </Button>
           </div>
         </form>

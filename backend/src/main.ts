@@ -7,7 +7,7 @@ import { AppModule } from "./app.module";
 import { EnvConfig } from "./config/env.schema";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // WebSocket adapter (Socket.IO)
   app.useWebSocketAdapter(new IoAdapter(app));
@@ -29,7 +29,7 @@ async function bootstrap() {
 
   // API prefix (исключаем Telegram webhook)
   app.setGlobalPrefix(apiPrefix, {
-    exclude: ["tg/webhook", "tg/order"],
+    exclude: ["tg/webhook", "tg/order", "paddle/webhook"],
   });
 
   // CORS - configure via CORS_ORIGINS env variable (comma-separated list)

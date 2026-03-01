@@ -54,5 +54,13 @@
   "authorisedSignatory": "(Authorised Signatory)",
   "taxId": "Tax ID",
   "iban": "IBAN",
-  "swift": "SWIFT"
+  "swift": "SWIFT",
+  "deliveryNote": "Delivery Note",
+  "proformaInvoice": "Proforma Invoice",
+  "paymentTerms": "Payment Terms",
+  "deliveryTerms": "Delivery Terms",
+  "bankDetails": "Bank Details",
+  "proformaWatermark": "PROFORMA",
+  "receivedBy": "Received By",
+  "signature": "Signature"
 }

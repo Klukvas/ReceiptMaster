@@ -49,6 +49,14 @@ export const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_OWNER_USER_ID: z.string().uuid().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+
+  // Paddle Billing
+  PADDLE_API_KEY: z.string().optional(),
+  PADDLE_WEBHOOK_SECRET: z.string().optional(),
+  PADDLE_PRO_PRICE_ID: z.string().optional(),
+  PADDLE_BUSINESS_PRICE_ID: z.string().optional(),
+  PADDLE_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  FRONTEND_URL: z.string().default("http://localhost:5173"),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

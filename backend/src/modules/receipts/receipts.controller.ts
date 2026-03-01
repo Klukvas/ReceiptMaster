@@ -211,4 +211,26 @@ export class ReceiptsController {
   ) {
     return this.receiptsService.regenerateReceiptPdf(id, req.user);
   }
+
+  @Post(":id/share")
+  @ApiOperation({ summary: "Generate a public share link for a receipt" })
+  @ApiResponse({
+    status: 200,
+    description: "Public link generated",
+  })
+  @ApiResponse({ status: 404, description: "Receipt not found" })
+  async shareReceipt(@Param("id") id: string, @Request() req: { user: User }) {
+    return this.receiptsService.generatePublicToken(id, req.user);
+  }
+
+  @Post(":id/share/revoke")
+  @ApiOperation({ summary: "Revoke public share link for a receipt" })
+  @ApiResponse({ status: 200, description: "Public link revoked" })
+  @ApiResponse({ status: 404, description: "Receipt not found" })
+  async revokeShareReceipt(
+    @Param("id") id: string,
+    @Request() req: { user: User },
+  ) {
+    return this.receiptsService.revokePublicToken(id, req.user);
+  }
 }

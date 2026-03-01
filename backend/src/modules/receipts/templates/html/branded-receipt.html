@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branded Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans', 'Inter', 'Segoe UI', sans-serif;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #1F2937;
+            background: white;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Accent bar */
+        .accent-bar {
+            width: calc(100% + 10mm);
+            margin-left: -5mm;
+            margin-right: -5mm;
+            height: 6px;
+            margin-bottom: 24px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 28px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo {
+            height: 64px;
+            width: auto;
+            margin-right: 14px;
+        }
+
+        .company-name {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .company-tagline {
+            font-size: 10px;
+            color: #6B7280;
+            margin-top: 2px;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+        .receipt-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+
+        .meta-item {
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        .meta-label {
+            color: #6B7280;
+            font-weight: 500;
+        }
+
+        .meta-value {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: #E5E7EB;
+            margin-bottom: 24px;
+        }
+
+        /* Two-column info */
+        .info-columns {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+
+        .info-card {
+            flex: 1;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .card-title {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 10px;
+        }
+
+        .info-line {
+            font-size: 11px;
+            line-height: 1.5;
+            margin-bottom: 3px;
+            color: #374151;
+        }
+
+        .info-line strong {
+            color: #111827;
+        }
+
+        .info-detail {
+            font-size: 10px;
+            color: #6B7280;
+            margin-bottom: 2px;
+        }
+
+        /* Items table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+        }
+
+        .items-table th {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 10px 12px;
+            color: #FFFFFF;
+            border-bottom: 2px solid transparent;
+        }
+
+        .items-table th.col-description {
+            text-align: left;
+            width: 46%;
+        }
+
+        .items-table th.col-qty {
+            text-align: center;
+            width: 12%;
+        }
+
+        .items-table th.col-unit-price {
+            text-align: right;
+            width: 21%;
+        }
+
+        .items-table th.col-amount {
+            text-align: right;
+            width: 21%;
+        }
+
+        .items-table td {
+            font-size: 11px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #F3F4F6;
+            color: #374151;
+        }
+
+        .items-table td.col-description {
+            text-align: left;
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .items-table td.col-qty {
+            text-align: center;
+        }
+
+        .items-table td.col-unit-price {
+            text-align: right;
+        }
+
+        .items-table td.col-amount {
+            text-align: right;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .items-table tbody tr:nth-child(even) td {
+            background: #FAFAFA;
+        }
+
+        /* Totals */
+        .totals-wrapper {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 32px;
+        }
+
+        .totals-card {
+            width: 280px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 11px;
+            border-bottom: 1px solid #F3F4F6;
+        }
+
+        .totals-row-label {
+            color: #6B7280;
+            font-weight: 500;
+        }
+
+        .totals-row-value {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .totals-row-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            margin-top: 6px;
+            border-radius: 8px;
+            border-bottom: none;
+        }
+
+        .totals-row-total .totals-row-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #FFFFFF;
+        }
+
+        .totals-row-total .totals-row-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #FFFFFF;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 36px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+            text-align: center;
+        }
+
+        .footer-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .footer-subtitle {
+            font-size: 11px;
+            color: #6B7280;
+            line-height: 1.5;
+        }
+
+        .generated-at {
+            margin-top: 16px;
+            font-size: 9px;
+            color: #9CA3AF;
+        }
+
+        /* Print */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Accent Bar -->
+        {{#if primaryColor}}
+        <div class="accent-bar" style="background-color: {{primaryColor}};"></div>
+        {{else}}
+        <div class="accent-bar" style="background-color: #3B82F6;"></div>
+        {{/if}}
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                {{#if hasCustomLogo}}
+                <img src="{{logoPath}}" alt="Logo" class="logo">
+                {{/if}}
+                <div>
+                    {{#if primaryColor}}
+                    <div class="company-name" style="color: {{primaryColor}};">{{companyName}}</div>
+                    {{else}}
+                    <div class="company-name" style="color: #3B82F6;">{{companyName}}</div>
+                    {{/if}}
+                    {{#if companyTagline}}
+                    <div class="company-tagline">{{companyTagline}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="header-right">
+                {{#if primaryColor}}
+                <div class="receipt-title" style="color: {{primaryColor}};">{{receiptTitle}}</div>
+                {{else}}
+                <div class="receipt-title" style="color: #3B82F6;">{{receiptTitle}}</div>
+                {{/if}}
+                <div class="meta-item">
+                    <span class="meta-label">{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No:{{/if}}</span>
+                    <span class="meta-value"> {{receiptNumber}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
+                    <span class="meta-value"> {{orderDate}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- From / Bill To -->
+        <div class="info-columns">
+            <div class="info-card" style="background-color: {{hexToRgba primaryColor 0.1}};">
+                {{#if primaryColor}}
+                <div class="card-title" style="color: {{primaryColor}};">{{#if translations.from}}{{translations.from}}{{else}}From{{/if}}</div>
+                {{else}}
+                <div class="card-title" style="color: #3B82F6;">{{#if translations.from}}{{translations.from}}{{else}}From{{/if}}</div>
+                {{/if}}
+                <div class="info-line"><strong>{{companyName}}</strong></div>
+                {{#if companyAddress}}
+                <div class="info-line">{{companyAddress}}</div>
+                {{/if}}
+                {{#if companyEmail}}
+                <div class="info-detail">{{companyEmail}}</div>
+                {{/if}}
+                {{#if companyPhone}}
+                <div class="info-detail">{{companyPhone}}</div>
+                {{/if}}
+                {{#if companyWebsite}}
+                <div class="info-detail">{{companyWebsite}}</div>
+                {{/if}}
+                {{#if companyTaxId}}
+                <div class="info-detail">Tax ID: {{companyTaxId}}</div>
+                {{/if}}
+                {{#if companyIban}}
+                <div class="info-detail">IBAN: {{companyIban}}</div>
+                {{/if}}
+                {{#if companySwift}}
+                <div class="info-detail">SWIFT: {{companySwift}}</div>
+                {{/if}}
+            </div>
+            <div class="info-card" style="background-color: {{hexToRgba primaryColor 0.1}};">
+                {{#if primaryColor}}
+                <div class="card-title" style="color: {{primaryColor}};">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
+                {{else}}
+                <div class="card-title" style="color: #3B82F6;">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
+                {{/if}}
+                <div class="info-line"><strong>{{recipientName}}</strong></div>
+                {{#if recipientAddress}}
+                <div class="info-line">{{recipientAddress}}</div>
+                {{/if}}
+                {{#if recipientEmail}}
+                <div class="info-detail">{{recipientEmail}}</div>
+                {{/if}}
+                {{#if recipientPhone}}
+                <div class="info-detail">{{recipientPhone}}</div>
+                {{/if}}
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    {{#if primaryColor}}
+                    <th class="col-description" style="background-color: {{primaryColor}};">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    <th class="col-qty" style="background-color: {{primaryColor}};">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-unit-price" style="background-color: {{primaryColor}};">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
+                    <th class="col-amount" style="background-color: {{primaryColor}};">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{else}}
+                    <th class="col-description" style="background-color: #3B82F6;">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    <th class="col-qty" style="background-color: #3B82F6;">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    <th class="col-unit-price" style="background-color: #3B82F6;">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
+                    <th class="col-amount" style="background-color: #3B82F6;">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/if}}
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td class="col-description">{{productName}}</td>
+                    <td class="col-qty">{{qty}}</td>
+                    <td class="col-unit-price">{{unitPrice}}</td>
+                    <td class="col-amount">{{lineTotal}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Totals -->
+        <div class="totals-wrapper">
+            <div class="totals-card">
+                <div class="totals-row">
+                    <span class="totals-row-label">{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
+                    <span class="totals-row-value">{{subtotal}}</span>
+                </div>
+                {{#if primaryColor}}
+                <div class="totals-row-total" style="background-color: {{primaryColor}};">
+                {{else}}
+                <div class="totals-row-total" style="background-color: #3B82F6;">
+                {{/if}}
+                    <span class="totals-row-label">{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</span>
+                    <span class="totals-row-value">{{total}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{#if footerSubtitle}}
+            <div class="footer-subtitle">{{footerSubtitle}}</div>
+            {{/if}}
+            {{else}}
+            {{#if translations.thankYou}}
+            <div class="footer-title">{{translations.thankYou}}</div>
+            {{else}}
+            <div class="footer-title">Thank you for your business!</div>
+            {{/if}}
+            {{/if}}
+            {{#if generatedAt}}
+            <div class="generated-at">{{generatedAt}}</div>
+            {{/if}}
+        </div>
+    </div>
+</body>
+</html>

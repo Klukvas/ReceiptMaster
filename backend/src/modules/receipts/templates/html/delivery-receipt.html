@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Note</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans', 'Helvetica Neue', 'Arial', sans-serif;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #111827;
+            background: white;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Green accent bar */
+        .accent-bar {
+            width: calc(100% + 40mm);
+            margin-left: -20mm;
+            margin-right: -20mm;
+            height: 10px;
+            background-color: #059669;
+            margin-bottom: 20px;
+            border-radius: 0;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+        }
+
+        .header-left {
+            height: 120px;
+            width: auto;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo {
+            height: 110px;
+            width: auto;
+            margin-right: 15px;
+        }
+
+        .company-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* Document title */
+        .document-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #059669;
+            margin: 10px 0 20px 0;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Meta card */
+        .meta-card {
+            background: white;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            padding: 16px;
+            min-width: 200px;
+        }
+
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .meta-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .meta-label {
+            font-weight: 500;
+            color: #6B7280;
+        }
+
+        .meta-value {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* From / To info sections */
+        .info-sections {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            flex: 1;
+            background: #F3F4F6;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .card-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: #059669;
+            margin-bottom: 12px;
+        }
+
+        .info-content {
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .info-line {
+            margin-bottom: 4px;
+        }
+
+        /* Items table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .items-table th {
+            font-size: 11px;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 8px;
+            background-color: rgba(5, 150, 105, 0.1);
+            color: #111827;
+            border-bottom: 2px solid #059669;
+        }
+
+        .items-table td {
+            font-size: 11px;
+            padding: 12px 8px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .col-num {
+            width: 8%;
+            text-align: center;
+        }
+
+        .col-product {
+            width: 72%;
+        }
+
+        .col-qty {
+            width: 20%;
+            text-align: center;
+        }
+
+        .items-table tbody tr:last-child td {
+            border-bottom: 2px solid #059669;
+        }
+
+        /* Signature section */
+        .signature-section {
+            margin-top: 60px;
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+        }
+
+        .signature-block {
+            flex: 1;
+            max-width: 280px;
+        }
+
+        .signature-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 40px;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #111827;
+            margin-bottom: 6px;
+        }
+
+        .signature-caption {
+            font-size: 9px;
+            color: #6B7280;
+            text-align: center;
+        }
+
+        /* Footer */
+        .footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+            text-align: center;
+        }
+
+        .footer-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .footer-subtitle {
+            font-size: 12px;
+            color: #6B7280;
+            line-height: 1.4;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Green Accent Bar -->
+        <div class="accent-bar"></div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                {{#if hasCustomLogo}}
+                <img src="{{logoPath}}" alt="Logo" class="logo">
+                {{/if}}
+                <div>
+                    <div class="company-name">{{companyName}}</div>
+                </div>
+            </div>
+            <div>
+                <div class="meta-card">
+                    <div class="meta-item">
+                        <span class="meta-label">{{translations.invoiceNo}}</span>
+                        <span class="meta-value">{{receiptNumber}}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">{{translations.date}}</span>
+                        <span class="meta-value">{{orderDate}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Title -->
+        <div class="document-title">{{translations.deliveryNote}}</div>
+
+        <!-- From / To Sections -->
+        <div class="info-sections">
+            <div class="info-card">
+                <div class="card-title">{{translations.from}}</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{companyName}}</strong></div>
+                    {{#if companyAddress}}
+                    <div class="info-line">{{companyAddress}}</div>
+                    {{/if}}
+                    {{#if companyEmail}}
+                    <div class="info-line">{{companyEmail}}</div>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <div class="info-line">{{companyPhone}}</div>
+                    {{/if}}
+                    {{#if companyWebsite}}
+                    <div class="info-line">{{companyWebsite}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="info-card">
+                <div class="card-title">{{translations.billTo}}</div>
+                <div class="info-content">
+                    <div class="info-line"><strong>{{recipientName}}</strong></div>
+                    {{#if recipientAddress}}
+                    <div class="info-line">{{recipientAddress}}</div>
+                    {{/if}}
+                    {{#if recipientEmail}}
+                    <div class="info-line">{{recipientEmail}}</div>
+                    {{/if}}
+                    {{#if recipientPhone}}
+                    <div class="info-line">{{recipientPhone}}</div>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="col-num">#</th>
+                    <th class="col-product">{{translations.productName}}</th>
+                    <th class="col-qty">{{translations.qty}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td class="col-num">{{add @index 1}}</td>
+                    <td class="col-product">{{productName}}</td>
+                    <td class="col-qty">{{qty}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+            <div class="signature-block">
+                <div class="signature-label">{{translations.receivedBy}}:</div>
+                <div class="signature-line"></div>
+                <div class="signature-caption">{{translations.signature}}</div>
+            </div>
+            <div class="signature-block">
+                <div class="signature-label">{{translations.date}}:</div>
+                <div class="signature-line"></div>
+                <div class="signature-caption">{{translations.date}}</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        {{#if footerTitle}}
+        <div class="footer">
+            <div>
+                <div class="footer-title">{{footerTitle}}</div>
+                {{#if footerSubtitle}}
+                <div class="footer-subtitle">{{footerSubtitle}}</div>
+                {{/if}}
+            </div>
+        </div>
+        {{/if}}
+    </div>
+</body>
+</html>

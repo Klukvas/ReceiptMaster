@@ -21,12 +21,6 @@ export enum OrderStatus {
   CANCELLED = "cancelled",
 }
 
-export enum PaymentStatus {
-  UNPAID = "unpaid",
-  PAID = "paid",
-  REFUNDED = "refunded",
-}
-
 @Entity("orders")
 @Index(["recipient_id"])
 @Index(["created_at"])
@@ -69,13 +63,6 @@ export class Order {
 
   @DeleteDateColumn()
   deleted_at?: Date;
-
-  @Column({
-    type: "enum",
-    enum: PaymentStatus,
-    default: PaymentStatus.UNPAID,
-  })
-  payment_status: PaymentStatus;
 
   @Column({ type: "boolean", default: false })
   is_locked: boolean;

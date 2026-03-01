@@ -202,6 +202,51 @@ export class SettingsService {
     await this.invalidateCache(userId);
   }
 
+  async getPrimaryColor(userId: string): Promise<string | undefined> {
+    const settings = await this.getCachedSettings(userId);
+    return settings?.primaryColor || undefined;
+  }
+
+  async setPrimaryColor(userId: string, color: string): Promise<void> {
+    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+      throw new Error("Invalid hex color value. Must match #RRGGBB format.");
+    }
+    const settings = await this.getOrCreateSettings(userId);
+    await this.userSettingsRepository.save({
+      ...settings,
+      primaryColor: color,
+    });
+    await this.invalidateCache(userId);
+  }
+
+  async getPaymentTerms(userId: string): Promise<string | undefined> {
+    const settings = await this.getCachedSettings(userId);
+    return settings?.paymentTerms || undefined;
+  }
+
+  async setPaymentTerms(userId: string, terms: string): Promise<void> {
+    const settings = await this.getOrCreateSettings(userId);
+    await this.userSettingsRepository.save({
+      ...settings,
+      paymentTerms: terms,
+    });
+    await this.invalidateCache(userId);
+  }
+
+  async getDeliveryTerms(userId: string): Promise<string | undefined> {
+    const settings = await this.getCachedSettings(userId);
+    return settings?.deliveryTerms || undefined;
+  }
+
+  async setDeliveryTerms(userId: string, terms: string): Promise<void> {
+    const settings = await this.getOrCreateSettings(userId);
+    await this.userSettingsRepository.save({
+      ...settings,
+      deliveryTerms: terms,
+    });
+    await this.invalidateCache(userId);
+  }
+
   /**
    * Get all PDF-related settings in a single call (cached).
    * This optimizes the N+1 query problem when generating receipts.
@@ -223,6 +268,9 @@ export class SettingsService {
     templateLanguage: string;
     footerTitle?: string;
     footerSubtitle?: string;
+    primaryColor?: string;
+    paymentTerms?: string;
+    deliveryTerms?: string;
   }> {
     const settings = await this.getCachedSettings(userId);
 
@@ -243,6 +291,9 @@ export class SettingsService {
       templateLanguage: settings?.templateLanguage || "en",
       footerTitle: settings?.footerText || undefined,
       footerSubtitle: settings?.subFooterText || undefined,
+      primaryColor: settings?.primaryColor || undefined,
+      paymentTerms: settings?.paymentTerms || undefined,
+      deliveryTerms: settings?.deliveryTerms || undefined,
     };
   }
 }

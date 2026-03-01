@@ -4,9 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { PaddleProvider } from "./providers/PaddleProvider";
 import { useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/layout/Layout";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { HomePage } from "./pages/HomePage";
 
 // Lazy-loaded page components for code splitting
@@ -35,6 +37,27 @@ const SettingsPage = React.lazy(() =>
 );
 const ProfilePage = React.lazy(() =>
   import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })),
+);
+const PublicReceiptPage = React.lazy(() =>
+  import("./pages/PublicReceiptPage").then((m) => ({
+    default: m.PublicReceiptPage,
+  })),
+);
+const TermsPage = React.lazy(() =>
+  import("./pages/TermsPage").then((m) => ({ default: m.TermsPage })),
+);
+const PrivacyPage = React.lazy(() =>
+  import("./pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
+);
+const RefundPolicyPage = React.lazy(() =>
+  import("./pages/RefundPolicyPage").then((m) => ({
+    default: m.RefundPolicyPage,
+  })),
+);
+const CookiePolicyPage = React.lazy(() =>
+  import("./pages/CookiePolicyPage").then((m) => ({
+    default: m.CookiePolicyPage,
+  })),
 );
 const NotFoundPage = React.lazy(() =>
   import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
@@ -144,6 +167,11 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route path="/r/:token" element={<PublicReceiptPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/refund-policy" element={<RefundPolicyPage />} />
+        <Route path="/cookie-policy" element={<CookiePolicyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
@@ -155,9 +183,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <Router>
-            <AppRoutes />
-          </Router>
+          <PaddleProvider>
+            <Router>
+              <ScrollToTop />
+              <AppRoutes />
+            </Router>
+          </PaddleProvider>
           <Toaster
             position="top-right"
             toastOptions={{

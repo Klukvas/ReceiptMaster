@@ -10,11 +10,12 @@ import {
   OrderRowActions,
   OrderBulkToolbar,
   OrderStatusBadge,
-  PaymentStatusBadge,
   OrdersFilterBar,
   OrderActionsMenu,
 } from "../components/orders";
-import { DeleteConfirmation, NotificationToast } from "../components/common";
+import { NotificationToast } from "../components/common";
+import { ConfirmModal } from "../components/ui/ConfirmModal";
+import { ShareReceiptModal } from "../components/receipts/ShareReceiptModal";
 import { useOrders } from "../hooks/useOrders";
 import {
   useServerPagination,
@@ -30,8 +31,8 @@ export const OrdersPage = () => {
   const { t } = useTranslation();
   const { status: subscriptionStatus } = useSubscription();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
-  const [paymentFilter, setPaymentFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [minAmount, setMinAmount] = useState("");
@@ -44,24 +45,22 @@ export const OrdersPage = () => {
     setEditingOrder,
     selectedOrder,
     setSelectedOrder,
-    deleteConfirmation,
+    confirmAction,
+    handleConfirmAction,
+    handleCloseConfirm,
     notifications,
     handleConfirm,
     handleCancel,
     handleDeleteOrder,
-    handleConfirmDeleteOrder,
-    handleCancelDeleteOrder,
     handleGenerateReceipt,
     handleDownloadReceipt,
     handlePrintReceipt,
     isDeleting,
+    isCancelling,
     selectedKeys,
     setSelectedKeys,
-    bulkDeleteConfirm,
     handleBatchApprove,
-    handleBatchDelete,
     handleBulkDeleteConfirm,
-    handleBulkDeleteCancel,
     clearSelection,
     isBatchApproving,
     isBatchDeleting,
@@ -70,17 +69,15 @@ export const OrdersPage = () => {
   const extraParams = useMemo(() => {
     const params: Record<string, string | number> = {};
     if (statusFilter) params.status = statusFilter;
-    if (paymentFilter) params.payment_status = paymentFilter;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
     if (minAmount) params.minAmount = Math.round(parseFloat(minAmount) * 100);
     if (maxAmount) params.maxAmount = Math.round(parseFloat(maxAmount) * 100);
     return params;
-  }, [statusFilter, paymentFilter, startDate, endDate, minAmount, maxAmount]);
+  }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
 
   const clearAllFilters = useCallback(() => {
     setStatusFilter("");
-    setPaymentFilter("");
     setStartDate("");
     setEndDate("");
     setMinAmount("");
@@ -118,12 +115,6 @@ export const OrdersPage = () => {
         render: (o) => <OrderStatusBadge order={o} />,
       },
       {
-        key: "payment_status",
-        header: t("orders.paymentStatus"),
-        sortable: false,
-        render: (o) => <PaymentStatusBadge status={o.payment_status} />,
-      },
-      {
         key: "total_cents",
         header: t("orders.total"),
         sortable: true,
@@ -155,7 +146,6 @@ export const OrdersPage = () => {
       ordersApi.getAll({
         ...params,
         ...(statusFilter ? { status: statusFilter } : {}),
-        ...(paymentFilter ? { payment_status: paymentFilter } : {}),
         ...(startDate ? { startDate } : {}),
         ...(endDate ? { endDate } : {}),
         ...(minAmount
@@ -175,7 +165,7 @@ export const OrdersPage = () => {
   // Clear selection when page or filters change
   useEffect(() => {
     setSelectedKeys(new Set());
-  }, [pagination.currentPage, statusFilter, paymentFilter, setSelectedKeys]);
+  }, [pagination.currentPage, statusFilter, setSelectedKeys]);
 
   // Compute whether all selected orders on current page are draft
   const allSelectedAreDraft = useMemo(() => {
@@ -246,10 +236,9 @@ export const OrdersPage = () => {
             />
           </div>
 
-          {/* Status + Payment row */}
+          {/* Status row */}
           <div className="flex items-center gap-2 flex-wrap">
             <OrderStatusBadge order={order} />
-            <PaymentStatusBadge status={order.payment_status} />
           </div>
 
           {/* Total - prominently displayed */}
@@ -287,11 +276,6 @@ export const OrdersPage = () => {
       statusFilter={statusFilter}
       onStatusFilterChange={(v) => {
         setStatusFilter(v);
-        pagination.setCurrentPage(1);
-      }}
-      paymentFilter={paymentFilter}
-      onPaymentFilterChange={(v) => {
-        setPaymentFilter(v);
         pagination.setCurrentPage(1);
       }}
       startDate={startDate}
@@ -411,33 +395,55 @@ export const OrdersPage = () => {
           onGenerateReceipt={handleGenerateReceipt}
           onDownloadReceipt={handleDownloadReceipt}
           onPrintReceipt={handlePrintReceipt}
+          onShareReceipt={setShareReceiptId}
         />
       )}
 
-      {/* Single order delete confirmation */}
-      <DeleteConfirmation
-        isOpen={deleteConfirmation.isOpen}
-        onClose={handleCancelDeleteOrder}
-        onConfirm={handleConfirmDeleteOrder}
-        title={t("orders.deleteOrder")}
-        message={t("orders.deleteOrderMessage")}
-        itemName={
-          deleteConfirmation.order
-            ? `Order #${deleteConfirmation.order.id.slice(0, 8)}...`
-            : undefined
+      {/* Confirm action modal (cancel / delete / bulk delete) */}
+      <ConfirmModal
+        isOpen={confirmAction.isOpen}
+        onClose={handleCloseConfirm}
+        onConfirm={handleConfirmAction}
+        title={
+          confirmAction.type === "cancel"
+            ? t("orders.cancelOrder", "Cancel Order")
+            : confirmAction.type === "bulkDelete"
+              ? t("orders.batchDeleteTitle")
+              : t("orders.deleteOrder")
         }
-        isLoading={isDeleting}
+        message={
+          confirmAction.type === "cancel"
+            ? t(
+                "orders.cancelOrderMessage",
+                "Are you sure you want to cancel this order?",
+              )
+            : confirmAction.type === "bulkDelete"
+              ? t("orders.batchDeleteMessage", { count: selectedKeys.size })
+              : t("orders.deleteOrderMessage")
+        }
+        confirmLabel={
+          confirmAction.type === "cancel"
+            ? t("orders.cancel", "Cancel Order")
+            : t("common.delete")
+        }
+        variant={confirmAction.type === "cancel" ? "warning" : "danger"}
+        isLoading={
+          confirmAction.type === "cancel"
+            ? isCancelling
+            : confirmAction.type === "bulkDelete"
+              ? isBatchDeleting
+              : isDeleting
+        }
       />
 
-      {/* Bulk delete confirmation */}
-      <DeleteConfirmation
-        isOpen={bulkDeleteConfirm}
-        onClose={handleBulkDeleteCancel}
-        onConfirm={handleBatchDelete}
-        title={t("orders.batchDeleteTitle")}
-        message={t("orders.batchDeleteMessage", { count: selectedKeys.size })}
-        isLoading={isBatchDeleting}
-      />
+      {/* Share receipt modal */}
+      {shareReceiptId && (
+        <ShareReceiptModal
+          isOpen={!!shareReceiptId}
+          onClose={() => setShareReceiptId(null)}
+          receiptId={shareReceiptId}
+        />
+      )}
 
       {/* Upgrade modal */}
       <UpgradeModal

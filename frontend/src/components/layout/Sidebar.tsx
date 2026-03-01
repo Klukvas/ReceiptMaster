@@ -97,11 +97,9 @@ export const Sidebar = ({
         >
           {isCollapsed ? (
             <div className="flex flex-col items-center gap-3">
-              <img
-                src="/image.png"
-                alt="Logo"
-                className="h-8 w-8 object-contain"
-              />
+              <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                R
+              </span>
               <button
                 onClick={onToggle}
                 className="hidden lg:flex p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors duration-150"
@@ -113,14 +111,12 @@ export const Sidebar = ({
             </div>
           ) : (
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/image.png"
-                  alt="Logo"
-                  className="h-8 w-8 object-contain"
-                />
+              <div className="flex flex-col">
                 <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
                   ReceiptMaster
+                </span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 -mt-0.5">
+                  Powered by <span className="font-semibold">fluxLab</span>
                 </span>
               </div>
               <div className="flex items-center gap-1">

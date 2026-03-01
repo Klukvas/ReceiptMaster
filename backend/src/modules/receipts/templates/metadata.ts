@@ -1,3 +1,5 @@
+import { PdfOptions } from "../services/playwright-pdf-generator.service";
+
 export interface TemplateMetadata {
   id: string;
   name: string;
@@ -10,6 +12,7 @@ export interface TemplateMetadata {
     accent: string;
   };
   preview: string;
+  pdfOptions?: Partial<PdfOptions>;
 }
 
 export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
@@ -200,6 +203,109 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
       accent: "#D1D5DB",
     },
     preview: "/templates/previews/corporate.png",
+  },
+
+  thermal: {
+    id: "thermal",
+    name: "Thermal",
+    description: "Узкий формат 80мм для кассовых аппаратов и термопринтеров",
+    category: "minimal",
+    features: [
+      "80мм формат",
+      "Моноширинный шрифт",
+      "Компактный дизайн",
+      "Для термопринтера",
+    ],
+    colors: {
+      primary: "#000000",
+      secondary: "#333333",
+      accent: "#666666",
+    },
+    preview: "/templates/previews/thermal.png",
+    pdfOptions: {
+      width: "80mm",
+      preferCSSPageSize: true,
+      margin: { top: "3mm", bottom: "3mm", left: "2mm", right: "2mm" },
+    },
+  },
+
+  dark: {
+    id: "dark",
+    name: "Dark",
+    description:
+      "Тёмная тема с тёмно-синим фоном и голубыми акцентами для стильных документов",
+    category: "creative",
+    features: [
+      "Тёмная тема",
+      "Голубые акценты",
+      "Современный стиль",
+      "Контрастный дизайн",
+    ],
+    colors: {
+      primary: "#4FC3F7",
+      secondary: "#1a1a2e",
+      accent: "#16213e",
+    },
+    preview: "/templates/previews/dark.png",
+  },
+
+  branded: {
+    id: "branded",
+    name: "Branded",
+    description:
+      "Брендированный шаблон с настраиваемым фирменным цветом компании",
+    category: "premium",
+    features: [
+      "Фирменный цвет",
+      "Профессиональный стиль",
+      "Настраиваемый акцент",
+      "Премиальный вид",
+    ],
+    colors: {
+      primary: "#3B82F6",
+      secondary: "#6B7280",
+      accent: "#EFF6FF",
+    },
+    preview: "/templates/previews/branded.png",
+  },
+
+  delivery: {
+    id: "delivery",
+    name: "Delivery Note",
+    description: "Накладная без цен — только товары и количество для доставки",
+    category: "business",
+    features: [
+      "Без цен",
+      "Только количество",
+      "Подпись получателя",
+      "Зелёный акцент",
+    ],
+    colors: {
+      primary: "#059669",
+      secondary: "#6B7280",
+      accent: "#ECFDF5",
+    },
+    preview: "/templates/previews/delivery.png",
+  },
+
+  proforma: {
+    id: "proforma",
+    name: "Proforma Invoice",
+    description:
+      "Проформа-инвойс с водяным знаком, банковскими реквизитами и условиями",
+    category: "business",
+    features: [
+      "Водяной знак PROFORMA",
+      "Банковские реквизиты",
+      "Условия оплаты",
+      "Условия доставки",
+    ],
+    colors: {
+      primary: "#1E40AF",
+      secondary: "#6B7280",
+      accent: "#EFF6FF",
+    },
+    preview: "/templates/previews/proforma.png",
   },
 };
 

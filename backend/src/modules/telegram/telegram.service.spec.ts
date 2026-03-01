@@ -1172,9 +1172,8 @@ describe("TelegramService", () => {
         },
       });
 
-      productsRepo.findOne
-        .mockResolvedValueOnce({ id: "p1", quantity: 3 }) // available, but less
-        .mockResolvedValueOnce(null); // not found
+      // Code uses productsRepo.find (batch load), returns only p1 (p2 not found)
+      productsRepo.find.mockResolvedValueOnce([{ id: "p1", quantity: 3 }]);
 
       await service.handleWebhook({
         update_id: 500,
@@ -1205,7 +1204,8 @@ describe("TelegramService", () => {
         },
       });
 
-      productsRepo.findOne.mockResolvedValue({ id: "p1", quantity: 0 });
+      // Code uses productsRepo.find (batch load)
+      productsRepo.find.mockResolvedValueOnce([{ id: "p1", quantity: 0 }]);
 
       await service.handleWebhook({
         update_id: 501,

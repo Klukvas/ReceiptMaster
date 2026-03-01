@@ -61,6 +61,9 @@ export class Receipt {
   @Column({ type: "varchar", length: 500, nullable: true })
   void_reason?: string;
 
+  @Column({ type: "varchar", length: 64, nullable: true, unique: true })
+  public_token?: string;
+
   @Column({ type: "integer", default: 0 })
   progress: number;
 

@@ -44,9 +44,14 @@ export class PlaywrightPdfGenerator {
       // Emulate print media for consistent styling
       await page.emulateMedia({ media: "print" });
 
+      // When width/height are provided, omit format (Playwright doesn't allow both)
+      const { width, height, ...rest } = options;
+      const baseOptions =
+        width || height ? { width, height } : { format: "A4" as const };
+
       // Generate PDF with optimized settings
       const pdfBuffer = await page.pdf({
-        format: "A4",
+        ...baseOptions,
         margin: {
           top: "20mm",
           bottom: "20mm",
@@ -56,7 +61,7 @@ export class PlaywrightPdfGenerator {
         printBackground: true,
         preferCSSPageSize: false,
         displayHeaderFooter: false,
-        ...options,
+        ...rest,
       });
 
       this.logger.log("PDF generated successfully");
@@ -92,6 +97,8 @@ export class PlaywrightPdfGenerator {
 
 export interface PdfOptions {
   format?: "A4" | "A3" | "A2" | "A1" | "A0" | "Letter" | "Legal" | "Tabloid";
+  width?: string;
+  height?: string;
   margin?: {
     top?: string;
     bottom?: string;

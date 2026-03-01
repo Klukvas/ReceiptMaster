@@ -1,8 +1,8 @@
-import React from 'react';
-import { Eye } from 'lucide-react';
-import { OrderActionsMenu } from './OrderActionsMenu';
-import { useTranslation } from '../../hooks/useTranslation';
-import type { Order } from '../../lib/api';
+import React from "react";
+import { Eye } from "lucide-react";
+import { OrderActionsMenu } from "./OrderActionsMenu";
+import { useTranslation } from "../../hooks/useTranslation";
+import type { Order } from "../../lib/api";
 
 interface OrderRowActionsProps {
   order: Order;
@@ -36,7 +36,7 @@ export const OrderRowActions: React.FC<OrderRowActionsProps> = ({
       <button
         onClick={() => onView(order)}
         className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-        title={t('orders.view')}
+        title={t("orders.view")}
       >
         <Eye className="w-4 h-4" />
       </button>

@@ -54,6 +54,11 @@ export class ReceiptGenerationProcessor extends WorkerHost {
       wave: ReceiptStyle.WAVE,
       minimal: ReceiptStyle.MINIMAL,
       corporate: ReceiptStyle.CORPORATE,
+      thermal: ReceiptStyle.THERMAL,
+      dark: ReceiptStyle.DARK,
+      branded: ReceiptStyle.BRANDED,
+      delivery: ReceiptStyle.DELIVERY,
+      proforma: ReceiptStyle.PROFORMA,
     };
     return map[templateId] || ReceiptStyle.COMPACT;
   }
@@ -150,6 +155,9 @@ export class ReceiptGenerationProcessor extends WorkerHost {
           pdfSettings.templateLanguage,
           pdfSettings.footerTitle,
           pdfSettings.footerSubtitle,
+          pdfSettings.primaryColor,
+          pdfSettings.paymentTerms,
+          pdfSettings.deliveryTerms,
         );
 
       // Stage 4: Computing hash

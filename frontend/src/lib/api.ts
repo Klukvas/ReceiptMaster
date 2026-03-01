@@ -177,7 +177,6 @@ export interface Order {
   id: string;
   recipient_id: string;
   status: "draft" | "confirmed" | "cancelled";
-  payment_status: "unpaid" | "paid" | "refunded";
   subtotal_cents: number;
   total_cents: number;
   currency: string;
@@ -500,6 +499,11 @@ export const receiptsApi = {
   testPreview: () =>
     api.post("/receipts/test-preview", {}, { responseType: "blob" }),
 
+  share: (id: string) =>
+    api.post<{ token: string; url: string }>(`/receipts/${id}/share`),
+
+  revokeShare: (id: string) => api.post(`/receipts/${id}/share/revoke`),
+
   getTemplatePreviewHtml: (templateId: string, language: string) => {
     const params = new URLSearchParams({ template: templateId, language });
     return api.get<string>(`/pdf-test/preview-template?${params}`, {
@@ -586,6 +590,27 @@ export const settingsApi = {
       companyWebsite: string;
       companyTagline: string;
     }>("/settings/company-info"),
+
+  // Primary color (branded template)
+  getPrimaryColor: () =>
+    api.get<{ primaryColor: string }>("/settings/primary-color"),
+
+  updatePrimaryColor: (primaryColor: string) =>
+    api.post("/settings/primary-color", { primaryColor }),
+
+  // Payment terms (proforma template)
+  getPaymentTerms: () =>
+    api.get<{ paymentTerms: string }>("/settings/payment-terms"),
+
+  updatePaymentTerms: (paymentTerms: string) =>
+    api.post("/settings/payment-terms", { paymentTerms }),
+
+  // Delivery terms (proforma template)
+  getDeliveryTerms: () =>
+    api.get<{ deliveryTerms: string }>("/settings/delivery-terms"),
+
+  updateDeliveryTerms: (deliveryTerms: string) =>
+    api.post("/settings/delivery-terms", { deliveryTerms }),
 
   // Onboarding
   getOnboardingStatus: () =>

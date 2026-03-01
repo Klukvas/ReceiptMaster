@@ -1,13 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { Filter, X, ChevronDown, Calendar } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { useTranslation } from '../../hooks/useTranslation';
+import React, { useState, useMemo } from "react";
+import { Filter, X, ChevronDown, Calendar } from "lucide-react";
+import { Button } from "../ui/Button";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface OrdersFilterBarProps {
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
-  paymentFilter: string;
-  onPaymentFilterChange: (value: string) => void;
   startDate: string;
   onStartDateChange: (value: string) => void;
   endDate: string;
@@ -22,8 +20,6 @@ interface OrdersFilterBarProps {
 export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
   statusFilter,
   onStatusFilterChange,
-  paymentFilter,
-  onPaymentFilterChange,
   startDate,
   onStartDateChange,
   endDate,
@@ -40,13 +36,12 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (statusFilter) count++;
-    if (paymentFilter) count++;
     if (startDate) count++;
     if (endDate) count++;
     if (minAmount) count++;
     if (maxAmount) count++;
     return count;
-  }, [statusFilter, paymentFilter, startDate, endDate, minAmount, maxAmount]);
+  }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
 
   const hasAdvancedFilters = startDate || endDate || minAmount || maxAmount;
 
@@ -61,25 +56,10 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
             onChange={(e) => onStatusFilterChange(e.target.value)}
             className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 dark:focus:border-primary-500 transition-all cursor-pointer"
           >
-            <option value="">{t('orders.allStatuses')}</option>
-            <option value="draft">{t('orders.draft')}</option>
-            <option value="confirmed">{t('orders.confirmed')}</option>
-            <option value="cancelled">{t('orders.cancelled')}</option>
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-        </div>
-
-        {/* Payment filter */}
-        <div className="relative">
-          <select
-            value={paymentFilter}
-            onChange={(e) => onPaymentFilterChange(e.target.value)}
-            className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 dark:focus:border-primary-500 transition-all cursor-pointer"
-          >
-            <option value="">{t('orders.allPayments')}</option>
-            <option value="unpaid">{t('orders.unpaid')}</option>
-            <option value="paid">{t('orders.paid')}</option>
-            <option value="refunded">{t('orders.refunded')}</option>
+            <option value="">{t("orders.allStatuses")}</option>
+            <option value="draft">{t("orders.draft")}</option>
+            <option value="confirmed">{t("orders.confirmed")}</option>
+            <option value="cancelled">{t("orders.cancelled")}</option>
           </select>
           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
         </div>
@@ -87,12 +67,12 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
         {/* Advanced filters toggle */}
         <Button
           size="sm"
-          variant={showAdvanced ? 'primary' : 'outline'}
+          variant={showAdvanced ? "primary" : "outline"}
           onClick={() => setShowAdvanced(!showAdvanced)}
           className="relative rounded-lg"
         >
           <Filter className="w-3.5 h-3.5 mr-1.5" />
-          {t('orders.filters')}
+          {t("orders.filters")}
           {hasAdvancedFilters && (
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary-500 rounded-full" />
           )}
@@ -102,14 +82,14 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
         {activeFilterCount > 0 && (
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-500/20">
-              {activeFilterCount} {t('orders.activeFilters')}
+              {activeFilterCount} {t("orders.activeFilters")}
             </span>
             <button
               onClick={onClearAll}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             >
               <X className="w-3 h-3" />
-              {t('orders.clearAll')}
+              {t("orders.clearAll")}
             </button>
           </div>
         )}
@@ -121,7 +101,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
           <div>
             <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
               <Calendar className="w-3 h-3" />
-              {t('orders.startDate')}
+              {t("orders.startDate")}
             </label>
             <input
               type="date"
@@ -133,7 +113,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
           <div>
             <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
               <Calendar className="w-3 h-3" />
-              {t('orders.endDate')}
+              {t("orders.endDate")}
             </label>
             <input
               type="date"
@@ -144,7 +124,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">
-              {t('orders.minAmount')}
+              {t("orders.minAmount")}
             </label>
             <input
               type="number"
@@ -158,7 +138,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">
-              {t('orders.maxAmount')}
+              {t("orders.maxAmount")}
             </label>
             <input
               type="number"

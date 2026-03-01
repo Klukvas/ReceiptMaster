@@ -17,6 +17,9 @@ export interface SubscriptionStatus {
     ordersThisMonth: number;
   };
   limits: PlanLimits;
+  paddleStatus: string | null;
+  currentPeriodEnd: string | null;
+  hasPaddleSubscription: boolean;
 }
 
 @Injectable()
@@ -79,6 +82,11 @@ export class SubscriptionService {
       plan: subscription.plan,
       usage: { productsCount, ordersThisMonth },
       limits,
+      paddleStatus: subscription.paddle_status ?? null,
+      currentPeriodEnd: subscription.current_period_end
+        ? subscription.current_period_end.toISOString()
+        : null,
+      hasPaddleSubscription: !!subscription.paddle_subscription_id,
     };
   }
 

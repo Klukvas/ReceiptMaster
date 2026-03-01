@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermal Receipt</title>
+    <style>
+        @page {
+            size: 80mm auto;
+            margin: 2mm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        body {
+            font-family: 'Noto Sans', 'Courier New', monospace;
+            font-size: 9px;
+            line-height: 1.3;
+            color: #000;
+            background: #fff;
+        }
+
+        .container {
+            max-width: 76mm;
+            margin: 0 auto;
+            padding: 2mm 0;
+        }
+
+        /* Dashed separator */
+        .separator {
+            border: none;
+            border-top: 1px dashed #000;
+            margin: 4px 0;
+        }
+
+        /* Logo */
+        .logo-section {
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .logo {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        /* Title */
+        .title {
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+
+        /* Company name */
+        .company-name {
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .company-tagline {
+            text-align: center;
+            font-size: 8px;
+            margin-bottom: 2px;
+        }
+
+        /* Receipt info */
+        .info-section {
+            margin: 4px 0;
+        }
+
+        .info-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            line-height: 1.5;
+        }
+
+        .info-label {
+            font-weight: bold;
+        }
+
+        /* Recipient */
+        .recipient-section {
+            margin: 2px 0;
+        }
+
+        .recipient-line {
+            font-size: 9px;
+            line-height: 1.5;
+        }
+
+        /* Items */
+        .items-section {
+            margin: 4px 0;
+        }
+
+        .items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 8px;
+            padding-bottom: 2px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 2px;
+        }
+
+        .items-header-name {
+            flex: 1;
+            text-align: left;
+        }
+
+        .items-header-qty {
+            width: 30px;
+            text-align: center;
+        }
+
+        .items-header-price {
+            width: 50px;
+            text-align: right;
+        }
+
+        .items-header-total {
+            width: 55px;
+            text-align: right;
+        }
+
+        .item-row {
+            margin-bottom: 2px;
+        }
+
+        .item-name {
+            font-size: 9px;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
+        .item-details {
+            display: flex;
+            justify-content: flex-end;
+            font-size: 9px;
+            line-height: 1.3;
+        }
+
+        .item-qty-price {
+            margin-right: 8px;
+        }
+
+        .item-line-total {
+            font-weight: bold;
+            min-width: 55px;
+            text-align: right;
+        }
+
+        /* Totals */
+        .totals-section {
+            margin: 4px 0;
+        }
+
+        .subtotal-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            line-height: 1.6;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 1.6;
+            padding: 2px 0;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .footer-title {
+            font-size: 9px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .footer-text {
+            font-size: 8px;
+            margin-bottom: 2px;
+        }
+
+        .footer-company-info {
+            font-size: 7px;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .footer-company-info:empty {
+            display: none;
+        }
+
+        .footer-company-info div {
+            margin-bottom: 1px;
+        }
+
+        .footer-timestamp {
+            font-size: 7px;
+            margin-top: 4px;
+            color: #000;
+        }
+
+        .cut-line {
+            text-align: center;
+            font-size: 7px;
+            letter-spacing: 2px;
+            margin-top: 6px;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Logo -->
+        {{#if hasCustomLogo}}
+        <div class="logo-section">
+            <img src="{{logoPath}}" alt="Logo" class="logo">
+        </div>
+        {{/if}}
+
+        <!-- Title -->
+        <div class="title">{{receiptTitle}}</div>
+
+        <!-- Company Name -->
+        <div class="company-name">{{companyName}}</div>
+        {{#if companyTagline}}
+        <div class="company-tagline">{{companyTagline}}</div>
+        {{/if}}
+
+        <hr class="separator">
+
+        <!-- Receipt Info -->
+        <div class="info-section">
+            <div class="info-line">
+                <span class="info-label">{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}No:{{/if}}</span>
+                <span>{{receiptNumber}}</span>
+            </div>
+            <div class="info-line">
+                <span class="info-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
+                <span>{{orderDate}}</span>
+            </div>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Recipient -->
+        <div class="recipient-section">
+            <div class="recipient-line">
+                <span class="info-label">{{#if translations.recipient}}{{translations.recipient}}{{else}}Recipient:{{/if}}</span>
+                {{recipientName}}
+            </div>
+            {{#if recipientEmail}}
+            <div class="recipient-line">
+                <span class="info-label">{{#if translations.email}}{{translations.email}}{{else}}Email:{{/if}}</span>
+                {{recipientEmail}}
+            </div>
+            {{/if}}
+            {{#if recipientPhone}}
+            <div class="recipient-line">
+                <span class="info-label">{{#if translations.phone}}{{translations.phone}}{{else}}Phone:{{/if}}</span>
+                {{recipientPhone}}
+            </div>
+            {{/if}}
+            {{#if recipientAddress}}
+            <div class="recipient-line">
+                <span class="info-label">{{#if translations.address}}{{translations.address}}{{else}}Address:{{/if}}</span>
+                {{recipientAddress}}
+            </div>
+            {{/if}}
+        </div>
+
+        <hr class="separator">
+
+        <!-- Items Header -->
+        <div class="items-section">
+            <div class="items-header">
+                <span class="items-header-name">{{#if translations.description}}{{translations.description}}{{else}}Item{{/if}}</span>
+                <span class="items-header-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</span>
+                <span class="items-header-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</span>
+                <span class="items-header-total">{{#if translations.amount}}{{translations.amount}}{{else}}Amt{{/if}}</span>
+            </div>
+
+            <!-- Items -->
+            {{#each items}}
+            <div class="item-row">
+                <div class="item-name">{{productName}}</div>
+                <div class="item-details">
+                    <span class="item-qty-price">{{qty}} x {{unitPrice}}</span>
+                    <span class="item-line-total">{{lineTotal}}</span>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+
+        <hr class="separator">
+
+        <!-- Totals -->
+        <div class="totals-section">
+            <div class="subtotal-row">
+                <span>{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
+                <span>{{subtotal}}</span>
+            </div>
+            {{#each taxes}}
+            <div class="subtotal-row">
+                <span>{{label}}</span>
+                <span>{{amount}}</span>
+            </div>
+            {{/each}}
+            <hr class="separator">
+            <div class="total-row">
+                <span>{{#if translations.total}}{{translations.total}}{{else}}TOTAL{{/if}}</span>
+                <span>{{total}}</span>
+            </div>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Footer -->
+        <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{else}}
+            <div class="footer-title">{{#if translations.thankYou}}{{translations.thankYou}}{{else}}Thank you!{{/if}}</div>
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
+            {{else}}
+            <div class="footer-text">{{#if translations.footerMessage}}{{translations.footerMessage}}{{else}}We appreciate your business.{{/if}}</div>
+            {{/if}}
+
+            <div class="footer-company-info">
+                {{#if companyAddress}}
+                <div>{{companyAddress}}</div>
+                {{/if}}
+                {{#if companyEmail}}
+                <div>{{companyEmail}}</div>
+                {{/if}}
+                {{#if companyPhone}}
+                <div>{{companyPhone}}</div>
+                {{/if}}
+                {{#if companyWebsite}}
+                <div>{{companyWebsite}}</div>
+                {{/if}}
+                {{#if companyTaxId}}
+                <div>{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
+                {{/if}}
+                {{#if companyIban}}
+                <div>{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
+                {{/if}}
+                {{#if companySwift}}
+                <div>{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
+                {{/if}}
+            </div>
+
+            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}} {{generatedAt}}{{else}}Generated: {{generatedAt}}{{/if}}</div>
+        </div>
+
+        <!-- Cut line -->
+        <div class="cut-line">- - - - - - - - - - - - - - -</div>
+    </div>
+</body>
+</html>

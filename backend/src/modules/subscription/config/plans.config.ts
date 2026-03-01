@@ -10,7 +10,7 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   free: {
     maxProducts: 10,
     maxOrdersPerMonth: 20,
-    allowedTemplateIds: ["standard", "compact", "minimal"],
+    allowedTemplateIds: ["standard", "compact", "minimal", "thermal"],
   },
   pro: {
     maxProducts: 100,

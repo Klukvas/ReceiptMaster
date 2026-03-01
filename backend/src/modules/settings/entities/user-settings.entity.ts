@@ -59,6 +59,15 @@ export class UserSettings {
   @Column({ nullable: true })
   headerText: string;
 
+  @Column({ type: "varchar", length: 7, nullable: true })
+  primaryColor: string;
+
+  @Column({ type: "varchar", length: 500, nullable: true })
+  paymentTerms: string;
+
+  @Column({ type: "varchar", length: 500, nullable: true })
+  deliveryTerms: string;
+
   @Column({ default: false })
   onboardingCompleted: boolean;
 

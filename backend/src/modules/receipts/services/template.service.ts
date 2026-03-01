@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as Handlebars from "handlebars";
+import Handlebars from "handlebars";
 import { Order } from "../../orders/entities/order.entity";
 import { MoneyUtil } from "../../../common/utils/money.util";
 
@@ -53,6 +53,13 @@ export interface TemplateData {
   // Footer customization
   footerTitle?: string;
   footerSubtitle?: string;
+
+  // Branded template
+  primaryColor?: string;
+
+  // Proforma invoice
+  paymentTerms?: string;
+  deliveryTerms?: string;
 }
 
 export enum ReceiptTemplate {
@@ -66,11 +73,17 @@ export enum ReceiptTemplate {
   WAVE = "wave",
   MINIMAL = "minimal",
   CORPORATE = "corporate",
+  THERMAL = "thermal",
+  DARK = "dark",
+  BRANDED = "branded",
+  DELIVERY = "delivery",
+  PROFORMA = "proforma",
 }
 
 @Injectable()
 export class TemplateService {
   private readonly logger = new Logger(TemplateService.name);
+  private readonly handlebars = Handlebars.create();
   private templates: Map<string, HandlebarsTemplateDelegate> = new Map();
   private fonts: Map<string, string> = new Map();
   private translations: Map<string, Record<string, string>> = new Map();
@@ -82,17 +95,28 @@ export class TemplateService {
   }
 
   private registerHelpers() {
-    // Register any custom Handlebars helpers here
-    Handlebars.registerHelper(
+    this.handlebars.registerHelper(
       "formatCurrency",
       (cents: number, currency: string) => {
         return MoneyUtil.formatCentsToCurrency(cents, currency);
       },
     );
 
-    Handlebars.registerHelper("add", (a: number, b: number) => {
+    this.handlebars.registerHelper("add", (a: number, b: number) => {
       return a + b;
     });
+
+    this.handlebars.registerHelper(
+      "hexToRgba",
+      (hex: string, alpha: number) => {
+        if (!hex || typeof hex !== "string") return `rgba(59,130,246,${alpha})`;
+        const clean = hex.replace("#", "");
+        const r = parseInt(clean.substring(0, 2), 16) || 0;
+        const g = parseInt(clean.substring(2, 4), 16) || 0;
+        const b = parseInt(clean.substring(4, 6), 16) || 0;
+        return `rgba(${r},${g},${b},${alpha})`;
+      },
+    );
   }
 
   private async loadFonts() {
@@ -203,7 +227,7 @@ export class TemplateService {
 
       this.logger.log(`Loading template from: ${templatePath}`);
       const templateContent = await fs.readFile(templatePath, "utf-8");
-      const compiledTemplate = Handlebars.compile(templateContent);
+      const compiledTemplate = this.handlebars.compile(templateContent);
 
       if (!isDevelopment) {
         this.templates.set(templateName, compiledTemplate);
@@ -247,6 +271,9 @@ export class TemplateService {
     language: string = "en",
     footerTitle?: string,
     footerSubtitle?: string,
+    primaryColor?: string,
+    paymentTerms?: string,
+    deliveryTerms?: string,
   ): TemplateData {
     const formatCurrency = (cents: number) =>
       MoneyUtil.formatCentsToCurrency(cents, order.currency);
@@ -290,6 +317,9 @@ export class TemplateService {
       translations,
       footerTitle,
       footerSubtitle,
+      primaryColor,
+      paymentTerms,
+      deliveryTerms,
     };
   }
 

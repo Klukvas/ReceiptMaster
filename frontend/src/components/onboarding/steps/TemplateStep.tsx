@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
-import { settingsApi } from '../../../lib/api';
-import { useTranslation } from '../../../hooks/useTranslation';
-import { TemplatePreviewIframe } from '../../settings/TemplatePreviewIframe';
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Check, Lock, Crown } from "lucide-react";
+import { settingsApi } from "../../../lib/api";
+import { useTranslation } from "../../../hooks/useTranslation";
+import { TemplatePreviewIframe } from "../../settings/TemplatePreviewIframe";
+import { UpgradeModal } from "../../subscription/UpgradeModal";
 
 interface Template {
   id: string;
@@ -11,19 +13,36 @@ interface Template {
   category: string;
   features: string[];
   colors: { primary: string; secondary: string; accent: string };
+  locked?: boolean;
 }
 
 const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
-  business: { label: 'Business', className: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' },
-  creative: { label: 'Creative', className: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' },
-  minimal: { label: 'Minimal', className: 'bg-gray-50 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300' },
-  premium: { label: 'Premium', className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
+  business: {
+    label: "Business",
+    className:
+      "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
+  },
+  creative: {
+    label: "Creative",
+    className:
+      "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300",
+  },
+  minimal: {
+    label: "Minimal",
+    className:
+      "bg-gray-50 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300",
+  },
+  premium: {
+    label: "Premium",
+    className:
+      "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
+  },
 };
 
 const LANGUAGES = [
-  { code: 'en', label: 'EN' },
-  { code: 'uk', label: 'UK' },
-  { code: 'ru', label: 'RU' },
+  { code: "en", label: "EN" },
+  { code: "uk", label: "UK" },
+  { code: "ru", label: "RU" },
 ];
 
 export interface TemplateData {
@@ -38,14 +57,15 @@ interface TemplateStepProps {
 
 export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
   const { t } = useTranslation();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   const { data: templates, isLoading } = useQuery<Template[]>({
-    queryKey: ['availableTemplates'],
+    queryKey: ["availableTemplates"],
     queryFn: async () => {
       const response = await settingsApi.getAvailableTemplates();
       const payload = response?.data;
       const normalized =
-        payload && typeof payload === 'object' && 'data' in payload
+        payload && typeof payload === "object" && "data" in payload
           ? (payload as Record<string, unknown>).data
           : payload;
       return Array.isArray(normalized) ? (normalized as Template[]) : [];
@@ -56,7 +76,10 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
     return (
       <div className="grid grid-cols-2 gap-3">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-48 rounded-xl bg-gray-100 dark:bg-gray-700/50 animate-pulse" />
+          <div
+            key={i}
+            className="h-48 rounded-xl bg-gray-100 dark:bg-gray-700/50 animate-pulse"
+          />
         ))}
       </div>
     );
@@ -67,7 +90,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
       {/* Language selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('settings.languageTitle')}
+          {t("settings.languageTitle")}
         </label>
         <div className="flex gap-2">
           {LANGUAGES.map((lang) => (
@@ -77,8 +100,8 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               onClick={() => onChange({ ...data, templateLanguage: lang.code })}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 data.templateLanguage === lang.code
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
               }`}
             >
               {lang.label}
@@ -91,19 +114,46 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
       <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto pr-1">
         {templates?.map((template) => {
           const isSelected = data.templateId === template.id;
-          const category = CATEGORY_STYLES[template.category] || CATEGORY_STYLES.business;
+          const isLocked = template.locked === true;
+          const category =
+            CATEGORY_STYLES[template.category] || CATEGORY_STYLES.business;
 
           return (
             <div
               key={template.id}
-              onClick={() => onChange({ ...data, templateId: template.id })}
+              onClick={() => {
+                if (isLocked) {
+                  setUpgradeModalOpen(true);
+                  return;
+                }
+                onChange({ ...data, templateId: template.id });
+              }}
               className={`group relative rounded-xl border-2 p-3 cursor-pointer transition-all duration-200 ${
-                isSelected
-                  ? 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
-                  : 'border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600'
+                isLocked
+                  ? "border-gray-200 dark:border-gray-700/60 opacity-75"
+                  : isSelected
+                    ? "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10"
+                    : "border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600"
               }`}
             >
-              {isSelected && (
+              {/* Lock overlay */}
+              {isLocked && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-black/5 dark:bg-black/20">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium shadow-lg">
+                    <Crown className="h-3 w-3" />
+                    {t("subscription.upgradeToPro", "Upgrade to Pro")}
+                  </div>
+                </div>
+              )}
+
+              {/* Lock indicator */}
+              {isLocked && (
+                <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white z-20">
+                  <Lock className="h-3 w-3" />
+                </div>
+              )}
+
+              {isSelected && !isLocked && (
                 <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-white z-10">
                   <Check className="h-3 w-3" />
                 </div>
@@ -122,11 +172,17 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               </h3>
 
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${category.className}`}>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${category.className}`}
+                >
                   {category.label}
                 </span>
                 <div className="flex gap-0.5">
-                  {[template.colors.primary, template.colors.secondary, template.colors.accent].map((color, i) => (
+                  {[
+                    template.colors.primary,
+                    template.colors.secondary,
+                    template.colors.accent,
+                  ].map((color, i) => (
                     <div
                       key={i}
                       className="w-3 h-3 rounded-full border border-gray-200 dark:border-gray-600"
@@ -139,6 +195,12 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
           );
         })}
       </div>
+
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        reason="templates"
+      />
     </div>
   );
 };

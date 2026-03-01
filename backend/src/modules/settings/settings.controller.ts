@@ -260,6 +260,84 @@ export class SettingsController {
     return { message: "Footer subtitle updated successfully" };
   }
 
+  @Get("primary-color")
+  async getPrimaryColor(@Request() req: { user: User }) {
+    const color = await this.settingsService.getPrimaryColor(req.user.id);
+    return { data: { primaryColor: color || "" } };
+  }
+
+  @Post("primary-color")
+  async updatePrimaryColor(
+    @Request() req: { user: User },
+    @Body() body: { primaryColor: string },
+  ) {
+    if (body.primaryColor && !/^#[0-9A-Fa-f]{6}$/.test(body.primaryColor)) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "primaryColor",
+        "Must be a valid hex color (#RRGGBB)",
+      );
+    }
+    await this.settingsService.setPrimaryColor(req.user.id, body.primaryColor);
+    return { message: "Primary color updated successfully" };
+  }
+
+  @Get("payment-terms")
+  async getPaymentTerms(@Request() req: { user: User }) {
+    const terms = await this.settingsService.getPaymentTerms(req.user.id);
+    return { data: { paymentTerms: terms || "" } };
+  }
+
+  @Post("payment-terms")
+  async updatePaymentTerms(
+    @Request() req: { user: User },
+    @Body() body: { paymentTerms: string },
+  ) {
+    if (
+      body.paymentTerms !== undefined &&
+      typeof body.paymentTerms !== "string"
+    ) {
+      throw ApiErrors.VALIDATION_ERROR("paymentTerms", "Must be a string");
+    }
+    if (body.paymentTerms && body.paymentTerms.length > 500) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "paymentTerms",
+        "Must not exceed 500 characters",
+      );
+    }
+    await this.settingsService.setPaymentTerms(req.user.id, body.paymentTerms);
+    return { message: "Payment terms updated successfully" };
+  }
+
+  @Get("delivery-terms")
+  async getDeliveryTerms(@Request() req: { user: User }) {
+    const terms = await this.settingsService.getDeliveryTerms(req.user.id);
+    return { data: { deliveryTerms: terms || "" } };
+  }
+
+  @Post("delivery-terms")
+  async updateDeliveryTerms(
+    @Request() req: { user: User },
+    @Body() body: { deliveryTerms: string },
+  ) {
+    if (
+      body.deliveryTerms !== undefined &&
+      typeof body.deliveryTerms !== "string"
+    ) {
+      throw ApiErrors.VALIDATION_ERROR("deliveryTerms", "Must be a string");
+    }
+    if (body.deliveryTerms && body.deliveryTerms.length > 500) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "deliveryTerms",
+        "Must not exceed 500 characters",
+      );
+    }
+    await this.settingsService.setDeliveryTerms(
+      req.user.id,
+      body.deliveryTerms,
+    );
+    return { message: "Delivery terms updated successfully" };
+  }
+
   @Get("company-info")
   async getCompanyInfo(@Request() req: { user: User }) {
     const companyInfo = await this.settingsService.getCompanyInfo(req.user.id);

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontRegular}}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,{{fontBold}}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans', 'Helvetica Neue', 'Arial', sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #1F2937;
+            background: white;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* Watermark */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 120px;
+            font-weight: bold;
+            color: #1E40AF;
+            opacity: 0.06;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 0;
+            letter-spacing: 0.05em;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 24px 20px;
+            border-bottom: 3px solid #1E40AF;
+            margin-bottom: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            height: 72px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .company-name {
+            font-size: 22px;
+            font-weight: bold;
+            color: #1E40AF;
+            margin-bottom: 4px;
+        }
+
+        .company-tagline {
+            font-size: 10px;
+            color: #6B7280;
+            letter-spacing: 0.02em;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+        .proforma-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1E40AF;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+        }
+
+        .invoice-meta {
+            font-size: 10px;
+            color: #6B7280;
+            line-height: 1.6;
+        }
+
+        .invoice-meta strong {
+            color: #1F2937;
+        }
+
+        /* Info Sections */
+        .info-grid {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .info-section {
+            flex: 1;
+            padding: 16px;
+            background: #F8FAFC;
+            border-radius: 6px;
+            border-left: 3px solid #1E40AF;
+        }
+
+        .section-label {
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #1E40AF;
+            margin-bottom: 10px;
+        }
+
+        .section-content {
+            font-size: 11px;
+            color: #1F2937;
+            line-height: 1.6;
+        }
+
+        .section-content .name {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .section-content .detail {
+            color: #4B5563;
+            margin-bottom: 2px;
+        }
+
+        /* Items Table */
+        .table-wrapper {
+            padding: 0 20px;
+            margin-bottom: 0;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .items-table thead tr {
+            background: #1E40AF;
+        }
+
+        .items-table th {
+            padding: 10px 12px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #FFFFFF;
+            text-align: left;
+        }
+
+        .items-table th.col-qty,
+        .items-table th.col-unit-price,
+        .items-table th.col-amount {
+            text-align: right;
+        }
+
+        .items-table td {
+            padding: 10px 12px;
+            font-size: 11px;
+            color: #1F2937;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .items-table td.col-qty,
+        .items-table td.col-unit-price,
+        .items-table td.col-amount {
+            text-align: right;
+        }
+
+        .items-table tbody tr:nth-child(even) {
+            background: #F9FAFB;
+        }
+
+        .col-description {
+            width: 50%;
+        }
+
+        .col-qty {
+            width: 12%;
+        }
+
+        .col-unit-price {
+            width: 19%;
+        }
+
+        .col-amount {
+            width: 19%;
+        }
+
+        /* Totals */
+        .totals-wrapper {
+            display: flex;
+            justify-content: flex-end;
+            padding: 20px;
+        }
+
+        .totals-box {
+            width: 280px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #4B5563;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .totals-row.total {
+            background: #1E40AF;
+            color: #FFFFFF;
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: none;
+            border-radius: 4px;
+            margin-top: 4px;
+            padding: 12px;
+        }
+
+        /* Bank Details, Payment Terms, Delivery Terms */
+        .details-grid {
+            display: flex;
+            gap: 16px;
+            padding: 0 20px 20px;
+        }
+
+        .details-box {
+            flex: 1;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            padding: 16px;
+            background: #FAFBFC;
+        }
+
+        .details-box-title {
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #1E40AF;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #1E40AF;
+        }
+
+        .details-box-content {
+            font-size: 11px;
+            color: #374151;
+            line-height: 1.6;
+        }
+
+        .details-box-content .detail-row {
+            display: flex;
+            margin-bottom: 4px;
+        }
+
+        .details-box-content .detail-label {
+            font-weight: bold;
+            color: #1F2937;
+            min-width: 55px;
+            margin-right: 8px;
+        }
+
+        .details-box-content .detail-value {
+            color: #374151;
+            word-break: break-all;
+        }
+
+        .terms-text {
+            font-size: 11px;
+            color: #374151;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+
+        /* Footer */
+        .footer {
+            border-top: 3px solid #1E40AF;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .footer-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1E40AF;
+            margin-bottom: 6px;
+        }
+
+        .footer-subtitle {
+            font-size: 11px;
+            color: #6B7280;
+            margin-bottom: 12px;
+        }
+
+        .footer-company-info {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px 20px;
+            font-size: 10px;
+            color: #9CA3AF;
+        }
+
+        .footer-company-info span {
+            white-space: nowrap;
+        }
+
+        .footer-timestamp {
+            font-size: 9px;
+            color: #9CA3AF;
+            margin-top: 10px;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                max-width: none;
+            }
+
+            .watermark {
+                position: fixed;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Watermark -->
+    <div class="watermark">{{#if translations.proformaWatermark}}{{translations.proformaWatermark}}{{else}}PROFORMA{{/if}}</div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                {{#if hasCustomLogo}}
+                <img src="{{logoPath}}" alt="Logo" class="logo">
+                {{/if}}
+                <div>
+                    <div class="company-name">{{companyName}}</div>
+                    {{#if companyTagline}}
+                    <div class="company-tagline">{{companyTagline}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="proforma-title">{{#if translations.proformaInvoice}}{{translations.proformaInvoice}}{{else}}Proforma Invoice{{/if}}</div>
+                <div class="invoice-meta">
+                    <div><strong>{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No:{{/if}}</strong> {{receiptNumber}}</div>
+                    <div><strong>{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</strong> {{orderDate}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- From / Bill To -->
+        <div class="info-grid">
+            <div class="info-section">
+                <div class="section-label">{{#if translations.from}}{{translations.from}}{{else}}From{{/if}}</div>
+                <div class="section-content">
+                    <div class="name">{{companyName}}</div>
+                    {{#if companyAddress}}
+                    <div class="detail">{{companyAddress}}</div>
+                    {{/if}}
+                    {{#if companyEmail}}
+                    <div class="detail">{{companyEmail}}</div>
+                    {{/if}}
+                    {{#if companyPhone}}
+                    <div class="detail">{{companyPhone}}</div>
+                    {{/if}}
+                    {{#if companyWebsite}}
+                    <div class="detail">{{companyWebsite}}</div>
+                    {{/if}}
+                    {{#if companyTaxId}}
+                    <div class="detail">Tax ID: {{companyTaxId}}</div>
+                    {{/if}}
+                </div>
+            </div>
+            <div class="info-section">
+                <div class="section-label">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
+                <div class="section-content">
+                    <div class="name">{{recipientName}}</div>
+                    {{#if recipientAddress}}
+                    <div class="detail">{{recipientAddress}}</div>
+                    {{/if}}
+                    {{#if recipientEmail}}
+                    <div class="detail">{{recipientEmail}}</div>
+                    {{/if}}
+                    {{#if recipientPhone}}
+                    <div class="detail">{{recipientPhone}}</div>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="table-wrapper">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                        <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                        <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
+                        <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each items}}
+                    <tr>
+                        <td class="col-description">{{productName}}</td>
+                        <td class="col-qty">{{qty}}</td>
+                        <td class="col-unit-price">{{unitPrice}}</td>
+                        <td class="col-amount">{{lineTotal}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Totals -->
+        <div class="totals-wrapper">
+            <div class="totals-box">
+                <div class="totals-row">
+                    <span>{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
+                    <span>{{subtotal}}</span>
+                </div>
+                <div class="totals-row total">
+                    <span>{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</span>
+                    <span>{{total}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bank Details, Payment Terms, Delivery Terms -->
+        <div class="details-grid">
+            {{#if companyIban}}
+            <div class="details-box">
+                <div class="details-box-title">{{#if translations.bankDetails}}{{translations.bankDetails}}{{else}}Bank Details{{/if}}</div>
+                <div class="details-box-content">
+                    {{#if companyIban}}
+                    <div class="detail-row">
+                        <span class="detail-label">{{#if translations.iban}}{{translations.iban}}{{else}}IBAN:{{/if}}</span>
+                        <span class="detail-value">{{companyIban}}</span>
+                    </div>
+                    {{/if}}
+                    {{#if companySwift}}
+                    <div class="detail-row">
+                        <span class="detail-label">{{#if translations.swift}}{{translations.swift}}{{else}}SWIFT:{{/if}}</span>
+                        <span class="detail-value">{{companySwift}}</span>
+                    </div>
+                    {{/if}}
+                </div>
+            </div>
+            {{/if}}
+
+            {{#if paymentTerms}}
+            <div class="details-box">
+                <div class="details-box-title">{{#if translations.paymentTerms}}{{translations.paymentTerms}}{{else}}Payment Terms{{/if}}</div>
+                <div class="details-box-content">
+                    <div class="terms-text">{{paymentTerms}}</div>
+                </div>
+            </div>
+            {{/if}}
+
+            {{#if deliveryTerms}}
+            <div class="details-box">
+                <div class="details-box-title">{{#if translations.deliveryTerms}}{{translations.deliveryTerms}}{{else}}Delivery Terms{{/if}}</div>
+                <div class="details-box-content">
+                    <div class="terms-text">{{deliveryTerms}}</div>
+                </div>
+            </div>
+            {{/if}}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            {{#if footerTitle}}
+            <div class="footer-title">{{footerTitle}}</div>
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-subtitle">{{footerSubtitle}}</div>
+            {{/if}}
+
+            <div class="footer-company-info">
+                {{#if companyAddress}}
+                <span>{{companyAddress}}</span>
+                {{/if}}
+                {{#if companyEmail}}
+                <span>{{companyEmail}}</span>
+                {{/if}}
+                {{#if companyPhone}}
+                <span>{{companyPhone}}</span>
+                {{/if}}
+                {{#if companyWebsite}}
+                <span>{{companyWebsite}}</span>
+                {{/if}}
+            </div>
+
+            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Generated:{{/if}} {{generatedAt}}</div>
+        </div>
+    </div>
+</body>
+</html>

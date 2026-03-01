@@ -38,6 +38,7 @@ lerna-debug.log*
 .env
 .env.local
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 
@@ -48,3 +49,5 @@ lerna-debug.log*
 # User uploaded assets
 src/assets/logo.png
 src/assets/settings.json
+backend/src/coverage-temp/
+backend/.env.test

@@ -54,5 +54,13 @@
   "authorisedSignatory": "(Уповноважений підпис)",
   "taxId": "Податковий номер",
   "iban": "IBAN",
-  "swift": "SWIFT"
+  "swift": "SWIFT",
+  "deliveryNote": "Видаткова накладна",
+  "proformaInvoice": "Проформа-інвойс",
+  "paymentTerms": "Умови оплати",
+  "deliveryTerms": "Умови доставки",
+  "bankDetails": "Банківські реквізити",
+  "proformaWatermark": "ПРОФОРМА",
+  "receivedBy": "Отримав",
+  "signature": "Підпис"
 }

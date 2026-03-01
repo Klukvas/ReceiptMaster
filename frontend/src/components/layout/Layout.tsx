@@ -1,9 +1,11 @@
-import { type ReactNode, useState } from 'react';
-import { Menu, LogOut } from 'lucide-react';
-import { clsx } from 'clsx';
-import { useAuth } from '../../hooks/useAuth';
-import { Sidebar } from './Sidebar';
-import { ReceiptProgressPanel } from '../receipts/ReceiptProgressPanel';
+import { type ReactNode, useState } from "react";
+import { Link } from "react-router-dom";
+import { Menu, LogOut } from "lucide-react";
+import { clsx } from "clsx";
+import { useAuth } from "../../hooks/useAuth";
+import { useTranslation } from "../../hooks/useTranslation";
+import { Sidebar } from "./Sidebar";
+import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,6 +13,7 @@ interface LayoutProps {
 
 export const Layout = ({ children }: LayoutProps) => {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -59,15 +62,62 @@ export const Layout = ({ children }: LayoutProps) => {
       />
 
       {/* Main content */}
-      <div className={clsx(
-        'transition-all duration-300',
-        sidebarCollapsed ? 'lg:pl-[68px]' : 'lg:pl-[260px]'
-      )}>
-        <main className="py-6 pt-20 lg:pt-6 pb-8">
+      <div
+        className={clsx(
+          "min-h-screen flex flex-col transition-all duration-300",
+          sidebarCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]",
+        )}
+      >
+        <main className="flex-1 py-6 pt-20 lg:pt-6 pb-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {children}
           </div>
         </main>
+        {/* Footer */}
+        <footer className="border-t border-gray-200/60 dark:border-gray-800 py-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                &copy; {new Date().getFullYear()} ReceiptMaster.{" "}
+                {t("landing.footer.rights")} &middot; Powered by{" "}
+                <span className="font-semibold">fluxLab</span>
+              </p>
+              <nav className="flex items-center gap-4">
+                <Link
+                  to="/terms"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {t("landing.footer.terms")}
+                </Link>
+                <Link
+                  to="/privacy"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {t("landing.footer.privacy")}
+                </Link>
+                <Link
+                  to="/refund-policy"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {t("landing.footer.refundPolicy")}
+                </Link>
+                <Link
+                  to="/cookie-policy"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {t("landing.footer.cookiePolicy")}
+                </Link>
+                <a
+                  href="mailto:fluxlab@flux-lab.dev"
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {t("landing.footer.contact")}
+                </a>
+              </nav>
+            </div>
+          </div>
+        </footer>
+
         <ReceiptProgressPanel />
       </div>
     </div>

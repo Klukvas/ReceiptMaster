@@ -234,6 +234,7 @@ export class OrdersService {
       .createQueryBuilder("order")
       .leftJoinAndSelect("order.recipient", "recipient")
       .leftJoinAndSelect("order.items", "items")
+      .leftJoinAndSelect("order.receipts", "receipts")
       .where("order.user_id = :userId", { userId: user.id });
 
     if (status) {
@@ -450,11 +451,6 @@ export class OrdersService {
           product.quantity -= itemDto.qty;
           await manager.save(Product, product);
         }
-      }
-
-      // Update payment status if provided
-      if (updateOrderDto.paymentStatus) {
-        order.payment_status = updateOrderDto.paymentStatus;
       }
 
       // Save order

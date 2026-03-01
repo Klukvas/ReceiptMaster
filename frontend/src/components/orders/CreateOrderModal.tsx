@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, AlertCircle, Plus, Package, User } from 'lucide-react';
-import { ordersApi, productsApi, recipientsApi } from '../../lib/api';
-import { Button } from '../ui/Button';
-import { Combobox } from '../ui/Combobox';
-import { useTranslation } from '../../hooks/useTranslation';
-import { OrderLineItem } from './OrderLineItem';
-import { OrderSummary } from './OrderSummary';
+import { useState, useEffect, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { X, AlertCircle, Plus, Package, User } from "lucide-react";
+import { ordersApi, productsApi, recipientsApi } from "../../lib/api";
+import { Button } from "../ui/Button";
+import { Combobox } from "../ui/Combobox";
+import { useTranslation } from "../../hooks/useTranslation";
+import { OrderLineItem } from "./OrderLineItem";
+import { OrderSummary } from "./OrderSummary";
 
 interface CreateOrderModalProps {
   onClose: () => void;
@@ -19,28 +19,29 @@ interface OrderItem {
 }
 
 const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response;
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } })
+      .response;
     return response?.data?.message || defaultMessage;
   }
   return defaultMessage;
 };
 
 export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
-  const [recipientId, setRecipientId] = useState('');
+  const [recipientId, setRecipientId] = useState("");
   const [items, setItems] = useState<OrderItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [backendError, setBackendError] = useState('');
+  const [backendError, setBackendError] = useState("");
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
   const { data: productsData } = useQuery({
-    queryKey: ['products'],
+    queryKey: ["products"],
     queryFn: () => productsApi.getAll({ limit: 100 }),
   });
 
   const { data: recipientsData } = useQuery({
-    queryKey: ['recipients'],
+    queryKey: ["recipients"],
     queryFn: () => recipientsApi.getAll({ limit: 100 }),
   });
 
@@ -50,33 +51,34 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
   const createMutation = useMutation({
     mutationFn: ordersApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t('orders.failedToCreateOrder')));
+      setBackendError(getErrorMessage(error, t("orders.failedToCreateOrder")));
     },
   });
 
   // Lock body scroll
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     };
   }, []);
 
   // Escape key handler
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [onClose]);
 
   const addItem = useCallback(() => {
-    setItems((prev) => [...prev, { productId: '', qty: 1 }]);
+    setItems((prev) => [...prev, { productId: "", qty: 1 }]);
   }, []);
 
   const removeItem = useCallback((index: number) => {
@@ -84,13 +86,17 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
   }, []);
 
   const updateItem = useCallback(
-    (index: number, field: keyof OrderItem, value: string | number | undefined) => {
+    (
+      index: number,
+      field: keyof OrderItem,
+      value: string | number | undefined,
+    ) => {
       setItems((prev) => {
         const newItems = [...prev];
         newItems[index] = { ...newItems[index], [field]: value };
         return newItems;
       });
-      if (field === 'productId' || field === 'qty') {
+      if (field === "productId" || field === "qty") {
         setErrors((prev) => {
           const next = { ...prev };
           delete next[`item-${index}-qty`];
@@ -99,7 +105,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
         });
       }
     },
-    []
+    [],
   );
 
   const getProduct = (productId: string) =>
@@ -119,18 +125,18 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
     const newErrors: Record<string, string> = {};
 
     if (!recipientId) {
-      newErrors.recipient = t('orders.selectRecipient');
+      newErrors.recipient = t("orders.selectRecipient");
     }
 
     const validItems = items.filter((item) => item.productId && item.qty > 0);
     if (validItems.length === 0) {
-      newErrors.items = t('orders.addAtLeastOneProduct');
+      newErrors.items = t("orders.addAtLeastOneProduct");
     }
 
     validItems.forEach((item, index) => {
       const product = getProduct(item.productId);
       if (product && item.qty > product.quantity) {
-        newErrors[`item-${index}-qty`] = t('orders.insufficientQuantity', {
+        newErrors[`item-${index}-qty`] = t("orders.insufficientQuantity", {
           available: product.quantity,
         });
       }
@@ -143,7 +149,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-    setBackendError('');
+    setBackendError("");
 
     if (!validateForm()) return;
 
@@ -151,13 +157,14 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
     createMutation.mutate({ recipientId, items: validItems });
   };
 
-  const isFormValid = recipientId && items.some((i) => i.productId && i.qty > 0);
+  const isFormValid =
+    recipientId && items.some((i) => i.productId && i.qty > 0);
 
   const recipientOptions = recipients.map((r) => ({
     value: r.id,
     label: r.name,
-    searchText: `${r.name} ${r.email || ''} ${r.phone || ''}`.trim(),
-    subtitle: r.email || '',
+    searchText: `${r.name} ${r.email || ""} ${r.phone || ""}`.trim(),
+    subtitle: r.email || "",
   }));
 
   return (
@@ -186,7 +193,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
               id="create-order-title"
               className="text-lg font-semibold text-gray-900 dark:text-white"
             >
-              {t('orders.createOrder')}
+              {t("orders.createOrder")}
             </h2>
             <button
               type="button"
@@ -213,7 +220,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
               <div className="flex items-center gap-2 mb-2">
                 <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('orders.recipient')}
+                  {t("orders.recipient")}
                 </label>
               </div>
               <Combobox
@@ -221,18 +228,21 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                 value={recipientId}
                 onChange={(value) => {
                   setRecipientId(value);
-                  if (errors.recipient) setErrors((prev) => ({ ...prev, recipient: '' }));
+                  if (errors.recipient)
+                    setErrors((prev) => ({ ...prev, recipient: "" }));
                 }}
-                placeholder={t('orders.selectRecipient')}
-                searchPlaceholder={t('orders.searchRecipient')}
-                noResultsText={t('orders.nothingFound')}
+                placeholder={t("orders.selectRecipient")}
+                searchPlaceholder={t("orders.searchRecipient")}
+                noResultsText={t("orders.nothingFound")}
                 required
               />
               {errors.recipient ? (
-                <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{errors.recipient}</p>
+                <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+                  {errors.recipient}
+                </p>
               ) : (
                 <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                  {t('orders.recipientHelper')}
+                  {t("orders.recipientHelper")}
                 </p>
               )}
             </section>
@@ -242,7 +252,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
               <div className="flex items-center gap-2 mb-3">
                 <Package className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('orders.products')}
+                  {t("orders.products")}
                 </label>
               </div>
 
@@ -251,7 +261,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                 <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                   <Package className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" />
                   <p className="text-sm text-gray-400 dark:text-gray-500 text-center max-w-[220px]">
-                    {t('orders.emptyProducts')}
+                    {t("orders.emptyProducts")}
                   </p>
                 </div>
               ) : (
@@ -279,11 +289,13 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                 className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                {t('orders.addProduct')}
+                {t("orders.addProduct")}
               </button>
 
               {errors.items && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errors.items}</p>
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                  {errors.items}
+                </p>
               )}
             </section>
 
@@ -324,14 +336,14 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                       />
                     </svg>
-                    {t('orders.creating')}
+                    {t("orders.creating")}
                   </span>
                 ) : (
-                  t('orders.createOrder')
+                  t("orders.createOrder")
                 )}
               </Button>
               <Button type="button" variant="secondary" onClick={onClose}>
-                {t('common.cancel')}
+                {t("common.cancel")}
               </Button>
             </div>
           </div>

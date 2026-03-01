@@ -72,6 +72,16 @@ export class ReceiptsService {
         return ReceiptStyle.MINIMAL;
       case "corporate":
         return ReceiptStyle.CORPORATE;
+      case "thermal":
+        return ReceiptStyle.THERMAL;
+      case "dark":
+        return ReceiptStyle.DARK;
+      case "branded":
+        return ReceiptStyle.BRANDED;
+      case "delivery":
+        return ReceiptStyle.DELIVERY;
+      case "proforma":
+        return ReceiptStyle.PROFORMA;
       default:
         this.logger.warn(
           `Unknown template ID: ${templateId}, falling back to COMPACT`,
@@ -186,7 +196,6 @@ export class ReceiptsService {
       created_at: new Date(),
       updated_at: new Date(),
       is_locked: false,
-      payment_status: "unpaid" as any,
       user: user,
       recipient: {
         id: "00000000-0000-0000-0000-000000000000",
@@ -241,6 +250,9 @@ export class ReceiptsService {
       pdfSettings.templateLanguage,
       pdfSettings.footerTitle,
       pdfSettings.footerSubtitle,
+      pdfSettings.primaryColor,
+      pdfSettings.paymentTerms,
+      pdfSettings.deliveryTerms,
     );
 
     let pdfBuffer: Buffer;
@@ -288,12 +300,20 @@ export class ReceiptsService {
         throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
       }
 
-      // Void the receipt (immutable update)
-      const savedReceipt = await manager.save(Receipt, {
-        ...receipt,
-        status: ReceiptStatus.VOID,
-        voided_at: new Date(),
-        void_reason: reason,
+      // Void the receipt and revoke any public share link (immutable update)
+      await manager.update(
+        Receipt,
+        { id: receipt.id },
+        {
+          status: ReceiptStatus.VOID,
+          voided_at: new Date(),
+          void_reason: reason,
+          public_token: undefined,
+        },
+      );
+      const savedReceipt = await manager.findOneOrFail(Receipt, {
+        where: { id: receipt.id },
+        relations: ["order"],
       });
 
       // Unlock the order so it can be modified again
@@ -427,6 +447,9 @@ export class ReceiptsService {
             pdfSettings.templateLanguage,
             pdfSettings.footerTitle,
             pdfSettings.footerSubtitle,
+            pdfSettings.primaryColor,
+            pdfSettings.paymentTerms,
+            pdfSettings.deliveryTerms,
           );
 
         // Обновляем путь к файлу в базе данных (immutable update)
@@ -519,6 +542,9 @@ export class ReceiptsService {
       pdfSettings.templateLanguage,
       pdfSettings.footerTitle,
       pdfSettings.footerSubtitle,
+      pdfSettings.primaryColor,
+      pdfSettings.paymentTerms,
+      pdfSettings.deliveryTerms,
     );
 
     // Вычисляем хеш нового файла
@@ -858,6 +884,191 @@ export class ReceiptsService {
         });
       }
     }
+  }
+
+  async generatePublicToken(
+    receiptId: string,
+    user: User,
+  ): Promise<{ token: string; url: string }> {
+    const receipt = await this.receiptsRepository.findOne({
+      where: { id: receiptId, user_id: user.id },
+    });
+
+    if (!receipt) {
+      throw ApiErrors.RECEIPT_NOT_FOUND(receiptId);
+    }
+
+    if (receipt.status !== ReceiptStatus.GENERATED) {
+      throw ApiErrors.BAD_REQUEST(
+        "Only generated receipts can be shared publicly",
+      );
+    }
+
+    const frontendUrl = this.configService.get<string>(
+      "FRONTEND_URL",
+      "http://localhost:5173",
+    );
+
+    // If already has a token, return it
+    if (receipt.public_token) {
+      return {
+        token: receipt.public_token,
+        url: `${frontendUrl}/r/${receipt.public_token}`,
+      };
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await this.receiptsRepository.save({
+      ...receipt,
+      public_token: token,
+    });
+
+    return {
+      token,
+      url: `${frontendUrl}/r/${token}`,
+    };
+  }
+
+  async revokePublicToken(receiptId: string, user: User): Promise<Receipt> {
+    const receipt = await this.receiptsRepository.findOne({
+      where: { id: receiptId, user_id: user.id },
+    });
+
+    if (!receipt) {
+      throw ApiErrors.RECEIPT_NOT_FOUND(receiptId);
+    }
+
+    await this.receiptsRepository.update(
+      { id: receiptId },
+      { public_token: undefined },
+    );
+
+    this.logger.log(`Public token revoked for receipt ${receipt.number}`);
+
+    return this.receiptsRepository.findOneOrFail({
+      where: { id: receiptId },
+    });
+  }
+
+  async getPublicReceipt(token: string): Promise<{
+    receipt: {
+      id: string;
+      number: string;
+      status: ReceiptStatus;
+      created_at: Date;
+      order: {
+        id: string;
+        currency: string;
+        subtotal_cents: number;
+        total_cents: number;
+        created_at: Date;
+        recipient: {
+          name: string;
+          email?: string;
+          phone?: string;
+          address?: string;
+        };
+        items: Array<{
+          product_name: string;
+          qty: number;
+          unit_price_cents: number;
+          line_total_cents: number;
+        }>;
+      };
+    };
+    companyInfo: Record<string, string | undefined>;
+  }> {
+    const receipt = await this.receiptsRepository.findOne({
+      where: { public_token: token, status: ReceiptStatus.GENERATED },
+      relations: ["order", "order.items", "order.recipient"],
+    });
+
+    if (!receipt) {
+      throw ApiErrors.NOT_FOUND("Receipt");
+    }
+
+    const pdfSettings = await this.settingsService.getAllPdfSettings(
+      receipt.user_id,
+    );
+
+    // Return only public-safe fields — never expose pdf_path, html_snapshot,
+    // user_id, public_token, hash, or error_message to unauthenticated callers
+    return {
+      receipt: {
+        id: receipt.id,
+        number: receipt.number,
+        status: receipt.status,
+        created_at: receipt.created_at,
+        order: {
+          id: receipt.order.id,
+          currency: receipt.order.currency,
+          subtotal_cents: receipt.order.subtotal_cents,
+          total_cents: receipt.order.total_cents,
+          created_at: receipt.order.created_at,
+          recipient: {
+            name: receipt.order.recipient.name,
+            email: receipt.order.recipient.email || undefined,
+            phone: receipt.order.recipient.phone || undefined,
+            address: receipt.order.recipient.address || undefined,
+          },
+          items: receipt.order.items.map((item) => ({
+            product_name: item.product_name,
+            qty: item.qty,
+            unit_price_cents: item.unit_price_cents,
+            line_total_cents: item.line_total_cents,
+          })),
+        },
+      },
+      companyInfo: {
+        ...pdfSettings.companyInfo,
+        receiptTitle: pdfSettings.receiptTitle,
+      },
+    };
+  }
+
+  async getPublicReceiptPdf(
+    token: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const receipt = await this.receiptsRepository.findOne({
+      where: { public_token: token, status: ReceiptStatus.GENERATED },
+    });
+
+    if (!receipt) {
+      throw ApiErrors.NOT_FOUND("Receipt");
+    }
+
+    if (!receipt.pdf_path) {
+      throw ApiErrors.FILE_NOT_FOUND("receipt PDF");
+    }
+
+    let buffer: Buffer;
+
+    if (receipt.pdf_path.startsWith("object-storage://")) {
+      const parsed = this.pdfStorageService.parseObjectStoragePath(
+        receipt.pdf_path,
+      );
+      if (!parsed) {
+        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+      }
+      const exists = await this.pdfStorageService.fileExists(
+        parsed.bucket,
+        parsed.key,
+      );
+      if (!exists) {
+        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+      }
+      buffer = await this.pdfStorageService.downloadFile(
+        parsed.bucket,
+        parsed.key,
+      );
+    } else {
+      await fs.access(receipt.pdf_path);
+      buffer = await fs.readFile(receipt.pdf_path);
+    }
+
+    const filename = `receipt-${receipt.number}.pdf`;
+    return { buffer, filename };
   }
 
   async deleteReceiptFilesForOrder(orderId: string): Promise<void> {

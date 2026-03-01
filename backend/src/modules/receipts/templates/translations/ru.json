@@ -54,5 +54,13 @@
   "authorisedSignatory": "(Уполномоченная подпись)",
   "taxId": "Налоговый номер",
   "iban": "IBAN",
-  "swift": "SWIFT"
+  "swift": "SWIFT",
+  "deliveryNote": "Накладная",
+  "proformaInvoice": "Проформа-инвойс",
+  "paymentTerms": "Условия оплаты",
+  "deliveryTerms": "Условия доставки",
+  "bankDetails": "Банковские реквизиты",
+  "proformaWatermark": "ПРОФОРМА",
+  "receivedBy": "Получил",
+  "signature": "Подпись"
 }
