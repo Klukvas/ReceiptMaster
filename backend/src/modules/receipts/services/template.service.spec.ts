@@ -231,6 +231,7 @@ describe("TemplateService", () => {
   });
 
   describe("loadTranslations", () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require("fs/promises");
 
     it("should load flat JSON translations without corporate wrapper", async () => {
@@ -270,7 +271,9 @@ describe("TemplateService", () => {
   });
 
   describe("loadTemplate", () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require("fs/promises");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const _Handlebars = require("handlebars");
 
     it("should load template from file", async () => {
@@ -292,6 +295,7 @@ describe("TemplateService", () => {
   });
 
   describe("renderTemplate", () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require("fs/promises");
 
     it("should render template with data", async () => {

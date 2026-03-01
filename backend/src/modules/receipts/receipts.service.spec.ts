@@ -16,7 +16,7 @@ jest.mock("child_process", () => {
   const execFileFn = jest.fn();
   const customSymbol =
     Symbol.for("nodejs.util.promisify.custom") ||
-    require("util").promisify.custom;
+    require("util").promisify.custom; // eslint-disable-line @typescript-eslint/no-var-requires
   execFileFn[customSymbol] = (...args: any[]) => mockExecPromise(...args);
   return { execFile: execFileFn };
 });
