@@ -196,7 +196,7 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           TELEGRAM_BOT_TOKEN: test-telegram-bot-token
-          TELEGRAM_BOT_OWNER_USER_ID: test-owner-id
+          TELEGRAM_BOT_OWNER_USER_ID: 00000000-0000-0000-0000-000000000000
 
       - name: E2E summary
         if: always()
