@@ -152,6 +152,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: ./backend
@@ -184,6 +193,10 @@ jobs:
           API_PREFIX: api/v1
           AUTO_RUN_MIGRATIONS: 'true'
           API_KEY: test-api-key
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          TELEGRAM_BOT_TOKEN: test-telegram-bot-token
+          TELEGRAM_BOT_OWNER_USER_ID: test-owner-id
 
       - name: E2E summary
         if: always()
