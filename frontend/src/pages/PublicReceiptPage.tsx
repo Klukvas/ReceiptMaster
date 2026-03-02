@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { Download, FileText, AlertCircle } from "lucide-react";
+import { downloadPdf } from "../lib/pdf-utils";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
@@ -67,6 +68,7 @@ export const PublicReceiptPage = () => {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -80,18 +82,15 @@ export const PublicReceiptPage = () => {
   const handleDownload = async () => {
     if (!token) return;
     setDownloading(true);
+    setDownloadError(false);
     try {
       const res = await publicApi.get(`/public/receipts/${token}/pdf`, {
         responseType: "blob",
       });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `receipt-${data?.receipt.number || "download"}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      downloadPdf(blob, `receipt-${data?.receipt.number || "download"}.pdf`);
     } catch {
-      // Silently fail
+      setDownloadError(true);
     } finally {
       setDownloading(false);
     }
@@ -140,7 +139,9 @@ export const PublicReceiptPage = () => {
             </h1>
           )}
           {companyInfo.companyAddress && (
-            <p className="text-sm text-gray-500">{companyInfo.companyAddress}</p>
+            <p className="text-sm text-gray-500">
+              {companyInfo.companyAddress}
+            </p>
           )}
         </div>
 
@@ -164,6 +165,11 @@ export const PublicReceiptPage = () => {
                 {downloading ? "..." : "Download PDF"}
               </button>
             </div>
+            {downloadError && (
+              <p className="mt-2 text-sm text-red-600">
+                Failed to download PDF. Please try again.
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
               <span>#{receipt.number}</span>
               <span>{formatDate(receipt.created_at)}</span>
@@ -227,7 +233,9 @@ export const PublicReceiptPage = () => {
                 Bill To
               </h3>
               <div className="space-y-0.5 text-sm text-gray-700">
-                {order.recipient.name && <p className="font-medium">{order.recipient.name}</p>}
+                {order.recipient.name && (
+                  <p className="font-medium">{order.recipient.name}</p>
+                )}
                 {order.recipient.email && <p>{order.recipient.email}</p>}
                 {order.recipient.phone && <p>{order.recipient.phone}</p>}
                 {order.recipient.address && <p>{order.recipient.address}</p>}
@@ -236,7 +244,9 @@ export const PublicReceiptPage = () => {
           )}
 
           {/* Company contact */}
-          {(companyInfo.companyEmail || companyInfo.companyPhone || companyInfo.companyWebsite) && (
+          {(companyInfo.companyEmail ||
+            companyInfo.companyPhone ||
+            companyInfo.companyWebsite) && (
             <div className="px-6 py-4 border-t border-gray-100">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
                 Contact
@@ -244,7 +254,9 @@ export const PublicReceiptPage = () => {
               <div className="space-y-0.5 text-sm text-gray-500">
                 {companyInfo.companyEmail && <p>{companyInfo.companyEmail}</p>}
                 {companyInfo.companyPhone && <p>{companyInfo.companyPhone}</p>}
-                {companyInfo.companyWebsite && <p>{companyInfo.companyWebsite}</p>}
+                {companyInfo.companyWebsite && (
+                  <p>{companyInfo.companyWebsite}</p>
+                )}
               </div>
             </div>
           )}
@@ -257,9 +269,7 @@ export const PublicReceiptPage = () => {
               {companyInfo.companyTagline}
             </p>
           )}
-          <p className="text-xs text-gray-300 mt-2">
-            Powered by ReceiptMaster
-          </p>
+          <p className="text-xs text-gray-300 mt-2">Powered by ReceiptMaster</p>
         </div>
       </div>
     </div>

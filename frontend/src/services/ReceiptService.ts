@@ -1,7 +1,7 @@
 import { receiptsApi } from "../lib/api";
 import { notificationService } from "./NotificationService";
 import { parseApiError } from "../lib/api-errors";
-import { isIOS } from "../lib/pdf-utils";
+import { downloadPdf } from "../lib/pdf-utils";
 
 export interface PrinterInfo {
   name: string;
@@ -31,27 +31,8 @@ export class ReceiptService {
   async downloadReceipt(receiptId: string): Promise<void> {
     try {
       const response = await receiptsApi.getPdf(receiptId);
-
       const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-
-      if (isIOS()) {
-        // iOS Safari: <a download> с blob URL создаёт и загрузку, и навигацию,
-        // в результате при шеринге отправляется 2 файла.
-        // Открываем PDF в новой вкладке — Safari покажет встроенный просмотрщик
-        // с корректной кнопкой «Поделиться» (1 файл).
-        window.open(url, "_blank");
-        setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-      } else {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `receipt-${receiptId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
-
+      downloadPdf(blob, `receipt-${receiptId}.pdf`);
       notificationService.success("Receipt downloaded successfully");
     } catch (error) {
       const apiError = parseApiError(error);

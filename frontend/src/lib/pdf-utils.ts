@@ -1,42 +1,42 @@
 /**
- * Утилиты для работы с PDF файлами
+ * Утилиты для скачивания файлов (PDF, CSV и т.д.)
+ *
+ * Используем единый подход <a download> для ВСЕХ браузеров (включая Safari).
+ * Ключевой момент — revokeObjectURL вызывается с задержкой 10 с,
+ * чтобы Safari успел начать чтение blob (Safari делает это асинхронно).
+ * Это тот же паттерн, что использует FileSaver.js.
  */
 
+const REVOKE_DELAY_MS = 10_000;
+
 /**
- * Определяет, работает ли приложение на iOS (iPhone, iPad, iPod)
+ * Скачивает blob как файл через скрытый <a download>.
+ * Работает во всех современных браузерах (Chrome, Firefox, Safari 14.1+, Edge).
  */
-export const isIOS = (): boolean => {
-  if (typeof navigator === "undefined") return false;
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
+export const downloadBlob = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }, REVOKE_DELAY_MS);
 };
 
 /**
  * Скачивает PDF файл из blob данных.
- * На iOS Safari использует window.open вместо <a download>,
- * т.к. download-атрибут в Safari приводит к дублированию файла при шеринге.
+ * Семантический алиас для downloadBlob.
  */
-export const downloadPdf = (blob: Blob, filename: string) => {
-  const url = window.URL.createObjectURL(blob);
-
-  if (isIOS()) {
-    window.open(url, "_blank");
-    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-  } else {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  }
-};
+export const downloadPdf = downloadBlob;
 
 /**
- * Открывает PDF в новой вкладке
+ * Открывает PDF в новой вкладке браузера.
+ * Вызывать ТОЛЬКО из синхронного обработчика клика
+ * (до любого await), иначе popup blocker заблокирует window.open.
  */
 export const openPdfInNewTab = (blob: Blob) => {
   const url = window.URL.createObjectURL(blob);

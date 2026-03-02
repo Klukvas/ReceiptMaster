@@ -4,7 +4,7 @@ import { receiptsApi } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { SettingsSection } from "./SettingsSection";
 import { useTranslation } from "../../hooks/useTranslation";
-import { downloadPdf } from "../../lib/pdf-utils";
+import { downloadPdf, openPdfInNewTab } from "../../lib/pdf-utils";
 
 export const TestReceiptButton = () => {
   const { t } = useTranslation();
@@ -17,9 +17,7 @@ export const TestReceiptButton = () => {
     try {
       const response = await receiptsApi.testPreview();
       const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      openPdfInNewTab(blob);
     } catch {
       setError(
         t("settings.testReceiptError", "Failed to generate test receipt"),
