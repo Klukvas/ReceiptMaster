@@ -20,8 +20,10 @@ import { RecipientsService } from "./recipients.service";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginatedRecipientResponse } from "../../common/dto/paginated-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+import { Recipient } from "./entities/recipient.entity";
 
 @ApiTags("recipients")
 @ApiBearerAuth("bearer")
@@ -32,7 +34,11 @@ export class RecipientsController {
 
   @Post()
   @ApiOperation({ summary: "Создать получателя" })
-  @ApiResponse({ status: 201, description: "Получатель успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Получатель успешно создан",
+    type: Recipient,
+  })
   create(
     @Body() createRecipientDto: CreateRecipientDto,
     @Request() req: { user: User },
@@ -42,14 +48,22 @@ export class RecipientsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список получателей" })
-  @ApiResponse({ status: 200, description: "Список получателей получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список получателей получен",
+    type: PaginatedRecipientResponse,
+  })
   findAll(@Query() pagination: PaginationDto, @Request() req: { user: User }) {
     return this.recipientsService.findAll(pagination, req.user);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Получить получателя по ID" })
-  @ApiResponse({ status: 200, description: "Получатель найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Получатель найден",
+    type: Recipient,
+  })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
   findOne(@Param("id") id: string, @Request() req: { user: User }) {
     return this.recipientsService.findOne(id, req.user);
@@ -57,7 +71,11 @@ export class RecipientsController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Обновить получателя" })
-  @ApiResponse({ status: 200, description: "Получатель успешно обновлен" })
+  @ApiResponse({
+    status: 200,
+    description: "Получатель успешно обновлен",
+    type: Recipient,
+  })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
   update(
     @Param("id") id: string,

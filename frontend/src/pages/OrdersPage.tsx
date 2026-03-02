@@ -67,12 +67,14 @@ export const OrdersPage = () => {
   } = useOrders();
 
   const extraParams = useMemo(() => {
-    const params: Record<string, string | number> = {};
+    const params: Record<string, string> = {};
     if (statusFilter) params.status = statusFilter;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
-    if (minAmount) params.minAmount = Math.round(parseFloat(minAmount) * 100);
-    if (maxAmount) params.maxAmount = Math.round(parseFloat(maxAmount) * 100);
+    if (minAmount)
+      params.minAmount = String(Math.round(parseFloat(minAmount) * 100));
+    if (maxAmount)
+      params.maxAmount = String(Math.round(parseFloat(maxAmount) * 100));
     return params;
   }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
 
@@ -94,10 +96,9 @@ export const OrdersPage = () => {
         render: (o) => (
           <div className="flex items-center gap-2">
             {o.is_locked && (
-              <Lock
-                className="w-3.5 h-3.5 text-amber-500 flex-shrink-0"
-                title={t("orders.locked")}
-              />
+              <span title={t("orders.locked")}>
+                <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              </span>
             )}
             <span
               className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[180px] block"

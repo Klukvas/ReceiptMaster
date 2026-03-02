@@ -21,8 +21,10 @@ import { ProductsService } from "./products.service";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginatedProductResponse } from "../../common/dto/paginated-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+import { Product } from "./entities/product.entity";
 
 @ApiTags("products")
 @ApiBearerAuth("bearer")
@@ -33,7 +35,11 @@ export class ProductsController {
 
   @Post()
   @ApiOperation({ summary: "Создать товар" })
-  @ApiResponse({ status: 201, description: "Товар успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Товар успешно создан",
+    type: Product,
+  })
   create(
     @Body() createProductDto: CreateProductDto,
     @Request() req: { user: User },
@@ -43,14 +49,22 @@ export class ProductsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список товаров" })
-  @ApiResponse({ status: 200, description: "Список товаров получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список товаров получен",
+    type: PaginatedProductResponse,
+  })
   findAll(@Query() pagination: PaginationDto, @Request() req: { user: User }) {
     return this.productsService.findAll(pagination, req.user);
   }
 
   @Get("low-stock")
   @ApiOperation({ summary: "Get products with low stock" })
-  @ApiResponse({ status: 200, description: "Low stock products retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Low stock products retrieved",
+    type: [Product],
+  })
   @ApiQuery({
     name: "threshold",
     required: false,
@@ -79,7 +93,7 @@ export class ProductsController {
 
   @Get(":id")
   @ApiOperation({ summary: "Получить товар по ID" })
-  @ApiResponse({ status: 200, description: "Товар найден" })
+  @ApiResponse({ status: 200, description: "Товар найден", type: Product })
   @ApiResponse({ status: 404, description: "Товар не найден" })
   findOne(@Param("id") id: string, @Request() req: { user: User }) {
     return this.productsService.findOne(id, req.user);
@@ -87,7 +101,11 @@ export class ProductsController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Обновить товар" })
-  @ApiResponse({ status: 200, description: "Товар успешно обновлен" })
+  @ApiResponse({
+    status: 200,
+    description: "Товар успешно обновлен",
+    type: Product,
+  })
   @ApiResponse({ status: 404, description: "Товар не найден" })
   update(
     @Param("id") id: string,

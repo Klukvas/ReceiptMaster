@@ -1,16 +1,13 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { usePaddle } from "../providers/PaddleProvider";
 import { useTranslation } from "./useTranslation";
 import { subscriptionApi } from "../lib/subscriptionApi";
-import { CheckoutEventNames } from "@paddle/paddle-js";
 import toast from "react-hot-toast";
 
 type CheckoutLoading = "pro" | "business" | "manage" | null;
 
 export const useCheckout = () => {
   const { paddle } = usePaddle();
-  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const [loading, setLoading] = useState<CheckoutLoading>(null);
 
@@ -40,19 +37,9 @@ export const useCheckout = () => {
             : "light",
           successUrl: window.location.origin + "/settings?tab=subscription",
         },
-        eventCallback: (data) => {
-          if (data.name === CheckoutEventNames.CHECKOUT_COMPLETED) {
-            // Give the webhook a few seconds to process before refetching
-            setTimeout(() => {
-              queryClient.invalidateQueries({ queryKey: ["subscription"] });
-            }, 3000);
-          }
-        },
-      });
+      } as Parameters<typeof paddle.Checkout.open>[0]);
     } catch {
-      toast.error(
-        t("subscription.checkoutError", "Failed to start checkout"),
-      );
+      toast.error(t("subscription.checkoutError", "Failed to start checkout"));
     } finally {
       setLoading(null);
     }

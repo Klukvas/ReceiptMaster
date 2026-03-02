@@ -21,8 +21,10 @@ import { SuppliersService } from "./suppliers.service";
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { PaginatedSupplierResponse } from "../../common/dto/paginated-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+import { Supplier } from "./entities/supplier.entity";
 
 @ApiTags("suppliers")
 @ApiBearerAuth("bearer")
@@ -33,7 +35,11 @@ export class SuppliersController {
 
   @Post()
   @ApiOperation({ summary: "Создать поставщика" })
-  @ApiResponse({ status: 201, description: "Поставщик успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Поставщик успешно создан",
+    type: Supplier,
+  })
   create(
     @Body() createSupplierDto: CreateSupplierDto,
     @Request() req: { user: User },
@@ -43,14 +49,18 @@ export class SuppliersController {
 
   @Get()
   @ApiOperation({ summary: "Получить список поставщиков" })
-  @ApiResponse({ status: 200, description: "Список поставщиков получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список поставщиков получен",
+    type: PaginatedSupplierResponse,
+  })
   findAll(@Query() pagination: PaginationDto, @Request() req: { user: User }) {
     return this.suppliersService.findAll(pagination, req.user);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Получить поставщика по ID" })
-  @ApiResponse({ status: 200, description: "Поставщик найден" })
+  @ApiResponse({ status: 200, description: "Поставщик найден", type: Supplier })
   @ApiResponse({ status: 404, description: "Поставщик не найден" })
   findOne(
     @Param("id", ParseUUIDPipe) id: string,
@@ -61,7 +71,11 @@ export class SuppliersController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Обновить поставщика" })
-  @ApiResponse({ status: 200, description: "Поставщик успешно обновлен" })
+  @ApiResponse({
+    status: 200,
+    description: "Поставщик успешно обновлен",
+    type: Supplier,
+  })
   @ApiResponse({ status: 404, description: "Поставщик не найден" })
   update(
     @Param("id", ParseUUIDPipe) id: string,

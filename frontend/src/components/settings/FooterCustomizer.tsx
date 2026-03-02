@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Save, X, Pencil } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { settingsApi } from '../../lib/api';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { SettingsSection } from './SettingsSection';
-import { useTranslation } from '../../hooks/useTranslation';
+import React, { useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { FileText, Save, X, Pencil } from "lucide-react";
+import toast from "react-hot-toast";
+import { settingsApi } from "../../lib/api";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { SettingsSection } from "./SettingsSection";
+import { useTranslation } from "../../hooks/useTranslation";
+import {
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
 
 export const FooterCustomizer = () => {
   const { t } = useTranslation();
@@ -14,69 +18,70 @@ export const FooterCustomizer = () => {
   const [isEditing, setIsEditing] = useState(false);
 
   const [formData, setFormData] = useState({
-    footerTitle: '',
-    footerSubtitle: '',
+    footerTitle: "",
+    footerSubtitle: "",
   });
 
-  const { data: footerTitleData, isLoading: isLoadingTitle } = useQuery({
-    queryKey: ['footerTitle'],
-    queryFn: async () => {
-      const response = await settingsApi.getFooterTitle();
-      return response.data.data;
-    },
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
-
-  const { data: footerSubtitleData, isLoading: isLoadingSubtitle } = useQuery({
-    queryKey: ['footerSubtitle'],
-    queryFn: async () => {
-      const response = await settingsApi.getFooterSubtitle();
-      return response.data.data;
-    },
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
+  const { data: designData, isLoading } = useReceiptDesignSettings();
 
   useEffect(() => {
-    if (footerTitleData?.footerTitle !== undefined) {
-      setFormData(prev => ({ ...prev, footerTitle: footerTitleData.footerTitle || '' }));
+    if (designData) {
+      setFormData({
+        footerTitle: designData.footerTitle || "",
+        footerSubtitle: designData.footerSubtitle || "",
+      });
     }
-  }, [footerTitleData]);
-
-  useEffect(() => {
-    if (footerSubtitleData?.footerSubtitle !== undefined) {
-      setFormData(prev => ({ ...prev, footerSubtitle: footerSubtitleData.footerSubtitle || '' }));
-    }
-  }, [footerSubtitleData]);
+  }, [designData]);
 
   const updateFooterTitleMutation = useMutation({
-    mutationFn: (footerTitle: string) => settingsApi.updateFooterTitle(footerTitle),
+    mutationFn: (footerTitle: string) =>
+      settingsApi.updateFooterTitle(footerTitle),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['footerTitle'] });
-      toast.success(t('settings.footerTitleUpdated', 'Footer title updated successfully'));
+      queryClient.invalidateQueries({ queryKey: [...RECEIPT_DESIGN_QUERY_KEY] });
+      toast.success(
+        t(
+          "settings.footerTitleUpdated",
+          "Footer title updated successfully",
+        ),
+      );
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || t('settings.footerTitleUpdateFailed', 'Failed to update footer title'));
+      toast.error(
+        error.response?.data?.message ||
+          t(
+            "settings.footerTitleUpdateFailed",
+            "Failed to update footer title",
+          ),
+      );
     },
   });
 
   const updateFooterSubtitleMutation = useMutation({
-    mutationFn: (footerSubtitle: string) => settingsApi.updateFooterSubtitle(footerSubtitle),
+    mutationFn: (footerSubtitle: string) =>
+      settingsApi.updateFooterSubtitle(footerSubtitle),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['footerSubtitle'] });
-      toast.success(t('settings.footerSubtitleUpdated', 'Footer subtitle updated successfully'));
+      queryClient.invalidateQueries({ queryKey: [...RECEIPT_DESIGN_QUERY_KEY] });
+      toast.success(
+        t(
+          "settings.footerSubtitleUpdated",
+          "Footer subtitle updated successfully",
+        ),
+      );
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || t('settings.footerSubtitleUpdateFailed', 'Failed to update footer subtitle'));
+      toast.error(
+        error.response?.data?.message ||
+          t(
+            "settings.footerSubtitleUpdateFailed",
+            "Failed to update footer subtitle",
+          ),
+      );
     },
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = () => {
@@ -87,25 +92,33 @@ export const FooterCustomizer = () => {
 
   const handleCancel = () => {
     setFormData({
-      footerTitle: footerTitleData?.footerTitle || '',
-      footerSubtitle: footerSubtitleData?.footerSubtitle || '',
+      footerTitle: designData?.footerTitle || "",
+      footerSubtitle: designData?.footerSubtitle || "",
     });
     setIsEditing(false);
   };
 
-  const isLoading = isLoadingTitle || isLoadingSubtitle;
-  const isSaving = updateFooterTitleMutation.isPending || updateFooterSubtitleMutation.isPending;
+  const isSaving =
+    updateFooterTitleMutation.isPending ||
+    updateFooterSubtitleMutation.isPending;
 
   return (
     <SettingsSection
-      title={t('settings.footerCustomization', 'Footer Customization')}
-      description={t('settings.footerCustomizationDescription', 'Customize the footer title and subtitle that appear on your invoices and receipts')}
+      title={t("settings.footerCustomization", "Footer Customization")}
+      description={t(
+        "settings.footerCustomizationDescription",
+        "Customize the footer title and subtitle that appear on your invoices and receipts",
+      )}
       icon={<FileText className="h-5 w-5" />}
       actions={
         !isEditing && !isLoading ? (
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEditing(true)}
+          >
             <Pencil className="h-3.5 w-3.5 mr-1.5" />
-            {t('common.edit', 'Edit')}
+            {t("common.edit", "Edit")}
           </Button>
         ) : undefined
       }
@@ -123,29 +136,41 @@ export const FooterCustomizer = () => {
         <div className="space-y-4">
           <div>
             <Input
-              label={t('settings.footerTitle', 'Footer Title')}
+              label={t("settings.footerTitle", "Footer Title")}
               name="footerTitle"
               value={formData.footerTitle}
               onChange={handleInputChange}
-              placeholder={t('settings.footerTitlePlaceholder', 'e.g., Thank you for your purchase!')}
+              placeholder={t(
+                "settings.footerTitlePlaceholder",
+                "e.g., Thank you for your purchase!",
+              )}
               disabled={!isEditing}
             />
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-              {t('settings.footerTitleHint', 'This text will appear as the main footer title on your receipts')}
+              {t(
+                "settings.footerTitleHint",
+                "This text will appear as the main footer title on your receipts",
+              )}
             </p>
           </div>
 
           <div>
             <Input
-              label={t('settings.footerSubtitle', 'Footer Subtitle')}
+              label={t("settings.footerSubtitle", "Footer Subtitle")}
               name="footerSubtitle"
               value={formData.footerSubtitle}
               onChange={handleInputChange}
-              placeholder={t('settings.footerSubtitlePlaceholder', 'e.g., If you have any questions, please contact us.')}
+              placeholder={t(
+                "settings.footerSubtitlePlaceholder",
+                "e.g., If you have any questions, please contact us.",
+              )}
               disabled={!isEditing}
             />
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-              {t('settings.footerSubtitleHint', 'This text will appear as the footer subtitle on your receipts')}
+              {t(
+                "settings.footerSubtitleHint",
+                "This text will appear as the footer subtitle on your receipts",
+              )}
             </p>
           </div>
 
@@ -153,13 +178,20 @@ export const FooterCustomizer = () => {
             <>
               <div className="border-t border-gray-100 dark:border-gray-700/40" />
               <div className="flex justify-end gap-3">
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                >
                   <X className="h-3.5 w-3.5 mr-1.5" />
-                  {t('common.cancel', 'Cancel')}
+                  {t("common.cancel", "Cancel")}
                 </Button>
                 <Button size="sm" onClick={handleSave} disabled={isSaving}>
                   <Save className="h-3.5 w-3.5 mr-1.5" />
-                  {isSaving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                  {isSaving
+                    ? t("common.saving", "Saving...")
+                    : t("common.save", "Save")}
                 </Button>
               </div>
             </>

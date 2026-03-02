@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
-import { useTranslation } from '../../hooks/useTranslation';
-import { Button } from '../ui/Button';
-import { Modal } from '../ui/Modal';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { useTranslation } from "../../hooks/useTranslation";
+import { Button } from "../ui/Button";
+import { Modal } from "../ui/Modal";
+import toast from "react-hot-toast";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -23,52 +23,54 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.email.trim() || !formData.password.trim()) {
-      toast.error(t('errors.requiredFieldMissing'));
+      toast.error(t("errors.requiredFieldMissing"));
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      toast.error(t('errors.passwordsDoNotMatch'));
+      toast.error(t("errors.passwordsDoNotMatch"));
       return;
     }
 
     if (formData.password.length < 6) {
-      toast.error(t('errors.passwordTooShort'));
+      toast.error(t("errors.passwordTooShort"));
       return;
     }
 
     setIsLoading(true);
     try {
-      await register(formData.email, formData.password);
-      toast.success(t('auth.registerSuccess') || 'Successfully registered!');
+      await register(formData.email, formData.password, "", "");
+      toast.success(t("auth.registerSuccess") || "Successfully registered!");
       onClose();
-      setFormData({ email: '', password: '', confirmPassword: '' });
+      setFormData({ email: "", password: "", confirmPassword: "" });
     } catch (error: any) {
-      toast.error(error.response?.data?.message || t('errors.userAlreadyExists'));
+      toast.error(
+        error.response?.data?.message || t("errors.userAlreadyExists"),
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
-    setFormData({ email: '', password: '', confirmPassword: '' });
+    setFormData({ email: "", password: "", confirmPassword: "" });
     onClose();
   };
 
@@ -76,14 +78,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={t('auth.registerTitle')}
+      title={t("auth.registerTitle")}
       size="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Email */}
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('auth.email')}
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            {t("auth.email")}
           </label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -94,7 +99,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               value={formData.email}
               onChange={handleInputChange}
               className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder={t('auth.email')}
+              placeholder={t("auth.email")}
               required
             />
           </div>
@@ -102,19 +107,22 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
         {/* Password */}
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('auth.password')}
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            {t("auth.password")}
           </label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               id="password"
               name="password"
               value={formData.password}
               onChange={handleInputChange}
               className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder={t('auth.password')}
+              placeholder={t("auth.password")}
               required
             />
             <button
@@ -122,26 +130,33 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {showPassword ? (
+                <EyeOff className="h-5 w-5" />
+              ) : (
+                <Eye className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
 
         {/* Confirm Password */}
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('auth.confirmPassword')}
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            {t("auth.confirmPassword")}
           </label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
-              type={showConfirmPassword ? 'text' : 'password'}
+              type={showConfirmPassword ? "text" : "password"}
               id="confirmPassword"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleInputChange}
               className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder={t('auth.confirmPassword')}
+              placeholder={t("auth.confirmPassword")}
               required
             />
             <button
@@ -149,31 +164,31 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
-              {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {showConfirmPassword ? (
+                <EyeOff className="h-5 w-5" />
+              ) : (
+                <Eye className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
 
         {/* Submit Button */}
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={isLoading}
-        >
-          {isLoading ? t('common.loading') : t('auth.register')}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? t("common.loading") : t("auth.register")}
         </Button>
 
         {/* Switch to Login */}
         {onSwitchToLogin && (
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('auth.alreadyHaveAccount')}{' '}
+              {t("auth.alreadyHaveAccount")}{" "}
               <button
                 type="button"
                 onClick={onSwitchToLogin}
                 className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 transition-colors"
               >
-                {t('auth.signInHere')}
+                {t("auth.signInHere")}
               </button>
             </p>
           </div>

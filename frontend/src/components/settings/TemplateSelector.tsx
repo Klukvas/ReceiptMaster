@@ -9,6 +9,10 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 import { UpgradeModal } from "../subscription/UpgradeModal";
+import {
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
 
 interface Template {
   id: string;
@@ -56,24 +60,11 @@ export const TemplateSelector = () => {
   const [carouselOpen, setCarouselOpen] = useState(false);
   const [carouselInitialTemplate, setCarouselInitialTemplate] = useState("");
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-  const { data: currentTemplate, isLoading: isLoadingCurrent } =
-    useQuery<TemplateSetting>({
-      queryKey: ["templateSettings"],
-      queryFn: async () => {
-        const response = await settingsApi.getTemplateSettings();
-        const payload = response?.data;
-        const normalized =
-          payload && typeof payload === "object" && "data" in payload
-            ? (payload as any).data
-            : payload;
-        return {
-          templateId: normalized?.templateId ?? "standard",
-        } as TemplateSetting;
-      },
-      staleTime: 1000 * 60 * 5,
-      refetchOnWindowFocus: false,
-      refetchOnMount: true,
-    });
+  const { data: designData, isLoading: isLoadingCurrent } =
+    useReceiptDesignSettings();
+  const currentTemplate: TemplateSetting | undefined = designData
+    ? { templateId: designData.templateId }
+    : undefined;
 
   const {
     data: templates,
@@ -96,7 +87,9 @@ export const TemplateSelector = () => {
     mutationFn: (templateId: string) =>
       settingsApi.updateTemplateSettings(templateId),
     onSuccess: (_data, templateId) => {
-      queryClient.invalidateQueries({ queryKey: ["templateSettings"] });
+      queryClient.invalidateQueries({
+        queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
+      });
       setSelectedTemplate(templateId);
       toast.success(
         t("settings.templateUpdated", "Template updated successfully"),

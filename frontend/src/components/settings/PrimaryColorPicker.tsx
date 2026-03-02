@@ -1,8 +1,12 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paintbrush, Check, Loader2 } from "lucide-react";
 import { settingsApi } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
 
 const PRESET_COLORS = [
   "#3B82F6",
@@ -20,13 +24,7 @@ export const PrimaryColorPicker = () => {
   const queryClient = useQueryClient();
   const [color, setColor] = useState("#3B82F6");
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["settings", "primary-color"],
-    queryFn: async () => {
-      const res = await settingsApi.getPrimaryColor();
-      return res.data;
-    },
-  });
+  const { data, isLoading } = useReceiptDesignSettings();
 
   useEffect(() => {
     if (data?.primaryColor) {
@@ -37,16 +35,43 @@ export const PrimaryColorPicker = () => {
   const mutation = useMutation({
     mutationFn: (newColor: string) => settingsApi.updatePrimaryColor(newColor),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings", "primary-color"] });
+      queryClient.invalidateQueries({
+        queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
+      });
     },
   });
 
   const isValidHex = (value: string) => /^#[0-9A-Fa-f]{6}$/.test(value);
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  const debouncedMutate = useCallback(
+    (newColor: string) => {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        mutation.mutate(newColor);
+      }, 300);
+    },
+    [mutation],
+  );
+
+  useEffect(() => {
+    return () => clearTimeout(debounceRef.current);
+  }, []);
+
   const handleColorChange = (newColor: string) => {
     setColor(newColor);
     if (isValidHex(newColor)) {
       mutation.mutate(newColor);
+    }
+  };
+
+  const handleColorSliderChange = (newColor: string) => {
+    setColor(newColor);
+    if (isValidHex(newColor)) {
+      debouncedMutate(newColor);
     }
   };
 
@@ -100,7 +125,7 @@ export const PrimaryColorPicker = () => {
           <input
             type="color"
             value={color}
-            onChange={(e) => handleColorChange(e.target.value)}
+            onChange={(e) => handleColorSliderChange(e.target.value)}
             className="h-8 w-8 cursor-pointer rounded border-0 p-0"
           />
           <input

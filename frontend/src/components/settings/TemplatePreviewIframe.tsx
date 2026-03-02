@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { receiptsApi } from "../../lib/api";
 
 const A4_WIDTH = 794;
@@ -57,27 +58,28 @@ export const TemplatePreviewIframe = ({
     return () => observer.disconnect();
   }, []);
 
-  // Fetch HTML via authenticated API
+  // Fetch HTML via authenticated API (cached with react-query)
+  const { data: fetchedHtml, isError } = useQuery({
+    queryKey: ["template-preview", templateId, language],
+    queryFn: async () => {
+      const res = await receiptsApi.getTemplatePreviewHtml(
+        templateId,
+        language,
+      );
+      return res.data;
+    },
+    enabled: visible,
+    staleTime: 1000 * 60 * 30, // 30 min — template HTML is immutable for a given ID+language
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
-    if (!visible) return;
+    if (fetchedHtml !== undefined) setHtml(fetchedHtml);
+  }, [fetchedHtml]);
 
-    let cancelled = false;
-    setHtml(null);
-    setError(false);
-
-    receiptsApi
-      .getTemplatePreviewHtml(templateId, language)
-      .then((res) => {
-        if (!cancelled) setHtml(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [templateId, language, visible]);
+  useEffect(() => {
+    if (isError) setError(true);
+  }, [isError]);
 
   return (
     <div

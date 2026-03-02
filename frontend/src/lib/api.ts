@@ -1,11 +1,57 @@
 import axios from "axios";
 
+export type {
+  Product,
+  Recipient,
+  Supplier,
+  OrderItem,
+  Order,
+  Receipt,
+  DailyRevenue,
+  OrderStatusSummary,
+  RevenueByProduct,
+  RevenueByRecipient,
+  TotalRevenue,
+  TurnoverByProduct,
+  TurnoverByRecipient,
+  TotalTurnover,
+  PaginatedResponse,
+  PaginationParams,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  User,
+} from "./api-types";
+
+import type {
+  Product,
+  Recipient,
+  Supplier,
+  Order,
+  Receipt,
+  DailyRevenue,
+  OrderStatusSummary,
+  RevenueByProduct,
+  RevenueByRecipient,
+  TotalRevenue,
+  TurnoverByProduct,
+  TurnoverByRecipient,
+  TotalTurnover,
+  PaginatedResponse,
+  PaginationParams,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  User,
+} from "./api-types";
+
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
 const API_KEY = import.meta.env.VITE_API_KEY || "your-secret-key-here";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
     "X-API-Key": API_KEY,
@@ -108,188 +154,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
-
-// Shared pagination types
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  offset: number;
-  limit: number;
-}
-
-export interface PaginationParams {
-  limit?: number;
-  offset?: number;
-  search?: string;
-  sortBy?: string;
-  sortOrder?: "ASC" | "DESC";
-}
-
-// Data types
-export interface Product {
-  id: string;
-  name: string;
-  purchase_price_cents: number;
-  sale_price_cents: number;
-  quantity: number;
-  currency: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Recipient {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  telegram_user_id?: string;
-  total_spent_cents?: number;
-  order_count?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Supplier {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  contact_person?: string;
-  notes?: string;
-  products?: Product[];
-  product_count?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OrderItem {
-  id: string;
-  product_id: string;
-  product_name: string;
-  unit_price_cents: number;
-  qty: number;
-  line_total_cents: number;
-}
-
-export interface Order {
-  id: string;
-  recipient_id: string;
-  status: "draft" | "confirmed" | "cancelled";
-  subtotal_cents: number;
-  total_cents: number;
-  currency: string;
-  is_locked: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
-  recipient: Recipient;
-  items: OrderItem[];
-  receipts: Receipt[];
-}
-
-export interface Receipt {
-  id: string;
-  order_id: string;
-  number: string;
-  pdf_url?: string;
-  pdf_path?: string;
-  hash?: string;
-  status: "processing" | "generated" | "void";
-  progress: number;
-  error_message?: string;
-  html_snapshot?: string;
-  template_id?: string;
-  template_version?: number;
-  voided_at?: string;
-  void_reason?: string;
-  created_at: string;
-  order: Order;
-}
-
-// Dashboard types
-export interface DailyRevenue {
-  date: string;
-  revenue_cents: number;
-  turnover_cents: number;
-}
-
-export interface OrderStatusSummary {
-  draft: number;
-  confirmed: number;
-  cancelled: number;
-}
-
-export interface RevenueByProduct {
-  product_id: string;
-  product_name: string;
-  total_revenue_cents: number;
-  total_quantity: number;
-  currency: string;
-}
-
-export interface RevenueByRecipient {
-  recipient_id: string;
-  recipient_name: string;
-  total_revenue_cents: number;
-  total_orders: number;
-  currency: string;
-}
-
-export interface TotalRevenue {
-  total_revenue_cents: number;
-  total_orders: number;
-  currency: string;
-}
-
-// Turnover types (total turnover - without cost deduction)
-export interface TurnoverByProduct {
-  product_id: string;
-  product_name: string;
-  total_turnover_cents: number;
-  total_quantity: number;
-  currency: string;
-}
-
-export interface TurnoverByRecipient {
-  recipient_id: string;
-  recipient_name: string;
-  total_turnover_cents: number;
-  total_orders: number;
-  currency: string;
-}
-
-export interface TotalTurnover {
-  total_turnover_cents: number;
-  total_orders: number;
-  currency: string;
-}
-
-// Auth types
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-}
-
-export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  user: {
-    id: string;
-    email: string;
-  };
-}
-
-export interface User {
-  id: string;
-  email: string;
-}
 
 // API methods
 export const authApi = {
@@ -428,7 +292,6 @@ export const ordersApi = {
 };
 
 export const dashboardApi = {
-  // Sparkline / summary
   getDailyRevenue: (days?: number) =>
     api.get<DailyRevenue[]>("/orders/dashboard/daily-revenue", {
       params: { days },
@@ -437,7 +300,6 @@ export const dashboardApi = {
   getOrderStatusSummary: () =>
     api.get<OrderStatusSummary>("/orders/dashboard/status-summary"),
 
-  // Revenue methods (income - with cost deduction)
   getRevenueByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<RevenueByProduct[]>("/orders/dashboard/revenue-by-products", {
       params,
@@ -451,7 +313,6 @@ export const dashboardApi = {
   getTotalRevenue: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TotalRevenue>("/orders/dashboard/total-revenue", { params }),
 
-  // Turnover methods (turnover - without cost deduction)
   getTurnoverByProducts: (params?: { startDate?: string; endDate?: string }) =>
     api.get<TurnoverByProduct[]>("/orders/dashboard/turnover-by-products", {
       params,
@@ -528,7 +389,18 @@ export const settingsApi = {
 
   deleteLogo: () => api.post("/settings/logo/delete"),
 
-  // Template settings
+  getReceiptDesign: () =>
+    api.get<{
+      receiptTitle: string;
+      templateId: string;
+      templateLanguage: string;
+      footerTitle: string;
+      footerSubtitle: string;
+      primaryColor: string;
+      paymentTerms: string;
+      deliveryTerms: string;
+    }>("/settings/receipt-design"),
+
   getTemplateSettings: () =>
     api.get<{ templateId: string }>("/settings/template"),
 
@@ -551,14 +423,12 @@ export const settingsApi = {
       }>;
     }>("/settings/templates"),
 
-  // Template language settings
   getTemplateLanguage: () =>
     api.get<{ language: string }>("/settings/template-language"),
 
   updateTemplateLanguage: (language: string) =>
     api.post("/settings/template-language", { language }),
 
-  // Footer settings
   getFooterTitle: () =>
     api.get<{ footerTitle: string }>("/settings/footer-title"),
 
@@ -571,13 +441,11 @@ export const settingsApi = {
   updateFooterSubtitle: (footerSubtitle: string) =>
     api.post("/settings/footer-subtitle", { footerSubtitle }),
 
-  // Receipt title settings
   getReceiptTitle: () => api.get<{ title: string }>("/settings/receipt-title"),
 
   updateReceiptTitle: (title: string) =>
     api.post("/settings/receipt-title", { title }),
 
-  // Company information
   getCompanyInfo: () =>
     api.get<{
       companyName: string;
@@ -591,28 +459,24 @@ export const settingsApi = {
       companyTagline: string;
     }>("/settings/company-info"),
 
-  // Primary color (branded template)
   getPrimaryColor: () =>
     api.get<{ primaryColor: string }>("/settings/primary-color"),
 
   updatePrimaryColor: (primaryColor: string) =>
     api.post("/settings/primary-color", { primaryColor }),
 
-  // Payment terms (proforma template)
   getPaymentTerms: () =>
     api.get<{ paymentTerms: string }>("/settings/payment-terms"),
 
   updatePaymentTerms: (paymentTerms: string) =>
     api.post("/settings/payment-terms", { paymentTerms }),
 
-  // Delivery terms (proforma template)
   getDeliveryTerms: () =>
     api.get<{ deliveryTerms: string }>("/settings/delivery-terms"),
 
   updateDeliveryTerms: (deliveryTerms: string) =>
     api.post("/settings/delivery-terms", { deliveryTerms }),
 
-  // Onboarding
   getOnboardingStatus: () =>
     api.get<{ completed: boolean }>("/settings/onboarding-status"),
 
@@ -646,7 +510,6 @@ export const formatDate = (dateString: string) => {
 };
 
 // Parsing utilities
-// Converts a user-entered currency amount (e.g., "99.99" or "99,99") to integer cents
 export const amountToCents = (amount: string | number): number => {
   if (typeof amount === "number") {
     if (!Number.isFinite(amount)) return 0;

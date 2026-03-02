@@ -23,9 +23,20 @@ import {
 } from "@nestjs/swagger";
 import { OrdersService, IdempotencyResponse } from "./orders.service";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
+import { PaginatedOrderResponse } from "../../common/dto/paginated-response.dto";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { BatchOrderIdsDto } from "./dto/batch-orders.dto";
+import {
+  DailyRevenueDto,
+  OrderStatusSummaryDto,
+  RevenueByProductDto,
+  RevenueByRecipientDto,
+  TotalRevenueDto,
+  TurnoverByProductDto,
+  TurnoverByRecipientDto,
+  TotalTurnoverDto,
+} from "./dto/dashboard-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { DateRangeDto } from "../../common/dto/date-range.dto";
@@ -42,7 +53,11 @@ export class OrdersController {
 
   @Post()
   @ApiOperation({ summary: "Create order" })
-  @ApiResponse({ status: 201, description: "Order successfully created" })
+  @ApiResponse({
+    status: 201,
+    description: "Order successfully created",
+    type: Order,
+  })
   @ApiResponse({
     status: 200,
     description: "Order returned from idempotency cache",
@@ -98,7 +113,11 @@ export class OrdersController {
 
   @Get()
   @ApiOperation({ summary: "Get orders list" })
-  @ApiResponse({ status: 200, description: "Orders list retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Orders list retrieved",
+    type: PaginatedOrderResponse,
+  })
   @ApiQuery({
     name: "status",
     required: false,
@@ -133,7 +152,7 @@ export class OrdersController {
 
   @Get(":id")
   @ApiOperation({ summary: "Get order by ID" })
-  @ApiResponse({ status: 200, description: "Order found" })
+  @ApiResponse({ status: 200, description: "Order found", type: Order })
   @ApiResponse({ status: 404, description: "Order not found" })
   findOne(@Param("id") id: string, @Request() req: { user: User }) {
     return this.ordersService.findOne(id, req.user);
@@ -141,7 +160,11 @@ export class OrdersController {
 
   @Patch(":id/confirm")
   @ApiOperation({ summary: "Confirm order" })
-  @ApiResponse({ status: 200, description: "Order successfully confirmed" })
+  @ApiResponse({
+    status: 200,
+    description: "Order successfully confirmed",
+    type: Order,
+  })
   @ApiResponse({ status: 400, description: "Cannot confirm order" })
   @ApiResponse({ status: 404, description: "Order not found" })
   confirm(@Param("id") id: string, @Request() req: { user: User }) {
@@ -150,7 +173,11 @@ export class OrdersController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Update order" })
-  @ApiResponse({ status: 200, description: "Order successfully updated" })
+  @ApiResponse({
+    status: 200,
+    description: "Order successfully updated",
+    type: Order,
+  })
   @ApiResponse({ status: 400, description: "Cannot update order" })
   @ApiResponse({ status: 404, description: "Order not found" })
   update(
@@ -163,7 +190,11 @@ export class OrdersController {
 
   @Patch(":id/cancel")
   @ApiOperation({ summary: "Cancel order" })
-  @ApiResponse({ status: 200, description: "Order successfully cancelled" })
+  @ApiResponse({
+    status: 200,
+    description: "Order successfully cancelled",
+    type: Order,
+  })
   @ApiResponse({ status: 400, description: "Cannot cancel order" })
   @ApiResponse({ status: 404, description: "Order not found" })
   cancel(@Param("id") id: string, @Request() req: { user: User }) {
@@ -181,7 +212,11 @@ export class OrdersController {
 
   @Get("dashboard/daily-revenue")
   @ApiOperation({ summary: "Get daily revenue/turnover for sparkline" })
-  @ApiResponse({ status: 200, description: "Daily revenue data retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Daily revenue data retrieved",
+    type: [DailyRevenueDto],
+  })
   @ApiQuery({
     name: "days",
     required: false,
@@ -201,14 +236,22 @@ export class OrdersController {
   @ApiOperation({
     summary: "Get order status summary (draft/confirmed/cancelled counts)",
   })
-  @ApiResponse({ status: 200, description: "Order status summary retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Order status summary retrieved",
+    type: OrderStatusSummaryDto,
+  })
   getOrderStatusSummary(@Request() req: { user: User }) {
     return this.ordersService.getOrderStatusSummary(req.user);
   }
 
   @Get("dashboard/revenue-by-products")
   @ApiOperation({ summary: "Get revenue by products" })
-  @ApiResponse({ status: 200, description: "Revenue by products retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Revenue by products retrieved",
+    type: [RevenueByProductDto],
+  })
   getRevenueByProducts(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
@@ -222,7 +265,11 @@ export class OrdersController {
 
   @Get("dashboard/revenue-by-recipients")
   @ApiOperation({ summary: "Get revenue by recipients" })
-  @ApiResponse({ status: 200, description: "Revenue by recipients retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Revenue by recipients retrieved",
+    type: [RevenueByRecipientDto],
+  })
   getRevenueByRecipients(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
@@ -236,7 +283,11 @@ export class OrdersController {
 
   @Get("dashboard/total-revenue")
   @ApiOperation({ summary: "Get total revenue" })
-  @ApiResponse({ status: 200, description: "Total revenue retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Total revenue retrieved",
+    type: TotalRevenueDto,
+  })
   getTotalRevenue(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
@@ -250,7 +301,11 @@ export class OrdersController {
 
   @Get("dashboard/turnover-by-products")
   @ApiOperation({ summary: "Get turnover by products" })
-  @ApiResponse({ status: 200, description: "Turnover by products retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Turnover by products retrieved",
+    type: [TurnoverByProductDto],
+  })
   getTurnoverByProducts(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
@@ -264,7 +319,11 @@ export class OrdersController {
 
   @Get("dashboard/turnover-by-recipients")
   @ApiOperation({ summary: "Get turnover by recipients" })
-  @ApiResponse({ status: 200, description: "Turnover by recipients retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Turnover by recipients retrieved",
+    type: [TurnoverByRecipientDto],
+  })
   getTurnoverByRecipients(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
@@ -278,7 +337,11 @@ export class OrdersController {
 
   @Get("dashboard/total-turnover")
   @ApiOperation({ summary: "Get total turnover" })
-  @ApiResponse({ status: 200, description: "Total turnover retrieved" })
+  @ApiResponse({
+    status: 200,
+    description: "Total turnover retrieved",
+    type: TotalTurnoverDto,
+  })
   getTotalTurnover(
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,

@@ -1,7 +1,8 @@
-import { useEffect, useState, ReactNode } from 'react';
-import type { Theme } from './theme-constants';
-import { getInitialTheme } from './theme-constants';
-import { ThemeContext } from './ThemeContextInstance';
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import type { Theme } from "./theme-constants";
+import { getInitialTheme } from "./theme-constants";
+import { ThemeContext } from "./ThemeContextInstance";
 
 export interface ThemeContextType {
   theme: Theme;
@@ -14,18 +15,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const root = document.documentElement;
-    
-    if (theme === 'dark') {
-      root.classList.add('dark');
+
+    if (theme === "dark") {
+      root.classList.add("dark");
     } else {
-      root.classList.remove('dark');
+      root.classList.remove("dark");
     }
-    
-    localStorage.setItem('theme', theme);
+
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setThemeState(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+    setThemeState((prevTheme) => (prevTheme === "light" ? "dark" : "light"));
   };
 
   const setTheme = (newTheme: Theme) => {
@@ -38,4 +39,3 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     </ThemeContext.Provider>
   );
 };
-

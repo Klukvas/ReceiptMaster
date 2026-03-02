@@ -15,8 +15,7 @@ describe("PaddleController", () => {
   });
 
   describe("webhook", () => {
-    const makeReq = (rawBody?: Buffer) =>
-      ({ rawBody } as any);
+    const makeReq = (rawBody?: Buffer) => ({ rawBody }) as any;
 
     it("should return 400 if Paddle-Signature header is missing", async () => {
       await expect(
@@ -55,10 +54,7 @@ describe("PaddleController", () => {
       );
 
       await expect(
-        controller.webhook(
-          makeReq(Buffer.from("{}")),
-          "ts=123;h1=invalid",
-        ),
+        controller.webhook(makeReq(Buffer.from("{}")), "ts=123;h1=invalid"),
       ).rejects.toThrow(BadRequestException);
 
       expect(paddleService.handleWebhookEvent).not.toHaveBeenCalled();
@@ -73,18 +69,12 @@ describe("PaddleController", () => {
       );
 
       await expect(
-        controller.webhook(
-          makeReq(Buffer.from("{}")),
-          "ts=123;h1=valid",
-        ),
+        controller.webhook(makeReq(Buffer.from("{}")), "ts=123;h1=valid"),
       ).rejects.toThrow("DB connection failed");
 
       // Should NOT throw BadRequestException — this ensures 500
       await expect(
-        controller.webhook(
-          makeReq(Buffer.from("{}")),
-          "ts=123;h1=valid",
-        ),
+        controller.webhook(makeReq(Buffer.from("{}")), "ts=123;h1=valid"),
       ).rejects.not.toThrow(BadRequestException);
     });
   });

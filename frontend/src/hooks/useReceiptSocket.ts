@@ -38,6 +38,7 @@ export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
   const isFirstConnect = useRef(true);
+  const lastInvalidation = useRef(0);
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -56,9 +57,14 @@ export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
 
     socket.on("connect", () => {
       // On reconnect (not first connect), invalidate queries to catch missed events
+      // but skip if we already invalidated within the last 5 seconds
       if (!isFirstConnect.current) {
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
-        queryClient.invalidateQueries({ queryKey: ["receipts"] });
+        const now = Date.now();
+        if (now - lastInvalidation.current > 5000) {
+          lastInvalidation.current = now;
+          queryClient.invalidateQueries({ queryKey: ["orders"] });
+          queryClient.invalidateQueries({ queryKey: ["receipts"] });
+        }
       }
       isFirstConnect.current = false;
     });

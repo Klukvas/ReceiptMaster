@@ -1,9 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { IdempotencyCleanupService } from './idempotency-cleanup.service';
-import { IdempotencyKey } from './entities/idempotency-key.entity';
+import { Test, TestingModule } from "@nestjs/testing";
+import { getRepositoryToken } from "@nestjs/typeorm";
+import { IdempotencyCleanupService } from "./idempotency-cleanup.service";
+import { IdempotencyKey } from "./entities/idempotency-key.entity";
 
-describe('IdempotencyCleanupService', () => {
+describe("IdempotencyCleanupService", () => {
   let service: IdempotencyCleanupService;
   let idempotencyKeyRepo: any;
 
@@ -25,12 +25,12 @@ describe('IdempotencyCleanupService', () => {
     service = module.get<IdempotencyCleanupService>(IdempotencyCleanupService);
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(service).toBeDefined();
   });
 
-  describe('cleanupExpiredKeys', () => {
-    it('should delete expired idempotency keys', async () => {
+  describe("cleanupExpiredKeys", () => {
+    it("should delete expired idempotency keys", async () => {
       idempotencyKeyRepo.delete.mockResolvedValue({ affected: 5 });
 
       await service.cleanupExpiredKeys();
@@ -42,14 +42,14 @@ describe('IdempotencyCleanupService', () => {
       );
     });
 
-    it('should handle no expired keys gracefully', async () => {
+    it("should handle no expired keys gracefully", async () => {
       idempotencyKeyRepo.delete.mockResolvedValue({ affected: 0 });
 
       await expect(service.cleanupExpiredKeys()).resolves.toBeUndefined();
     });
 
-    it('should not throw on deletion failure', async () => {
-      idempotencyKeyRepo.delete.mockRejectedValue(new Error('DB error'));
+    it("should not throw on deletion failure", async () => {
+      idempotencyKeyRepo.delete.mockRejectedValue(new Error("DB error"));
 
       await expect(service.cleanupExpiredKeys()).resolves.toBeUndefined();
     });

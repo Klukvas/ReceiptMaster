@@ -49,20 +49,21 @@ export const SupplierDrawer = ({
     enabled: open && !!supplier?.id,
   });
 
-  const fullSupplier = fullData?.data ?? supplier;
-
   const handleCopyAddress = useCallback(async () => {
-    if (!fullSupplier?.address) return;
+    const s = fullData?.data ?? supplier;
+    if (!s?.address) return;
     try {
-      await navigator.clipboard.writeText(fullSupplier.address);
+      await navigator.clipboard.writeText(s.address);
       setAddressCopied(true);
       setTimeout(() => setAddressCopied(false), 2000);
     } catch {
       // clipboard API might not be available
     }
-  }, [fullSupplier?.address]);
+  }, [fullData?.data, supplier]);
 
   if (!supplier) return null;
+
+  const fullSupplier = fullData?.data ?? supplier;
 
   const initials = fullSupplier.name
     .split(" ")

@@ -38,7 +38,8 @@
     "install:all": "yarn install && cd backend && yarn install && cd ../frontend && yarn install",
     "clean": "rm -rf node_modules backend/node_modules frontend/node_modules backend/dist frontend/dist",
     "generate:logo-variants": "node scripts/generate-logo-variants.js",
-    "generate:invoice-pdfs": "node scripts/generate-invoice-pdfs.js"
+    "generate:invoice-pdfs": "node scripts/generate-invoice-pdfs.js",
+    "contract:check": "cd frontend && yarn openapi:generate && yarn typecheck"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

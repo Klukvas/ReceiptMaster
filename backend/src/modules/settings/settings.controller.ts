@@ -10,7 +10,17 @@ import {
   Request,
   Logger,
 } from "@nestjs/common";
-import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from "@nestjs/swagger";
+import {
+  ReceiptDesignResponseDto,
+  CompanyInfoResponseDto,
+  TemplateInfoDto,
+} from "./dto/settings-response.dto";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
@@ -154,7 +164,19 @@ export class SettingsController {
     return { data: { completed: true } };
   }
 
+  @Get("receipt-design")
+  @ApiOperation({ summary: "Get all receipt design settings" })
+  @ApiResponse({ status: 200, type: ReceiptDesignResponseDto })
+  async getReceiptDesign(@Request() req: { user: User }) {
+    const design = await this.settingsService.getReceiptDesignSettings(
+      req.user.id,
+    );
+    return { data: design };
+  }
+
   @Get("templates")
+  @ApiOperation({ summary: "Get available receipt templates" })
+  @ApiResponse({ status: 200, type: [TemplateInfoDto] })
   async getAvailableTemplates(@Request() req: { user: User }) {
     const allowedIds = await this.subscriptionService.getAllowedTemplateIds(
       req.user.id,
@@ -339,6 +361,8 @@ export class SettingsController {
   }
 
   @Get("company-info")
+  @ApiOperation({ summary: "Get company information" })
+  @ApiResponse({ status: 200, type: CompanyInfoResponseDto })
   async getCompanyInfo(@Request() req: { user: User }) {
     const companyInfo = await this.settingsService.getCompanyInfo(req.user.id);
     return { data: companyInfo };

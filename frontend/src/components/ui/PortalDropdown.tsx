@@ -3,11 +3,14 @@ import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
 interface PortalDropdownProps {
-  children: React.ReactNode;
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
   buttonTitle?: string;
 }
 
-export const PortalDropdown = ({ children, buttonTitle }: PortalDropdownProps) => {
+export const PortalDropdown = ({
+  children,
+  buttonTitle,
+}: PortalDropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -36,8 +39,10 @@ export const PortalDropdown = ({ children, buttonTitle }: PortalDropdownProps) =
 
     const handleClick = (e: MouseEvent) => {
       if (
-        menuRef.current && !menuRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
       ) {
         close();
       }

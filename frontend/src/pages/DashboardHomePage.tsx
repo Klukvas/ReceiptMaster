@@ -58,7 +58,7 @@ export const DashboardHomePage = () => {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    queryClient.invalidateQueries();
+    queryClient.invalidateQueries({ queryKey: ["onboarding-status"] });
   };
 
   const { data: productsData, isLoading: productsLoading } = useQuery({

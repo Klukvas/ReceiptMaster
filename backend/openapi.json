@@ -1,0 +1,4238 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/products": {
+      "post": {
+        "operationId": "ProductsController_create",
+        "summary": "Создать товар",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Товар успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "ProductsController_findAll",
+        "summary": "Получить список товаров",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Поле для сортировки",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Направление сортировки: ASC или DESC",
+            "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список товаров получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedProductResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/products/low-stock": {
+      "get": {
+        "operationId": "ProductsController_getLowStock",
+        "summary": "Get products with low stock",
+        "parameters": [
+          {
+            "name": "threshold",
+            "required": false,
+            "in": "query",
+            "description": "Stock threshold (default 10)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Max results (default 50, max 100)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Low stock products retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "operationId": "ProductsController_findOne",
+        "summary": "Получить товар по ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Товар найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Товар не найден"
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "ProductsController_update",
+        "summary": "Обновить товар",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Товар успешно обновлен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Товар не найден"
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "ProductsController_remove",
+        "summary": "Удалить товар",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Товар успешно удален"
+          },
+          "400": {
+            "description": "Невозможно удалить товар"
+          },
+          "404": {
+            "description": "Товар не найден"
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/products/bulk": {
+      "delete": {
+        "operationId": "ProductsController_removeBulk",
+        "summary": "Bulk delete products",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Products deleted"
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/subscription/status": {
+      "get": {
+        "operationId": "SubscriptionController_getStatus",
+        "summary": "Get current subscription status and usage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/subscription/checkout": {
+      "post": {
+        "operationId": "SubscriptionController_checkout",
+        "summary": "Create Paddle checkout transaction",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/subscription/portal": {
+      "post": {
+        "operationId": "SubscriptionController_portal",
+        "summary": "Get Paddle customer portal URL",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/recipients": {
+      "post": {
+        "operationId": "RecipientsController_create",
+        "summary": "Создать получателя",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecipientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Получатель успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "recipients"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "RecipientsController_findAll",
+        "summary": "Получить список получателей",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Поле для сортировки",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Направление сортировки: ASC или DESC",
+            "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список получателей получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedRecipientResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "recipients"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/recipients/{id}": {
+      "get": {
+        "operationId": "RecipientsController_findOne",
+        "summary": "Получить получателя по ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Получатель найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Получатель не найден"
+          }
+        },
+        "tags": [
+          "recipients"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "RecipientsController_update",
+        "summary": "Обновить получателя",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecipientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Получатель успешно обновлен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Получатель не найден"
+          }
+        },
+        "tags": [
+          "recipients"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "RecipientsController_remove",
+        "summary": "Удалить получателя",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Получатель успешно удален"
+          },
+          "400": {
+            "description": "Нельзя удалить получателя с существующими заказами"
+          },
+          "404": {
+            "description": "Получатель не найден"
+          }
+        },
+        "tags": [
+          "recipients"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "OrdersController_create",
+        "summary": "Create order",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Idempotency key to prevent order duplication (valid for 24 hours)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order returned from idempotency cache"
+          },
+          "201": {
+            "description": "Order successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recipient or product not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_findAll",
+        "summary": "Get orders list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Поле для сортировки",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Направление сортировки: ASC или DESC",
+            "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by order status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minAmount",
+            "required": false,
+            "in": "query",
+            "description": "Minimum order total in cents",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxAmount",
+            "required": false,
+            "in": "query",
+            "description": "Maximum order total in cents",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orders list retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedOrderResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/batch-approve": {
+      "post": {
+        "operationId": "OrdersController_batchApprove",
+        "summary": "Batch approve orders",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchOrderIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Orders approved"
+          },
+          "400": {
+            "description": "Some orders cannot be approved"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/batch-delete": {
+      "post": {
+        "operationId": "OrdersController_batchDelete",
+        "summary": "Batch delete orders",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchOrderIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Orders deleted"
+          },
+          "400": {
+            "description": "Some orders cannot be deleted"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_findOne",
+        "summary": "Get order by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "OrdersController_update",
+        "summary": "Update order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot update order"
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "OrdersController_remove",
+        "summary": "Delete order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order successfully deleted"
+          },
+          "400": {
+            "description": "Cannot delete order"
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/confirm": {
+      "patch": {
+        "operationId": "OrdersController_confirm",
+        "summary": "Confirm order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order successfully confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot confirm order"
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/{id}/cancel": {
+      "patch": {
+        "operationId": "OrdersController_cancel",
+        "summary": "Cancel order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order successfully cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot cancel order"
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/daily-revenue": {
+      "get": {
+        "operationId": "OrdersController_getDailyRevenue",
+        "summary": "Get daily revenue/turnover for sparkline",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Number of days (default 7)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily revenue data retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyRevenueDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/status-summary": {
+      "get": {
+        "operationId": "OrdersController_getOrderStatusSummary",
+        "summary": "Get order status summary (draft/confirmed/cancelled counts)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Order status summary retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStatusSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/revenue-by-products": {
+      "get": {
+        "operationId": "OrdersController_getRevenueByProducts",
+        "summary": "Get revenue by products",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue by products retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RevenueByProductDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/revenue-by-recipients": {
+      "get": {
+        "operationId": "OrdersController_getRevenueByRecipients",
+        "summary": "Get revenue by recipients",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue by recipients retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RevenueByRecipientDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/total-revenue": {
+      "get": {
+        "operationId": "OrdersController_getTotalRevenue",
+        "summary": "Get total revenue",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Total revenue retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotalRevenueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/turnover-by-products": {
+      "get": {
+        "operationId": "OrdersController_getTurnoverByProducts",
+        "summary": "Get turnover by products",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Turnover by products retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TurnoverByProductDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/turnover-by-recipients": {
+      "get": {
+        "operationId": "OrdersController_getTurnoverByRecipients",
+        "summary": "Get turnover by recipients",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Turnover by recipients retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TurnoverByRecipientDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/dashboard/total-turnover": {
+      "get": {
+        "operationId": "OrdersController_getTotalTurnover",
+        "summary": "Get total turnover",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Total turnover retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotalTurnoverDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/printers": {
+      "get": {
+        "operationId": "ReceiptsController_getPrinters",
+        "summary": "Получить список доступных принтеров",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Список принтеров получен"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/orders/{orderId}/receipt": {
+      "post": {
+        "operationId": "ReceiptsController_createReceipt",
+        "summary": "Создать чек для заказа",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Чек успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Невозможно создать чек"
+          },
+          "404": {
+            "description": "Заказ не найден"
+          },
+          "409": {
+            "description": "Чек для заказа уже существует"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/orders/{orderId}/receipt/compact": {
+      "post": {
+        "operationId": "ReceiptsController_createCompactReceipt",
+        "summary": "Создать компактный чек для заказа",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Компактный чек успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Невозможно создать чек"
+          },
+          "404": {
+            "description": "Заказ не найден"
+          },
+          "409": {
+            "description": "Чек для заказа уже существует"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/orders/{orderId}/receipt/standard": {
+      "post": {
+        "operationId": "ReceiptsController_createStandardReceipt",
+        "summary": "Создать стандартный чек для заказа",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Стандартный чек успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Невозможно создать чек"
+          },
+          "404": {
+            "description": "Заказ не найден"
+          },
+          "409": {
+            "description": "Чек для заказа уже существует"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts": {
+      "get": {
+        "operationId": "ReceiptsController_findAll",
+        "summary": "Получить список всех чеков",
+        "parameters": [
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Offset",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Limit (max 100)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список чеков получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedReceiptResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}": {
+      "get": {
+        "operationId": "ReceiptsController_findOne",
+        "summary": "Получить метаданные чека",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Метаданные чека получены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Чек не найден"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/pdf": {
+      "get": {
+        "operationId": "ReceiptsController_getPdf",
+        "summary": "Скачать PDF чек",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF файл получен"
+          },
+          "404": {
+            "description": "PDF файл не найден"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/print": {
+      "post": {
+        "operationId": "ReceiptsController_printReceipt",
+        "summary": "Отправить чек на печать",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "printer",
+            "required": false,
+            "in": "query",
+            "description": "Имя принтера (по умолчанию системный)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Чек отправлен на печать"
+          },
+          "404": {
+            "description": "Чек не найден"
+          },
+          "500": {
+            "description": "Ошибка при печати"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/void": {
+      "post": {
+        "operationId": "ReceiptsController_voidReceipt",
+        "summary": "Void a receipt and unlock the order",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt voided successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Receipt is already voided"
+          },
+          "404": {
+            "description": "Receipt not found"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/test-preview": {
+      "post": {
+        "operationId": "ReceiptsController_testPreview",
+        "summary": "Generate a test receipt PDF preview using current user settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Test PDF generated"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/regenerate": {
+      "post": {
+        "operationId": "ReceiptsController_regenerateReceiptPdf",
+        "summary": "Принудительно регенерировать PDF чек",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF чек успешно регенерирован",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Чек не найден"
+          },
+          "500": {
+            "description": "Ошибка при регенерации PDF"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/share": {
+      "post": {
+        "operationId": "ReceiptsController_shareReceipt",
+        "summary": "Generate a public share link for a receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public link generated"
+          },
+          "404": {
+            "description": "Receipt not found"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/{id}/share/revoke": {
+      "post": {
+        "operationId": "ReceiptsController_revokeShareReceipt",
+        "summary": "Revoke public share link for a receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public link revoked"
+          },
+          "404": {
+            "description": "Receipt not found"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/public/receipts/{token}": {
+      "get": {
+        "operationId": "PublicReceiptsController_getPublicReceipt",
+        "summary": "Get public receipt data by token (no auth)",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt data returned"
+          },
+          "404": {
+            "description": "Receipt not found or revoked"
+          }
+        },
+        "tags": [
+          "public-receipts"
+        ]
+      }
+    },
+    "/public/receipts/{token}/pdf": {
+      "get": {
+        "operationId": "PublicReceiptsController_getPublicReceiptPdf",
+        "summary": "Download public receipt PDF by token (no auth)",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF file returned"
+          },
+          "404": {
+            "description": "Receipt not found or revoked"
+          }
+        },
+        "tags": [
+          "public-receipts"
+        ]
+      }
+    },
+    "/pdf-test/generate-test-pdf": {
+      "get": {
+        "operationId": "PdfTestController_generateTestPdfGet",
+        "parameters": [
+          {
+            "name": "template",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "logo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "PdfTestController_generateTestPdf",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/pdf-test/preview-template": {
+      "get": {
+        "operationId": "PdfTestController_previewTemplate",
+        "parameters": [
+          {
+            "name": "template",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "logo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/settings/logo/upload": {
+      "post": {
+        "operationId": "SettingsController_uploadLogo",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/logo": {
+      "get": {
+        "operationId": "SettingsController_getLogo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/logo/exists": {
+      "get": {
+        "operationId": "SettingsController_checkLogoExists",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/logo/delete": {
+      "post": {
+        "operationId": "SettingsController_deleteLogo",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/onboarding-status": {
+      "get": {
+        "operationId": "SettingsController_getOnboardingStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/onboarding-complete": {
+      "post": {
+        "operationId": "SettingsController_completeOnboarding",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/receipt-design": {
+      "get": {
+        "operationId": "SettingsController_getReceiptDesign",
+        "summary": "Get all receipt design settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptDesignResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/templates": {
+      "get": {
+        "operationId": "SettingsController_getAvailableTemplates",
+        "summary": "Get available receipt templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateInfoDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/template": {
+      "get": {
+        "operationId": "SettingsController_getTemplateSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateTemplateSettings",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/receipt-title": {
+      "get": {
+        "operationId": "SettingsController_getReceiptTitle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateReceiptTitle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/template-language": {
+      "get": {
+        "operationId": "SettingsController_getTemplateLanguage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateTemplateLanguage",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/footer-title": {
+      "get": {
+        "operationId": "SettingsController_getFooterTitle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateFooterTitle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/footer-subtitle": {
+      "get": {
+        "operationId": "SettingsController_getFooterSubtitle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateFooterSubtitle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/primary-color": {
+      "get": {
+        "operationId": "SettingsController_getPrimaryColor",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updatePrimaryColor",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/payment-terms": {
+      "get": {
+        "operationId": "SettingsController_getPaymentTerms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updatePaymentTerms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/delivery-terms": {
+      "get": {
+        "operationId": "SettingsController_getDeliveryTerms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateDeliveryTerms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/company-info": {
+      "get": {
+        "operationId": "SettingsController_getCompanyInfo",
+        "summary": "Get company information",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyInfoResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateCompanyInfo",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "UsersController_register",
+        "summary": "Register a new user",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User with this email already exists"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "UsersController_login",
+        "summary": "Login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Too many login attempts"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "UsersController_refresh",
+        "summary": "Refresh access token using refresh token",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Tokens refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired refresh token"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "UsersController_logout",
+        "summary": "Logout and revoke refresh token",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Logged out successfully"
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "operationId": "UsersController_getProfile",
+        "summary": "Get current user profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_updateProfile",
+        "summary": "Update current user profile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "UsersController_changePassword",
+        "summary": "Change current user password",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/tg/webhook": {
+      "post": {
+        "operationId": "TelegramController_webhook",
+        "parameters": [
+          {
+            "name": "x-telegram-bot-api-secret-token",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/suppliers": {
+      "post": {
+        "operationId": "SuppliersController_create",
+        "summary": "Создать поставщика",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSupplierDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Поставщик успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Supplier"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "SuppliersController_findAll",
+        "summary": "Получить список поставщиков",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Поле для сортировки",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Направление сортировки: ASC или DESC",
+            "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список поставщиков получен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedSupplierResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "suppliers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/suppliers/{id}": {
+      "get": {
+        "operationId": "SuppliersController_findOne",
+        "summary": "Получить поставщика по ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Поставщик найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Supplier"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Поставщик не найден"
+          }
+        },
+        "tags": [
+          "suppliers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "SuppliersController_update",
+        "summary": "Обновить поставщика",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSupplierDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Поставщик успешно обновлен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Supplier"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Поставщик не найден"
+          }
+        },
+        "tags": [
+          "suppliers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "SuppliersController_remove",
+        "summary": "Удалить поставщика",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Поставщик успешно удален"
+          },
+          "404": {
+            "description": "Поставщик не найден"
+          }
+        },
+        "tags": [
+          "suppliers"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "ReceiptMaster API",
+    "description": "Multi-tenant SaaS API for managing products, recipients, orders, receipts, and analytics.",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "api-key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
+    "schemas": {
+      "CreateProductDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название товара",
+            "example": "iPhone 15"
+          },
+          "purchase_price_cents": {
+            "type": "number",
+            "description": "Цена покупки в копейках",
+            "example": 80000
+          },
+          "sale_price_cents": {
+            "type": "number",
+            "description": "Цена продажи в копейках",
+            "example": 99900
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Количество товара на складе",
+            "example": 50
+          },
+          "currency": {
+            "type": "string",
+            "description": "Валюта",
+            "enum": [
+              "UAH"
+            ],
+            "example": "UAH"
+          }
+        },
+        "required": [
+          "name",
+          "purchase_price_cents",
+          "sale_price_cents",
+          "quantity",
+          "currency"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "purchase_price_cents": {
+            "type": "number"
+          },
+          "sale_price_cents": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UAH"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "purchase_price_cents",
+          "sale_price_cents",
+          "quantity",
+          "currency",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PaginatedProductResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "data"
+        ]
+      },
+      "UpdateProductDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название товара",
+            "example": "iPhone 15"
+          },
+          "purchase_price_cents": {
+            "type": "number",
+            "description": "Цена покупки в копейках",
+            "example": 80000
+          },
+          "sale_price_cents": {
+            "type": "number",
+            "description": "Цена продажи в копейках",
+            "example": 99900
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Количество товара на складе",
+            "example": 50
+          },
+          "currency": {
+            "type": "string",
+            "description": "Валюта",
+            "enum": [
+              "UAH"
+            ],
+            "example": "UAH"
+          }
+        }
+      },
+      "CheckoutDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateRecipientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Имя получателя",
+            "example": "Иван Иванов"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email получателя",
+            "example": "ivan@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон получателя",
+            "example": "+7 (999) 123-45-67"
+          },
+          "address": {
+            "type": "string",
+            "description": "Адрес получателя",
+            "example": "г. Москва, ул. Тверская, д. 1"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Recipient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "telegram_user_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PaginatedRecipientResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipient"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "data"
+        ]
+      },
+      "UpdateRecipientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Имя получателя",
+            "example": "Иван Иванов"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email получателя",
+            "example": "ivan@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон получателя",
+            "example": "+7 (999) 123-45-67"
+          },
+          "address": {
+            "type": "string",
+            "description": "Адрес получателя",
+            "example": "г. Москва, ул. Тверская, д. 1"
+          }
+        }
+      },
+      "CreateOrderItemDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "description": "ID товара",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Количество",
+            "example": 2,
+            "minimum": 1
+          },
+          "unitPriceCents": {
+            "type": "number",
+            "description": "Цена за единицу в копейках (опционально, по умолчанию используется цена из продукта)",
+            "example": 99900
+          }
+        },
+        "required": [
+          "productId",
+          "qty"
+        ]
+      },
+      "CreateOrderDto": {
+        "type": "object",
+        "properties": {
+          "recipientId": {
+            "type": "string",
+            "description": "ID получателя",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "items": {
+            "description": "Позиции заказа",
+            "example": [
+              {
+                "productId": "123e4567-e89b-12d3-a456-426614174000",
+                "qty": 2
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateOrderItemDto"
+            }
+          }
+        },
+        "required": [
+          "recipientId",
+          "items"
+        ]
+      },
+      "OrderItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "order_id": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "unit_price_cents": {
+            "type": "number"
+          },
+          "qty": {
+            "type": "number"
+          },
+          "line_total_cents": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "product_id",
+          "product_name",
+          "unit_price_cents",
+          "qty",
+          "line_total_cents"
+        ]
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "recipient_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "cancelled"
+            ]
+          },
+          "subtotal_cents": {
+            "type": "number"
+          },
+          "total_cents": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "is_locked": {
+            "type": "boolean"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/Recipient"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "recipient_id",
+          "status",
+          "subtotal_cents",
+          "total_cents",
+          "currency",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "is_locked",
+          "recipient",
+          "items",
+          "receipts"
+        ]
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "order_id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string"
+          },
+          "pdf_path": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void"
+            ]
+          },
+          "html_snapshot": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "template_version": {
+            "type": "number"
+          },
+          "voided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "void_reason": {
+            "type": "string"
+          },
+          "public_token": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "number"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "order": {
+            "$ref": "#/components/schemas/Order"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "number",
+          "status",
+          "progress",
+          "created_at",
+          "order"
+        ]
+      },
+      "BatchOrderIdsDto": {
+        "type": "object",
+        "properties": {
+          "orderIds": {
+            "description": "Array of order UUIDs",
+            "example": [
+              "123e4567-e89b-12d3-a456-426614174000"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "orderIds"
+        ]
+      },
+      "PaginatedOrderResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "data"
+        ]
+      },
+      "UpdateOrderItemDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "description": "Product ID",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Quantity",
+            "example": 2,
+            "minimum": 1
+          },
+          "unitPriceCents": {
+            "type": "number",
+            "description": "Unit price in cents (optional, defaults to product sale price)",
+            "example": 99900
+          }
+        },
+        "required": [
+          "productId",
+          "qty"
+        ]
+      },
+      "UpdateOrderDto": {
+        "type": "object",
+        "properties": {
+          "recipientId": {
+            "type": "string",
+            "description": "Recipient ID",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "items": {
+            "description": "Order items",
+            "example": [
+              {
+                "productId": "123e4567-e89b-12d3-a456-426614174000",
+                "qty": 2
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateOrderItemDto"
+            }
+          }
+        }
+      },
+      "DailyRevenueDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "revenue_cents": {
+            "type": "number"
+          },
+          "turnover_cents": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "revenue_cents",
+          "turnover_cents"
+        ]
+      },
+      "OrderStatusSummaryDto": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "type": "number"
+          },
+          "confirmed": {
+            "type": "number"
+          },
+          "cancelled": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "draft",
+          "confirmed",
+          "cancelled"
+        ]
+      },
+      "RevenueByProductDto": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "total_revenue_cents": {
+            "type": "number"
+          },
+          "total_quantity": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "product_name",
+          "total_revenue_cents",
+          "total_quantity",
+          "currency"
+        ]
+      },
+      "RevenueByRecipientDto": {
+        "type": "object",
+        "properties": {
+          "recipient_id": {
+            "type": "string"
+          },
+          "recipient_name": {
+            "type": "string"
+          },
+          "total_revenue_cents": {
+            "type": "number"
+          },
+          "total_orders": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient_id",
+          "recipient_name",
+          "total_revenue_cents",
+          "total_orders",
+          "currency"
+        ]
+      },
+      "TotalRevenueDto": {
+        "type": "object",
+        "properties": {
+          "total_revenue_cents": {
+            "type": "number"
+          },
+          "total_orders": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "total_revenue_cents",
+          "total_orders",
+          "currency"
+        ]
+      },
+      "TurnoverByProductDto": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "total_turnover_cents": {
+            "type": "number"
+          },
+          "total_quantity": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "product_name",
+          "total_turnover_cents",
+          "total_quantity",
+          "currency"
+        ]
+      },
+      "TurnoverByRecipientDto": {
+        "type": "object",
+        "properties": {
+          "recipient_id": {
+            "type": "string"
+          },
+          "recipient_name": {
+            "type": "string"
+          },
+          "total_turnover_cents": {
+            "type": "number"
+          },
+          "total_orders": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient_id",
+          "recipient_name",
+          "total_turnover_cents",
+          "total_orders",
+          "currency"
+        ]
+      },
+      "TotalTurnoverDto": {
+        "type": "object",
+        "properties": {
+          "total_turnover_cents": {
+            "type": "number"
+          },
+          "total_orders": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "total_turnover_cents",
+          "total_orders",
+          "currency"
+        ]
+      },
+      "PaginatedReceiptResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "data"
+        ]
+      },
+      "ReceiptDesignResponseDto": {
+        "type": "object",
+        "properties": {
+          "receiptTitle": {
+            "type": "string"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "templateLanguage": {
+            "type": "string"
+          },
+          "footerTitle": {
+            "type": "string"
+          },
+          "footerSubtitle": {
+            "type": "string"
+          },
+          "primaryColor": {
+            "type": "string"
+          },
+          "paymentTerms": {
+            "type": "string"
+          },
+          "deliveryTerms": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiptTitle",
+          "templateId",
+          "templateLanguage",
+          "footerTitle",
+          "footerSubtitle",
+          "primaryColor",
+          "paymentTerms",
+          "deliveryTerms"
+        ]
+      },
+      "TemplateColorsDto": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": "string"
+          },
+          "secondary": {
+            "type": "string"
+          },
+          "accent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "primary",
+          "secondary",
+          "accent"
+        ]
+      },
+      "TemplateInfoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "colors": {
+            "$ref": "#/components/schemas/TemplateColorsDto"
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "category",
+          "features",
+          "colors",
+          "locked"
+        ]
+      },
+      "CompanyInfoResponseDto": {
+        "type": "object",
+        "properties": {
+          "companyName": {
+            "type": "string"
+          },
+          "companyAddress": {
+            "type": "string"
+          },
+          "companyEmail": {
+            "type": "string"
+          },
+          "companyPhone": {
+            "type": "string"
+          },
+          "companyTaxId": {
+            "type": "string"
+          },
+          "companyIban": {
+            "type": "string"
+          },
+          "companySwift": {
+            "type": "string"
+          },
+          "companyWebsite": {
+            "type": "string"
+          },
+          "companyTagline": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "companyName",
+          "companyAddress",
+          "companyEmail",
+          "companyPhone",
+          "companyTaxId",
+          "companyIban",
+          "companySwift",
+          "companyWebsite",
+          "companyTagline"
+        ]
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "User": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "Текущий пароль",
+            "example": "oldPassword123"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "Новый пароль",
+            "example": "newPassword123",
+            "minLength": 6
+          },
+          "confirmPassword": {
+            "type": "string",
+            "description": "Подтверждение нового пароля",
+            "example": "newPassword123",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword",
+          "confirmPassword"
+        ]
+      },
+      "CreateSupplierDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название поставщика",
+            "example": "ООО Поставщик"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email поставщика",
+            "example": "supplier@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон поставщика",
+            "example": "+380 50 123 4567"
+          },
+          "address": {
+            "type": "string",
+            "description": "Адрес поставщика",
+            "example": "г. Киев, ул. Центральная, 1"
+          },
+          "contactPerson": {
+            "type": "string",
+            "description": "Контактное лицо",
+            "example": "Иван Иванов"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Заметки",
+            "example": "Основной поставщик"
+          },
+          "productIds": {
+            "description": "ID продуктов для привязки",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Supplier": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "contact_person": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "products",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PaginatedSupplierResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "offset": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Supplier"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "data"
+        ]
+      },
+      "UpdateSupplierDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Название поставщика",
+            "example": "ООО Поставщик"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email поставщика",
+            "example": "supplier@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Телефон поставщика",
+            "example": "+380 50 123 4567"
+          },
+          "address": {
+            "type": "string",
+            "description": "Адрес поставщика",
+            "example": "г. Киев, ул. Центральная, 1"
+          },
+          "contactPerson": {
+            "type": "string",
+            "description": "Контактное лицо",
+            "example": "Иван Иванов"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Заметки",
+            "example": "Основной поставщик"
+          },
+          "productIds": {
+            "description": "ID продуктов для привязки",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -25,9 +25,7 @@ describe("SuppliersController", () => {
         limit: 10,
       }),
       findOne: jest.fn().mockResolvedValue(mockSupplier),
-      update: jest
-        .fn()
-        .mockResolvedValue({ ...mockSupplier, name: "Updated" }),
+      update: jest.fn().mockResolvedValue({ ...mockSupplier, name: "Updated" }),
       remove: jest.fn().mockResolvedValue(undefined),
     } as any;
 

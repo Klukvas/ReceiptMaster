@@ -34,9 +34,9 @@ describe("PublicReceiptsController", () => {
         new Error("Not found"),
       );
 
-      await expect(
-        controller.getPublicReceipt("bad-token"),
-      ).rejects.toThrow("Not found");
+      await expect(controller.getPublicReceipt("bad-token")).rejects.toThrow(
+        "Not found",
+      );
     });
   });
 

@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileText, Loader2 } from "lucide-react";
 import { settingsApi } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
 
 export const ProformaSettings = () => {
   const { t } = useTranslation();
@@ -11,39 +15,22 @@ export const ProformaSettings = () => {
   const [paymentTerms, setPaymentTerms] = useState("");
   const [deliveryTerms, setDeliveryTerms] = useState("");
 
-  const { data: paymentData, isLoading: loadingPayment } = useQuery({
-    queryKey: ["settings", "payment-terms"],
-    queryFn: async () => {
-      const res = await settingsApi.getPaymentTerms();
-      return res.data;
-    },
-  });
-
-  const { data: deliveryData, isLoading: loadingDelivery } = useQuery({
-    queryKey: ["settings", "delivery-terms"],
-    queryFn: async () => {
-      const res = await settingsApi.getDeliveryTerms();
-      return res.data;
-    },
-  });
+  const { data: designData, isLoading } = useReceiptDesignSettings();
 
   useEffect(() => {
-    if (paymentData?.paymentTerms !== undefined) {
-      setPaymentTerms(paymentData.paymentTerms);
+    if (designData?.paymentTerms !== undefined) {
+      setPaymentTerms(designData.paymentTerms);
     }
-  }, [paymentData]);
-
-  useEffect(() => {
-    if (deliveryData?.deliveryTerms !== undefined) {
-      setDeliveryTerms(deliveryData.deliveryTerms);
+    if (designData?.deliveryTerms !== undefined) {
+      setDeliveryTerms(designData.deliveryTerms);
     }
-  }, [deliveryData]);
+  }, [designData]);
 
   const paymentMutation = useMutation({
     mutationFn: (terms: string) => settingsApi.updatePaymentTerms(terms),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["settings", "payment-terms"],
+        queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
       });
     },
   });
@@ -52,12 +39,10 @@ export const ProformaSettings = () => {
     mutationFn: (terms: string) => settingsApi.updateDeliveryTerms(terms),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["settings", "delivery-terms"],
+        queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
       });
     },
   });
-
-  const isLoading = loadingPayment || loadingDelivery;
 
   if (isLoading) {
     return (

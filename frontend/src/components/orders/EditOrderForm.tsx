@@ -150,7 +150,6 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
               placeholder={t("orders.selectRecipient")}
               searchPlaceholder={t("orders.searchRecipient")}
               required
-              已完成
             />
           </div>
 

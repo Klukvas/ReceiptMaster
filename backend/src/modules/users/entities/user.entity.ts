@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from "typeorm";
+import { ApiHideProperty } from "@nestjs/swagger";
 import { Product } from "../../products/entities/product.entity";
 import { Recipient } from "../../recipients/entities/recipient.entity";
 import { Order } from "../../orders/entities/order.entity";
@@ -20,24 +21,30 @@ export class User {
   @Column({ unique: true })
   email: string;
 
+  @ApiHideProperty()
   @Column()
   password: string;
 
   @Column({ default: true })
   isActive: boolean;
 
+  @ApiHideProperty()
   @OneToMany(() => Product, (product) => product.user)
   products: Product[];
 
+  @ApiHideProperty()
   @OneToMany(() => Recipient, (recipient) => recipient.user)
   recipients: Recipient[];
 
+  @ApiHideProperty()
   @OneToMany(() => Order, (order) => order.user)
   orders: Order[];
 
+  @ApiHideProperty()
   @OneToMany(() => OrderItem, (orderItem) => orderItem.user)
   orderItems: OrderItem[];
 
+  @ApiHideProperty()
   @OneToMany(() => Receipt, (receipt) => receipt.user)
   receipts: Receipt[];
 

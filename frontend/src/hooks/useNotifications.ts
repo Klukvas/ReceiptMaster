@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
-import { notificationService, type Notification } from '../services/NotificationService';
+import { useState, useEffect } from "react";
+import {
+  notificationService,
+  type Notification,
+} from "../services/NotificationService";
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     const unsubscribe = notificationService.subscribe(setNotifications);
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return {

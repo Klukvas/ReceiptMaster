@@ -19,8 +19,10 @@ import {
 } from "@nestjs/swagger";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
+import { PaginatedReceiptResponse } from "../../common/dto/paginated-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+import { Receipt } from "./entities/receipt.entity";
 
 @ApiTags("receipts")
 @ApiBearerAuth("bearer")
@@ -40,7 +42,11 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt")
   @ApiOperation({ summary: "Создать чек для заказа" })
-  @ApiResponse({ status: 201, description: "Чек успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Чек успешно создан",
+    type: Receipt,
+  })
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
@@ -53,7 +59,11 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt/compact")
   @ApiOperation({ summary: "Создать компактный чек для заказа" })
-  @ApiResponse({ status: 201, description: "Компактный чек успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Компактный чек успешно создан",
+    type: Receipt,
+  })
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
@@ -66,7 +76,11 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt/standard")
   @ApiOperation({ summary: "Создать стандартный чек для заказа" })
-  @ApiResponse({ status: 201, description: "Стандартный чек успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Стандартный чек успешно создан",
+    type: Receipt,
+  })
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
@@ -79,7 +93,11 @@ export class ReceiptsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список всех чеков" })
-  @ApiResponse({ status: 200, description: "Список чеков получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список чеков получен",
+    type: PaginatedReceiptResponse,
+  })
   @ApiQuery({ name: "offset", required: false, description: "Offset" })
   @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
   findAll(
@@ -103,7 +121,11 @@ export class ReceiptsController {
 
   @Get(":id")
   @ApiOperation({ summary: "Получить метаданные чека" })
-  @ApiResponse({ status: 200, description: "Метаданные чека получены" })
+  @ApiResponse({
+    status: 200,
+    description: "Метаданные чека получены",
+    type: Receipt,
+  })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   findOne(@Param("id") id: string, @Request() req: { user: User }) {
     return this.receiptsService.findOne(id, req.user);
@@ -168,7 +190,11 @@ export class ReceiptsController {
 
   @Post(":id/void")
   @ApiOperation({ summary: "Void a receipt and unlock the order" })
-  @ApiResponse({ status: 200, description: "Receipt voided successfully" })
+  @ApiResponse({
+    status: 200,
+    description: "Receipt voided successfully",
+    type: Receipt,
+  })
   @ApiResponse({ status: 400, description: "Receipt is already voided" })
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async voidReceipt(
@@ -202,7 +228,11 @@ export class ReceiptsController {
 
   @Post(":id/regenerate")
   @ApiOperation({ summary: "Принудительно регенерировать PDF чек" })
-  @ApiResponse({ status: 200, description: "PDF чек успешно регенерирован" })
+  @ApiResponse({
+    status: 200,
+    description: "PDF чек успешно регенерирован",
+    type: Receipt,
+  })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при регенерации PDF" })
   async regenerateReceiptPdf(

@@ -247,6 +247,29 @@ export class SettingsService {
     await this.invalidateCache(userId);
   }
 
+  async getReceiptDesignSettings(userId: string): Promise<{
+    receiptTitle: string;
+    templateId: string;
+    templateLanguage: string;
+    footerTitle: string;
+    footerSubtitle: string;
+    primaryColor: string;
+    paymentTerms: string;
+    deliveryTerms: string;
+  }> {
+    const settings = await this.getCachedSettings(userId);
+    return {
+      receiptTitle: settings?.receiptTitle || "Invoice",
+      templateId: settings?.templateId || "standard",
+      templateLanguage: settings?.templateLanguage || "en",
+      footerTitle: settings?.footerText || "",
+      footerSubtitle: settings?.subFooterText || "",
+      primaryColor: settings?.primaryColor || "",
+      paymentTerms: settings?.paymentTerms || "",
+      deliveryTerms: settings?.deliveryTerms || "",
+    };
+  }
+
   /**
    * Get all PDF-related settings in a single call (cached).
    * This optimizes the N+1 query problem when generating receipts.

@@ -38,10 +38,7 @@ export class SubscriptionController {
   @Post("checkout")
   @ApiOperation({ summary: "Create Paddle checkout transaction" })
   @ApiBody({ type: CheckoutDto })
-  async checkout(
-    @Request() req: { user: User },
-    @Body() dto: CheckoutDto,
-  ) {
+  async checkout(@Request() req: { user: User }, @Body() dto: CheckoutDto) {
     return this.paddleService.createCheckoutTransaction(
       req.user.id,
       req.user.email,

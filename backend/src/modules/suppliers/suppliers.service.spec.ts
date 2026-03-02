@@ -91,10 +91,7 @@ describe("SuppliersService", () => {
 
   describe("findAll", () => {
     it("should return paginated suppliers with product count", async () => {
-      const result = await service.findAll(
-        { limit: 10, offset: 0 },
-        mockUser,
-      );
+      const result = await service.findAll({ limit: 10, offset: 0 }, mockUser);
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0]).toHaveProperty("product_count", 2);
@@ -104,10 +101,7 @@ describe("SuppliersService", () => {
     it("should apply search filter", async () => {
       const qb = suppliersRepo.createQueryBuilder();
 
-      await service.findAll(
-        { limit: 10, offset: 0, search: "Test" },
-        mockUser,
-      );
+      await service.findAll({ limit: 10, offset: 0, search: "Test" }, mockUser);
 
       expect(qb.andWhere).toHaveBeenCalled();
     });
