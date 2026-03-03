@@ -1,7 +1,8 @@
 import React, { forwardRef, type ReactNode } from "react";
 import { Card as BaseCard, cn } from "@klukvas/flux-b2c-ui";
 
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CardProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   title?: React.ReactNode;
   actions?: ReactNode;
 }
