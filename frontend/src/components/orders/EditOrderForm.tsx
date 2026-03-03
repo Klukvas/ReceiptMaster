@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Trash2, Info } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import {
   ordersApi,
   productsApi,
@@ -120,10 +120,10 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-lg font-semibold text-content">
             {t("orders.editOrder")}
           </h2>
           <Button variant="secondary" size="sm" onClick={onClose}>
@@ -133,7 +133,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-content-secondary mb-1">
               {t("orders.recipient")}
             </label>
             <Combobox
@@ -155,7 +155,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="block text-sm font-medium text-content-secondary">
                 {t("orders.products")}
               </label>
               <Button type="button" size="sm" onClick={addItem}>
@@ -167,44 +167,56 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  className="p-3 border border-[var(--color-border)] rounded-lg bg-elevated space-y-3"
                 >
-                  <div className="flex-1">
-                    <Combobox
-                      options={
-                        productsData?.data?.data?.map((product) => ({
-                          value: product.id,
-                          label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
-                          searchText: `${product.name}`.trim(),
-                        })) || []
-                      }
-                      value={item.productId}
-                      onChange={(value) =>
-                        updateItem(index, "productId", value)
-                      }
-                      placeholder={t("orders.selectProduct")}
-                      searchPlaceholder={t("orders.searchProduct")}
-                      required
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <Combobox
+                        options={
+                          productsData?.data?.data?.map((product) => ({
+                            value: product.id,
+                            label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
+                            searchText: `${product.name}`.trim(),
+                          })) || []
+                        }
+                        value={item.productId}
+                        onChange={(value) =>
+                          updateItem(index, "productId", value)
+                        }
+                        placeholder={t("orders.selectProduct")}
+                        searchPlaceholder={t("orders.searchProduct")}
+                        required
+                      />
+                    </div>
+                    {items.length > 1 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => removeItem(index)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
-                  <div className="w-28">
-                    <Input
-                      type="number"
-                      min="1"
-                      value={item.qty}
-                      onChange={(e) =>
-                        updateItem(index, "qty", parseInt(e.target.value))
-                      }
-                      required
-                      placeholder={t("orders.quantity")}
-                    />
-                  </div>
-                  {(() => {
-                    const product = getProduct(item.productId);
-                    if (!product) return null;
-                    return (
-                      <div className="w-28">
-                        <div className="relative group">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="w-24">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.qty}
+                        onChange={(e) =>
+                          updateItem(index, "qty", parseInt(e.target.value))
+                        }
+                        required
+                        placeholder={t("orders.quantity")}
+                      />
+                    </div>
+                    {(() => {
+                      const product = getProduct(item.productId);
+                      if (!product) return null;
+                      return (
+                        <div className="w-28">
                           <Input
                             type="text"
                             inputMode="decimal"
@@ -284,44 +296,20 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                             title={`${t("orders.customPriceTooltip")}. ${t("orders.customPriceDefault")}: ${formatCurrency(product.sale_price_cents, product.currency)}`}
                             className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
-                          <Info className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors pointer-events-none" />
-                          {/* Custom tooltip */}
-                          <div className="absolute z-50 left-0 bottom-full mb-2 hidden group-hover:block px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
-                            {t("orders.customPriceTooltip")}
-                            <br />
-                            <span className="text-gray-300">
-                              {t("orders.customPriceDefault")}:{" "}
-                              {formatCurrency(
-                                product.sale_price_cents,
-                                product.currency,
-                              )}
-                            </span>
-                            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
-                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
-                  <div className="w-28 text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {formatCurrency(calculateItemTotal(item))}
+                      );
+                    })()}
+                    <div className="ml-auto text-sm font-medium text-content">
+                      {formatCurrency(calculateItemTotal(item))}
+                    </div>
                   </div>
-                  {items.length > 1 && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="danger"
-                      onClick={() => removeItem(index)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <div className="flex justify-between items-center text-lg font-semibold text-gray-900 dark:text-white">
+          <div className="border-t border-[var(--color-border)] pt-4">
+            <div className="flex justify-between items-center text-lg font-semibold text-content">
               <span>{t("orders.total")}:</span>
               <span>{formatCurrency(calculateTotal())}</span>
             </div>

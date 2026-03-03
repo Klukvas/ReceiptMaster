@@ -3,11 +3,18 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build arguments
+ARG GITHUB_TOKEN
+
 # Устанавливаем vite глобально
 RUN npm install -g vite
 
-# Копируем package.json и yarn.lock
-COPY package.json yarn.lock ./
+# Копируем package.json, yarn.lock и .npmrc
+COPY package.json yarn.lock .npmrc ./
+# Configure GitHub Packages auth for @klukvas scope
+RUN if [ -n "$GITHUB_TOKEN" ]; then \
+      echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc; \
+    fi
 
 # Устанавливаем зависимости через npm
 RUN npm install

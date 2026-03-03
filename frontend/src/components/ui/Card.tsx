@@ -1,25 +1,27 @@
-import React, { type ReactNode } from 'react';
-import { clsx } from 'clsx';
+import React, { forwardRef, type ReactNode } from "react";
+import { Card as BaseCard, cn } from "@klukvas/flux-b2c-ui";
 
-interface CardProps {
-  children: ReactNode;
-  className?: string;
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: React.ReactNode;
   actions?: ReactNode;
 }
 
-export const Card = ({ children, className, title, actions }: CardProps) => {
-  return (
-    <div className={clsx('bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-200', className)}>
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ children, className, title, actions, ...props }, ref) => (
+    <BaseCard ref={ref} className={cn("p-6", className)} {...props}>
       {(title || actions) && (
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex items-center justify-between">
           {title && (
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+            <h3 className="text-lg font-semibold text-[var(--color-text)]">
+              {title}
+            </h3>
           )}
           {actions && <div className="flex space-x-2">{actions}</div>}
         </div>
       )}
       {children}
-    </div>
-  );
-};
+    </BaseCard>
+  ),
+);
+
+Card.displayName = "Card";

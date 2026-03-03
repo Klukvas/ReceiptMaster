@@ -1,22 +1,24 @@
+import { Skeleton as BaseSkeleton, cn } from "@klukvas/flux-b2c-ui";
+
 interface SkeletonProps {
   className?: string;
 }
 
-export const Skeleton = ({ className = '' }: SkeletonProps) => (
-  <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`} />
+export const Skeleton = ({ className = "" }: SkeletonProps) => (
+  <BaseSkeleton className={className} />
 );
 
-export const SkeletonCard = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-    <Skeleton className="h-4 w-24 mb-3" />
-    <Skeleton className="h-8 w-32 mb-2" />
+export const StatCardSkeleton = () => (
+  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-elevated)] p-6">
+    <Skeleton className="mb-3 h-4 w-24" />
+    <Skeleton className="mb-2 h-8 w-32" />
     <Skeleton className="h-3 w-20" />
   </div>
 );
 
-export const SkeletonChart = ({ height = 'h-48' }: { height?: string }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-    <Skeleton className="h-4 w-32 mb-4" />
-    <Skeleton className={`w-full ${height}`} />
+export const SkeletonChart = ({ height = "h-48" }: { height?: string }) => (
+  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-elevated)] p-6">
+    <Skeleton className="mb-4 h-4 w-32" />
+    <Skeleton className={cn("w-full", height)} />
   </div>
 );

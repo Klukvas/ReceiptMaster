@@ -1,7 +1,7 @@
-import React from 'react';
-import { CheckCircle, Trash2, X } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { useTranslation } from '../../hooks/useTranslation';
+import React from "react";
+import { CheckCircle, Trash2, X } from "lucide-react";
+import { Button } from "../ui/Button";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface OrderBulkToolbarProps {
   selectedCount: number;
@@ -25,13 +25,13 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-modal-content">
-      <div className="flex items-center gap-3 px-5 py-3 bg-gray-900 dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-700/50 dark:border-gray-600/50">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-modal-content w-[calc(100%-2rem)] sm:w-auto max-w-[calc(100%-2rem)]">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 bg-[#111827] dark:bg-elevated rounded-xl shadow-2xl border border-[var(--color-border)]">
         <span className="text-sm font-medium text-white whitespace-nowrap">
-          {t('orders.selectedCount', { count: selectedCount })}
+          {t("orders.selectedCount", { count: selectedCount })}
         </span>
 
-        <div className="w-px h-5 bg-gray-600" />
+        <div className="hidden sm:block w-px h-5 bg-surface-alt" />
 
         <div className="flex items-center gap-2">
           <Button
@@ -41,13 +41,13 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
             disabled={!allSelectedAreDraft || isApproving}
             title={
               !allSelectedAreDraft
-                ? t('orders.batchApproveDisabledHint')
-                : t('orders.batchApprove')
+                ? t("orders.batchApproveDisabledHint")
+                : t("orders.batchApprove")
             }
-            className="bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500 text-white text-xs"
+            className="bg-success-base hover:bg-success-base-hover focus:ring-[var(--color-success)]/10 text-white text-xs"
           >
             <CheckCircle className="w-3.5 h-3.5 mr-1" />
-            {t('orders.batchApprove')}
+            {t("orders.batchApprove")}
           </Button>
 
           <Button
@@ -58,14 +58,14 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
             className="text-xs"
           >
             <Trash2 className="w-3.5 h-3.5 mr-1" />
-            {t('orders.batchDelete')}
+            {t("orders.batchDelete")}
           </Button>
         </div>
 
         <button
           onClick={onClearSelection}
-          className="p-1 rounded-md hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
-          title={t('common.clear')}
+          className="p-1 rounded-md hover:bg-surface transition-colors text-content-tertiary hover:text-white"
+          title={t("common.clear")}
         >
           <X className="w-4 h-4" />
         </button>

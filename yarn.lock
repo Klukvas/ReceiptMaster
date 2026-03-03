@@ -1048,6 +1048,15 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
+"@klukvas/flux-b2c-ui@^0.1.0":
+  version "0.1.0"
+  resolved "https://npm.pkg.github.com/download/@klukvas/flux-b2c-ui/0.1.0/3703feceb23ef0f0a165b5e3a5ce9d55b085ae5f#3703feceb23ef0f0a165b5e3a5ce9d55b085ae5f"
+  integrity sha512-gDJSBa91G3Jv7sEjc1M48JZaIFPkhSqefDhUxwrBAdJ2QgyH/GxcugLl1xPjy4+GT/dx9XrAb9kyHqsZ7CqRKQ==
+  dependencies:
+    class-variance-authority "^0.7.1"
+    clsx "^2.1.1"
+    tailwind-merge "^3.3.1"
+
 "@ljharb/through@^2.3.12":
   version "2.3.14"
   resolved "https://registry.npmjs.org/@ljharb/through/-/through-2.3.14.tgz"
@@ -1128,7 +1137,7 @@
 
 "@nestjs/bullmq@^11.0.4":
   version "11.0.4"
-  resolved "https://registry.npmjs.org/@nestjs/bullmq/-/bullmq-11.0.4.tgz"
+  resolved "https://registry.yarnpkg.com/@nestjs/bullmq/-/bullmq-11.0.4.tgz#aa0d62f949a9bfa7456b43780aa7b404dc5536b3"
   integrity sha512-wBzK9raAVG0/6NTMdvLGM4/FQ1lsB35/pYS8L6a0SDgkTiLpd7mAjQ8R692oMx5s7IjvgntaZOuTUrKYLNfIkA==
   dependencies:
     "@nestjs/bull-shared" "^11.0.4"
@@ -1219,10 +1228,10 @@
     multer "2.0.2"
     tslib "2.8.1"
 
-"@nestjs/platform-socket.io@^11.1.14":
-  version "11.1.14"
-  resolved "https://registry.npmjs.org/@nestjs/platform-socket.io/-/platform-socket.io-11.1.14.tgz"
-  integrity sha512-LLSIWkYz4FcvUhfepillYQboo9qbjq1YtQj8XC3zyex+EaqNXvxhZntx/1uJhAjc655pJts9HfZwWXei8jrRGw==
+"@nestjs/platform-socket.io@^11.1.15":
+  version "11.1.15"
+  resolved "https://registry.yarnpkg.com/@nestjs/platform-socket.io/-/platform-socket.io-11.1.15.tgz#5d66989df6f71cd251d1a396d353e0f8f5ef3011"
+  integrity sha512-o5RmPm1QG0uJJvPhrfb5kvhXYjl9ErkJHs8zZznxqe3YFKmTdCFfzukrneQLOVztwOseOJt593aMWyAPZ49ZOw==
   dependencies:
     socket.io "4.8.3"
     tslib "2.8.1"
@@ -1266,7 +1275,7 @@
 
 "@nestjs/throttler@^6.5.0":
   version "6.5.0"
-  resolved "https://registry.npmjs.org/@nestjs/throttler/-/throttler-6.5.0.tgz"
+  resolved "https://registry.yarnpkg.com/@nestjs/throttler/-/throttler-6.5.0.tgz#1ee550a258c4ae697d3978f2c8932adff927439e"
   integrity sha512-9j0ZRfH0QE1qyrj9JjIRDz5gQLPqq9yVC2nHsrosDVAfI5HHw08/aUAWx9DZLSdQf4HDkmhTTEGLrRFHENvchQ==
 
 "@nestjs/typeorm@^10.0.1":
@@ -1276,10 +1285,10 @@
   dependencies:
     uuid "9.0.1"
 
-"@nestjs/websockets@^11.1.14":
-  version "11.1.14"
-  resolved "https://registry.npmjs.org/@nestjs/websockets/-/websockets-11.1.14.tgz"
-  integrity sha512-fVP6RmmrmtLIitTXN9er7BUOIjjxcdIewN/zUtBlwgfng+qKBTxpNFOs3AXXbCu8bQr2xjzhjrBTfqri0Ske7w==
+"@nestjs/websockets@^11.1.15":
+  version "11.1.15"
+  resolved "https://registry.yarnpkg.com/@nestjs/websockets/-/websockets-11.1.15.tgz#95fcb106cc2bdef74f96ba3a6110905440d960d0"
+  integrity sha512-69ho/z9RdUcnOab1GXvKoHE8pca0FiUaO9wn6HEcY6JTosKQERx5reBkRVOLAX73eV4rDbiJ7Ck8AllEEIobZw==
   dependencies:
     iterare "1.2.1"
     object-hash "3.0.0"
@@ -3142,9 +3151,9 @@ buffer@^6.0.3:
     base64-js "^1.3.1"
     ieee754 "^1.2.1"
 
-bullmq@^5.69.3:
+bullmq@^5.70.1:
   version "5.70.1"
-  resolved "https://registry.npmjs.org/bullmq/-/bullmq-5.70.1.tgz"
+  resolved "https://registry.yarnpkg.com/bullmq/-/bullmq-5.70.1.tgz#34c64dbd17bc05b1299cc07e85079ad1c94eb1ed"
   integrity sha512-HjfGHfICkAClrFL0Y07qNbWcmiOCv1l+nusupXUjrvTPuDEyPEJ23MP0lUwUs/QEy1a3pWt/P/sCsSZ1RjRK+w==
   dependencies:
     cron-parser "4.9.0"
@@ -3323,6 +3332,13 @@ class-validator@^0.14.0:
     "@types/validator" "^13.11.8"
     libphonenumber-js "^1.11.1"
     validator "^13.9.0"
+
+class-variance-authority@^0.7.1:
+  version "0.7.1"
+  resolved "https://registry.yarnpkg.com/class-variance-authority/-/class-variance-authority-0.7.1.tgz#4008a798a0e4553a781a57ac5177c9fb5d043787"
+  integrity sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==
+  dependencies:
+    clsx "^2.1.1"
 
 clean-stack@^2.0.0:
   version "2.2.0"
@@ -7739,9 +7755,22 @@ socket.io-parser@~4.2.4:
     "@socket.io/component-emitter" "~3.1.0"
     debug "~4.4.1"
 
-socket.io@4.8.3, socket.io@^4.8.3:
+socket.io@4.8.3:
   version "4.8.3"
   resolved "https://registry.npmjs.org/socket.io/-/socket.io-4.8.3.tgz"
+  integrity sha512-2Dd78bqzzjE6KPkD5fHZmDAKRNe3J15q+YHDrIsy9WEkqttc7GY+kT9OBLSMaPbQaEd0x1BjcmtMtXkfpc+T5A==
+  dependencies:
+    accepts "~1.3.4"
+    base64id "~2.0.0"
+    cors "~2.8.5"
+    debug "~4.4.1"
+    engine.io "~6.6.0"
+    socket.io-adapter "~2.5.2"
+    socket.io-parser "~4.2.4"
+
+socket.io@^4.8.3:
+  version "4.8.3"
+  resolved "https://registry.yarnpkg.com/socket.io/-/socket.io-4.8.3.tgz#ca6ba1431c69532e1e0a6f496deebeb601dbc4df"
   integrity sha512-2Dd78bqzzjE6KPkD5fHZmDAKRNe3J15q+YHDrIsy9WEkqttc7GY+kT9OBLSMaPbQaEd0x1BjcmtMtXkfpc+T5A==
   dependencies:
     accepts "~1.3.4"

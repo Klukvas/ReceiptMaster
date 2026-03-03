@@ -146,22 +146,22 @@ export const TemplateCarouselModal = ({
       {/* Content */}
       <div className="relative z-10 flex flex-col h-full animate-modal-content">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-6 py-4 bg-elevated border-b border-[var(--color-border)]">
           <div className="min-w-0">
             <h2
               id="carousel-dialog-title"
-              className="text-lg font-semibold text-gray-900 dark:text-white truncate"
+              className="text-lg font-semibold text-content truncate"
             >
               {current.name}
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+            <p className="text-sm text-content-tertiary truncate">
               {current.description}
             </p>
           </div>
           <button
             ref={closeButtonRef}
             onClick={onClose}
-            className="ml-4 shrink-0 rounded-lg p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="ml-4 shrink-0 rounded-lg p-2 text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors"
             aria-label={t("common.close", "Close")}
           >
             <X className="h-5 w-5" />
@@ -171,12 +171,12 @@ export const TemplateCarouselModal = ({
         {/* Preview area */}
         <div
           ref={previewAreaRef}
-          className="relative flex-1 flex items-center justify-center px-16 py-6 overflow-hidden"
+          className="relative flex-1 flex items-center justify-center px-4 sm:px-8 lg:px-16 py-6 overflow-hidden"
         >
           {/* Left arrow */}
           <button
             onClick={() => goTo("prev")}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 shadow-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-elevated border border-[var(--color-border)] text-content-secondary shadow-md hover:bg-surface-alt transition-colors"
             aria-label={t("common.previous", "Previous template")}
           >
             <ChevronLeft className="h-5 w-5" />
@@ -194,7 +194,7 @@ export const TemplateCarouselModal = ({
           {/* Right arrow */}
           <button
             onClick={() => goTo("next")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 shadow-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-elevated border border-[var(--color-border)] text-content-secondary shadow-md hover:bg-surface-alt transition-colors"
             aria-label={t("common.next", "Next template")}
           >
             <ChevronRight className="h-5 w-5" />
@@ -202,7 +202,7 @@ export const TemplateCarouselModal = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-6 py-4 bg-elevated border-t border-[var(--color-border)]">
           {/* Dot indicators */}
           <div className="flex items-center gap-1.5">
             {templates.map((tpl, i) => (
@@ -212,8 +212,8 @@ export const TemplateCarouselModal = ({
                 className={clsx(
                   "h-2 rounded-full transition-all duration-200",
                   i === currentIndex
-                    ? "w-4 bg-blue-500"
-                    : "w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500",
+                    ? "w-4 bg-accent-base"
+                    : "w-2 bg-surface-alt hover:bg-surface-alt",
                 )}
                 aria-label={tpl.name}
               />
@@ -223,7 +223,7 @@ export const TemplateCarouselModal = ({
           {/* Select button */}
           <button
             onClick={handleSelect}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent-base px-4 py-2 text-sm font-medium text-white hover:bg-accent-base transition-colors"
           >
             <Check className="h-4 w-4" />
             {t("settings.selectTemplate", "Select This Template")}

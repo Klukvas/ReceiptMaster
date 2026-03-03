@@ -80,6 +80,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@klukvas'
           cache: 'yarn'
           cache-dependency-path: |
             frontend/yarn.lock
@@ -87,6 +89,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting
         run: yarn lint
@@ -108,6 +112,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@klukvas'
           cache: 'yarn'
           cache-dependency-path: |
             frontend/yarn.lock
@@ -116,6 +122,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: yarn install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate types from OpenAPI spec
         working-directory: ./frontend
@@ -252,6 +260,7 @@ jobs:
           build-args: |
             VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
             VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           tags: |
             klukvas/receiptmaster-frontend:${{ github.sha }}
             klukvas/receiptmaster-frontend:latest

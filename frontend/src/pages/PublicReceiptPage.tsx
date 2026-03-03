@@ -98,12 +98,12 @@ export const PublicReceiptPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface-alt flex items-center justify-center">
         <div className="animate-pulse space-y-4 w-full max-w-2xl px-4">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mx-auto" />
-          <div className="h-4 bg-gray-200 rounded w-1/4 mx-auto" />
-          <div className="h-64 bg-gray-200 rounded" />
-          <div className="h-32 bg-gray-200 rounded" />
+          <div className="h-8 bg-surface-alt rounded w-1/3 mx-auto" />
+          <div className="h-4 bg-surface-alt rounded w-1/4 mx-auto" />
+          <div className="h-64 bg-surface-alt rounded" />
+          <div className="h-32 bg-surface-alt rounded" />
         </div>
       </div>
     );
@@ -111,13 +111,13 @@ export const PublicReceiptPage = () => {
 
   if (notFound || !data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface-alt flex items-center justify-center">
         <div className="text-center px-4">
-          <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-700 mb-2">
+          <AlertCircle className="w-16 h-16 text-content-tertiary mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-content-secondary mb-2">
             Receipt Not Found
           </h1>
-          <p className="text-gray-500">
+          <p className="text-content-tertiary">
             This receipt link is invalid or has been revoked.
           </p>
         </div>
@@ -129,77 +129,77 @@ export const PublicReceiptPage = () => {
   const { order } = receipt;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-alt">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
         {/* Header */}
         <div className="text-center mb-8">
           {companyInfo.companyName && (
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            <h1 className="text-2xl font-bold text-content mb-1">
               {companyInfo.companyName}
             </h1>
           )}
           {companyInfo.companyAddress && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-content-tertiary">
               {companyInfo.companyAddress}
             </p>
           )}
         </div>
 
         {/* Receipt card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-elevated rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
           {/* Receipt header */}
-          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+          <div className="px-6 py-5 border-b border-[var(--color-border-light)] bg-surface-alt">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-400" />
-                <h2 className="text-lg font-semibold text-gray-900">
+                <FileText className="w-5 h-5 text-content-tertiary" />
+                <h2 className="text-lg font-semibold text-content">
                   {companyInfo.receiptTitle || "Receipt"}
                 </h2>
               </div>
               <button
                 onClick={handleDownload}
                 disabled={downloading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-accent-base rounded-lg hover:bg-accent-base-hover transition-colors disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 {downloading ? "..." : "Download PDF"}
               </button>
             </div>
             {downloadError && (
-              <p className="mt-2 text-sm text-red-600">
+              <p className="mt-2 text-sm text-danger-base">
                 Failed to download PDF. Please try again.
               </p>
             )}
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-content-tertiary">
               <span>#{receipt.number}</span>
               <span>{formatDate(receipt.created_at)}</span>
             </div>
           </div>
 
           {/* Items */}
-          <div className="px-6 py-4">
-            <table className="w-full">
+          <div className="px-6 py-4 overflow-x-auto">
+            <table className="w-full min-w-[400px]">
               <thead>
-                <tr className="text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                <tr className="text-xs font-semibold uppercase tracking-wider text-content-tertiary border-b border-[var(--color-border-light)]">
                   <th className="text-left pb-2">Item</th>
                   <th className="text-center pb-2 w-16">Qty</th>
                   <th className="text-right pb-2 w-28">Price</th>
                   <th className="text-right pb-2 w-28">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-[var(--color-border-light)]">
                 {order.items.map((item) => (
                   <tr key={item.id}>
-                    <td className="py-3 text-sm text-gray-900">
+                    <td className="py-3 text-sm text-content">
                       {item.product_name}
                     </td>
-                    <td className="py-3 text-sm text-gray-500 text-center">
+                    <td className="py-3 text-sm text-content-tertiary text-center">
                       {item.qty}
                     </td>
-                    <td className="py-3 text-sm text-gray-500 text-right tabular-nums">
+                    <td className="py-3 text-sm text-content-tertiary text-right tabular-nums">
                       {formatCurrency(item.unit_price_cents, order.currency)}
                     </td>
-                    <td className="py-3 text-sm font-medium text-gray-900 text-right tabular-nums">
+                    <td className="py-3 text-sm font-medium text-content text-right tabular-nums">
                       {formatCurrency(item.line_total_cents, order.currency)}
                     </td>
                   </tr>
@@ -209,18 +209,18 @@ export const PublicReceiptPage = () => {
           </div>
 
           {/* Totals */}
-          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+          <div className="px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-gray-500">Subtotal</span>
-              <span className="text-sm tabular-nums text-gray-700">
+              <span className="text-sm text-content-tertiary">Subtotal</span>
+              <span className="text-sm tabular-nums text-content-secondary">
                 {formatCurrency(order.subtotal_cents, order.currency)}
               </span>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-              <span className="text-base font-semibold text-gray-900">
+            <div className="flex justify-between items-center pt-2 border-t border-[var(--color-border)]">
+              <span className="text-base font-semibold text-content">
                 Total
               </span>
-              <span className="text-xl font-bold tabular-nums text-gray-900">
+              <span className="text-xl font-bold tabular-nums text-content">
                 {formatCurrency(order.total_cents, order.currency)}
               </span>
             </div>
@@ -228,11 +228,11 @@ export const PublicReceiptPage = () => {
 
           {/* Recipient */}
           {order.recipient && (
-            <div className="px-6 py-4 border-t border-gray-100">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+            <div className="px-6 py-4 border-t border-[var(--color-border-light)]">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-2">
                 Bill To
               </h3>
-              <div className="space-y-0.5 text-sm text-gray-700">
+              <div className="space-y-0.5 text-sm text-content-secondary">
                 {order.recipient.name && (
                   <p className="font-medium">{order.recipient.name}</p>
                 )}
@@ -247,11 +247,11 @@ export const PublicReceiptPage = () => {
           {(companyInfo.companyEmail ||
             companyInfo.companyPhone ||
             companyInfo.companyWebsite) && (
-            <div className="px-6 py-4 border-t border-gray-100">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+            <div className="px-6 py-4 border-t border-[var(--color-border-light)]">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-2">
                 Contact
               </h3>
-              <div className="space-y-0.5 text-sm text-gray-500">
+              <div className="space-y-0.5 text-sm text-content-tertiary">
                 {companyInfo.companyEmail && <p>{companyInfo.companyEmail}</p>}
                 {companyInfo.companyPhone && <p>{companyInfo.companyPhone}</p>}
                 {companyInfo.companyWebsite && (
@@ -265,11 +265,13 @@ export const PublicReceiptPage = () => {
         {/* Footer */}
         <div className="text-center mt-6">
           {companyInfo.companyTagline && (
-            <p className="text-sm text-gray-400 italic">
+            <p className="text-sm text-content-tertiary italic">
               {companyInfo.companyTagline}
             </p>
           )}
-          <p className="text-xs text-gray-300 mt-2">Powered by ReceiptMaster</p>
+          <p className="text-xs text-content-tertiary mt-2">
+            Powered by ReceiptMaster
+          </p>
         </div>
       </div>
     </div>

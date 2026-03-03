@@ -21,7 +21,7 @@ import {
 } from "../lib/api";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { SkeletonCard } from "../components/ui/Skeleton";
+import { StatCardSkeleton } from "../components/ui/Skeleton";
 import { StatCard } from "../components/dashboard/StatCard";
 import { RevenueSparkline } from "../components/dashboard/RevenueSparkline";
 import { OrderStatusSummary } from "../components/dashboard/OrderStatusSummary";
@@ -100,16 +100,16 @@ export const DashboardHomePage = () => {
       value: productsData?.data?.total || 0,
       icon: Package,
       href: "/products",
-      color: "text-blue-600",
-      bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      color: "text-accent-base",
+      bgColor: "bg-[var(--color-accent-light)]",
     },
     {
       name: t("navigation.recipients"),
       value: recipientsData?.data?.total || 0,
       icon: Users,
       href: "/recipients",
-      color: "text-green-600",
-      bgColor: "bg-green-100 dark:bg-green-900/30",
+      color: "text-success-base",
+      bgColor: "bg-[var(--color-success-light)]",
     },
     {
       name: t("navigation.orders"),
@@ -124,25 +124,29 @@ export const DashboardHomePage = () => {
       value: receiptsData?.data?.total || 0,
       icon: Receipt,
       href: "/receipts",
-      color: "text-orange-600",
-      bgColor: "bg-orange-100 dark:bg-orange-900/30",
+      color: "text-warning-base",
+      bgColor: "bg-[var(--color-warning-light)]",
     },
   ];
 
   return (
     <div className="space-y-8">
       {/* Welcome banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
-        <h1 className="text-3xl font-bold mb-2">
+      <div className="bg-gradient-to-r from-accent-base to-purple-600 rounded-lg p-6 text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">
           {t("home.welcome")}, {user?.email?.split("@")[0]}!
         </h1>
-        <p className="text-blue-100 text-lg">{t("home.subtitle")}</p>
+        <p className="text-[var(--color-accent-light)] text-lg">
+          {t("home.subtitle")}
+        </p>
       </div>
 
       {/* Entity count cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statsLoading
-          ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))
           : stats.map((stat) => <StatCard key={stat.name} {...stat} />)}
       </div>
 
@@ -150,8 +154,8 @@ export const DashboardHomePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {revenueLoading || turnoverLoading ? (
           <>
-            <SkeletonCard />
-            <SkeletonCard />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
           </>
         ) : (
           <>
@@ -163,8 +167,8 @@ export const DashboardHomePage = () => {
               )}
               description={t("home.revenueDescription")}
               icon={DollarSign}
-              color="text-green-600"
-              bgColor="bg-green-100 dark:bg-green-900/30"
+              color="text-success-base"
+              bgColor="bg-[var(--color-success-light)]"
             />
             <StatCard
               name={t("home.totalTurnover")}
@@ -174,8 +178,8 @@ export const DashboardHomePage = () => {
               )}
               description={t("home.turnoverDescription")}
               icon={TrendingUp}
-              color="text-blue-600"
-              bgColor="bg-blue-100 dark:bg-blue-900/30"
+              color="text-accent-base"
+              bgColor="bg-[var(--color-accent-light)]"
             />
           </>
         )}
@@ -201,17 +205,15 @@ export const DashboardHomePage = () => {
               {productsData.data.data.map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
                 >
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {product.name}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="font-medium text-content">{product.name}</p>
+                    <p className="text-sm text-content-tertiary">
                       {formatCurrency(product.sale_price_cents)}
                     </p>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-content-tertiary">
                     {product.quantity} {t("orders.pieces", "pcs")}
                   </div>
                 </div>
@@ -224,8 +226,8 @@ export const DashboardHomePage = () => {
             </div>
           ) : (
             <div className="text-center py-8">
-              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
+              <Package className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
+              <p className="text-content-tertiary mb-4">
                 {t("home.noProducts", "No products yet")}
               </p>
               <Link to="/products">
@@ -242,17 +244,15 @@ export const DashboardHomePage = () => {
               {recipientsData.data.data.map((recipient) => (
                 <div
                   key={recipient.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
                 >
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {recipient.name}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="font-medium text-content">{recipient.name}</p>
+                    <p className="text-sm text-content-tertiary">
                       {recipient.email}
                     </p>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-content-tertiary">
                     {recipient.phone}
                   </div>
                 </div>
@@ -265,8 +265,8 @@ export const DashboardHomePage = () => {
             </div>
           ) : (
             <div className="text-center py-8">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
+              <Users className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
+              <p className="text-content-tertiary mb-4">
                 {t("home.noRecipients", "No recipients yet")}
               </p>
               <Link to="/recipients">
@@ -284,21 +284,21 @@ export const DashboardHomePage = () => {
             {ordersData.data.data.map((order) => (
               <div
                 key={order.id}
-                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
               >
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-content">
                     {t("home.order", "Order")} #{order.id.slice(-8)}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-content-tertiary">
                     {new Date(order.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-content">
                     {formatCurrency(order.total_cents)}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-content-tertiary">
                     {order.status}
                   </p>
                 </div>
@@ -312,8 +312,8 @@ export const DashboardHomePage = () => {
           </div>
         ) : (
           <div className="text-center py-8">
-            <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
+            <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
+            <p className="text-content-tertiary mb-4">
               {t("home.noOrders", "No orders yet")}
             </p>
             <Link to="/orders">

@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
+    "@klukvas/flux-b2c-ui": "^0.1.0",
     "@paddle/paddle-js": "^1.6.2",
     "@tanstack/react-query": "^5.86.0",
     "axios": "^1.11.0",

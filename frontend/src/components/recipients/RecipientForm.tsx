@@ -8,122 +8,122 @@ import { Card } from '../ui/Card';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface RecipientFormProps {
-  recipient?: Recipient | null;
-  onClose: () => void;
+ recipient?: Recipient | null;
+ onClose: () => void;
 }
 
 export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
-  const { t } = useTranslation();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-  });
+ const { t } = useTranslation();
+ const [formData, setFormData] = useState({
+ name: '',
+ email: '',
+ phone: '',
+ address: '',
+ });
 
-  const queryClient = useQueryClient();
+ const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (recipient) {
-      setFormData({
-        name: recipient.name,
-        email: recipient.email || '',
-        phone: recipient.phone || '',
-        address: recipient.address || '',
-      });
-    }
-  }, [recipient]);
+ useEffect(() => {
+ if (recipient) {
+ setFormData({
+ name: recipient.name,
+ email: recipient.email || '',
+ phone: recipient.phone || '',
+ address: recipient.address || '',
+ });
+ }
+ }, [recipient]);
 
-  const createMutation = useMutation({
-    mutationFn: recipientsApi.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipients'] });
-      onClose();
-    },
-  });
+ const createMutation = useMutation({
+ mutationFn: recipientsApi.create,
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['recipients'] });
+ onClose();
+ },
+ });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Recipient> }) =>
-      recipientsApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipients'] });
-      onClose();
-    },
-  });
+ const updateMutation = useMutation({
+ mutationFn: ({ id, data }: { id: string; data: Partial<Recipient> }) =>
+ recipientsApi.update(id, data),
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['recipients'] });
+ onClose();
+ },
+ });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+ const handleSubmit = (e: React.FormEvent) => {
+ e.preventDefault();
 
-    const data = {
-      ...formData,
-      email: formData.email || undefined,
-      phone: formData.phone || undefined,
-      address: formData.address || undefined,
-    };
+ const data = {
+ ...formData,
+ email: formData.email || undefined,
+ phone: formData.phone || undefined,
+ address: formData.address || undefined,
+ };
 
-    if (recipient) {
-      updateMutation.mutate({ id: recipient.id, data });
-    } else {
-      createMutation.mutate(data);
-    }
-  };
+ if (recipient) {
+ updateMutation.mutate({ id: recipient.id, data });
+ } else {
+ createMutation.mutate(data);
+ }
+ };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+ const isLoading = createMutation.isPending || updateMutation.isPending;
 
-  return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-black/20 dark:bg-black/50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {recipient ? t('recipients.editRecipient') : t('recipients.createRecipient')}
-          </h2>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+ return (
+ <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50">
+ <Card className="w-full max-w-md mx-4">
+ <div className="flex items-center justify-between mb-4">
+ <h2 className="text-lg font-semibold text-content">
+ {recipient ? t('recipients.editRecipient') : t('recipients.createRecipient')}
+ </h2>
+ <Button variant="secondary" size="sm" onClick={onClose}>
+ <X className="w-4 h-4" />
+ </Button>
+ </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label={t('recipients.name')}
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
+ <form onSubmit={handleSubmit} className="space-y-4">
+ <Input
+ label={t('recipients.name')}
+ value={formData.name}
+ onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+ required
+ />
 
-          <Input
-            label={t('recipients.email')}
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
+ <Input
+ label={t('recipients.email')}
+ type="email"
+ value={formData.email}
+ onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+ />
 
-          <Input
-            label={t('recipients.phone')}
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          />
+ <Input
+ label={t('recipients.phone')}
+ value={formData.phone}
+ onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+ />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('recipients.address')}
-            </label>
-            <textarea
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            />
-          </div>
+ <div>
+ <label className="block text-sm font-medium text-content-secondary mb-1">
+ {t('recipients.address')}
+ </label>
+ <textarea
+ className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
+ value={formData.address}
+ onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+ />
+ </div>
 
-          <div className="flex space-x-3 pt-4">
-            <Button type="submit" disabled={isLoading} className="flex-1">
-              {isLoading ? t('recipients.saving') : recipient ? t('recipients.update') : t('common.create')}
-            </Button>
-            <Button type="button" variant="secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    </div>
-  );
+ <div className="flex space-x-3 pt-4">
+ <Button type="submit" disabled={isLoading} className="flex-1">
+ {isLoading ? t('recipients.saving') : recipient ? t('recipients.update') : t('common.create')}
+ </Button>
+ <Button type="button" variant="secondary" onClick={onClose}>
+ {t('common.cancel')}
+ </Button>
+ </div>
+ </form>
+ </Card>
+ </div>
+ );
 };
