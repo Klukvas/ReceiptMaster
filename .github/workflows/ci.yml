@@ -410,6 +410,10 @@ jobs:
               done
             }
 
+            # Free disk space before pulling new images
+            echo "🧹 Cleaning up old Docker resources..."
+            docker system prune -af --volumes 2>/dev/null || true
+
             # Deploy application
             echo "🚀 Deploying application server..."
             retry docker compose -f docker-compose.application.yml pull
