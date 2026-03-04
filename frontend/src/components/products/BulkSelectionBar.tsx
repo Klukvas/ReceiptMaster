@@ -21,17 +21,17 @@ export const BulkSelectionBar: React.FC<BulkSelectionBarProps> = ({
 
  return (
  <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-modal-content">
- <div className="flex items-center gap-3 px-5 py-3 bg-[#111827] dark:bg-elevated text-white rounded-xl shadow-2xl ring-1 ring-white/10">
+ <div className="flex items-center gap-3 px-5 py-3 bg-elevated text-content rounded-xl shadow-2xl border border-[var(--color-border)]">
  <span className="text-sm font-medium whitespace-nowrap">
  {selectedCount} {t("products.selected", "selected")}
  </span>
 
- <div className="w-px h-5 bg-elevated/20" />
+ <div className="w-px h-5 bg-surface-alt" />
 
  <button
  onClick={onDelete}
  disabled={isDeleting}
- className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-danger-base hover:text-danger-base hover:bg-elevated/10 rounded-lg transition-colors duration-150 disabled:opacity-50"
+ className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-danger-base hover:text-danger-base hover:bg-surface-alt rounded-lg transition-colors duration-150 disabled:opacity-50"
  >
  <Trash2 className="w-3.5 h-3.5" />
  {t("common.delete")}
@@ -39,7 +39,7 @@ export const BulkSelectionBar: React.FC<BulkSelectionBarProps> = ({
 
  <button
  onClick={onClear}
- className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-content-tertiary hover:text-white hover:bg-elevated/10 rounded-lg transition-colors duration-150"
+ className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-content-tertiary hover:text-content hover:bg-surface-alt rounded-lg transition-colors duration-150"
  >
  <X className="w-3.5 h-3.5" />
  {t("common.clear")}

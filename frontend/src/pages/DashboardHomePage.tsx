@@ -116,7 +116,7 @@ export const DashboardHomePage = () => {
       value: ordersData?.data?.total || 0,
       icon: ShoppingCart,
       href: "/orders",
-      color: "text-purple-600",
+      color: "text-purple-600 dark:text-purple-400",
       bgColor: "bg-purple-100 dark:bg-purple-900/30",
     },
     {
@@ -136,9 +136,7 @@ export const DashboardHomePage = () => {
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">
           {t("home.welcome")}, {user?.email?.split("@")[0]}!
         </h1>
-        <p className="text-[var(--color-accent-light)] text-lg">
-          {t("home.subtitle")}
-        </p>
+        <p className="text-white/80 text-lg">{t("home.subtitle")}</p>
       </div>
 
       {/* Entity count cards */}

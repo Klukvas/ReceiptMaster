@@ -26,8 +26,8 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-modal-content w-[calc(100%-2rem)] sm:w-auto max-w-[calc(100%-2rem)]">
-      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 bg-[#111827] dark:bg-elevated rounded-xl shadow-2xl border border-[var(--color-border)]">
-        <span className="text-sm font-medium text-white whitespace-nowrap">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 bg-elevated rounded-xl shadow-2xl border border-[var(--color-border)]">
+        <span className="text-sm font-medium text-content whitespace-nowrap">
           {t("orders.selectedCount", { count: selectedCount })}
         </span>
 
@@ -64,7 +64,7 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
 
         <button
           onClick={onClearSelection}
-          className="p-1 rounded-md hover:bg-surface transition-colors text-content-tertiary hover:text-white"
+          className="p-1 rounded-md hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content"
           title={t("common.clear")}
         >
           <X className="w-4 h-4" />

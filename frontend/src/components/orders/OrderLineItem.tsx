@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Minus, Plus, X, Info, Search, Package } from "lucide-react";
 import { formatCurrency } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -91,21 +92,36 @@ const ProductSearchCard = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
 
   const filtered = products.filter((p) => {
     if (!searchTerm) return true;
     return p.name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  // Click outside handler
+  const updateDropdownPosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }, []);
+
+  // Click outside handler – checks both container and portal
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(e.target as Node) &&
+        (!portalRef.current || !portalRef.current.contains(e.target as Node))
       ) {
         setIsOpen(false);
       }
@@ -116,6 +132,18 @@ const ProductSearchCard = ({
         document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
+
+  // Update portal position on scroll / resize
+  useEffect(() => {
+    if (!isOpen) return;
+    updateDropdownPosition();
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    window.addEventListener("resize", updateDropdownPosition);
+    return () => {
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+      window.removeEventListener("resize", updateDropdownPosition);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   // Scroll highlighted into view
   useEffect(() => {
@@ -165,6 +193,7 @@ const ProductSearchCard = ({
   );
 
   const openDropdown = () => {
+    updateDropdownPosition();
     setIsOpen(true);
     setHighlightedIndex(-1);
     setTimeout(() => inputRef.current?.focus(), 10);
@@ -227,28 +256,33 @@ const ProductSearchCard = ({
         )}
       </div>
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1.5 rounded-xl border border-[var(--color-border)] bg-elevated shadow-lg shadow-[var(--color-shadow)] animate-dropdown-in overflow-hidden">
-          <ul
-            ref={listRef}
-            role="listbox"
-            className="py-1 max-h-56 overflow-auto scrollbar-thin"
+      {/* Dropdown rendered in portal to escape modal overflow clipping */}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={portalRef}
+            style={dropdownStyle}
+            className="rounded-xl border border-[var(--color-border)] bg-elevated shadow-lg shadow-[var(--color-shadow)] animate-dropdown-in overflow-hidden"
           >
-            {filtered.length === 0 ? (
-              <li className="flex flex-col items-center py-6 text-center">
-                <Package className="w-6 h-6 text-content-tertiary mb-1.5" />
-                <span className="text-sm text-content-tertiary">
-                  {t("orders.nothingFound")}
-                </span>
-              </li>
-            ) : (
-              filtered.map((p, i) => (
-                <li
-                  key={p.id}
-                  role="option"
-                  aria-selected={i === highlightedIndex}
-                  className={`
+            <ul
+              ref={listRef}
+              role="listbox"
+              className="py-1 max-h-56 overflow-auto scrollbar-thin"
+            >
+              {filtered.length === 0 ? (
+                <li className="flex flex-col items-center py-6 text-center">
+                  <Package className="w-6 h-6 text-content-tertiary mb-1.5" />
+                  <span className="text-sm text-content-tertiary">
+                    {t("orders.nothingFound")}
+                  </span>
+                </li>
+              ) : (
+                filtered.map((p, i) => (
+                  <li
+                    key={p.id}
+                    role="option"
+                    aria-selected={i === highlightedIndex}
+                    className={`
  px-3.5 py-2.5 cursor-pointer transition-colors
  ${
    i === highlightedIndex
@@ -256,26 +290,27 @@ const ProductSearchCard = ({
      : "hover:bg-surface-alt"
  }
  `}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onSelect(p.id);
-                  }}
-                  onMouseEnter={() => setHighlightedIndex(i)}
-                >
-                  <span className="block text-sm font-medium text-content">
-                    {p.name}
-                  </span>
-                  <span className="block text-xs text-content-tertiary mt-0.5">
-                    {formatCurrency(p.sale_price_cents, p.currency)}
-                    <span className="mx-1.5">·</span>
-                    {p.quantity} {t("orders.stock")}
-                  </span>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onSelect(p.id);
+                    }}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                  >
+                    <span className="block text-sm font-medium text-content">
+                      {p.name}
+                    </span>
+                    <span className="block text-xs text-content-tertiary mt-0.5">
+                      {formatCurrency(p.sale_price_cents, p.currency)}
+                      <span className="mx-1.5">·</span>
+                      {p.quantity} {t("orders.stock")}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>,
+          document.body,
+        )}
 
       {/* Hidden required input for form validation */}
       <input
