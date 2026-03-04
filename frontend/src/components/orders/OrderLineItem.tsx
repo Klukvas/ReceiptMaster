@@ -1,4 +1,10 @@
-import { useState, useRef, useEffect, useCallback, CSSProperties } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
 import { Minus, Plus, X, Info, Search, Package } from "lucide-react";
 import { formatCurrency } from "../../lib/api";
