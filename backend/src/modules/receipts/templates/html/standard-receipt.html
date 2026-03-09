@@ -353,13 +353,13 @@
                 <div>{{companyWebsite}}</div>
                 {{/if}}
                 {{#if companyTaxId}}
-                <div>Tax ID: {{companyTaxId}}</div>
+                <div>{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
                 {{/if}}
                 {{#if companyIban}}
-                <div>IBAN: {{companyIban}}</div>
+                <div>{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
                 {{/if}}
                 {{#if companySwift}}
-                <div>SWIFT: {{companySwift}}</div>
+                <div>{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
                 {{/if}}
             </div>
             

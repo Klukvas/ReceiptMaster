@@ -361,13 +361,13 @@
             <div class="company-contact">{{companyWebsite}}</div>
             {{/if}}
             {{#if companyTaxId}}
-            <div class="company-contact">{{#if translations.gstinNo}}{{translations.gstinNo}} {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
+            <div class="company-contact">{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
             {{/if}}
             {{#if companyIban}}
-            <div class="company-contact">IBAN: {{companyIban}}</div>
+            <div class="company-contact">{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
             {{/if}}
             {{#if companySwift}}
-            <div class="company-contact">SWIFT: {{companySwift}}</div>
+            <div class="company-contact">{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
             {{/if}}
         </div>
         
@@ -433,7 +433,7 @@
         <div class="tax-total-section">
             <div class="tax-info">
                 {{#if companyTaxId}}
-                <div class="gstin">{{#if translations.gstinNo}}{{translations.gstinNo}} {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
+                <div class="gstin">{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
                 {{/if}}
             </div>
             <div class="total-info">

@@ -410,13 +410,13 @@
                     <div class="info-line">{{companyWebsite}}</div>
                     {{/if}}
                     {{#if companyTaxId}}
-                    <div class="info-line">Tax ID: {{companyTaxId}}</div>
+                    <div class="info-line">{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
                     {{/if}}
                     {{#if companyIban}}
-                    <div class="info-line">IBAN: {{companyIban}}</div>
+                    <div class="info-line">{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
                     {{/if}}
                     {{#if companySwift}}
-                    <div class="info-line">SWIFT: {{companySwift}}</div>
+                    <div class="info-line">{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
                     {{/if}}
                 </div>
             </div>

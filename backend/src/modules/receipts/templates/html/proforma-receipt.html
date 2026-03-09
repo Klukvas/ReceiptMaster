@@ -415,7 +415,7 @@
                     <div class="detail">{{companyWebsite}}</div>
                     {{/if}}
                     {{#if companyTaxId}}
-                    <div class="detail">Tax ID: {{companyTaxId}}</div>
+                    <div class="detail">{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
                     {{/if}}
                 </div>
             </div>

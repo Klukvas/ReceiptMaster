@@ -380,13 +380,13 @@
                 <div class="info-detail">{{companyWebsite}}</div>
                 {{/if}}
                 {{#if companyTaxId}}
-                <div class="info-detail">Tax ID: {{companyTaxId}}</div>
+                <div class="info-detail">{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
                 {{/if}}
                 {{#if companyIban}}
-                <div class="info-detail">IBAN: {{companyIban}}</div>
+                <div class="info-detail">{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
                 {{/if}}
                 {{#if companySwift}}
-                <div class="info-detail">SWIFT: {{companySwift}}</div>
+                <div class="info-detail">{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
                 {{/if}}
             </div>
             <div class="info-card" style="background-color: {{hexToRgba primaryColor 0.1}};">

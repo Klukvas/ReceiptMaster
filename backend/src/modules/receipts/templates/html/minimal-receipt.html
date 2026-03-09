@@ -296,15 +296,15 @@
                     {{/if}}
                     {{#if companyTaxId}}
                     <span class="info-separator">—</span>
-                    <span>Tax ID: {{companyTaxId}}</span>
+                    <span>{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</span>
                     {{/if}}
                     {{#if companyIban}}
                     <span class="info-separator">—</span>
-                    <span>IBAN: {{companyIban}}</span>
+                    <span>{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</span>
                     {{/if}}
                     {{#if companySwift}}
                     <span class="info-separator">—</span>
-                    <span>SWIFT: {{companySwift}}</span>
+                    <span>{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</span>
                     {{/if}}
                 </div>
             </div>
@@ -383,7 +383,7 @@
             {{/if}}
             
             {{#if companyIban}}
-            <div class="iban">IBAN: {{companyIban}}</div>
+            <div class="iban">{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
             {{/if}}
             
             <div class="contact-info">
