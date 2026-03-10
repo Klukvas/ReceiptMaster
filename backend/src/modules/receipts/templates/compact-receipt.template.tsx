@@ -25,10 +25,10 @@ export const CompactReceiptDocument = ({
       <Page
         size="A4"
         style={{
-          padding: 20,
+          padding: 24,
           fontFamily: "NotoSans",
-          fontSize: 8,
-          lineHeight: 1.2,
+          fontSize: 9,
+          lineHeight: 1.3,
         }}
       >
         {/* Header with Logo and Blue Line */}
@@ -59,7 +59,7 @@ export const CompactReceiptDocument = ({
             <View>
               <Text
                 style={{
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: "bold",
                   color: "#333",
                 }}
@@ -88,7 +88,7 @@ export const CompactReceiptDocument = ({
           >
             <Text
               style={{
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: "bold",
                 marginBottom: 8,
               }}
@@ -97,7 +97,7 @@ export const CompactReceiptDocument = ({
             </Text>
             <Text
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "#666",
               }}
             >
@@ -107,59 +107,59 @@ export const CompactReceiptDocument = ({
         </View>
 
         {/* Order Info */}
-        <View style={{ marginBottom: 8 }}>
-          <View style={{ flexDirection: "row", marginBottom: 2 }}>
-            <Text style={{ fontWeight: "bold", width: 60, fontSize: 7 }}>
+        <View style={{ marginBottom: 10 }}>
+          <View style={{ flexDirection: "row", marginBottom: 3 }}>
+            <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
               Дата:
             </Text>
-            <Text style={{ fontSize: 7 }}>
+            <Text style={{ fontSize: 9 }}>
               {new Date(order.created_at).toLocaleString("ru-RU")}
             </Text>
           </View>
-          <View style={{ flexDirection: "row", marginBottom: 2 }}>
-            <Text style={{ fontWeight: "bold", width: 60, fontSize: 7 }}>
+          <View style={{ flexDirection: "row", marginBottom: 3 }}>
+            <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
               Одержувач:
             </Text>
-            <Text style={{ fontSize: 7 }}>{order.recipient.name}</Text>
+            <Text style={{ fontSize: 9 }}>{order.recipient.name}</Text>
           </View>
           {order.recipient.email && (
-            <View style={{ flexDirection: "row", marginBottom: 2 }}>
-              <Text style={{ fontWeight: "bold", width: 60, fontSize: 7 }}>
+            <View style={{ flexDirection: "row", marginBottom: 3 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Email:
               </Text>
-              <Text style={{ fontSize: 7 }}>{order.recipient.email}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.email}</Text>
             </View>
           )}
           {order.recipient.phone && (
-            <View style={{ flexDirection: "row", marginBottom: 2 }}>
-              <Text style={{ fontWeight: "bold", width: 60, fontSize: 7 }}>
+            <View style={{ flexDirection: "row", marginBottom: 3 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Телефон:
               </Text>
-              <Text style={{ fontSize: 7 }}>{order.recipient.phone}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.phone}</Text>
             </View>
           )}
           {order.recipient.address && (
-            <View style={{ flexDirection: "row", marginBottom: 2 }}>
-              <Text style={{ fontWeight: "bold", width: 60, fontSize: 7 }}>
+            <View style={{ flexDirection: "row", marginBottom: 3 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Адреса:
               </Text>
-              <Text style={{ fontSize: 7 }}>{order.recipient.address}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.address}</Text>
             </View>
           )}
         </View>
 
         {/* Items Table */}
-        <View style={{ marginBottom: 8 }}>
+        <View style={{ marginBottom: 10 }}>
           {/* Table Header */}
           <View
             style={{
               flexDirection: "row",
-              padding: 3,
+              padding: 4,
               margin: 0,
               border: "1 solid #000",
             }}
           >
-            <Text style={{ fontWeight: "bold", width: "50%", fontSize: 8 }}>
+            <Text style={{ fontWeight: "bold", width: "50%", fontSize: 10 }}>
               Опис товару
             </Text>
             <Text
@@ -167,7 +167,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "15%",
                 textAlign: "center",
-                fontSize: 8,
+                fontSize: 10,
               }}
             >
               Кількість
@@ -177,7 +177,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "20%",
                 textAlign: "right",
-                fontSize: 8,
+                fontSize: 10,
               }}
             >
               Ціна
@@ -187,7 +187,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "15%",
                 textAlign: "right",
-                fontSize: 8,
+                fontSize: 10,
               }}
             >
               Сума
@@ -199,26 +199,26 @@ export const CompactReceiptDocument = ({
               key={index}
               style={{
                 flexDirection: "row",
-                padding: 3,
+                padding: 4,
                 margin: 0,
                 border: "1 solid #000",
                 borderTop: "none",
               }}
             >
-              <Text style={{ width: "50%", fontSize: 7 }}>
+              <Text style={{ width: "50%", fontSize: 9 }}>
                 {item.product_name}
               </Text>
-              <Text style={{ width: "15%", textAlign: "center", fontSize: 7 }}>
+              <Text style={{ width: "15%", textAlign: "center", fontSize: 9 }}>
                 {item.qty.toString()}
               </Text>
-              <Text style={{ width: "20%", textAlign: "right", fontSize: 7 }}>
+              <Text style={{ width: "20%", textAlign: "right", fontSize: 9 }}>
                 {formatCurrency(item.unit_price_cents)}
               </Text>
               <Text
                 style={{
                   width: "15%",
                   textAlign: "right",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: "bold",
                 }}
               >
@@ -244,10 +244,10 @@ export const CompactReceiptDocument = ({
               paddingHorizontal: 8,
             }}
           >
-            <Text style={{ fontWeight: "bold", fontSize: 8 }}>
+            <Text style={{ fontWeight: "bold", fontSize: 10 }}>
               Проміжний підсумок:
             </Text>
-            <Text style={{ fontSize: 8 }}>
+            <Text style={{ fontSize: 10 }}>
               {formatCurrency(order.subtotal_cents)}
             </Text>
           </View>
@@ -265,14 +265,14 @@ export const CompactReceiptDocument = ({
             <Text
               style={{
                 fontWeight: "bold",
-                fontSize: 12,
+                fontSize: 14,
                 color: "white",
                 textAlign: "center",
               }}
             >
               РАЗОМ:
             </Text>
-            <Text style={{ fontWeight: "bold", fontSize: 12, color: "white" }}>
+            <Text style={{ fontWeight: "bold", fontSize: 14, color: "white" }}>
               {formatCurrency(order.total_cents)}
             </Text>
           </View>
@@ -289,13 +289,13 @@ export const CompactReceiptDocument = ({
             paddingTop: 10,
           }}
         >
-          <Text style={{ marginBottom: 5, fontSize: 7, fontWeight: "bold" }}>
+          <Text style={{ marginBottom: 5, fontSize: 8, fontWeight: "bold" }}>
             Дякуємо за покупку!
           </Text>
-          <Text style={{ marginBottom: 3, fontSize: 6 }}>
+          <Text style={{ marginBottom: 3, fontSize: 7 }}>
             Якщо у вас є питання, будь ласка, зв'яжіться з нами.
           </Text>
-          <Text style={{ fontSize: 5 }}>
+          <Text style={{ fontSize: 6 }}>
             Чек згенеровано: {new Date().toLocaleString("ru-RU")}
           </Text>
         </View>
