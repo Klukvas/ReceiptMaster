@@ -121,15 +121,35 @@ export class TemplateService {
 
   private async loadFonts() {
     try {
-      // Determine the correct path based on environment
-      const isDevelopment = __dirname.includes("/src/");
-      let fontsPath: string;
+      const possiblePaths = [
+        // Production path (dist)
+        path.join(__dirname, "../../assets/fonts"),
+        // Alternative production path
+        path.join(process.cwd(), "dist/modules/assets/fonts"),
+        // Development path (src)
+        path.join(__dirname, "../../../assets/fonts"),
+        // Alternative development path
+        path.join(process.cwd(), "src/assets/fonts"),
+      ];
 
-      if (isDevelopment) {
-        fontsPath = path.join(__dirname, "../../../assets/fonts");
-      } else {
-        fontsPath = path.join(__dirname, "../../assets/fonts");
+      let fontsPath: string | null = null;
+
+      for (const testPath of possiblePaths) {
+        try {
+          await fs.access(testPath);
+          fontsPath = testPath;
+          break;
+        } catch {
+          // Continue to next path
+        }
       }
+
+      if (!fontsPath) {
+        this.logger.error("Fonts directory not found in any expected location");
+        return;
+      }
+
+      this.logger.log(`Loading fonts from: ${fontsPath}`);
 
       // Load regular font
       const regularFontPath = path.join(fontsPath, "NotoSans-Regular.ttf");

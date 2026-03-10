@@ -3,6 +3,7 @@
 # Create assets directories
 mkdir -p dist/modules/assets/fonts
 mkdir -p dist/modules/receipts/templates/html
+mkdir -p dist/modules/receipts/templates/translations
 
 # Copy fonts
 if [ -d "src/assets/fonts" ]; then
@@ -18,6 +19,14 @@ if [ -d "src/modules/receipts/templates/html" ]; then
     echo "HTML templates copied successfully"
 else
     echo "HTML templates directory not found"
+fi
+
+# Copy translation files
+if [ -d "src/modules/receipts/templates/translations" ]; then
+    cp src/modules/receipts/templates/translations/*.json dist/modules/receipts/templates/translations/ 2>/dev/null || true
+    echo "Translations copied successfully"
+else
+    echo "Translations directory not found"
 fi
 
 # Note: Logo is served directly from src/assets, not copied to dist
