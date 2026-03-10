@@ -424,7 +424,7 @@ export const settingsApi = {
     }>("/settings/templates"),
 
   getTemplateLanguage: () =>
-    api.get<{ language: string }>("/settings/template-language"),
+    api.get<{ data: { language: string } }>("/settings/template-language"),
 
   updateTemplateLanguage: (language: string) =>
     api.post("/settings/template-language", { language }),
