@@ -25,16 +25,16 @@ export const CompactReceiptDocument = ({
       <Page
         size="A4"
         style={{
-          padding: 28,
+          padding: 24,
           fontFamily: "NotoSans",
-          fontSize: 10,
-          lineHeight: 1.4,
+          fontSize: 9,
+          lineHeight: 1.3,
         }}
       >
         {/* Header with Logo and Blue Line */}
         <View
           style={{
-            marginBottom: 12,
+            marginBottom: 10,
           }}
         >
           {/* Company Logo and Name */}
@@ -42,16 +42,16 @@ export const CompactReceiptDocument = ({
             style={{
               flexDirection: "row",
               alignItems: "center",
-              marginBottom: 9,
+              marginBottom: 8,
             }}
           >
             {hasCustomLogo && logoPath && (
               <Image
                 src={logoPath}
                 style={{
-                  width: 46,
-                  height: 46,
-                  marginRight: 12,
+                  width: 40,
+                  height: 40,
+                  marginRight: 10,
                   objectFit: "contain",
                 }}
               />
@@ -59,7 +59,7 @@ export const CompactReceiptDocument = ({
             <View>
               <Text
                 style={{
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: "bold",
                   color: "#333",
                 }}
@@ -74,7 +74,7 @@ export const CompactReceiptDocument = ({
             style={{
               height: 2,
               backgroundColor: "#4A90E2",
-              marginBottom: 9,
+              marginBottom: 8,
             }}
           />
 
@@ -83,21 +83,21 @@ export const CompactReceiptDocument = ({
             style={{
               textAlign: "center",
               borderBottom: "1 solid #000",
-              paddingBottom: 9,
+              paddingBottom: 8,
             }}
           >
             <Text
               style={{
-                fontSize: 21,
+                fontSize: 18,
                 fontWeight: "bold",
-                marginBottom: 9,
+                marginBottom: 8,
               }}
             >
               Видаткова накладна
             </Text>
             <Text
               style={{
-                fontSize: 13,
+                fontSize: 11,
                 color: "#666",
               }}
             >
@@ -107,59 +107,59 @@ export const CompactReceiptDocument = ({
         </View>
 
         {/* Order Info */}
-        <View style={{ marginBottom: 12 }}>
+        <View style={{ marginBottom: 10 }}>
           <View style={{ flexDirection: "row", marginBottom: 3 }}>
-            <Text style={{ fontWeight: "bold", width: 80, fontSize: 10 }}>
+            <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
               Дата:
             </Text>
-            <Text style={{ fontSize: 10 }}>
+            <Text style={{ fontSize: 9 }}>
               {new Date(order.created_at).toLocaleString("ru-RU")}
             </Text>
           </View>
           <View style={{ flexDirection: "row", marginBottom: 3 }}>
-            <Text style={{ fontWeight: "bold", width: 80, fontSize: 10 }}>
+            <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
               Одержувач:
             </Text>
-            <Text style={{ fontSize: 10 }}>{order.recipient.name}</Text>
+            <Text style={{ fontSize: 9 }}>{order.recipient.name}</Text>
           </View>
           {order.recipient.email && (
             <View style={{ flexDirection: "row", marginBottom: 3 }}>
-              <Text style={{ fontWeight: "bold", width: 80, fontSize: 10 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Email:
               </Text>
-              <Text style={{ fontSize: 10 }}>{order.recipient.email}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.email}</Text>
             </View>
           )}
           {order.recipient.phone && (
             <View style={{ flexDirection: "row", marginBottom: 3 }}>
-              <Text style={{ fontWeight: "bold", width: 80, fontSize: 10 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Телефон:
               </Text>
-              <Text style={{ fontSize: 10 }}>{order.recipient.phone}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.phone}</Text>
             </View>
           )}
           {order.recipient.address && (
             <View style={{ flexDirection: "row", marginBottom: 3 }}>
-              <Text style={{ fontWeight: "bold", width: 80, fontSize: 10 }}>
+              <Text style={{ fontWeight: "bold", width: 70, fontSize: 9 }}>
                 Адреса:
               </Text>
-              <Text style={{ fontSize: 10 }}>{order.recipient.address}</Text>
+              <Text style={{ fontSize: 9 }}>{order.recipient.address}</Text>
             </View>
           )}
         </View>
 
         {/* Items Table */}
-        <View style={{ marginBottom: 12 }}>
+        <View style={{ marginBottom: 10 }}>
           {/* Table Header */}
           <View
             style={{
               flexDirection: "row",
-              padding: 5,
+              padding: 4,
               margin: 0,
               border: "1 solid #000",
             }}
           >
-            <Text style={{ fontWeight: "bold", width: "50%", fontSize: 12 }}>
+            <Text style={{ fontWeight: "bold", width: "50%", fontSize: 10 }}>
               Опис товару
             </Text>
             <Text
@@ -167,7 +167,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "15%",
                 textAlign: "center",
-                fontSize: 12,
+                fontSize: 10,
               }}
             >
               Кількість
@@ -177,7 +177,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "20%",
                 textAlign: "right",
-                fontSize: 12,
+                fontSize: 10,
               }}
             >
               Ціна
@@ -187,7 +187,7 @@ export const CompactReceiptDocument = ({
                 fontWeight: "bold",
                 width: "15%",
                 textAlign: "right",
-                fontSize: 12,
+                fontSize: 10,
               }}
             >
               Сума
@@ -199,26 +199,26 @@ export const CompactReceiptDocument = ({
               key={index}
               style={{
                 flexDirection: "row",
-                padding: 5,
+                padding: 4,
                 margin: 0,
                 border: "1 solid #000",
                 borderTop: "none",
               }}
             >
-              <Text style={{ width: "50%", fontSize: 10 }}>
+              <Text style={{ width: "50%", fontSize: 9 }}>
                 {item.product_name}
               </Text>
-              <Text style={{ width: "15%", textAlign: "center", fontSize: 10 }}>
+              <Text style={{ width: "15%", textAlign: "center", fontSize: 9 }}>
                 {item.qty.toString()}
               </Text>
-              <Text style={{ width: "20%", textAlign: "right", fontSize: 10 }}>
+              <Text style={{ width: "20%", textAlign: "right", fontSize: 9 }}>
                 {formatCurrency(item.unit_price_cents)}
               </Text>
               <Text
                 style={{
                   width: "15%",
                   textAlign: "right",
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: "bold",
                 }}
               >
@@ -232,7 +232,7 @@ export const CompactReceiptDocument = ({
         <View
           style={{
             borderTop: "2 solid #4A90E2",
-            paddingTop: 7,
+            paddingTop: 6,
             textAlign: "right",
           }}
         >
@@ -241,13 +241,13 @@ export const CompactReceiptDocument = ({
               flexDirection: "row",
               justifyContent: "space-between",
               marginBottom: 2,
-              paddingHorizontal: 9,
+              paddingHorizontal: 8,
             }}
           >
-            <Text style={{ fontWeight: "bold", fontSize: 12 }}>
+            <Text style={{ fontWeight: "bold", fontSize: 10 }}>
               Проміжний підсумок:
             </Text>
-            <Text style={{ fontSize: 12 }}>
+            <Text style={{ fontSize: 10 }}>
               {formatCurrency(order.subtotal_cents)}
             </Text>
           </View>
@@ -257,7 +257,7 @@ export const CompactReceiptDocument = ({
               justifyContent: "space-between",
               alignItems: "center",
               backgroundColor: "#4A90E2",
-              padding: 5,
+              padding: 4,
               marginTop: 2,
               borderRadius: 3,
             }}
@@ -265,14 +265,14 @@ export const CompactReceiptDocument = ({
             <Text
               style={{
                 fontWeight: "bold",
-                fontSize: 16,
+                fontSize: 14,
                 color: "white",
                 textAlign: "center",
               }}
             >
               РАЗОМ:
             </Text>
-            <Text style={{ fontWeight: "bold", fontSize: 16, color: "white" }}>
+            <Text style={{ fontWeight: "bold", fontSize: 14, color: "white" }}>
               {formatCurrency(order.total_cents)}
             </Text>
           </View>
@@ -281,21 +281,21 @@ export const CompactReceiptDocument = ({
         {/* Footer - flexible positioning */}
         <View
           style={{
-            marginTop: 23,
+            marginTop: 20,
             textAlign: "center",
-            fontSize: 7,
+            fontSize: 6,
             color: "#666",
             borderTop: "1 solid #ddd",
-            paddingTop: 12,
+            paddingTop: 10,
           }}
         >
-          <Text style={{ marginBottom: 5, fontSize: 9, fontWeight: "bold" }}>
+          <Text style={{ marginBottom: 5, fontSize: 8, fontWeight: "bold" }}>
             Дякуємо за покупку!
           </Text>
-          <Text style={{ marginBottom: 3, fontSize: 8 }}>
+          <Text style={{ marginBottom: 3, fontSize: 7 }}>
             Якщо у вас є питання, будь ласка, зв'яжіться з нами.
           </Text>
-          <Text style={{ fontSize: 7 }}>
+          <Text style={{ fontSize: 6 }}>
             Чек згенеровано: {new Date().toLocaleString("ru-RU")}
           </Text>
         </View>
