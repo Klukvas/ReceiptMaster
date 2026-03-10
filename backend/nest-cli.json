@@ -4,6 +4,16 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "tsConfigPath": "tsconfig.build.json"
+    "tsConfigPath": "tsconfig.build.json",
+    "assets": [
+      {
+        "include": "modules/receipts/templates/html/**/*.html",
+        "outDir": "dist"
+      },
+      {
+        "include": "modules/receipts/templates/translations/**/*.json",
+        "outDir": "dist"
+      }
+    ]
   }
 }

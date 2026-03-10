@@ -150,14 +150,38 @@ export class TemplateService {
 
   private async loadTranslations() {
     try {
-      const isDevelopment = __dirname.includes("/src/");
-      let translationsPath: string;
+      const possiblePaths = [
+        // Production path (dist)
+        path.join(__dirname, "../templates/translations"),
+        // Alternative production path
+        path.join(
+          process.cwd(),
+          "dist/modules/receipts/templates/translations",
+        ),
+        // Development path (src)
+        path.join(process.cwd(), "src/modules/receipts/templates/translations"),
+      ];
 
-      if (isDevelopment) {
-        translationsPath = path.join(__dirname, "../templates/translations");
-      } else {
-        translationsPath = path.join(__dirname, "../../templates/translations");
+      let translationsPath: string | null = null;
+
+      for (const testPath of possiblePaths) {
+        try {
+          await fs.access(testPath);
+          translationsPath = testPath;
+          break;
+        } catch {
+          // Continue to next path
+        }
       }
+
+      if (!translationsPath) {
+        this.logger.error(
+          "Translations directory not found in any expected location",
+        );
+        return;
+      }
+
+      this.logger.log(`Loading translations from: ${translationsPath}`);
 
       const languages = ["en", "ru", "uk"];
 
