@@ -3,6 +3,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
@@ -103,11 +104,23 @@ const ProductSearchCard = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const filtered = products.filter((p) => {
-    if (!searchTerm) return true;
-    return p.name.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    };
+  }, []);
+
+  const filtered = useMemo(
+    () =>
+      searchTerm
+        ? products.filter((p) =>
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()),
+          )
+        : products,
+    [products, searchTerm],
+  );
 
   const updateDropdownPosition = useCallback(() => {
     if (!containerRef.current) return;
@@ -189,6 +202,8 @@ const ProductSearchCard = ({
           }
           break;
         case "Escape":
+          e.preventDefault();
+          e.nativeEvent.stopImmediatePropagation();
           setIsOpen(false);
           setSearchTerm("");
           setHighlightedIndex(-1);
@@ -202,7 +217,8 @@ const ProductSearchCard = ({
     updateDropdownPosition();
     setIsOpen(true);
     setHighlightedIndex(-1);
-    setTimeout(() => inputRef.current?.focus(), 10);
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = setTimeout(() => inputRef.current?.focus(), 10);
   };
 
   return (
@@ -223,6 +239,8 @@ const ProductSearchCard = ({
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
           className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-content placeholder-content-tertiary"
           placeholder={t("orders.searchProduct")}
           value={searchTerm}
@@ -231,12 +249,12 @@ const ProductSearchCard = ({
             setHighlightedIndex(-1);
             if (!isOpen) setIsOpen(true);
           }}
-          onFocus={openDropdown}
           onKeyDown={handleKeyDown}
         />
         {searchTerm && (
           <button
             type="button"
+            aria-label={t("common.clear")}
             onClick={(e) => {
               e.stopPropagation();
               setSearchTerm("");
@@ -251,6 +269,7 @@ const ProductSearchCard = ({
         {canRemove && (
           <button
             type="button"
+            aria-label={t("common.delete")}
             onClick={(e) => {
               e.stopPropagation();
               onRemove();
@@ -317,16 +336,6 @@ const ProductSearchCard = ({
           </div>,
           document.body,
         )}
-
-      {/* Hidden required input for form validation */}
-      <input
-        type="text"
-        value=""
-        onChange={() => {}}
-        className="sr-only"
-        tabIndex={-1}
-        required
-      />
     </div>
   );
 };
