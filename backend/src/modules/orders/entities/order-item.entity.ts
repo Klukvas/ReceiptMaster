@@ -59,7 +59,7 @@ export class OrderItem {
 
   @ApiHideProperty()
   @ManyToOne(() => Product, (product) => product.order_items, {
-    onDelete: "CASCADE",
+    onDelete: "RESTRICT",
   })
   @JoinColumn({ name: "product_id" })
   product: Product;

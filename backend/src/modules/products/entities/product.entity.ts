@@ -4,10 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   OneToMany,
   ManyToOne,
   JoinColumn,
-  Index,
 } from "typeorm";
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { OrderItem } from "../../orders/entities/order-item.entity";
@@ -17,8 +17,9 @@ export enum Currency {
   UAH = "UAH",
 }
 
+// Partial unique index (user_id, name) WHERE deleted_at IS NULL
+// управляется миграцией 1762500000000-AddProductSoftDelete
 @Entity("products")
-@Index(["user_id", "name"])
 export class Product {
   @ApiProperty()
   @PrimaryGeneratedColumn("uuid")
@@ -60,6 +61,10 @@ export class Product {
   @ApiProperty()
   @UpdateDateColumn()
   updated_at: Date;
+
+  @ApiHideProperty()
+  @DeleteDateColumn()
+  deleted_at?: Date;
 
   @ApiHideProperty()
   @OneToMany(() => OrderItem, (orderItem) => orderItem.product)

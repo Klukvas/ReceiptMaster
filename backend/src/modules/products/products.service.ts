@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
-import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import { Product } from "./entities/product.entity";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
@@ -23,8 +23,6 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private productsRepository: Repository<Product>,
-    @InjectDataSource()
-    private dataSource: DataSource,
     private subscriptionService: SubscriptionService,
   ) {}
 
@@ -96,34 +94,8 @@ export class ProductsService {
   }
 
   async remove(id: string, user: User): Promise<void> {
-    const _product = await this.findOne(id, user);
-
-    // Проверяем, не используется ли товар в активных заказах
-    const activeOrders = await this.dataSource.query(
-      `
-      SELECT COUNT(*) as count 
-      FROM orders o 
-      JOIN order_items oi ON o.id = oi.order_id 
-      WHERE oi.product_id = $1 AND o.status = 'confirmed'
-    `,
-      [id],
-    );
-
-    if (parseInt(activeOrders[0].count) > 0) {
-      throw ApiErrors.BAD_REQUEST(
-        "Нельзя удалить товар, который используется в подтвержденных заказах",
-      );
-    }
-
-    // Удаляем товар и связанные записи в транзакции
-    await this.dataSource.transaction(async (manager) => {
-      // Сначала удаляем все записи из order_items для этого товара
-      await manager.query("DELETE FROM order_items WHERE product_id = $1", [
-        id,
-      ]);
-      // Затем удаляем сам товар
-      await manager.delete(Product, { id });
-    });
+    await this.findOne(id, user);
+    await this.productsRepository.softDelete({ id, user_id: user.id });
   }
 
   async removeBulk(
