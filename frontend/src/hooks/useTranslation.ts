@@ -7,7 +7,7 @@ export const useTranslation = () => {
     i18n.changeLanguage(language);
   };
 
-  const currentLanguage = i18n.language as 'en' | 'ru' | 'uk';
+  const currentLanguage = (i18n.language?.split('-')[0] || 'en') as 'en' | 'ru' | 'uk';
 
   return {
     t,

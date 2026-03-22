@@ -23,9 +23,9 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
   children,
 }) => {
   useEffect(() => {
-    document.title = `${title} — ReceiptMaster`;
+    document.title = `${title} — receiptmaster`;
     return () => {
-      document.title = "ReceiptMaster";
+      document.title = "receiptmaster";
     };
   }, [title]);
 
@@ -48,12 +48,8 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
             className="flex items-center gap-2 text-sm text-content-tertiary hover:text-content transition-colors"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <img
-              src="/image.png"
-              alt="ReceiptMaster"
-              className="h-6 w-6 object-contain"
-            />
-            <span className="font-medium">ReceiptMaster</span>
+            <img src="/logo-icon.svg" alt="receiptmaster" className="h-6 w-6" />
+            <span className="font-medium">receiptmaster</span>
           </Link>
         </div>
       </header>

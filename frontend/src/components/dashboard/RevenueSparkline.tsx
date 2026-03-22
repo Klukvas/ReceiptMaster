@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart,
@@ -16,13 +16,25 @@ import { useTranslation } from "../../hooks/useTranslation";
 export const RevenueSparkline = () => {
   const { t } = useTranslation();
   const [days, setDays] = useState(7);
+  const revenueGradientId = useId();
+  const turnoverGradientId = useId();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["dailyRevenue", days],
     queryFn: () => dashboardApi.getDailyRevenue(days),
   });
 
   if (isLoading) return <SkeletonChart height="h-52" />;
+
+  if (isError) {
+    return (
+      <Card>
+        <div className="flex items-center justify-center h-52 text-content-tertiary text-sm">
+          {t("dashboard.noData", "No data available")}
+        </div>
+      </Card>
+    );
+  }
 
   const chartData =
     data?.data?.map((d) => ({
@@ -59,11 +71,11 @@ export const RevenueSparkline = () => {
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={chartData}>
           <defs>
-            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+            <linearGradient id={revenueGradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
             </linearGradient>
-            <linearGradient id="colorTurnover" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={turnoverGradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
               <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
             </linearGradient>
@@ -93,14 +105,14 @@ export const RevenueSparkline = () => {
             type="monotone"
             dataKey="turnover"
             stroke="#10b981"
-            fill="url(#colorTurnover)"
+            fill={`url(#${turnoverGradientId})`}
             name={t("dashboard.turnover", "Turnover")}
           />
           <Area
             type="monotone"
             dataKey="revenue"
-            stroke="#3b82f6"
-            fill="url(#colorRevenue)"
+            stroke="#4F46E5"
+            fill={`url(#${revenueGradientId})`}
             name={t("dashboard.revenue", "Revenue")}
           />
         </AreaChart>

@@ -1,0 +1,26 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon: white square with dark border -->
+  <rect width="44" height="44" rx="10" x="0" y="2" fill="white" fill-opacity="0.15" stroke="white" stroke-width="1.5"/>
+  <!-- Document body -->
+  <path d="M10 10 h13 l6 6 v19 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V12 a2 2 0 0 1 2-2z"
+        fill="white" fill-opacity="0.15" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Dog-ear fold -->
+  <path d="M23 10 v5.5 a0.8 0.8 0 0 0 0.8 0.8 H29.5"
+        stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <!-- Document lines -->
+  <line x1="13" y1="21" x2="23" y2="21" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="13" y1="25" x2="23" y2="25" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="13" y1="29" x2="18" y2="29" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Check circle -->
+  <circle cx="32" cy="36" r="7" fill="white" fill-opacity="0.25" stroke="white" stroke-width="1.2"/>
+  <path d="M28.8 36 l2.4 2.5 4.4-4.8"
+        stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Wordmark -->
+  <text x="53" y="22"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="15" font-weight="400" fill="white" letter-spacing="-0.4">receipt</text>
+  <text x="53" y="40"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="15" font-weight="700" fill="white" letter-spacing="-0.4">master</text>
+</svg>

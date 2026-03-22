@@ -50,7 +50,7 @@ export const RevenueChart = ({
   title,
   data,
   isLoading,
-  color = "#3b82f6",
+  color = "#4F46E5",
   emptyMessage = "No data",
 }: RevenueChartProps) => {
   if (isLoading) return <SkeletonChart height="h-72" />;
@@ -98,9 +98,9 @@ export const RevenueChart = ({
               cursor={{ fill: "currentColor", opacity: 0.04 }}
             />
             <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={28}>
-              {data.map((_, index) => (
+              {data.map((entry, index) => (
                 <Cell
-                  key={index}
+                  key={entry.name ?? index}
                   fill={color}
                   fillOpacity={0.85}
                   className="transition-opacity hover:opacity-100"

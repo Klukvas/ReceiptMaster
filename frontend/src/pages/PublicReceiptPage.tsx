@@ -270,7 +270,7 @@ export const PublicReceiptPage = () => {
             </p>
           )}
           <p className="text-xs text-content-tertiary mt-2">
-            Powered by ReceiptMaster
+            Powered by receiptmaster.org
           </p>
         </div>
       </div>

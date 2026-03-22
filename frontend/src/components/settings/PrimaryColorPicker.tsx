@@ -9,7 +9,7 @@ import {
 } from "../../hooks/useReceiptDesignSettings";
 
 const PRESET_COLORS = [
-  "#3B82F6",
+  "#4F46E5",
   "#EF4444",
   "#10B981",
   "#F59E0B",
@@ -22,7 +22,7 @@ const PRESET_COLORS = [
 export const PrimaryColorPicker = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [color, setColor] = useState("#3B82F6");
+  const [color, setColor] = useState("#4F46E5");
 
   const { data, isLoading } = useReceiptDesignSettings();
 
@@ -139,7 +139,7 @@ export const PrimaryColorPicker = () => {
                 mutation.mutate(val);
               }
             }}
-            placeholder="#3B82F6"
+            placeholder="#4F46E5"
             maxLength={7}
             className="w-24 rounded-lg border border-[var(--color-border)] bg-elevated px-2.5 py-1.5 text-sm text-content font-mono"
           />

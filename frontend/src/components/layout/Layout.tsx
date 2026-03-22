@@ -29,13 +29,9 @@ export const Layout = ({ children }: LayoutProps) => {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2.5">
-            <img
-              src="/image.png"
-              alt="ReceiptMaster Logo"
-              className="h-6 w-6 object-contain"
-            />
+            <img src="/logo-icon.svg" alt="receiptmaster" className="h-7 w-7" />
             <span className="text-sm font-bold text-content tracking-tight">
-              ReceiptMaster
+              receiptmaster
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -78,9 +74,7 @@ export const Layout = ({ children }: LayoutProps) => {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <p className="text-xs text-content-tertiary">
-                &copy; {new Date().getFullYear()} ReceiptMaster.{""}
-                {t("landing.footer.rights")} &middot; Powered by{""}
-                <span className="font-semibold">fluxLab</span>
+                &copy; {new Date().getFullYear()} receiptmaster.org
               </p>
               <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
                 <Link

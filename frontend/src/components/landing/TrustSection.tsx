@@ -1,37 +1,62 @@
-import React from 'react';
-import { Shield, Clock, Lock, Database } from 'lucide-react';
-import { useTranslation } from '../../hooks/useTranslation';
+import React from "react";
+import { useTranslation } from "../../hooks/useTranslation";
 
-export const TrustSection: React.FC = () => {
- const { t } = useTranslation();
+const STAT_KEYS: ReadonlyArray<{
+  id: string;
+  valueKey: string;
+  labelKey: string;
+  highlight?: boolean;
+}> = [
+  {
+    id: "receipts",
+    valueKey: "landing.stats.receiptsValue",
+    labelKey: "landing.stats.receipts",
+  },
+  {
+    id: "orders",
+    valueKey: "landing.stats.ordersValue",
+    labelKey: "landing.stats.orders",
+  },
+  {
+    id: "merchants",
+    valueKey: "landing.stats.merchantsValue",
+    labelKey: "landing.stats.merchants",
+  },
+  {
+    id: "languages",
+    valueKey: "landing.stats.languagesValue",
+    labelKey: "landing.stats.languages",
+  },
+  {
+    id: "uptime",
+    valueKey: "landing.stats.uptimeValue",
+    labelKey: "landing.stats.uptime",
+    highlight: true,
+  },
+];
 
- const badges = [
- { icon: Shield, label: t('landing.trust.gdpr') },
- { icon: Clock, label: t('landing.trust.uptime') },
- { icon: Lock, label: t('landing.trust.encrypted') },
- { icon: Database, label: t('landing.trust.multiTenant') },
- ];
+export const TrustSection: React.FC = React.memo(() => {
+  const { t } = useTranslation();
 
- return (
- <section className="py-12 border-y border-[var(--color-border-light)] bg-surface-alt">
- <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
- <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-12">
- <span className="text-xs font-medium text-content-tertiary uppercase tracking-wider whitespace-nowrap">
- {t('landing.trust.badge')}
- </span>
- <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 lg:gap-8">
- {badges.map((badge) => (
- <div
- key={badge.label}
- className="flex items-center gap-2 text-content-tertiary"
- >
- <badge.icon className="h-4 w-4 text-content-tertiary" />
- <span className="text-sm font-medium">{badge.label}</span>
- </div>
- ))}
- </div>
- </div>
- </div>
- </section>
- );
-};
+  return (
+    <div className="landing-trusted">
+      <span className="landing-trusted-label">{t("landing.stats.label")}</span>
+      <div className="landing-trusted-sep" />
+      <div className="landing-trusted-items">
+        {STAT_KEYS.map((stat) => (
+          <div key={stat.id}>
+            <span
+              className="landing-trusted-n"
+              style={stat.highlight ? { color: "var(--l-green)" } : undefined}
+            >
+              {t(stat.valueKey)}
+            </span>
+            <span className="landing-trusted-l">{t(stat.labelKey)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+TrustSection.displayName = "TrustSection";

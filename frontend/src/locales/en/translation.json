@@ -450,73 +450,170 @@
   "landing": {
     "welcome": "Welcome",
     "goToDashboard": "Go to Dashboard",
+    "nav": {
+      "features": "Features",
+      "howItWorks": "How it works",
+      "pricing": "Pricing",
+      "blog": "Blog"
+    },
     "hero": {
-      "badge": "Business Management Platform",
-      "title": "Complete Business Control.",
-      "titleHighlight": "In One Dashboard.",
-      "subtitle": "Manage orders, generate receipts, track revenue, and automate via Telegram — all from a single platform built for European businesses.",
-      "startFree": "Start Free",
-      "viewDemo": "View Demo",
+      "line1": "Orders, Receipts",
+      "line2": "Analytics",
+      "line3": "in one place",
+      "subtitle": "The complete back-office for modern merchants. Manage products, customers, and orders — generate professional PDF invoices in seconds.",
+      "startFree": "Start for free",
+      "seeDemo": "See a demo →",
       "welcomeBack": "Welcome back",
       "welcomeBackSubtitle": "Your dashboard is ready.",
       "goToDashboard": "Go to Dashboard"
     },
-    "trust": {
-      "badge": "Trusted by businesses across UA & EU",
-      "gdpr": "GDPR Ready",
-      "uptime": "99.9% Uptime",
-      "encrypted": "Encrypted",
-      "multiTenant": "Tenant Isolation"
+    "stats": {
+      "label": "Platform stats",
+      "receiptsValue": "10K+",
+      "receipts": "Receipts generated",
+      "ordersValue": "50K+",
+      "orders": "Orders processed",
+      "merchantsValue": "1K+",
+      "merchants": "Active merchants",
+      "languagesValue": "EN / UK / RU",
+      "languages": "Languages",
+      "uptimeValue": "99.9%",
+      "uptime": "Uptime SLA"
     },
-    "features": {
-      "label": "Platform",
-      "title": "Everything your business needs. Nothing it doesn't.",
-      "operations": {
-        "label": "Operations Management",
-        "title": "Products, Orders & Customers in one place",
-        "description": "Full CRUD for products with margin tracking, multi-item orders with status workflows, and customer management with Telegram integration.",
-        "item1": "Inventory tracking with low-stock alerts",
-        "item2": "Order lifecycle with payment status",
-        "item3": "Customer stats and order history"
+    "grid": {
+      "label": "Platform features",
+      "title": "Everything you need to run your business",
+      "subtitle": "From inventory and customer management to professional PDF receipts with digital integrity — built for modern merchants.",
+      "products": {
+        "title": "Product Management",
+        "description": "Full CRUD with purchase/sale prices, color-coded margin tracking, inventory alerts and stock badges. Bulk operations with row selection.",
+        "tag1": "margin %",
+        "tag2": "low-stock alerts",
+        "tag3": "bulk delete"
       },
-      "financial": {
-        "label": "Financial Control",
-        "title": "Receipts, Revenue & Turnover analytics",
-        "description": "Generate professional PDF receipts from 10 templates in 3 languages. Track revenue by product, by customer, and over time with exportable analytics.",
-        "item1": "10 receipt templates, 3 languages",
-        "item2": "Revenue and turnover dashboards",
-        "item3": "CSV export for all analytics"
+      "customers": {
+        "title": "Customer CRM",
+        "description": "Manage recipients with full order history, total spend aggregation, Telegram integration badges and a slide-over detail drawer.",
+        "tag1": "order history",
+        "tag2": "telegram badge",
+        "tag3": "total spend"
       },
-      "automation": {
-        "label": "Automation & Security",
-        "title": "Telegram bot, audit logs & enterprise security",
-        "description": "Accept orders via Telegram bot with cart UI. Every operation is audit-logged. Row-Level Security ensures complete tenant data isolation.",
-        "item1": "Telegram bot with shopping cart",
-        "item2": "Full audit trail on every change",
-        "item3": "PostgreSQL RLS data isolation"
+      "orders": {
+        "title": "Order Lifecycle",
+        "description": "DRAFT → CONFIRMED → CANCELLED workflow with payment status, soft-delete, order locking and idempotency keys for safe retries.",
+        "tag1": "status workflow",
+        "tag2": "payment tracking",
+        "tag3": "idempotent"
+      },
+      "receipts": {
+        "title": "PDF Receipt Generation",
+        "description": "Background PDF generation via BullMQ queue. 10 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
+        "tag1": "10 templates",
+        "tag2": "SHA256 hash",
+        "tag3": "S3 storage"
+      },
+      "analytics": {
+        "title": "Analytics & Dashboard",
+        "description": "Revenue sparklines, order status donut, turnover by product and customer, CSV export with Redis-cached queries and date range presets.",
+        "tag1": "revenue charts",
+        "tag2": "csv export",
+        "tag3": "redis cache"
+      },
+      "telegramBot": {
+        "title": "Telegram Bot",
+        "description": "Full shopping cart experience inside Telegram with inline buttons, quantity input, order confirmation and automatic customer creation.",
+        "tag1": "inline cart",
+        "tag2": "redis sessions",
+        "tag3": "auto-create"
       }
     },
-    "differentiators": {
-      "label": "Enterprise Grade",
-      "title": "Built for serious businesses",
-      "subtitle": "Technical foundations that set ReceiptMaster apart from generic tools.",
-      "rls": {
-        "title": "Multi-Tenant RLS Isolation",
-        "description": "PostgreSQL Row-Level Security on every table. Each tenant's data is invisible to others at the database level."
+    "howItWorks": {
+      "label": "How it works",
+      "title": "Up and running in minutes",
+      "subtitle": "No complex setup. Register, configure your branding, and start creating orders and generating receipts right away.",
+      "step1": {
+        "title": "Add your products & customers",
+        "description": "Import your catalog with prices and stock levels. Add customers manually or let the Telegram bot create them automatically on first order."
       },
-      "pdf": {
-        "title": "Background PDF Generation",
-        "description": "Receipts generated asynchronously via BullMQ queue with Playwright. No request blocking, automatic retries, horizontal scaling."
+      "step2": {
+        "title": "Create and confirm orders",
+        "description": "Build multi-item orders with per-item pricing. Move through DRAFT → CONFIRMED. Track payment status and filter by date, status or amount."
       },
-      "hash": {
-        "title": "Receipt Integrity Verification",
-        "description": "Every receipt is SHA256-hashed. Verify document authenticity at any time. HTML snapshots stored for complete audit trail."
+      "step3": {
+        "title": "Generate & send receipts",
+        "description": "Click \"Generate Receipt\" — a professional PDF is created with your branding in the background. Download, print, or send directly."
       }
+    },
+    "telegram": {
+      "label": "Telegram Bot",
+      "title": "Sell directly inside Telegram",
+      "description": "Your customers browse products, add to cart and confirm orders without leaving Telegram. Sessions persist across restarts via Redis.",
+      "feat1": {
+        "title": "Full cart experience",
+        "description": "Inline buttons, quantity input, stock validation, order review and confirmation flow."
+      },
+      "feat2": {
+        "title": "Automatic customer creation",
+        "description": "Find-or-create by Telegram user ID. Customer appears in your dashboard immediately."
+      },
+      "feat3": {
+        "title": "Redis-backed sessions (4h TTL)",
+        "description": "Cart state survives server restarts. Rate-limit retry handling built in."
+      }
+    },
+    "pricing": {
+      "label": "Pricing",
+      "title": "Simple, transparent pricing",
+      "subtitle": "Start free, upgrade when you grow. No hidden fees, no surprises.",
+      "month": "mo",
+      "popular": "Most popular",
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "description": "Perfect for getting started and testing the platform.",
+        "feat1": "Up to 10 products",
+        "feat2": "Up to 20 orders / month",
+        "feat3": "4 basic templates",
+        "feat4": "SHA256 receipt verification",
+        "cta": "Get started"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$19",
+        "description": "For growing businesses that need more capacity.",
+        "feat1": "Up to 100 products",
+        "feat2": "Up to 500 orders / month",
+        "feat3": "All 15 templates",
+        "feat4": "Priority support",
+        "cta": "Start free trial"
+      },
+      "business": {
+        "name": "Business",
+        "price": "$49",
+        "description": "Unlimited scale for established businesses.",
+        "feat1": "Unlimited products",
+        "feat2": "Unlimited orders",
+        "feat3": "All templates + custom branding",
+        "feat4": "API access & webhooks",
+        "cta": "Contact sales"
+      }
+    },
+    "templates": {
+      "label": "Receipt templates",
+      "title": "15+ professional templates",
+      "subtitle": "From minimal invoices to branded corporate receipts — choose the perfect look for your business. Every template supports 3 languages.",
+      "modern": { "name": "Modern", "category": "Creative" },
+      "elegant": { "name": "Elegant", "category": "Premium" },
+      "dark": { "name": "Dark", "category": "Creative" },
+      "vintage": { "name": "Vintage", "category": "Creative" },
+      "corporate": { "name": "Corporate", "category": "Business" },
+      "branded": { "name": "Branded", "category": "Premium" },
+      "minimal": { "name": "Minimal", "category": "Minimal" }
     },
     "cta": {
-      "title": "Ready to take control?",
-      "subtitle": "Start managing your business with a platform built for reliability.",
-      "startFree": "Start Free",
+      "title": "Ready to streamline your business?",
+      "subtitle": "Join thousands of merchants using ReceiptMaster to manage orders, generate receipts, and grow with confidence.",
+      "startFree": "Create your free account",
       "welcomeBackTitle": "Ready to continue?",
       "welcomeBackSubtitle": "Your dashboard is waiting.",
       "goToDashboard": "Go to Dashboard"

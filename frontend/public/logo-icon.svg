@@ -1,0 +1,17 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="11" fill="#4F46E5"/>
+  <!-- Document body -->
+  <path d="M11 10 h14 l7 7 v21 a2.5 2.5 0 0 1-2.5 2.5 H11 a2.5 2.5 0 0 1-2.5-2.5 V12.5 a2.5 2.5 0 0 1 2.5-2.5z"
+        fill="white" fill-opacity="0.15" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+  <!-- Dog-ear fold -->
+  <path d="M25 10 v6.2 a0.9 0.9 0 0 0 0.9 0.9 H32"
+        stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Document lines -->
+  <line x1="14" y1="22" x2="25" y2="22" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="14" y1="26.5" x2="25" y2="26.5" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="14" y1="31" x2="19" y2="31" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Check circle -->
+  <circle cx="35" cy="38" r="8" fill="white"/>
+  <path d="M31.4 38 l2.7 2.8 5-5.4"
+        stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

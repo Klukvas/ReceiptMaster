@@ -1,119 +1,64 @@
-import React from"react";
-import { Link } from"react-router-dom";
-import { useTranslation } from"../../hooks/useTranslation";
+import React from "react";
+import { Link } from "react-router-dom";
+import { useTranslation } from "../../hooks/useTranslation";
 
-const linkClass =
-"text-sm text-content-tertiary hover:text-content transition-colors";
+const FluxLabBadge = () => (
+  <a
+    href="https://flux-lab.dev/en"
+    className="powered-by-badge"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    <div className="powered-by-badge__icon">
+      <svg width="12" height="10" viewBox="0 0 62 52" fill="none" aria-hidden="true">
+        <g className="fl1">
+          <polygon points="31,3 57,15 31,27 5,15" fill="white" opacity=".92" />
+        </g>
+        <g className="fl2">
+          <line x1="5" y1="25" x2="31" y2="36" stroke="#9E94F9" strokeWidth="3" strokeLinecap="round" opacity=".68" />
+          <line x1="31" y1="36" x2="57" y2="25" stroke="#9E94F9" strokeWidth="3" strokeLinecap="round" opacity=".68" />
+        </g>
+        <g className="fl3">
+          <line x1="5" y1="35" x2="31" y2="47" stroke="#7B6EF6" strokeWidth="4" strokeLinecap="round" />
+          <line x1="31" y1="47" x2="57" y2="35" stroke="#7B6EF6" strokeWidth="4" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+      <span className="powered-by-badge__label">powered by</span>
+      <span className="powered-by-badge__brand">flux-lab</span>
+      <span className="powered-by-badge__tld">.dev</span>
+    </div>
+  </a>
+);
 
-const disabledLinkClass =
-"text-sm text-content-tertiary cursor-default";
+export const FooterSection: React.FC = React.memo(() => {
+  const { t } = useTranslation();
 
-export const FooterSection: React.FC = () => {
- const { t } = useTranslation();
+  return (
+    <footer className="landing-footer">
+      <a href="/" className="landing-logo">
+        <img src="/logo-icon.svg" alt="receiptmaster" className="landing-logo-icon" />
+        <span className="landing-logo-name">
+          receipt<em>master</em>
+        </span>
+      </a>
+      <div className="landing-footer-links">
+        <a href="#features">{t("landing.footer.features")}</a>
+        <a href="#pricing">{t("landing.footer.pricing")}</a>
+        <Link to="/blog">{t("landing.nav.blog")}</Link>
+        <a href="/api/docs">{t("landing.footer.apiDocs")}</a>
+        <Link to="/privacy">{t("landing.footer.privacy")}</Link>
+        <Link to="/terms">{t("landing.footer.terms")}</Link>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <span className="landing-footer-copy">
+          &copy; {new Date().getFullYear()} receiptmaster.org
+        </span>
+        <FluxLabBadge />
+      </div>
+    </footer>
+  );
+});
 
- return (
- <footer className="bg-surface-alt border-t border-[var(--color-border)]">
- <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
- <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
- {/* Brand */}
- <div className="col-span-2 md:col-span-1">
- <div className="flex items-center gap-2.5 mb-4">
- <img
- src="/image.png"
- alt="ReceiptMaster"
- className="h-8 w-8 object-contain"
- />
- <span className="text-lg font-semibold text-content">
- ReceiptMaster
- </span>
- </div>
- <p className="text-sm text-content-tertiary leading-relaxed max-w-xs">
- {t("landing.footer.description")}
- </p>
- </div>
-
- {/* Product */}
- <div>
- <h4 className="text-sm font-semibold text-content mb-4">
- {t("landing.footer.product")}
- </h4>
- <ul className="space-y-2.5">
- <li>
- <a href="#features" className={linkClass}>
- {t("landing.footer.features")}
- </a>
- </li>
- <li>
- <a href="#pricing" className={linkClass}>
- {t("landing.footer.pricing")}
- </a>
- </li>
- <li>
- <a href="/api/docs" className={linkClass}>
- {t("landing.footer.apiDocs")}
- </a>
- </li>
- </ul>
- </div>
-
- {/* Company */}
- <div>
- <h4 className="text-sm font-semibold text-content mb-4">
- {t("landing.footer.company")}
- </h4>
- <ul className="space-y-2.5">
- <li>
- <span className={disabledLinkClass} aria-disabled="true">
- {t("landing.footer.about")}
- </span>
- </li>
- <li>
- <a href="mailto:fluxlab@flux-lab.dev" className={linkClass}>
- {t("landing.footer.contact")}
- </a>
- </li>
- </ul>
- </div>
-
- {/* Legal */}
- <div>
- <h4 className="text-sm font-semibold text-content mb-4">
- {t("landing.footer.legal")}
- </h4>
- <ul className="space-y-2.5">
- <li>
- <Link to="/terms" className={linkClass}>
- {t("landing.footer.terms")}
- </Link>
- </li>
- <li>
- <Link to="/privacy" className={linkClass}>
- {t("landing.footer.privacy")}
- </Link>
- </li>
- <li>
- <Link to="/refund-policy" className={linkClass}>
- {t("landing.footer.refundPolicy")}
- </Link>
- </li>
- <li>
- <Link to="/cookie-policy" className={linkClass}>
- {t("landing.footer.cookiePolicy")}
- </Link>
- </li>
- </ul>
- </div>
- </div>
-
- {/* Bottom bar */}
- <div className="mt-12 pt-8 border-t border-[var(--color-border)]">
- <p className="text-sm text-content-tertiary">
- &copy; {new Date().getFullYear()} ReceiptMaster.{""}
- {t("landing.footer.rights")} &middot; Powered by{""}
- <span className="font-semibold">fluxLab</span>
- </p>
- </div>
- </div>
- </footer>
- );
-};
+FooterSection.displayName = "FooterSection";
