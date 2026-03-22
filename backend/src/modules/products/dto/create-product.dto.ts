@@ -1,5 +1,12 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsString, IsNumber, IsEnum, Min } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import {
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsUUID,
+  Min,
+} from "class-validator";
 import { Currency } from "../entities/product.entity";
 
 export class CreateProductDto {
@@ -25,4 +32,9 @@ export class CreateProductDto {
   @ApiProperty({ description: "Валюта", enum: Currency, example: Currency.UAH })
   @IsEnum(Currency)
   currency: Currency;
+
+  @ApiPropertyOptional({ description: "ID поставщика", example: "uuid" })
+  @IsOptional()
+  @IsUUID()
+  supplier_id?: string | null;
 }

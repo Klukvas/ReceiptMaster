@@ -12,6 +12,7 @@ import {
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { OrderItem } from "../../orders/entities/order-item.entity";
 import { User } from "../../users/entities/user.entity";
+import { Supplier } from "../../suppliers/entities/supplier.entity";
 
 export enum Currency {
   UAH = "UAH",
@@ -53,6 +54,15 @@ export class Product {
   @ManyToOne(() => User, (user) => user.products)
   @JoinColumn({ name: "user_id" })
   user: User;
+
+  @ApiProperty({ required: false, nullable: true })
+  @Column({ type: "uuid", nullable: true, default: null })
+  supplier_id?: string | null;
+
+  @ApiHideProperty()
+  @ManyToOne(() => Supplier, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "supplier_id" })
+  supplier?: Supplier;
 
   @ApiProperty()
   @CreateDateColumn()

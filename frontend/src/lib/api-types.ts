@@ -7,7 +7,9 @@
 import type { components } from "./api-types.generated";
 
 // ─── Entity types (from OpenAPI spec) ────────────────────────────────
-export type Product = components["schemas"]["Product"];
+export type Product = components["schemas"]["Product"] & {
+  supplier_id?: string | null;
+};
 export type OrderItem = components["schemas"]["OrderItem"];
 export type Order = components["schemas"]["Order"];
 export type Receipt = components["schemas"]["Receipt"];
