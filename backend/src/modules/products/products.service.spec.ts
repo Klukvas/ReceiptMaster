@@ -38,6 +38,7 @@ describe("ProductsService", () => {
       save: jest.fn((data) => Promise.resolve({ id: "prod-1", ...data })),
       findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+      softDelete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     dataSource = {
@@ -159,18 +160,19 @@ describe("ProductsService", () => {
   });
 
   describe("remove", () => {
-    it("should delete product when not used in confirmed orders", async () => {
+    it("should soft delete product", async () => {
       productsRepo.findOne.mockResolvedValue(mockProduct);
-      dataSource.query.mockResolvedValue([{ count: "0" }]);
 
       await service.remove("prod-1", mockUser);
 
-      expect(dataSource.transaction).toHaveBeenCalled();
+      expect(productsRepo.softDelete).toHaveBeenCalledWith({
+        id: "prod-1",
+        user_id: "user-1",
+      });
     });
 
-    it("should throw if product is used in confirmed orders", async () => {
-      productsRepo.findOne.mockResolvedValue(mockProduct);
-      dataSource.query.mockResolvedValue([{ count: "3" }]);
+    it("should throw if product not found", async () => {
+      productsRepo.findOne.mockResolvedValue(null);
 
       await expect(service.remove("prod-1", mockUser)).rejects.toThrow(
         ApiErrorResponse,
@@ -181,14 +183,14 @@ describe("ProductsService", () => {
   describe("removeBulk", () => {
     it("should delete multiple products and track skipped", async () => {
       productsRepo.findOne
-        .mockResolvedValueOnce(mockProduct)
-        .mockResolvedValueOnce(null); // second will fail
-      dataSource.query.mockResolvedValue([{ count: "0" }]);
+        .mockResolvedValueOnce(mockProduct) // prod-1 found
+        .mockResolvedValueOnce(null); // prod-2 not found → skipped
 
       const result = await service.removeBulk(["prod-1", "prod-2"], mockUser);
 
       expect(result.deleted).toBe(1);
       expect(result.skipped).toContain("prod-2");
+      expect(productsRepo.softDelete).toHaveBeenCalledTimes(1);
     });
   });
 
