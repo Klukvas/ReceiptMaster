@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Package,
@@ -10,9 +10,11 @@ import {
   TrendingUp,
   Loader2,
   DollarSign,
+  ShoppingCart,
 } from "lucide-react";
 import {
   suppliersApi,
+  ordersApi,
   formatCurrency,
   formatDate,
   type Product,
@@ -20,6 +22,7 @@ import {
 import { Drawer } from "../ui/Drawer";
 import { ProductStockBadge } from "./ProductStockBadge";
 import { ProductMarginBadge } from "./ProductMarginBadge";
+import { OrderStatusBadge } from "../orders/OrderStatusBadge";
 import { useTranslation } from "../../hooks/useTranslation";
 
 interface ProductDrawerProps {
@@ -45,6 +48,22 @@ export const ProductDrawer = ({
     queryFn: () => suppliersApi.getById(product!.supplier_id!),
     enabled: open && !!product?.supplier_id,
   });
+
+  const { data: ordersData, isLoading: isLoadingOrders } = useQuery({
+    queryKey: ["orders-for-product", product?.id],
+    queryFn: () =>
+      ordersApi.getAll({ limit: 50, sortBy: "created_at", sortOrder: "DESC" }),
+    enabled: open && !!product?.id,
+  });
+
+  const recentOrders = useMemo(() => {
+    if (!ordersData?.data?.data || !product) return [];
+    return ordersData.data.data
+      .filter((order) =>
+        order.items?.some((item) => item.product_id === product.id),
+      )
+      .slice(0, 5);
+  }, [ordersData?.data?.data, product]);
 
   const supplier = supplierData?.data;
 
@@ -225,6 +244,69 @@ export const ProductDrawer = ({
             )}
           </div>
         )}
+
+        {/* Recent Orders */}
+        <div className="pt-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider">
+              {t("products.recentOrders", "Recent Orders")}
+            </h3>
+            {recentOrders.length > 0 && (
+              <span className="text-[11px] font-medium text-content-tertiary bg-surface-alt px-1.5 py-0.5 rounded-md">
+                {recentOrders.length}
+              </span>
+            )}
+          </div>
+          {isLoadingOrders ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <div className="text-center py-8 bg-surface-alt rounded-xl">
+              <ShoppingCart className="h-8 w-8 text-content-tertiary mx-auto mb-2.5" />
+              <p className="text-sm text-content-tertiary">
+                {t("products.noOrders", "No orders with this product")}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--color-border-light)]">
+              {recentOrders.map((order) => {
+                const orderItem = order.items?.find(
+                  (i) => i.product_id === product.id,
+                );
+                return (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between py-3 first:pt-0 hover:bg-surface-alt -mx-1.5 px-1.5 rounded-lg transition-colors cursor-default"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-medium text-content truncate">
+                          {order.recipient?.name ?? "—"}
+                        </p>
+                        <OrderStatusBadge order={order} />
+                      </div>
+                      <p className="text-xs text-content-tertiary">
+                        {formatDate(order.created_at)}
+                        {orderItem && (
+                          <span className="ml-2">
+                            {"\u00D7"}
+                            {orderItem.qty}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <p className="text-sm font-semibold text-content tabular-nums">
+                        {formatCurrency(order.total_cents)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Created */}
         <div className="pt-4">
