@@ -220,6 +220,7 @@ export class OrdersService {
       endDate?: Date;
       minAmount?: number;
       maxAmount?: number;
+      productId?: string;
     },
   ): Promise<PaginatedResponse<Order>> {
     const {
@@ -256,6 +257,12 @@ export class OrdersService {
     if (filters?.endDate) {
       queryBuilder.andWhere("order.created_at <= :endDate", {
         endDate: filters.endDate,
+      });
+    }
+
+    if (filters?.productId) {
+      queryBuilder.andWhere("items.product_id = :productId", {
+        productId: filters.productId,
       });
     }
 

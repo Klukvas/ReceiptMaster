@@ -260,6 +260,7 @@ export const ordersApi = {
       endDate?: string;
       minAmount?: number;
       maxAmount?: number;
+      productId?: string;
     },
   ) => api.get<PaginatedResponse<Order>>("/orders", { params }),
 

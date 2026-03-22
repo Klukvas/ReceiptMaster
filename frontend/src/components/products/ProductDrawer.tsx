@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Package,
@@ -11,6 +11,7 @@ import {
   Loader2,
   DollarSign,
   ShoppingCart,
+  AlertCircle,
 } from "lucide-react";
 import {
   suppliersApi,
@@ -43,28 +44,34 @@ export const ProductDrawer = ({
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const { data: supplierData } = useQuery({
+  // Reset menu when drawer closes or product changes
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [open, product?.id]);
+
+  const { data: supplierData, isError: isSupplierError } = useQuery({
     queryKey: ["supplier", product?.supplier_id],
     queryFn: () => suppliersApi.getById(product!.supplier_id!),
     enabled: open && !!product?.supplier_id,
   });
 
-  const { data: ordersData, isLoading: isLoadingOrders } = useQuery({
+  const {
+    data: ordersData,
+    isLoading: isLoadingOrders,
+    isError: isOrdersError,
+  } = useQuery({
     queryKey: ["orders-for-product", product?.id],
     queryFn: () =>
-      ordersApi.getAll({ limit: 50, sortBy: "created_at", sortOrder: "DESC" }),
+      ordersApi.getAll({
+        productId: product!.id,
+        limit: 5,
+        sortBy: "created_at",
+        sortOrder: "DESC",
+      }),
     enabled: open && !!product?.id,
   });
 
-  const recentOrders = useMemo(() => {
-    if (!ordersData?.data?.data || !product) return [];
-    return ordersData.data.data
-      .filter((order) =>
-        order.items?.some((item) => item.product_id === product.id),
-      )
-      .slice(0, 5);
-  }, [ordersData?.data?.data, product]);
-
+  const recentOrders = ordersData?.data?.data ?? [];
   const supplier = supplierData?.data;
 
   if (!product) return null;
@@ -75,6 +82,18 @@ export const ProductDrawer = ({
           product.purchase_price_cents) *
         100
       : 0;
+
+  const handleEdit = () => {
+    setMenuOpen(false);
+    onClose();
+    if (onEdit) onEdit(product);
+  };
+
+  const handleDelete = () => {
+    setMenuOpen(false);
+    onClose();
+    if (onDelete) onDelete(product);
+  };
 
   return (
     <Drawer open={open} onClose={onClose}>
@@ -117,11 +136,7 @@ export const ProductDrawer = ({
                   <div className="absolute right-0 top-full mt-1 w-44 bg-elevated rounded-xl shadow-lg border border-[var(--color-border)] z-50 py-1 animate-modal-content origin-top-right">
                     {onEdit && (
                       <button
-                        onClick={() => {
-                          onEdit(product);
-                          setMenuOpen(false);
-                          onClose();
-                        }}
+                        onClick={handleEdit}
                         className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-content-secondary hover:bg-surface-alt transition-colors"
                       >
                         <Edit className="w-3.5 h-3.5" />
@@ -132,11 +147,7 @@ export const ProductDrawer = ({
                       <>
                         <div className="my-1 border-t border-[var(--color-border-light)]" />
                         <button
-                          onClick={() => {
-                            onDelete(product);
-                            setMenuOpen(false);
-                            onClose();
-                          }}
+                          onClick={handleDelete}
                           className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-danger-base hover:bg-[var(--color-danger-light)] transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -219,7 +230,12 @@ export const ProductDrawer = ({
             <h3 className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider mb-2.5">
               {t("products.supplier", "Supplier")}
             </h3>
-            {supplier ? (
+            {isSupplierError ? (
+              <div className="flex items-center gap-2 py-3 px-3.5 bg-surface-alt rounded-xl text-sm text-content-tertiary">
+                <AlertCircle className="h-4 w-4" />
+                {t("common.loadError", "Failed to load")}
+              </div>
+            ) : supplier ? (
               <div className="bg-surface-alt rounded-xl px-3.5 py-3">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-lg bg-[var(--color-accent-light)] flex items-center justify-center shrink-0">
@@ -251,15 +267,15 @@ export const ProductDrawer = ({
             <h3 className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider">
               {t("products.recentOrders", "Recent Orders")}
             </h3>
-            {recentOrders.length > 0 && (
-              <span className="text-[11px] font-medium text-content-tertiary bg-surface-alt px-1.5 py-0.5 rounded-md">
-                {recentOrders.length}
-              </span>
-            )}
           </div>
           {isLoadingOrders ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
+            </div>
+          ) : isOrdersError ? (
+            <div className="flex items-center gap-2 py-3 px-3.5 bg-surface-alt rounded-xl text-sm text-content-tertiary">
+              <AlertCircle className="h-4 w-4" />
+              {t("common.loadError", "Failed to load")}
             </div>
           ) : recentOrders.length === 0 ? (
             <div className="text-center py-8 bg-surface-alt rounded-xl">
@@ -284,7 +300,9 @@ export const ProductDrawer = ({
                         <p className="text-sm font-medium text-content truncate">
                           {order.recipient?.name ?? "—"}
                         </p>
-                        <OrderStatusBadge order={order} />
+                        <div className="shrink-0">
+                          <OrderStatusBadge order={order} />
+                        </div>
                       </div>
                       <p className="text-xs text-content-tertiary">
                         {formatDate(order.created_at)}
@@ -298,7 +316,7 @@ export const ProductDrawer = ({
                     </div>
                     <div className="text-right shrink-0 ml-3">
                       <p className="text-sm font-semibold text-content tabular-nums">
-                        {formatCurrency(order.total_cents)}
+                        {formatCurrency(order.total_cents, order.currency)}
                       </p>
                     </div>
                   </div>

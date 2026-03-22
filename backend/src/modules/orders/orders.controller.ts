@@ -140,12 +140,14 @@ export class OrdersController {
     @Query("status") status?: OrderStatus,
     @Query("minAmount") minAmount?: string,
     @Query("maxAmount") maxAmount?: string,
+    @Query("productId") productId?: string,
   ): Promise<PaginatedResponse<Order>> {
     const filters = {
       startDate: dateRange.startDateParsed,
       endDate: dateRange.endDateParsed,
       minAmount: minAmount ? parseInt(minAmount) : undefined,
       maxAmount: maxAmount ? parseInt(maxAmount) : undefined,
+      productId,
     };
     return this.ordersService.findAll(paginationDto, req.user, status, filters);
   }
