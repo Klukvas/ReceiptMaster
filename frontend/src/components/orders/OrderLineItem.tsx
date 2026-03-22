@@ -104,7 +104,7 @@ const ProductSearchCard = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
-  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     return () => {
