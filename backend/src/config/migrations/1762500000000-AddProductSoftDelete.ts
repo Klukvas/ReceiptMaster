@@ -13,6 +13,24 @@ export class AddProductSoftDelete1762500000000 implements MigrationInterface {
       `CREATE INDEX "IDX_products_not_deleted" ON "products" ("deleted_at") WHERE "deleted_at" IS NULL`,
     );
 
+    // Soft-delete duplicate products (keep the newest one per user+name)
+    // so the unique index can be created
+    await queryRunner.query(`
+      UPDATE "products" p
+      SET "deleted_at" = NOW()
+      WHERE p."id" NOT IN (
+        SELECT DISTINCT ON ("user_id", "name") "id"
+        FROM "products"
+        ORDER BY "user_id", "name", "created_at" DESC
+      )
+      AND EXISTS (
+        SELECT 1 FROM "products" p2
+        WHERE p2."user_id" = p."user_id"
+          AND p2."name" = p."name"
+          AND p2."id" != p."id"
+      )
+    `);
+
     // Заменяем обычный индекс на partial unique — чтобы можно было
     // создать новый товар с тем же именем после удаления старого
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_products_user_name"`);
