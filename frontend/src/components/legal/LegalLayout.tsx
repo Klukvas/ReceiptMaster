@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
@@ -22,13 +22,6 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
   lastUpdated,
   children,
 }) => {
-  useEffect(() => {
-    document.title = `${title} — receiptmaster`;
-    return () => {
-      document.title = "receiptmaster";
-    };
-  }, [title]);
-
   const formattedDate = useMemo(
     () =>
       new Intl.DateTimeFormat("en-US", {

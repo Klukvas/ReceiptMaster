@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <!-- Homepage -->
+  <url>
+    <loc>https://receiptmaster.org/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Blog -->
+  <url>
+    <loc>https://receiptmaster.org/blog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Blog posts (English) -->
+  <url>
+    <loc>https://receiptmaster.org/blog/getting-started</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/getting-started"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/getting-started-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/pdf-receipt-templates</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/pdf-receipt-templates"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/pdf-receipt-templates-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/automate-business-finances</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/automate-business-finances"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/automate-business-finances-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/sha256-receipt-verification</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/sha256-receipt-verification"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/sha256-receipt-verification-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/order-management-tips</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/order-management-tips"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/order-management-tips-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/multi-language-receipts</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/multi-language-receipts"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/multi-language-receipts-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/inventory-tracking-guide</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/inventory-tracking-guide"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/inventory-tracking-guide-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/revenue-analytics</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/revenue-analytics"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/revenue-analytics-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/digital-invoicing-eu</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/digital-invoicing-eu"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/digital-invoicing-eu-uk"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/customer-management-crm</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/customer-management-crm"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/customer-management-crm-uk"/>
+  </url>
+
+  <!-- Blog posts (Ukrainian) -->
+  <url>
+    <loc>https://receiptmaster.org/blog/getting-started-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/getting-started-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/getting-started"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/pdf-receipt-templates-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/pdf-receipt-templates-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/pdf-receipt-templates"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/automate-business-finances-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/automate-business-finances-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/automate-business-finances"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/sha256-receipt-verification-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/sha256-receipt-verification-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/sha256-receipt-verification"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/order-management-tips-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/order-management-tips-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/order-management-tips"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/multi-language-receipts-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/multi-language-receipts-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/multi-language-receipts"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/inventory-tracking-guide-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/inventory-tracking-guide-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/inventory-tracking-guide"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/revenue-analytics-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/revenue-analytics-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/revenue-analytics"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/digital-invoicing-eu-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/digital-invoicing-eu-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/digital-invoicing-eu"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/customer-management-crm-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/customer-management-crm-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/customer-management-crm"/>
+  </url>
+
+  <!-- Legal pages -->
+  <url>
+    <loc>https://receiptmaster.org/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/refund-policy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/cookie-policy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
