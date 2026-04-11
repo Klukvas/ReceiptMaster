@@ -360,9 +360,7 @@ jobs:
 
             # Write application env
             cat > .env << 'EOF'
-            # Database configuration
-            DB_HOST=${{ secrets.DB_PRIVATE_IP }}
-            DB_PORT=${{ secrets.DB_PORT }}
+            # Database configuration (local postgres container)
             DB_USERNAME=${{ secrets.DB_USERNAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_NAME=${{ secrets.DB_NAME }}
@@ -412,16 +410,16 @@ jobs:
 
             # Free disk space before pulling new images
             echo "🧹 Cleaning up old Docker resources..."
-            docker system prune -af --volumes 2>/dev/null || true
+            docker system prune -af 2>/dev/null || true
 
             # Deploy application
             echo "🚀 Deploying application server..."
-            retry docker compose -f docker-compose.application.yml pull
-            retry docker compose -f docker-compose.application.yml up -d --remove-orphans
+            retry docker compose -f docker-compose.production.yml pull
+            retry docker compose -f docker-compose.production.yml up -d --remove-orphans
 
             # Health check
             echo "⏳ Waiting for application to be ready..."
             sleep 30
-            curl -fsS http://localhost:3000/api/v1/health || true
-            docker compose -f docker-compose.application.yml ps
+            curl -fsSk https://localhost/api/v1/health || true
+            docker compose -f docker-compose.production.yml ps
 

@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: marketflow-postgres
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-market_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: marketflow-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:latest
+    container_name: marketflow-backend
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_PREFIX=api/v1
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - RECEIPT_STORAGE_PATH=/app/receipts
+      - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
+      - AUTO_RUN_MIGRATIONS=${AUTO_RUN_MIGRATIONS:-true}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-nbg1}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - LOGOS_BUCKET=${LOGOS_BUCKET:-marketflow-storage}
+      - RECEIPTS_BUCKET=${RECEIPTS_BUCKET:-marketflow-storage}
+      - TEMP_BUCKET=${TEMP_BUCKET:-marketflow-storage}
+    volumes:
+      - receipts:/app/receipts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-frontend:latest
+    container_name: marketflow-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
+volumes:
+  postgres_data:
+  receipts:
+
+networks:
+  marketflow-network:
+    driver: bridge
