@@ -84,6 +84,43 @@ services:
     networks:
       - marketflow-network
 
+  db-backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.db-backup
+    container_name: marketflow-db-backup
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        echo "0 3 */4 * * /scripts/backup-db.sh 2>&1" | crontab -
+        crond -f -l 2
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_NAME=${DB_NAME}
+      - PGPASSWORD=${DB_PASSWORD}
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-marketflow-storage}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-nbg1}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./backend/scripts/backup-db.sh:/scripts/backup-db.sh:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - marketflow-network
+
 volumes:
   postgres_data:
   receipts:
