@@ -4,6 +4,7 @@ import * as path from "path";
 import Handlebars from "handlebars";
 import { Order } from "../../orders/entities/order.entity";
 import { MoneyUtil } from "../../../common/utils/money.util";
+import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
 
 export interface TemplateData {
   // Company info
@@ -311,7 +312,7 @@ export class TemplateService {
     },
     hasCustomLogo: boolean = false,
     logoPath?: string,
-    receiptTitle: string = "Invoice",
+    receiptTitle?: string,
     language: string = "en",
     footerTitle?: string,
     footerSubtitle?: string,
@@ -340,7 +341,10 @@ export class TemplateService {
       companyTagline: companyInfo.companyTagline,
       hasCustomLogo,
       logoPath,
-      receiptTitle,
+      receiptTitle:
+        receiptTitle ||
+        DEFAULT_RECEIPT_TITLE[language] ||
+        DEFAULT_RECEIPT_TITLE.en,
       receiptNumber,
       orderDate: new Date(order.created_at).toLocaleString(locale),
       generatedAt: new Date().toLocaleString(locale),

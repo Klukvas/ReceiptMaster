@@ -44,8 +44,8 @@ export class UserSettings {
   @Column({ nullable: true })
   companyTagline: string;
 
-  @Column({ default: "Invoice" })
-  receiptTitle: string;
+  @Column({ nullable: true })
+  receiptTitle: string | null;
 
   @Column({ default: "en" })
   templateLanguage: string;

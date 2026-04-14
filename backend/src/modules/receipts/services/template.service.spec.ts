@@ -113,6 +113,34 @@ describe("TemplateService", () => {
       expect(result.receiptTitle).toBe("Накладна");
     });
 
+    it("should use Ukrainian default title when language is uk and no custom title", () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        "2025-000001",
+        mockCompanyInfo,
+        false,
+        undefined,
+        undefined,
+        "uk",
+      );
+
+      expect(result.receiptTitle).toBe("Інвойс");
+    });
+
+    it("should use Russian default title when language is ru and no custom title", () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        "2025-000001",
+        mockCompanyInfo,
+        false,
+        undefined,
+        undefined,
+        "ru",
+      );
+
+      expect(result.receiptTitle).toBe("Инвойс");
+    });
+
     it("should handle footer customization", () => {
       const result = service.prepareTemplateData(
         mockOrder,

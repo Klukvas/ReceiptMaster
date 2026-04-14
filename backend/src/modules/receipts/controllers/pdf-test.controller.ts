@@ -14,6 +14,7 @@ import { Response } from "express";
 import { TemplateService, ReceiptTemplate } from "../services/template.service";
 import { PlaywrightPdfGenerator } from "../services/playwright-pdf-generator.service";
 import { JwtAuthGuard } from "../../users/guards/jwt-auth.guard";
+import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
 
 const VALID_TEMPLATES = new Set(Object.values(ReceiptTemplate));
 const VALID_LANGUAGES = new Set(["en", "ru", "uk"]);
@@ -121,7 +122,7 @@ export class PdfTestController {
     return {
       companyName: "Tech Solutions LLC",
       ...logoData,
-      receiptTitle: "Invoice",
+      receiptTitle: DEFAULT_RECEIPT_TITLE[language] || DEFAULT_RECEIPT_TITLE.en,
       receiptNumber: "2025-000123",
       orderDate: new Date().toLocaleString(
         TemplateService.getLocaleForLanguage(language),

@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { UserSettings } from "../entities/user-settings.entity";
 import { CacheService } from "../../../common/services/cache.service";
+import { DEFAULT_RECEIPT_TITLE } from "../../receipts/templates/translations/defaults";
 
 const SETTINGS_CACHE_TTL = 3600; // 1 hour
 
@@ -85,7 +86,12 @@ export class SettingsService {
 
   async getReceiptTitle(userId: string): Promise<string> {
     const settings = await this.getCachedSettings(userId);
-    return settings?.receiptTitle || "Invoice";
+    const lang = settings?.templateLanguage || "en";
+    return (
+      settings?.receiptTitle ||
+      DEFAULT_RECEIPT_TITLE[lang] ||
+      DEFAULT_RECEIPT_TITLE.en
+    );
   }
 
   async setReceiptTitle(userId: string, title: string): Promise<void> {
@@ -258,10 +264,14 @@ export class SettingsService {
     deliveryTerms: string;
   }> {
     const settings = await this.getCachedSettings(userId);
+    const lang = settings?.templateLanguage || "en";
     return {
-      receiptTitle: settings?.receiptTitle || "Invoice",
+      receiptTitle:
+        settings?.receiptTitle ||
+        DEFAULT_RECEIPT_TITLE[lang] ||
+        DEFAULT_RECEIPT_TITLE.en,
       templateId: settings?.templateId || "standard",
-      templateLanguage: settings?.templateLanguage || "en",
+      templateLanguage: lang,
       footerTitle: settings?.footerText || "",
       footerSubtitle: settings?.subFooterText || "",
       primaryColor: settings?.primaryColor || "",
@@ -296,6 +306,7 @@ export class SettingsService {
     deliveryTerms?: string;
   }> {
     const settings = await this.getCachedSettings(userId);
+    const lang = settings?.templateLanguage || "en";
 
     return {
       companyInfo: {
@@ -310,8 +321,11 @@ export class SettingsService {
         companyTagline: settings?.companyTagline || undefined,
       },
       templateId: settings?.templateId || "standard",
-      receiptTitle: settings?.receiptTitle || "Invoice",
-      templateLanguage: settings?.templateLanguage || "en",
+      receiptTitle:
+        settings?.receiptTitle ||
+        DEFAULT_RECEIPT_TITLE[lang] ||
+        DEFAULT_RECEIPT_TITLE.en,
+      templateLanguage: lang,
       footerTitle: settings?.footerText || undefined,
       footerSubtitle: settings?.subFooterText || undefined,
       primaryColor: settings?.primaryColor || undefined,

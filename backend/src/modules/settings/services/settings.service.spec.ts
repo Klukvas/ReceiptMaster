@@ -12,7 +12,7 @@ describe("SettingsService", () => {
     id: "settings-1",
     userId: "user-1",
     templateId: "modern",
-    receiptTitle: "Invoice",
+    receiptTitle: null,
     templateLanguage: "en",
     footerText: "Thank you",
     subFooterText: "Visit again",
@@ -124,14 +124,57 @@ describe("SettingsService", () => {
   });
 
   describe("getReceiptTitle / setReceiptTitle", () => {
-    it("should return receipt title", async () => {
-      settingsRepo.findOne.mockResolvedValue(mockSettings);
+    it("should return custom receipt title when set", async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: "Custom Title",
+      });
+
+      expect(await service.getReceiptTitle("user-1")).toBe("Custom Title");
+    });
+
+    it('should default to "Invoice" when no settings exist', async () => {
+      settingsRepo.findOne.mockResolvedValue(null);
 
       expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
     });
 
-    it('should default to "Invoice"', async () => {
-      settingsRepo.findOne.mockResolvedValue(null);
+    it('should default to "Invoice" when receiptTitle is null and language is en', async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "en",
+      });
+
+      expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
+    });
+
+    it('should default to "Інвойс" when receiptTitle is null and language is uk', async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "uk",
+      });
+
+      expect(await service.getReceiptTitle("user-1")).toBe("Інвойс");
+    });
+
+    it('should default to "Инвойс" when receiptTitle is null and language is ru', async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "ru",
+      });
+
+      expect(await service.getReceiptTitle("user-1")).toBe("Инвойс");
+    });
+
+    it("should fallback to English default for unknown language", async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "fr",
+      });
 
       expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
     });
@@ -383,13 +426,16 @@ describe("SettingsService", () => {
   });
 
   describe("getAllPdfSettings", () => {
-    it("should return all PDF-related settings", async () => {
-      settingsRepo.findOne.mockResolvedValue(mockSettings);
+    it("should return all PDF-related settings with custom title", async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: "My Invoice",
+      });
 
       const result = await service.getAllPdfSettings("user-1");
 
       expect(result.templateId).toBe("modern");
-      expect(result.receiptTitle).toBe("Invoice");
+      expect(result.receiptTitle).toBe("My Invoice");
       expect(result.templateLanguage).toBe("en");
       expect(result.footerTitle).toBe("Thank you");
       expect(result.companyInfo.companyName).toBe("ACME Corp");
@@ -404,6 +450,32 @@ describe("SettingsService", () => {
       expect(result.receiptTitle).toBe("Invoice");
       expect(result.templateLanguage).toBe("en");
       expect(result.companyInfo.companyName).toBe("");
+    });
+
+    it("should return Ukrainian default title when language is uk and no custom title", async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "uk",
+      });
+
+      const result = await service.getAllPdfSettings("user-1");
+
+      expect(result.receiptTitle).toBe("Інвойс");
+      expect(result.templateLanguage).toBe("uk");
+    });
+
+    it("should return Russian default title when language is ru and no custom title", async () => {
+      settingsRepo.findOne.mockResolvedValue({
+        ...mockSettings,
+        receiptTitle: null,
+        templateLanguage: "ru",
+      });
+
+      const result = await service.getAllPdfSettings("user-1");
+
+      expect(result.receiptTitle).toBe("Инвойс");
+      expect(result.templateLanguage).toBe("ru");
     });
   });
 });
