@@ -25,7 +25,7 @@ export const SidebarItem = ({
         to={href}
         onClick={onClick}
         className={clsx(
-          "flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative",
+          "flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative motion-safe:active:scale-[0.98]",
           isCollapsed ? "justify-center mx-1 px-0 py-2.5" : "mx-2 px-3 py-2.5",
           isActive
             ? "bg-primary-500/10 text-primary-600"

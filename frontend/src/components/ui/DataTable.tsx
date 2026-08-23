@@ -328,7 +328,7 @@ export function DataTable<T>({
  border-b border-[var(--color-border-light)] last:border-0
  transition-colors duration-150
  hover:bg-surface-alt
- ${onRowClick ?"cursor-pointer" :""}
+ ${onRowClick ?"cursor-pointer active:bg-surface-alt" :""}
  ${isSelected ?"bg-[var(--color-accent-light)]" :""}
  ${getRowClass(item, index)}
  `}

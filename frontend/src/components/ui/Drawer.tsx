@@ -1,6 +1,11 @@
 import { type ReactNode, useEffect } from "react";
 import { X } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type PanInfo,
+} from "motion/react";
 
 interface DrawerProps {
   open: boolean;
@@ -8,6 +13,15 @@ interface DrawerProps {
   title?: string;
   children: ReactNode;
 }
+
+// Apple "Designing Fluid Interfaces" momentum projection: where a flick lands,
+// using exponential scroll-style decay rather than the physics-textbook form.
+const projectMomentum = (velocity: number, decelerationRate = 0.998) =>
+  ((velocity / 1000) * decelerationRate) / (1 - decelerationRate);
+
+// Dismiss once the *projected* rightward travel passes this — so a quick flick
+// throws the panel closed even from a small drag (§6).
+const DISMISS_PROJECTION_PX = 160;
 
 export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
   const reduceMotion = useReducedMotion();
@@ -21,9 +35,15 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  // Apple sheet feel: an interruptible spring (grab-and-reverse mid-flight),
-  // entering and exiting along the same path (§7). Under reduced motion it
-  // degrades to a plain cross-fade with no slide or overshoot (§14).
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    // Project the resting point from release velocity (§5/§6). Past the
+    // threshold we dismiss; otherwise the drag constraints spring it home.
+    const projected = info.offset.x + projectMomentum(info.velocity.x);
+    if (projected > DISMISS_PROJECTION_PX) onClose();
+  };
+
+  // Interruptible spring on enter/exit, same path both ways (§7); reduced
+  // motion degrades to a plain cross-fade with no slide (§14).
   const panelMotion = reduceMotion
     ? {
         initial: { opacity: 0 },
@@ -38,13 +58,24 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
         transition: { type: "spring" as const, bounce: 0.2, duration: 0.35 },
       };
 
+  // Drag-to-dismiss only when motion is allowed. Pull right tracks ~1:1 (§2),
+  // pull left past the open position rubber-bands (§9). Constraints of 0/0 make
+  // a sub-threshold release spring back home on their own.
+  const dragProps = reduceMotion
+    ? {}
+    : {
+        drag: "x" as const,
+        dragConstraints: { left: 0, right: 0 },
+        dragElastic: { left: 0.12, right: 0.9 },
+        dragMomentum: false,
+        onDragEnd: handleDragEnd,
+        whileDrag: { cursor: "grabbing" },
+      };
+
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          key="drawer"
-          className="fixed inset-0 z-50 flex justify-end"
-        >
+        <motion.div key="drawer" className="fixed inset-0 z-50 flex justify-end">
           <motion.div
             className="absolute inset-0 bg-black/40"
             onClick={onClose}
@@ -56,6 +87,7 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
           <motion.div
             className="relative w-full max-w-md bg-elevated shadow-xl overflow-y-auto"
             {...panelMotion}
+            {...dragProps}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-elevated">
               {title && (
@@ -65,7 +97,7 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
               )}
               <button
                 onClick={onClose}
-                className="p-1 rounded-md hover:bg-surface-alt text-content-tertiary"
+                className="p-1 rounded-md hover:bg-surface-alt text-content-tertiary motion-safe:active:scale-95 transition-transform"
               >
                 <X className="h-5 w-5" />
               </button>
