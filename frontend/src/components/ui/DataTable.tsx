@@ -271,7 +271,7 @@ export function DataTable<T>({
  {col.sortable ? (
  <button
  onClick={() => onSort(col.key)}
- className="flex items-center gap-1 hover:text-content-secondary transition-colors duration-150"
+ className="flex items-center gap-1 uppercase hover:text-content-secondary transition-colors duration-150"
  >
  <span>{col.header}</span>
  {renderSortIcon(col)}
