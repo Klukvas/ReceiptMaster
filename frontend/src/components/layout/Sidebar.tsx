@@ -75,7 +75,7 @@ export const Sidebar = ({
       <aside
         className={clsx(
           "fixed top-0 bottom-0 left-0 z-50 h-screen flex flex-col",
-          "bg-elevated",
+          "bg-elevated/80 backdrop-blur-xl",
           "border-r border-[var(--color-border)]",
           "transform transition-all duration-300 ease-in-out",
           // Mobile slide

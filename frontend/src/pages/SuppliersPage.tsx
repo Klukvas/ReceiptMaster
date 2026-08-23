@@ -148,7 +148,7 @@ export const SuppliersPage = () => {
  <div className="space-y-5">
  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div>
- <h1 className="text-xl sm:text-2xl font-bold text-content">
+ <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-content">
  {t("suppliers.title")}
  </h1>
  <p className="text-sm text-content-tertiary mt-0.5">

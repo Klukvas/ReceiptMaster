@@ -133,7 +133,7 @@ export const DashboardHomePage = () => {
     <div className="space-y-8">
       {/* Welcome banner */}
       <div className="bg-gradient-to-r from-accent-base to-indigo-400 dark:to-indigo-300 rounded-lg p-6 text-white">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">
           {t("home.welcome")}, {user?.email?.split("@")[0]}!
         </h1>
         <p className="text-white/80 text-lg">{t("home.subtitle")}</p>

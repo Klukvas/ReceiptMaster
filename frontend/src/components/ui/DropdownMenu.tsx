@@ -198,7 +198,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
  {isOpen && (
  <div
  ref={dropdownRef}
- className="fixed w-48 bg-elevated rounded-md shadow-lg border border-[var(--color-border)] z-50"
+ className="fixed w-48 bg-elevated/80 backdrop-blur-xl rounded-md shadow-lg border border-[var(--color-border)] z-50"
  style={{
  top: `${position.top}px`,
  left: `${position.left}px`,

@@ -11,7 +11,7 @@ export const OrdersPageHeader = ({ onCreateOrder }: OrdersPageHeaderProps) => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-content">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-content">
           {t("orders.title")}
         </h1>
         <p className="mt-0.5 text-sm text-content-tertiary">

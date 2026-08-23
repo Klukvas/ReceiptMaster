@@ -160,7 +160,7 @@ export const RecipientsPage = () => {
  {/* Page header */}
  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
  <div>
- <h1 className="text-xl sm:text-2xl font-bold text-content">
+ <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-content">
  {t("recipients.title")}
  </h1>
  <p className="text-sm text-content-tertiary mt-0.5">

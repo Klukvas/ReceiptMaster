@@ -331,7 +331,7 @@ export const SettingsPage = () => {
             <Settings className="h-5 w-5 text-accent-base" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-content">
+            <h1 className="text-xl font-bold tracking-tight text-content">
               {t("settings.title", "Settings")}
             </h1>
             <p className="text-sm text-content-tertiary">

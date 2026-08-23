@@ -208,8 +208,8 @@ body {
 }
 
 @keyframes modal-content-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.96); filter: blur(6px); }
+  to { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
 .animate-modal-backdrop {
@@ -217,7 +217,8 @@ body {
 }
 
 .animate-modal-content {
-  animation: modal-content-in 0.2s ease-out forwards;
+  /* Materialize: blur + scale settle together on a spring-like decel curve */
+  animation: modal-content-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Line item enter animation */
@@ -950,6 +951,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .l-au { animation: none; opacity: 1; }
   .landing-fc-receipt, .landing-fc-revenue, .landing-fc-orders { animation: none; }
   .landing-page { transition: none; }
+
+  /* App chrome: drop slides/scales/overshoot and looping motion; surfaces
+     appear at rest instead of sliding or scaling in. (Apple §14) */
+  .animate-modal-backdrop,
+  .animate-modal-content,
+  .animate-line-item-in,
+  .animate-dropdown-in,
+  .animate-slide-in-right {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .receipt-pulse,
+  .animate-receipt-pulse { animation: none !important; }
+}
+
+/* Reduced transparency: drop glass blur so chrome reads solid (Apple §14) */
+@media (prefers-reduced-transparency: reduce) {
+  *, ::before, ::after { backdrop-filter: none !important; }
 }
 
 /* Responsive */
