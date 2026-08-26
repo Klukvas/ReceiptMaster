@@ -51,6 +51,15 @@ export interface PaginationParams {
   sortOrder?: "ASC" | "DESC";
 }
 
+/** Aggregate worth of everything in stock — from GET /products/stock-value. */
+export interface InventoryValue {
+  currency: string;
+  purchaseValueCents: number;
+  saleValueCents: number;
+  totalUnits: number;
+  productCount: number;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;

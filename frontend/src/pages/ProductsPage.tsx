@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Package, AlertCircle } from "lucide-react";
 import { productsApi, formatCurrency, type Product } from "../lib/api";
 import { Button } from "../components/ui/Button";
@@ -111,6 +111,13 @@ export const ProductsPage = () => {
     defaultSortBy: "created_at",
     defaultSortOrder: "DESC",
     storageKeyPrefix: "products",
+  });
+
+  // Total worth of everything in stock (cost & retail). Keyed under "products"
+  // so any product create/update/delete invalidation refreshes it too.
+  const { data: stockValue } = useQuery({
+    queryKey: ["products", "stock-value"],
+    queryFn: async () => (await productsApi.getStockValue()).data,
   });
 
   const deleteMutation = useMutation({
@@ -260,6 +267,39 @@ export const ProductsPage = () => {
           {t("products.createProduct")}
         </Button>
       </div>
+
+      {/* Inventory value — how much money is sitting in stock */}
+      {stockValue && stockValue.productCount > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+            <div className="text-xs font-medium text-content-tertiary">
+              {t("products.stockValueCost", "Stock value (cost)")}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-content tabular-nums">
+              {formatCurrency(
+                stockValue.purchaseValueCents,
+                stockValue.currency,
+              )}
+            </div>
+          </div>
+          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+            <div className="text-xs font-medium text-content-tertiary">
+              {t("products.stockValueRetail", "Stock value (retail)")}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-content tabular-nums">
+              {formatCurrency(stockValue.saleValueCents, stockValue.currency)}
+            </div>
+          </div>
+          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+            <div className="text-xs font-medium text-content-tertiary">
+              {t("products.stockUnits", "Units in stock")}
+            </div>
+            <div className="mt-1 text-xl font-semibold text-content tabular-nums">
+              {stockValue.totalUnits}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Empty state */}
       {isEmptyState ? (

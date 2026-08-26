@@ -194,45 +194,6 @@
             font-size: 20.8px;
             color: white;
         }
-
-        .footer {
-            margin-top: 23px;
-            text-align: center;
-            font-size: 10.4px;
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 12px;
-        }
-
-        .footer-title {
-            margin-bottom: 6px;
-            font-size: 11.9px;
-            font-weight: bold;
-        }
-
-        .footer-text {
-            margin-bottom: 3px;
-            font-size: 10.4px;
-        }
-
-        .footer-timestamp {
-            font-size: 8.9px;
-        }
-
-        .footer-company-info {
-            margin-top: 9px;
-            padding-top: 9px;
-            border-top: 1px solid #ddd;
-            font-size: 8.9px;
-        }
-
-        .footer-company-info:empty {
-            display: none;
-        }
-
-        .footer-company-info div {
-            margin-bottom: 2px;
-        }
     </style>
 </head>
 <body>
@@ -320,46 +281,6 @@
                 <span class="total-label">{{#if translations.grandTotal}}{{translations.grandTotal}}{{else}}Total{{/if}}</span>
                 <span class="total-value">{{total}}</span>
             </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            {{#if footerTitle}}
-            <div class="footer-title">{{footerTitle}}</div>
-            {{else}}
-            <div class="footer-title">{{#if translations.thankYou}}{{translations.thankYou}}{{else}}Thank you for your purchase!{{/if}}</div>
-            {{/if}}
-            {{#if footerSubtitle}}
-            <div class="footer-text">{{footerSubtitle}}</div>
-            {{else}}
-            <div class="footer-text">{{#if translations.footerMessage}}{{translations.footerMessage}}{{else}}If you have any questions, please contact us.{{/if}}</div>
-            {{/if}}
-
-            <div class="footer-company-info">
-                {{#if companyAddress}}
-                <div>{{companyAddress}}</div>
-                {{/if}}
-                {{#if companyEmail}}
-                <div>{{companyEmail}}</div>
-                {{/if}}
-                {{#if companyPhone}}
-                <div>{{companyPhone}}</div>
-                {{/if}}
-                {{#if companyWebsite}}
-                <div>{{companyWebsite}}</div>
-                {{/if}}
-                {{#if companyTaxId}}
-                <div>{{#if translations.taxId}}{{translations.taxId}}: {{else}}Tax ID: {{/if}}{{companyTaxId}}</div>
-                {{/if}}
-                {{#if companyIban}}
-                <div>{{#if translations.iban}}{{translations.iban}}: {{else}}IBAN: {{/if}}{{companyIban}}</div>
-                {{/if}}
-                {{#if companySwift}}
-                <div>{{#if translations.swift}}{{translations.swift}}: {{else}}SWIFT: {{/if}}{{companySwift}}</div>
-                {{/if}}
-            </div>
-
-            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}} {{generatedAt}}{{else}}Receipt generated: {{generatedAt}}{{/if}}</div>
         </div>
     </div>
 </body>

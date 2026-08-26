@@ -17,6 +17,7 @@ export type {
   TotalTurnover,
   PaginatedResponse,
   PaginationParams,
+  InventoryValue,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
@@ -39,6 +40,7 @@ import type {
   TotalTurnover,
   PaginatedResponse,
   PaginationParams,
+  InventoryValue,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
@@ -198,6 +200,8 @@ export const productsApi = {
 
   getLowStock: (threshold?: number) =>
     api.get<Product[]>(`/products/low-stock`, { params: { threshold } }),
+
+  getStockValue: () => api.get<InventoryValue>(`/products/stock-value`),
 
   bulkDelete: (ids: string[]) =>
     api.delete<{ deleted: number; skipped: string[] }>("/products/bulk", {

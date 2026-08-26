@@ -2,9 +2,10 @@ import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Product } from "./entities/product.entity";
+import { Product, Currency } from "./entities/product.entity";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
+import { InventoryValueDto } from "./dto/inventory-value.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
@@ -115,6 +116,41 @@ export class ProductsService {
     }
 
     return { deleted, skipped };
+  }
+
+  /**
+   * Total worth of everything in stock for a user — at both cost and retail
+   * price. Soft-deleted products are excluded automatically by TypeORM.
+   * All products share one currency (UAH), so a single total is returned.
+   */
+  async getInventoryValue(user: User): Promise<InventoryValueDto> {
+    const raw = await this.productsRepository
+      .createQueryBuilder("product")
+      .select(
+        "COALESCE(SUM(product.quantity * product.purchase_price_cents), 0)",
+        "purchaseValueCents",
+      )
+      .addSelect(
+        "COALESCE(SUM(product.quantity * product.sale_price_cents), 0)",
+        "saleValueCents",
+      )
+      .addSelect("COALESCE(SUM(product.quantity), 0)", "totalUnits")
+      .addSelect("COUNT(*)", "productCount")
+      .where("product.user_id = :userId", { userId: user.id })
+      .getRawOne<{
+        purchaseValueCents: string;
+        saleValueCents: string;
+        totalUnits: string;
+        productCount: string;
+      }>();
+
+    return {
+      currency: Currency.UAH,
+      purchaseValueCents: Number(raw?.purchaseValueCents ?? 0),
+      saleValueCents: Number(raw?.saleValueCents ?? 0),
+      totalUnits: Number(raw?.totalUnits ?? 0),
+      productCount: Number(raw?.productCount ?? 0),
+    };
   }
 
   async getLowStockProducts(

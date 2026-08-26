@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-08-21
+**Last Updated:** 2026-08-26
 
 **Total Endpoints:** 90 across 12 controllers. This reference covers all controllers exhaustively.
 
@@ -181,7 +181,7 @@ Changes authenticated user's password.
 
 All endpoints require JWT auth. Scoped to authenticated user.
 
-File: `backend/src/modules/products/products.controller.ts` (7 endpoints)
+File: `backend/src/modules/products/products.controller.ts` (8 endpoints)
 
 ### Create Product
 
@@ -322,6 +322,25 @@ Returns products below stock threshold.
 **Response** (200):
 ```typescript
 Product[]
+```
+
+---
+
+**GET** `/products/stock-value`
+
+Aggregate worth of everything currently in stock for the authenticated user, at
+both cost and retail price. Soft-deleted products are excluded. All products share
+one currency (UAH), so a single total is returned.
+
+**Response** (200):
+```typescript
+{
+  currency: "UAH";
+  purchaseValueCents: number; // Σ quantity × purchase_price_cents
+  saleValueCents: number;     // Σ quantity × sale_price_cents
+  totalUnits: number;         // Σ quantity
+  productCount: number;       // non-deleted products
+}
 ```
 
 ---

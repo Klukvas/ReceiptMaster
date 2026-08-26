@@ -29,8 +29,11 @@ describe("ProductsService", () => {
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[mockProduct], 1]),
       getMany: jest.fn().mockResolvedValue([mockProduct]),
+      getRawOne: jest.fn(),
     };
 
     productsRepo = {
@@ -211,6 +214,46 @@ describe("ProductsService", () => {
         "product.quantity <= :threshold",
         { threshold: 10 },
       );
+    });
+  });
+
+  describe("getInventoryValue", () => {
+    it("maps the aggregate to numbers and scopes to the user", async () => {
+      const qb = productsRepo.createQueryBuilder();
+      qb.getRawOne.mockResolvedValue({
+        purchaseValueCents: "150000",
+        saleValueCents: "250000",
+        totalUnits: "80",
+        productCount: "3",
+      });
+
+      const result = await service.getInventoryValue(mockUser);
+
+      expect(result).toEqual({
+        currency: "UAH",
+        purchaseValueCents: 150000,
+        saleValueCents: 250000,
+        totalUnits: 80,
+        productCount: 3,
+      });
+      expect(qb.where).toHaveBeenCalledWith("product.user_id = :userId", {
+        userId: mockUser.id,
+      });
+    });
+
+    it("returns zeros when the user has no products", async () => {
+      const qb = productsRepo.createQueryBuilder();
+      qb.getRawOne.mockResolvedValue(undefined);
+
+      const result = await service.getInventoryValue(mockUser);
+
+      expect(result).toEqual({
+        currency: "UAH",
+        purchaseValueCents: 0,
+        saleValueCents: 0,
+        totalUnits: 0,
+        productCount: 0,
+      });
     });
   });
 });

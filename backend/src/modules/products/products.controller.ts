@@ -25,6 +25,7 @@ import { PaginatedProductResponse } from "../../common/dto/paginated-response.dt
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { Product } from "./entities/product.entity";
+import { InventoryValueDto } from "./dto/inventory-value.dto";
 
 @ApiTags("products")
 @ApiBearerAuth("bearer")
@@ -89,6 +90,17 @@ export class ProductsController {
         : 10,
       Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 50,
     );
+  }
+
+  @Get("stock-value")
+  @ApiOperation({ summary: "Get total inventory value (cost & retail)" })
+  @ApiResponse({
+    status: 200,
+    description: "Aggregate stock value",
+    type: InventoryValueDto,
+  })
+  getStockValue(@Request() req: { user: User }) {
+    return this.productsService.getInventoryValue(req.user);
   }
 
   @Get(":id")
