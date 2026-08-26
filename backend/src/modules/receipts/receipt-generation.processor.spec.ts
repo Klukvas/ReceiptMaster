@@ -258,9 +258,9 @@ describe("ReceiptGenerationProcessor", () => {
 
       pdfStorageService.parseObjectStoragePath.mockReturnValue(null);
 
+      // process() rethrows so BullMQ can retry; the receipt is only marked
+      // failed once retries are exhausted (see the onFailed tests).
       await expect(processor.process(mockJob as any)).rejects.toThrow();
-
-      expect(receiptsGateway.emitFailed).toHaveBeenCalled();
     });
 
     it("should throw on PDF generation failure", async () => {
@@ -283,8 +283,6 @@ describe("ReceiptGenerationProcessor", () => {
       await expect(processor.process(mockJob as any)).rejects.toThrow(
         "PDF gen failed",
       );
-
-      expect(receiptsGateway.emitFailed).toHaveBeenCalled();
     });
 
     it("should handle markFailed error gracefully", async () => {
@@ -303,6 +301,49 @@ describe("ReceiptGenerationProcessor", () => {
 
       // Should not throw additionally - markFailed error is swallowed
       await processor.process(mockJob as any);
+    });
+  });
+
+  describe("onFailed", () => {
+    const jobData = {
+      receiptId: "receipt-1",
+      orderId: "order-1",
+      userId: "user-1",
+    } as ReceiptGenerationJobData;
+
+    it("marks the receipt FAILED once retries are exhausted", async () => {
+      const job = {
+        data: jobData,
+        opts: { attempts: 3 },
+        attemptsMade: 3,
+      };
+
+      await processor.onFailed(job as any, new Error("S3 unavailable"));
+
+      expect(receiptsRepository.update).toHaveBeenCalledWith(
+        { id: "receipt-1", status: ReceiptStatus.PROCESSING },
+        expect.objectContaining({
+          status: ReceiptStatus.FAILED,
+          error_message: "S3 unavailable",
+        }),
+      );
+      expect(receiptsGateway.emitFailed).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ receiptId: "receipt-1" }),
+      );
+    });
+
+    it("leaves the receipt PROCESSING while retries remain", async () => {
+      const job = {
+        data: jobData,
+        opts: { attempts: 3 },
+        attemptsMade: 1,
+      };
+
+      await processor.onFailed(job as any, new Error("transient"));
+
+      expect(receiptsRepository.update).not.toHaveBeenCalled();
+      expect(receiptsGateway.emitFailed).not.toHaveBeenCalled();
     });
   });
 

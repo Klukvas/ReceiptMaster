@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Processor, WorkerHost, OnWorkerEvent } from "@nestjs/bullmq";
 import { Logger } from "@nestjs/common";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
@@ -214,13 +214,42 @@ export class ReceiptGenerationProcessor extends WorkerHost {
         `Receipt ${receipt.number} generated successfully. Order ${orderId} locked.`,
       );
     } catch (error) {
+      // Log and rethrow so BullMQ retries. The receipt is only marked FAILED
+      // once every attempt is exhausted — see onFailed() — so retries keep the
+      // receipt in PROCESSING instead of prematurely flipping its status.
       this.logger.error(
-        `Failed to generate receipt ${receiptId}: ${error.message}`,
+        `Receipt ${receiptId} generation attempt ${(job.attemptsMade ?? 0) + 1}/${
+          job.opts?.attempts ?? 1
+        } failed: ${error.message}`,
         error.stack,
       );
-      await this.markFailed(receiptId, orderId, userId, error.message);
-      throw error; // Let BullMQ handle retry logic
+      throw error;
     }
+  }
+
+  @OnWorkerEvent("failed")
+  async onFailed(
+    job: Job<ReceiptGenerationJobData>,
+    error: Error,
+  ): Promise<void> {
+    if (!job) return;
+
+    const attempts = job.opts.attempts ?? 1;
+    // Fires after every failed attempt; only act once retries are exhausted.
+    if (job.attemptsMade < attempts) {
+      return;
+    }
+
+    const { receiptId, orderId, userId } = job.data;
+    this.logger.error(
+      `Receipt ${receiptId} permanently failed after ${job.attemptsMade} attempts: ${error?.message}`,
+    );
+    await this.markFailed(
+      receiptId,
+      orderId,
+      userId,
+      error?.message ?? "Receipt generation failed",
+    );
   }
 
   private async markFailed(
@@ -232,7 +261,7 @@ export class ReceiptGenerationProcessor extends WorkerHost {
     try {
       await this.receiptsRepository.update(
         { id: receiptId, status: ReceiptStatus.PROCESSING },
-        { error_message: errorMessage },
+        { status: ReceiptStatus.FAILED, error_message: errorMessage },
       );
       this.receiptsGateway.emitFailed(userId, {
         receiptId,

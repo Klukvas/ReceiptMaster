@@ -15,6 +15,7 @@ export enum ReceiptStatus {
   PROCESSING = "processing",
   GENERATED = "generated",
   VOID = "void",
+  FAILED = "failed",
 }
 
 @Entity("receipts")

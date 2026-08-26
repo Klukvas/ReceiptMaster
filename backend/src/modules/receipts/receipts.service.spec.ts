@@ -236,10 +236,11 @@ describe("ReceiptsService", () => {
       ).rejects.toThrow(ApiErrorResponse);
     });
 
-    it("should return existing receipt if already processing", async () => {
+    it("should return existing receipt if genuinely still processing", async () => {
       const processingReceipt = {
         ...mockReceipt,
         status: ReceiptStatus.PROCESSING,
+        created_at: new Date(), // fresh — not stale
       };
 
       dataSource.transaction.mockImplementation(async (cb: any) => {
@@ -255,6 +256,84 @@ describe("ReceiptsService", () => {
       const result = await service.generateReceipt("order-1", mockUser);
 
       expect(result).toEqual(processingReceipt);
+      // A genuinely in-progress receipt must NOT spawn a duplicate job
+      expect(receiptQueue.add).not.toHaveBeenCalled();
+    });
+
+    it("should re-queue generation for a previously FAILED receipt", async () => {
+      const failedReceipt = {
+        ...mockReceipt,
+        status: ReceiptStatus.FAILED,
+        error_message: "Service is unable to handle request.",
+        created_at: new Date(),
+      };
+      const managerUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      dataSource.transaction.mockImplementation(async (cb: any) => {
+        const manager = {
+          findOne: jest
+            .fn()
+            .mockResolvedValueOnce(mockOrder)
+            .mockResolvedValueOnce(failedReceipt),
+          update: managerUpdate,
+          findOneOrFail: jest.fn().mockResolvedValue({
+            ...failedReceipt,
+            status: ReceiptStatus.PROCESSING,
+            progress: 0,
+          }),
+        };
+        return cb(manager);
+      });
+
+      const result = await service.generateReceipt("order-1", mockUser);
+
+      // Row is reset to PROCESSING (reused, since order_id is unique)
+      expect(managerUpdate).toHaveBeenCalledWith(
+        Receipt,
+        failedReceipt.id,
+        expect.objectContaining({
+          status: ReceiptStatus.PROCESSING,
+          progress: 0,
+        }),
+      );
+      // And a fresh job is enqueued for the same receipt
+      expect(receiptQueue.add).toHaveBeenCalledWith(
+        "generate",
+        expect.objectContaining({
+          receiptId: failedReceipt.id,
+          orderId: "order-1",
+        }),
+        expect.any(Object),
+      );
+      expect(result.status).toBe(ReceiptStatus.PROCESSING);
+    });
+
+    it("should re-queue a stuck PROCESSING receipt that is stale", async () => {
+      const staleProcessing = {
+        ...mockReceipt,
+        status: ReceiptStatus.PROCESSING,
+        created_at: new Date(Date.now() - 60 * 60 * 1000), // 1h old → stale
+      };
+      const managerUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      dataSource.transaction.mockImplementation(async (cb: any) => {
+        const manager = {
+          findOne: jest
+            .fn()
+            .mockResolvedValueOnce(mockOrder)
+            .mockResolvedValueOnce(staleProcessing),
+          update: managerUpdate,
+          findOneOrFail: jest
+            .fn()
+            .mockResolvedValue({ ...staleProcessing, progress: 0 }),
+        };
+        return cb(manager);
+      });
+
+      await service.generateReceipt("order-1", mockUser);
+
+      expect(managerUpdate).toHaveBeenCalled();
+      expect(receiptQueue.add).toHaveBeenCalled();
     });
 
     it("should throw if receipt already exists (generated)", async () => {

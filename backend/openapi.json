@@ -3539,7 +3539,8 @@
             "enum": [
               "processing",
               "generated",
-              "void"
+              "void",
+              "failed"
             ]
           },
           "html_snapshot": {

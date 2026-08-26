@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-08-21
+**Last Updated:** 2026-08-26
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -95,7 +95,9 @@ File: `backend/src/modules/orders/orders.service.ts::cancel()`
 
 ### 2. Receipt & Invoice PDF Generation
 
-**States:** PENDING → GENERATING → GENERATED (or FAILED)
+**Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
+receipt can later be `VOID`. There is at most **one receipt row per order** (unique
+`order_id`), so a retry reuses the same row rather than inserting a new one.
 
 File: `backend/src/modules/receipts/entities/receipt.entity.ts`
 
@@ -103,13 +105,18 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
 
 **High-Level Process:**
 
-1. **Create Receipt Record** (PENDING)
+1. **Create / reuse Receipt Record** (`PROCESSING`)
    - Check: order is CONFIRMED
-   - Check: no existing receipt for this order
-   - Create Receipt with `status: PENDING`, `progress: 0`
+   - If a receipt already exists for the order:
+     - `GENERATED` → reject (`RECEIPT_ALREADY_EXISTS`)
+     - `PROCESSING` and still fresh → return it as-is (no duplicate job)
+     - `FAILED`, or a `PROCESSING` receipt older than `STALE_PROCESSING_MS`
+       (worker died mid-job) → **retry**: reset the row to `PROCESSING`/`progress: 0`,
+       clear `error_message`, re-enqueue
+   - Otherwise create a new Receipt with `status: PROCESSING`, `progress: 0`
    - File: `backend/src/modules/receipts/receipts.service.ts::generateReceipt()`
 
-2. **Enqueue Job** (async, BullMQ)
+2. **Enqueue Job** (async, BullMQ — `attempts: 3`, exponential backoff)
    - Add job to `receipt-generation` queue
    - Return receipt record immediately to user
    - File: `backend/src/modules/receipts/receipts.service.ts` (calls queue)
@@ -119,15 +126,24 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
    - Load user settings (logo, language, receipt template)
    - Select template based on `receipt_template_id` (from UserSettings)
    - Render HTML from template
-   - Convert HTML → PDF via headless browser (Puppeteer or similar)
-   - Upload PDF to S3
-   - Update Receipt: `status: GENERATED`, `pdf_url: s3_url`, `progress: 100`
-   - Emit WebSocket progress update to connected client
+   - Convert HTML → PDF via headless Chromium (**Playwright**)
+   - Upload PDF to S3 (Hetzner Object Storage)
+   - Update Receipt: `status: GENERATED`, `pdf_url: s3_url`, `progress: 100`; lock the order
+   - Emit WebSocket completion event
    - File: `backend/src/modules/receipts/receipt-generation.processor.ts`
 
-4. **Emit Progress** (WebSocket)
-   - On job start, progress update, and completion
-   - Client subscribes to receipt generation events: `receipts/progress/:userId`
+4. **Failure handling** (important)
+   - A failed attempt is rethrown so BullMQ retries (transient S3 `ServiceUnavailable`
+     is the classic cause). The receipt stays `PROCESSING` across retries.
+   - Only once **all attempts are exhausted** does `onFailed()` set `status: FAILED`
+     with `error_message` and emit `receipt.failed`. This prevents a receipt from
+     sitting in `PROCESSING` forever after a transient outage.
+   - The user can then retry from the UI (Retry button on the failure toast, or the
+     normal "generate" action), which re-runs step 1's retry path.
+
+5. **Emit Progress** (WebSocket)
+   - On job start, each stage, and completion/failure
+   - Events: `receipt.progress`, `receipt.completed`, `receipt.failed` (room `user:<id>`)
    - File: `backend/src/modules/receipts/receipts.gateway.ts`
 
 **Receipt Templates:**

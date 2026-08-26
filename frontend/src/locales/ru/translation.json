@@ -405,6 +405,7 @@
     "generatingReceipt": "Генерация чека...",
     "receiptReady": "Чек готов",
     "receiptFailed": "Ошибка генерации чека",
+    "retryGeneration": "Повторить",
     "downloadReceipt": "Скачать чек",
     "stageLoadingOrder": "Загрузка данных заказа...",
     "stageLoadingSettings": "Загрузка настроек...",

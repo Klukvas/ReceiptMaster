@@ -33,6 +33,8 @@ const SAFE_PRINTER_NAME = /^[a-zA-Z0-9_\-. ]+$/;
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
   private readonly MAX_RECEIPTS = 10;
+  /** A PROCESSING receipt older than this is treated as stuck and may be retried. */
+  private readonly STALE_PROCESSING_MS = 5 * 60 * 1000;
   private receiptFunctionEnsuredPromise: Promise<void> | null = null;
 
   constructor(
@@ -90,6 +92,16 @@ export class ReceiptsService {
     }
   }
 
+  /**
+   * A receipt is "stale" when it has sat in PROCESSING longer than a generation
+   * job could realistically take (retries + backoff). Such a receipt means the
+   * worker died mid-job, so a retry is safe rather than a duplicate.
+   */
+  private isReceiptStale(receipt: Receipt): boolean {
+    const startedAt = receipt.created_at?.getTime() ?? 0;
+    return Date.now() - startedAt > this.STALE_PROCESSING_MS;
+  }
+
   async generateReceipt(orderId: string, user: User): Promise<Receipt> {
     let s3PathsToDelete: Array<{ bucket: string; key: string }> = [];
 
@@ -108,19 +120,54 @@ export class ReceiptsService {
         throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       }
 
-      // Проверяем, что чек еще не создан (generated or already processing)
+      // A receipt already exists for this order (order_id is unique). Decide
+      // whether to block, return the in-progress one, or retry a stuck/failed one.
       const existingReceipt = await manager.findOne(Receipt, {
         where: [
           { order_id: orderId, status: ReceiptStatus.GENERATED },
           { order_id: orderId, status: ReceiptStatus.PROCESSING },
+          { order_id: orderId, status: ReceiptStatus.FAILED },
         ],
       });
       if (existingReceipt) {
-        if (existingReceipt.status === ReceiptStatus.PROCESSING) {
-          // Already being generated, return the in-progress receipt
+        if (existingReceipt.status === ReceiptStatus.GENERATED) {
+          throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
+        }
+
+        // Genuinely in progress — return it without enqueuing a duplicate job.
+        if (
+          existingReceipt.status === ReceiptStatus.PROCESSING &&
+          !this.isReceiptStale(existingReceipt)
+        ) {
           return existingReceipt;
         }
-        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
+
+        // FAILED, or a PROCESSING receipt whose worker died mid-job: retry on the
+        // SAME row (order_id is unique, so we can't insert a fresh receipt here).
+        await manager.update(Receipt, existingReceipt.id, {
+          status: ReceiptStatus.PROCESSING,
+          progress: 0,
+          error_message: () => "NULL",
+        });
+
+        await this.receiptQueue.add(
+          "generate",
+          { receiptId: existingReceipt.id, orderId, userId: user.id },
+          {
+            attempts: 3,
+            backoff: { type: "exponential", delay: 5000 },
+            removeOnComplete: 100,
+            removeOnFail: 200,
+          },
+        );
+
+        this.logger.log(
+          `Receipt ${existingReceipt.number} re-queued for generation (order ${orderId}, was ${existingReceipt.status})`,
+        );
+
+        return await manager.findOneOrFail(Receipt, {
+          where: { id: existingReceipt.id },
+        });
       }
 
       // Очищаем старые чеки перед созданием нового (S3 paths collected, not deleted yet)

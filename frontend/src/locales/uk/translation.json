@@ -405,6 +405,7 @@
     "generatingReceipt": "Генерація квитанції...",
     "receiptReady": "Квитанція готова",
     "receiptFailed": "Помилка генерації квитанції",
+    "retryGeneration": "Повторити",
     "downloadReceipt": "Завантажити квитанцію",
     "stageLoadingOrder": "Завантаження даних замовлення...",
     "stageLoadingSettings": "Завантаження налаштувань...",

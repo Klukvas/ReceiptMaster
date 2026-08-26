@@ -406,6 +406,7 @@
     "generatingReceipt": "Generating receipt...",
     "receiptReady": "Receipt ready",
     "receiptFailed": "Receipt generation failed",
+    "retryGeneration": "Retry",
     "downloadReceipt": "Download Receipt",
     "stageLoadingOrder": "Loading order data...",
     "stageLoadingSettings": "Loading settings...",
