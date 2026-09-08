@@ -13,11 +13,10 @@ RUN npm install -g yarn && \
 # Copy package files
 COPY package.json ./
 
-# Install dependencies (without lockfile requirement)
+# Install dependencies (without lockfile requirement).
+# This includes the @nestjs/cli devDependency, so `yarn build` below resolves
+# `nest` from node_modules/.bin -- no global CLI install needed.
 RUN yarn install
-
-# Install Nest CLI globally
-RUN yarn global add @nestjs/cli
 
 # Copy source code
 COPY . .
