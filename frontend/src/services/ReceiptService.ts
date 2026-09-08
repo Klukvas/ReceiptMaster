@@ -1,4 +1,4 @@
-import { receiptsApi } from "../lib/api";
+import { receiptsApi, type Receipt } from "../lib/api";
 import { notificationService } from "./NotificationService";
 import { parseApiError } from "../lib/api-errors";
 import { downloadPdf } from "../lib/pdf-utils";
@@ -26,6 +26,24 @@ export class ReceiptService {
 
   getAvailablePrinters(): string[] {
     return [...this.availablePrinters];
+  }
+
+  /**
+   * Current server-side state of a receipt.
+   *
+   * Used to resolve a progress card whose completion event never arrived, so a
+   * lookup failure is not user-facing: it is logged and the caller keeps
+   * showing progress and retries on the next tick.
+   */
+  async fetchReceipt(receiptId: string): Promise<Receipt | null> {
+    try {
+      const response = await receiptsApi.getById(receiptId);
+      return response.data;
+    } catch (error) {
+      const apiError = parseApiError(error);
+      console.error(`Error loading receipt ${receiptId}:`, apiError);
+      return null;
+    }
   }
 
   async downloadReceipt(receiptId: string): Promise<void> {

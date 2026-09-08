@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-08-21  
+**Last Updated:** 2026-09-08
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -11,6 +11,7 @@ Root: `/Users/andreypavlenko/Desktop/Projects/b2c/market`
 
 ```
 frontend/
+├── e2e/                      # Browser regression suite — see frontend/e2e/README.md
 ├── src/
 │   ├── main.tsx              # App entry point (initializes React 19, loads i18n)
 │   ├── App.tsx               # Provider setup + routing (React Router 7.8)
@@ -343,8 +344,11 @@ useReceiptSocket({
 })
 ```
 
-**Connection** (lines 43–54):
-- URL: `VITE_WS_URL` env var (defaults to `http://localhost:3000`)
+**Connection:**
+- URL: `resolveSocketUrl(VITE_WS_URL, VITE_API_URL, window.location.origin)` —
+  `VITE_WS_URL` wins if set; otherwise an absolute `VITE_API_URL` supplies the origin
+  and a relative one (the proxied production setup) means the page origin. Deployments
+  only ever configure `VITE_API_URL`, so never reintroduce a hard-coded default here.
 - Auth: passes access token in socket handshake
 - Transports: websocket primary, falls back to HTTP long-polling
 - Reconnect: 10 attempts, exponential backoff (1s → 10s)
@@ -355,6 +359,17 @@ useReceiptSocket({
 - `receipt.failed` — error state, also invalidates queries
 
 **Used by** OrdersPage (via ReceiptProgressPanel component) to show real-time status.
+
+**The socket is an accelerator, not the source of truth.** Nothing may depend on an
+event actually arriving — it can be blocked, dropped, or missed across a reconnect:
+
+- `ReceiptProgressPanel` runs a watchdog: a card that has heard nothing for ~8s asks
+  `GET /receipts/:id` and resolves itself from the answer (per receipt id, so a sibling
+  order that is genuinely still generating is untouched). Repeated lookup failures
+  dismiss the card rather than spinning forever.
+- `useReceiptGenerationPolling(orders)` (`hooks/useOrders.ts`, wired in `OrdersPage`)
+  re-fetches `['orders']` every 4s while any listed order has a `processing` receipt,
+  so the row's "generating" chip clears from server state without a page reload.
 
 ### Billing & Checkout
 

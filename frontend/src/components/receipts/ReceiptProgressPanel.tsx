@@ -1,4 +1,11 @@
-import { useState, useCallback } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   Check,
   X,
@@ -25,6 +32,14 @@ interface ReceiptProgress {
   status: "processing" | "completed" | "failed";
   receiptNumber?: string;
   error?: string;
+  /** When this card last heard anything about its receipt. */
+  updatedAt: number;
+  /**
+   * Bumped whenever an event changes what the card shows. A retry reuses the
+   * receipt id, so the id alone cannot tell one attempt from the next: work
+   * scheduled against an older revision must not act on the newer card.
+   */
+  revision: number;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -36,68 +51,263 @@ const STAGE_LABELS: Record<string, string> = {
   completed: "receipts.stageCompleted",
 };
 
+const COMPLETED_DISMISS_MS = 5000;
+// A failure is actionable (Retry) and the user needs time to read the error.
+const FAILED_DISMISS_MS = 20000;
+// Silence longer than this means an event was probably lost — go ask the server.
+const STALE_AFTER_MS = 8000;
+const WATCHDOG_INTERVAL_MS = 2000;
+// Give up on a card we cannot get an answer about rather than spinning forever.
+const MAX_LOOKUP_FAILURES = 3;
+
+type ReceiptMap = Map<string, ReceiptProgress>;
+
+type MarkCompleted = (
+  receiptId: string,
+  orderId: string,
+  receiptNumber?: string,
+) => void;
+type MarkFailed = (receiptId: string, orderId: string, error: string) => void;
+
+/**
+ * Resolves cards that stopped hearing from the socket.
+ *
+ * `receipt.completed` is the only thing that ends a card's spinner, so a lost or
+ * undelivered event used to leave it generating until the page was reloaded.
+ * Once a card has been silent for a while this asks the API what actually
+ * happened — per receipt id, so a sibling order that really is still generating
+ * is never touched.
+ */
+const useStaleReceiptWatchdog = (
+  receipts: ReceiptMap,
+  markCompleted: MarkCompleted,
+  markFailed: MarkFailed,
+  setReceipts: Dispatch<SetStateAction<ReceiptMap>>,
+) => {
+  const receiptsRef = useRef(receipts);
+  receiptsRef.current = receipts;
+  const pending = useRef<Set<string>>(new Set());
+  const lookupFailures = useRef<Map<string, number>>(new Map());
+
+  const isAnyProcessing = Array.from(receipts.values()).some(
+    (receipt) => receipt.status === "processing",
+  );
+
+  // A failure tally only describes the attempt that produced it. Once a card
+  // stops processing — finished, dismissed, or retried — the tally must not
+  // carry over into whatever comes next under the same receipt id.
+  useEffect(() => {
+    for (const receiptId of lookupFailures.current.keys()) {
+      if (receipts.get(receiptId)?.status !== "processing") {
+        lookupFailures.current.delete(receiptId);
+      }
+    }
+  }, [receipts]);
+
+  useEffect(() => {
+    if (!isAnyProcessing) return;
+
+    const touch = (receiptId: string) =>
+      setReceipts((prev) => {
+        const current = prev.get(receiptId);
+        if (!current || current.status !== "processing") return prev;
+        const next = new Map(prev);
+        next.set(receiptId, { ...current, updatedAt: Date.now() });
+        return next;
+      });
+
+    const drop = (receiptId: string) => {
+      lookupFailures.current.delete(receiptId);
+      setReceipts((prev) => {
+        if (!prev.has(receiptId)) return prev;
+        const next = new Map(prev);
+        next.delete(receiptId);
+        return next;
+      });
+    };
+
+    const reconcile = async (card: ReceiptProgress) => {
+      const receipt = await receiptService
+        .fetchReceipt(card.receiptId)
+        .finally(() => pending.current.delete(card.receiptId));
+
+      // A socket event may have landed while the request was in flight — either
+      // resolving this card or starting a fresh attempt under the same receipt
+      // id. Either way the event wins and this lookup's tally is obsolete.
+      const current = receiptsRef.current.get(card.receiptId);
+      if (
+        current?.status !== "processing" ||
+        current.revision !== card.revision
+      ) {
+        lookupFailures.current.delete(card.receiptId);
+        return;
+      }
+
+      if (!receipt) {
+        const failures = (lookupFailures.current.get(card.receiptId) ?? 0) + 1;
+        lookupFailures.current.set(card.receiptId, failures);
+        if (failures >= MAX_LOOKUP_FAILURES) drop(card.receiptId);
+        else touch(card.receiptId);
+        return;
+      }
+
+      lookupFailures.current.delete(card.receiptId);
+      if (receipt.status === "generated") {
+        markCompleted(card.receiptId, card.orderId, receipt.number);
+      } else if (receipt.status === "failed") {
+        markFailed(card.receiptId, card.orderId, receipt.error_message ?? "");
+      } else if (receipt.status === "processing") {
+        touch(card.receiptId); // genuinely still working — wait another round
+      } else {
+        drop(card.receiptId); // voided: nothing is generating any more
+      }
+    };
+
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      for (const card of receiptsRef.current.values()) {
+        if (card.status !== "processing") continue;
+        if (now - card.updatedAt < STALE_AFTER_MS) continue;
+        if (pending.current.has(card.receiptId)) continue;
+        pending.current.add(card.receiptId);
+        void reconcile(card);
+      }
+    }, WATCHDOG_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isAnyProcessing, markCompleted, markFailed, setReceipts]);
+};
+
 export const ReceiptProgressPanel = () => {
   const { t } = useTranslation();
   const [receipts, setReceipts] = useState<Map<string, ReceiptProgress>>(
     new Map(),
   );
 
-  const handleProgress = useCallback((payload: ReceiptProgressPayload) => {
-    setReceipts((prev) => {
-      const next = new Map(prev);
-      next.set(payload.receiptId, {
-        ...payload,
-        status: "processing",
-      });
-      return next;
-    });
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  const lastRevision = useRef(0);
+
+  const nextRevision = useCallback(() => {
+    lastRevision.current += 1;
+    return lastRevision.current;
   }, []);
 
-  const handleCompleted = useCallback((payload: ReceiptCompletedPayload) => {
-    setReceipts((prev) => {
-      const next = new Map(prev);
-      next.set(payload.receiptId, {
-        receiptId: payload.receiptId,
-        orderId: payload.orderId,
-        progress: 100,
-        stage: "completed",
-        status: "completed",
-        receiptNumber: payload.receiptNumber,
-      });
-      return next;
-    });
-    setTimeout(() => {
-      setReceipts((prev) => {
-        const next = new Map(prev);
-        next.delete(payload.receiptId);
-        return next;
-      });
-    }, 5000);
+  const cancelDismiss = useCallback((receiptId: string) => {
+    const timer = dismissTimers.current.get(receiptId);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    dismissTimers.current.delete(receiptId);
   }, []);
 
-  const handleFailed = useCallback((payload: ReceiptFailedPayload) => {
-    setReceipts((prev) => {
-      const next = new Map(prev);
-      next.set(payload.receiptId, {
-        receiptId: payload.receiptId,
-        orderId: payload.orderId,
-        progress: 0,
-        stage: "failed",
-        status: "failed",
-        error: payload.error,
-      });
-      return next;
-    });
-    // Longer than the success toast: a failure is actionable (Retry) and the
-    // user needs time to read the error and decide.
-    setTimeout(() => {
+  /**
+   * Auto-dismisses a finished card — but only while it is still the card that
+   * was scheduled. A retry reuses the receipt id, so without the revision guard
+   * a failed card's 20s timer would delete the retry's fresh progress card.
+   */
+  const dismissLater = useCallback(
+    (receiptId: string, revision: number, delayMs: number) => {
+      cancelDismiss(receiptId);
+      const timer = setTimeout(() => {
+        dismissTimers.current.delete(receiptId);
+        setReceipts((prev) => {
+          if (prev.get(receiptId)?.revision !== revision) return prev;
+          const next = new Map(prev);
+          next.delete(receiptId);
+          return next;
+        });
+      }, delayMs);
+      dismissTimers.current.set(receiptId, timer);
+    },
+    [cancelDismiss],
+  );
+
+  useEffect(() => {
+    const timers = dismissTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  const markCompleted = useCallback(
+    (receiptId: string, orderId: string, receiptNumber?: string) => {
+      const revision = nextRevision();
       setReceipts((prev) => {
         const next = new Map(prev);
-        next.delete(payload.receiptId);
+        next.set(receiptId, {
+          receiptId,
+          orderId,
+          progress: 100,
+          stage: "completed",
+          status: "completed",
+          receiptNumber,
+          updatedAt: Date.now(),
+          revision,
+        });
         return next;
       });
-    }, 20000);
-  }, []);
+      dismissLater(receiptId, revision, COMPLETED_DISMISS_MS);
+    },
+    [dismissLater, nextRevision],
+  );
+
+  const markFailed = useCallback(
+    (receiptId: string, orderId: string, error: string) => {
+      const revision = nextRevision();
+      setReceipts((prev) => {
+        const next = new Map(prev);
+        next.set(receiptId, {
+          receiptId,
+          orderId,
+          progress: 0,
+          stage: "failed",
+          status: "failed",
+          error,
+          updatedAt: Date.now(),
+          revision,
+        });
+        return next;
+      });
+      dismissLater(receiptId, revision, FAILED_DISMISS_MS);
+    },
+    [dismissLater, nextRevision],
+  );
+
+  const handleProgress = useCallback(
+    (payload: ReceiptProgressPayload) => {
+      // Fresh news about this receipt: whatever the previous attempt scheduled
+      // for the same id must not outlive it.
+      cancelDismiss(payload.receiptId);
+      const revision = nextRevision();
+      setReceipts((prev) => {
+        const next = new Map(prev);
+        next.set(payload.receiptId, {
+          ...payload,
+          status: "processing",
+          updatedAt: Date.now(),
+          revision,
+        });
+        return next;
+      });
+    },
+    [cancelDismiss, nextRevision],
+  );
+
+  const handleCompleted = useCallback(
+    (payload: ReceiptCompletedPayload) => {
+      markCompleted(payload.receiptId, payload.orderId, payload.receiptNumber);
+    },
+    [markCompleted],
+  );
+
+  const handleFailed = useCallback(
+    (payload: ReceiptFailedPayload) => {
+      markFailed(payload.receiptId, payload.orderId, payload.error);
+    },
+    [markFailed],
+  );
 
   useReceiptSocket({
     onProgress: handleProgress,
@@ -105,7 +315,10 @@ export const ReceiptProgressPanel = () => {
     onFailed: handleFailed,
   });
 
+  useStaleReceiptWatchdog(receipts, markCompleted, markFailed, setReceipts);
+
   const dismissReceipt = (receiptId: string) => {
+    cancelDismiss(receiptId);
     setReceipts((prev) => {
       const next = new Map(prev);
       next.delete(receiptId);

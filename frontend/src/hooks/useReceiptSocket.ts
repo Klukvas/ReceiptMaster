@@ -29,7 +29,39 @@ export interface ReceiptSocketCallbacks {
   onFailed?: (payload: ReceiptFailedPayload) => void;
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3000";
+/**
+ * Where the receipts gateway lives.
+ *
+ * Deployments only ever configure `VITE_API_URL`, so defaulting the socket to a
+ * hard-coded `localhost:3000` pointed every production browser at the user's own
+ * machine and no receipt event was ever delivered. Follow the API instead: an
+ * absolute API URL means the backend is on that origin, a relative one means it
+ * is proxied on this origin — and the socket is served from the same place.
+ */
+export const resolveSocketUrl = (
+  wsUrl: string | undefined,
+  apiUrl: string | undefined,
+  pageOrigin: string,
+): string => {
+  if (wsUrl) return wsUrl;
+  if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
+    try {
+      return new URL(apiUrl).origin;
+    } catch {
+      // A malformed VITE_API_URL must not take the whole app down at import time.
+      console.warn(`Unusable VITE_API_URL "${apiUrl}"; using the page origin`);
+    }
+  }
+  return pageOrigin;
+};
+
+// Mirrors the fallback in lib/api.ts so dev keeps talking to the local backend.
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
+const WS_URL = resolveSocketUrl(
+  import.meta.env.VITE_WS_URL,
+  API_URL,
+  window.location.origin,
+);
 
 export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
   const queryClient = useQueryClient();

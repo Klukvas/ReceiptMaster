@@ -11,6 +11,35 @@ interface ConfirmAction {
   order: Order | null;
 }
 
+const RECEIPT_POLL_INTERVAL_MS = 4000;
+
+const hasGeneratingReceipt = (orders: Order[]): boolean =>
+  orders.some((order) =>
+    order.receipts?.some((receipt) => receipt.status === "processing"),
+  );
+
+/**
+ * Refreshes the orders list while any of its receipts is still generating.
+ *
+ * The "generating" chip is driven by the order's receipt status, and the only
+ * other thing that refreshes it is a `receipt.completed` push. When that push
+ * never arrives — socket blocked, connection dropped, event missed — the chip
+ * used to spin until the user reloaded the page. Polling from server state also
+ * keeps the correlation right: each order clears on its own receipt's status.
+ */
+export const useReceiptGenerationPolling = (orders: Order[]) => {
+  const queryClient = useQueryClient();
+  const isGenerating = hasGeneratingReceipt(orders);
+
+  useEffect(() => {
+    if (!isGenerating) return;
+    const intervalId = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    }, RECEIPT_POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [isGenerating, queryClient]);
+};
+
 export const useOrders = () => {
   const queryClient = useQueryClient();
   const { notifications } = useNotifications();

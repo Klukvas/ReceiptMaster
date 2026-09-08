@@ -16,7 +16,7 @@ import {
 import { NotificationToast } from"../components/common";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
 import { ShareReceiptModal } from"../components/receipts/ShareReceiptModal";
-import { useOrders } from"../hooks/useOrders";
+import { useOrders, useReceiptGenerationPolling } from"../hooks/useOrders";
 import {
  useServerPagination,
  type ColumnDef,
@@ -162,6 +162,9 @@ export const OrdersPage = () => {
  extraParams,
  storageKeyPrefix:"orders",
  });
+
+ // Keep the "generating" chips honest even when no socket event lands
+ useReceiptGenerationPolling(pagination.items);
 
  // Clear selection when page or filters change
  useEffect(() => {

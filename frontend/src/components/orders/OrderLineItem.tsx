@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { Minus, Plus, X, Info, Search, Package } from "lucide-react";
 import { formatCurrency } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
+import { computeDropdownPosition, readViewport } from "./dropdown-position";
 
 interface Product {
   id: string;
@@ -125,13 +126,7 @@ const ProductSearchCard = ({
   const updateDropdownPosition = useCallback(() => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: "fixed",
-      top: rect.bottom + 6,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-    });
+    setDropdownStyle(computeDropdownPosition(rect, readViewport()));
   }, []);
 
   // Click outside handler – checks both container and portal
@@ -152,15 +147,25 @@ const ProductSearchCard = ({
     }
   }, [isOpen]);
 
-  // Update portal position on scroll / resize
+  // Keep the portal glued to the field: scrolling, window resizes, and the
+  // on-screen keyboard (which only moves the visual viewport on iOS).
   useEffect(() => {
     if (!isOpen) return;
     updateDropdownPosition();
+    // Re-measure once the browser has settled the anchor (entry animations,
+    // keyboard reflow) so the first paint is not positioned off a stale box.
+    const frame = requestAnimationFrame(updateDropdownPosition);
+    const visualViewport = window.visualViewport;
     window.addEventListener("scroll", updateDropdownPosition, true);
     window.addEventListener("resize", updateDropdownPosition);
+    visualViewport?.addEventListener("resize", updateDropdownPosition);
+    visualViewport?.addEventListener("scroll", updateDropdownPosition);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("scroll", updateDropdownPosition, true);
       window.removeEventListener("resize", updateDropdownPosition);
+      visualViewport?.removeEventListener("resize", updateDropdownPosition);
+      visualViewport?.removeEventListener("scroll", updateDropdownPosition);
     };
   }, [isOpen, updateDropdownPosition]);
 
@@ -287,12 +292,12 @@ const ProductSearchCard = ({
           <div
             ref={portalRef}
             style={dropdownStyle}
-            className="rounded-xl border border-[var(--color-border)] bg-elevated shadow-lg shadow-[var(--color-shadow)] animate-dropdown-in overflow-hidden"
+            className="flex flex-col rounded-xl border border-[var(--color-border)] bg-elevated shadow-lg shadow-[var(--color-shadow)] animate-dropdown-in overflow-hidden"
           >
             <ul
               ref={listRef}
               role="listbox"
-              className="py-1 max-h-56 overflow-auto scrollbar-thin"
+              className="py-1 flex-1 min-h-0 overflow-auto scrollbar-thin"
             >
               {filtered.length === 0 ? (
                 <li className="flex flex-col items-center py-6 text-center">

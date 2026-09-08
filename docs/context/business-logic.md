@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-08-26
+**Last Updated:** 2026-09-08
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -145,6 +145,10 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
    - On job start, each stage, and completion/failure
    - Events: `receipt.progress`, `receipt.completed`, `receipt.failed` (room `user:<id>`)
    - File: `backend/src/modules/receipts/receipts.gateway.ts`
+   - **Delivery is best-effort.** The socket can be blocked or drop mid-job, so the UI
+     never treats a missing `receipt.completed` as "still generating": it falls back to
+     the receipt's real status (`GET /receipts/:id`, and polling `GET /orders` while any
+     receipt is `PROCESSING`). See `docs/context/frontend.md` → Real-Time Updates.
 
 **Receipt Templates:**
 
