@@ -270,8 +270,8 @@ export const ProductsPage = () => {
 
       {/* Inventory value — how much money is sitting in stock */}
       {stockValue && stockValue.productCount > 0 && (
-        <div className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
             <div className="text-xs font-medium text-content-tertiary">
               {t("products.stockValueCost", "Stock value (cost)")}
             </div>
@@ -282,7 +282,7 @@ export const ProductsPage = () => {
               )}
             </div>
           </div>
-          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
             <div className="text-xs font-medium text-content-tertiary">
               {t("products.stockValueRetail", "Stock value (retail)")}
             </div>
@@ -290,7 +290,7 @@ export const ProductsPage = () => {
               {formatCurrency(stockValue.saleValueCents, stockValue.currency)}
             </div>
           </div>
-          <div className="flex-1 min-w-[180px] rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
             <div className="text-xs font-medium text-content-tertiary">
               {t("products.stockUnits", "Units in stock")}
             </div>

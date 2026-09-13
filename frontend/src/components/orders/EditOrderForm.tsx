@@ -200,7 +200,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="w-24">
+                    <div className="flex-1 min-w-[4.5rem] max-w-[7rem]">
                       <Input
                         type="number"
                         min="1"
@@ -216,7 +216,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       const product = getProduct(item.productId);
                       if (!product) return null;
                       return (
-                        <div className="w-28">
+                        <div className="flex-1 min-w-[5.5rem] max-w-[9rem]">
                           <Input
                             type="text"
                             inputMode="decimal"

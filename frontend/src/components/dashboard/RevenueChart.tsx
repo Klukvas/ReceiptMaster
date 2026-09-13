@@ -88,10 +88,10 @@ export const RevenueChart = ({
             <YAxis
               type="category"
               dataKey="name"
-              tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
+              tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
               axisLine={false}
               tickLine={false}
-              width={130}
+              width={90}
             />
             <Tooltip
               content={<CustomTooltip />}

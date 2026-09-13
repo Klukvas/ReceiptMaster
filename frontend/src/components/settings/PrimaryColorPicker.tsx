@@ -102,7 +102,7 @@ export const PrimaryColorPicker = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="flex gap-2 flex-wrap">
           {PRESET_COLORS.map((preset) => (
             <button

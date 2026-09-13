@@ -154,7 +154,7 @@ const SubscriptionTab = () => {
 
       {/* Current plan + usage */}
       <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-semibold text-content">
               {t("subscription.currentPlanLabel", "Your current plan")}

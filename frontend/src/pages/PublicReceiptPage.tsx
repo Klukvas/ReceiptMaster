@@ -178,7 +178,7 @@ export const PublicReceiptPage = () => {
 
           {/* Items */}
           <div className="px-6 py-4 overflow-x-auto">
-            <table className="w-full min-w-[400px]">
+            <table className="w-full min-w-[320px]">
               <thead>
                 <tr className="text-xs font-semibold uppercase tracking-wider text-content-tertiary border-b border-[var(--color-border-light)]">
                   <th className="text-left pb-2">Item</th>

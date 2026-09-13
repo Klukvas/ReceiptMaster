@@ -334,7 +334,7 @@ export const ReceiptProgressPanel = () => {
   if (receipts.size === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[calc(100vw-2rem)] max-w-sm pointer-events-none">
       {Array.from(receipts.values()).map((receipt) => (
         <div
           key={receipt.receiptId}
@@ -370,7 +370,8 @@ export const ReceiptProgressPanel = () => {
             </div>
             <button
               onClick={() => dismissReceipt(receipt.receiptId)}
-              className="text-content-tertiary hover:text-content-secondary transition-colors shrink-0 ml-2"
+              className="text-content-tertiary hover:text-content-secondary transition-colors shrink-0 ml-2 p-1.5 -m-1.5"
+              aria-label={t("common.close", "Close")}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -408,7 +409,7 @@ export const ReceiptProgressPanel = () => {
             )}
             {receipt.status === "failed" && (
               <>
-                <span className="text-xs text-danger-base truncate">
+                <span className="text-xs text-danger-base truncate min-w-0 flex-1">
                   {receipt.error || t("receipts.receiptFailed")}
                 </span>
                 <button
