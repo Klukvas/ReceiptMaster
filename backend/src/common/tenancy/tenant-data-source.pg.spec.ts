@@ -5,6 +5,7 @@ import { userInfo } from "os";
 import { installTenantContext } from "./tenant-data-source";
 import { runWithPublicToken, runWithTenant } from "./tenant-context";
 import { AddRLSPolicies1761500000006 } from "../../config/migrations/1761500000006-AddRLSPolicies";
+import { AddReceiptProcessingStatus1761500000005 } from "../../config/migrations/1761500000005-AddReceiptProcessingStatus";
 import { ReceiptCapabilitiesAndOutbox1792000000000 } from "../../config/migrations/1792000000000-ReceiptCapabilitiesAndOutbox";
 import { UsersService } from "../../modules/users/users.service";
 import { RefreshToken } from "../../modules/users/entities/refresh-token.entity";
@@ -160,6 +161,71 @@ pgDescribe(
       if (source?.isInitialized) await source.destroy();
       if (admin?.isInitialized) await admin.destroy();
     });
+
+    it("applies the outbox migration in the same transaction that adds processing", async () => {
+      const runner = admin.createQueryRunner();
+      await runner.startTransaction();
+      const schema = `enum_bootstrap_${randomUUID().replace(/-/g, "")}`;
+      try {
+        await runner.query(`CREATE SCHEMA "${schema}"`);
+        await runner.query(`SET LOCAL search_path TO "${schema}", public`);
+        await runner.query(
+          "CREATE TYPE receipts_status_enum AS ENUM ('generated', 'void')",
+        );
+        await runner.query("CREATE TABLE recipients(id uuid PRIMARY KEY)");
+        await runner.query(
+          "CREATE TABLE orders(id uuid PRIMARY KEY, recipient_id uuid)",
+        );
+        await runner.query(
+          "CREATE TABLE order_items(id uuid PRIMARY KEY, order_id uuid)",
+        );
+        await runner.query(
+          "CREATE TABLE receipts(id uuid PRIMARY KEY, order_id uuid, user_id uuid, status receipts_status_enum, public_token text)",
+        );
+        await new AddReceiptProcessingStatus1761500000005().up(runner);
+        await new ReceiptCapabilitiesAndOutbox1792000000000().up(runner);
+        expect(
+          await runner.query(
+            "SELECT count(*)::int AS count FROM receipt_generation_outbox",
+          ),
+        ).toEqual([{ count: 0 }]);
+      } finally {
+        await runner.rollbackTransaction();
+        await runner.release();
+      }
+    });
+
+    it("bootstraps the complete migration chain on a clean database in one transaction", async () => {
+      const freshDatabase = `audit_bootstrap_${process.pid}_${Date.now()}`;
+      await admin.query(`CREATE DATABASE "${freshDatabase}"`);
+      const fresh = await new DataSource({
+        type: "postgres",
+        host: "127.0.0.1",
+        port: 55439,
+        username: userInfo().username,
+        database: freshDatabase,
+        entities: [join(__dirname, "../../**/*.entity.ts")],
+        migrations: [join(__dirname, "../../config/migrations/*.ts")],
+        synchronize: false,
+      }).initialize();
+      try {
+        const applied = await fresh.runMigrations({ transaction: "all" });
+        expect(
+          applied.some(
+            (migration) =>
+              migration.name === "ReceiptCapabilitiesAndOutbox1792000000000",
+          ),
+        ).toBe(true);
+        expect(
+          await fresh.query(
+            "SELECT count(*)::int AS count FROM receipt_generation_outbox",
+          ),
+        ).toEqual([{ count: 0 }]);
+        expect(await fresh.showMigrations()).toBe(false);
+      } finally {
+        await fresh.destroy();
+      }
+    }, 20000);
 
     it("upgrades legacy processing work into a new durable generation", async () => {
       const legacy = await admin

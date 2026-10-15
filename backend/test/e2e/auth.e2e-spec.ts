@@ -175,10 +175,17 @@ describe("Auth (e2e)", () => {
       expect(res.body).toHaveProperty("refresh_token");
     });
 
-    it("should return 401 for invalid refresh token", async () => {
+    it("should return 400 for a malformed refresh token", async () => {
       await request(server)
         .post("/api/v1/auth/refresh")
         .send({ refresh_token: "invalid-token" })
+        .expect(400);
+    });
+
+    it("should return 401 for an unknown well-formed refresh token", async () => {
+      await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: "f".repeat(128) })
         .expect(401);
     });
   });

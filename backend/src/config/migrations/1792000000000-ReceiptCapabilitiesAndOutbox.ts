@@ -35,10 +35,10 @@ export class ReceiptCapabilitiesAndOutbox1792000000000
     );
     // Upgrade pending work too; legacy queue payloads are fenced by a fresh generation.
     await runner.query(
-      `UPDATE receipts SET generation_id = uuid_generate_v4(), generation_started_at = now() WHERE status = 'processing' AND generation_id IS NULL`,
+      `UPDATE receipts SET generation_id = uuid_generate_v4(), generation_started_at = now() WHERE status::text = 'processing' AND generation_id IS NULL`,
     );
     await runner.query(`INSERT INTO receipt_generation_outbox(id, receipt_id, order_id, user_id, generation_id)
-      SELECT uuid_generate_v4(), id, order_id, user_id, generation_id FROM receipts WHERE status = 'processing'
+      SELECT uuid_generate_v4(), id, order_id, user_id, generation_id FROM receipts WHERE status::text = 'processing'
       ON CONFLICT (receipt_id, generation_id) DO NOTHING`);
   }
   async down(runner: QueryRunner): Promise<void> {
