@@ -278,6 +278,24 @@ class HTTPSProbeTests(unittest.TestCase):
         with patch.object(self.ns['urllib'].request, 'build_opener', return_value=opener):
             with self.assertRaisesRegex(RuntimeError, 'origin changed'): self.ns['open_https']('https://receiptmaster.org/health')
         response.close.assert_called_once()
+    def test_probe_uses_explicit_release_user_agent(self):
+        from unittest.mock import Mock
+        response = Mock(); response.geturl.return_value = 'https://receiptmaster.org/health'
+        opener = Mock(); opener.open.return_value = response
+        with patch.object(self.ns['urllib'].request, 'build_opener', return_value=opener):
+            self.ns['open_https']('https://receiptmaster.org/health')
+        request = opener.open.call_args.args[0]
+        self.assertIsInstance(request,self.ns['urllib'].request.Request)
+        self.assertEqual(request.full_url,'https://receiptmaster.org/health')
+        self.assertEqual(request.get_header('User-agent'),'ReceiptMaster-Release-Check/1.0')
+    def test_http_403_still_rejects_the_release_probe(self):
+        from unittest.mock import Mock
+        from urllib.error import HTTPError
+        error = HTTPError('https://receiptmaster.org/health',403,'Forbidden',{},None)
+        opener = Mock(); opener.open.side_effect = error
+        with patch.object(self.ns['urllib'].request, 'build_opener', return_value=opener):
+            with self.assertRaises(HTTPError) as caught: self.ns['open_https']('https://receiptmaster.org/health')
+        self.assertIs(caught.exception,error)
     def test_valid_origin_uses_redirect_rejecting_handler(self):
         from unittest.mock import Mock
         response = Mock(); response.geturl.return_value = 'https://receiptmaster.org/health'

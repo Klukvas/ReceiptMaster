@@ -38,7 +38,8 @@ def open_https(url, timeout=12):
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != 'https' or parsed.hostname != 'receiptmaster.org' or parsed.port not in (None, 443) or parsed.username or parsed.password:
         raise RuntimeError('Release probes require the trusted HTTPS origin')
-    response = urllib.request.build_opener(RejectRedirects()).open(url, timeout=timeout)
+    request = urllib.request.Request(url, headers={'User-Agent': 'ReceiptMaster-Release-Check/1.0'})
+    response = urllib.request.build_opener(RejectRedirects()).open(request, timeout=timeout)
     final = urllib.parse.urlsplit(response.geturl())
     if final.scheme != 'https' or final.netloc != parsed.netloc:
         response.close()
