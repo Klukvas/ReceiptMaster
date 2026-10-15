@@ -5,6 +5,7 @@ import Handlebars from "handlebars";
 import { Order } from "../../orders/entities/order.entity";
 import { MoneyUtil } from "../../../common/utils/money.util";
 import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
+import { PRINT_LAYOUT_CSS } from "../templates/print-layout";
 
 export interface TemplateData {
   // Company info
@@ -19,9 +20,13 @@ export interface TemplateData {
   companyTagline?: string;
   hasCustomLogo: boolean;
   logoPath?: string;
+  logoStyle?: string;
+  logoSlotStyle?: string;
 
   // Receipt info
   receiptTitle: string;
+  language: string;
+  hasCustomReceiptTitle?: boolean;
   receiptNumber: string;
   orderDate: string;
   generatedAt: string;
@@ -88,11 +93,14 @@ export class TemplateService {
   private templates: Map<string, HandlebarsTemplateDelegate> = new Map();
   private fonts: Map<string, string> = new Map();
   private translations: Map<string, Record<string, string>> = new Map();
+  readonly ready: Promise<void>;
 
   constructor() {
     this.registerHelpers();
-    this.loadFonts();
-    this.loadTranslations();
+    this.handlebars.registerPartial("printLayout", PRINT_LAYOUT_CSS);
+    this.ready = Promise.all([this.loadFonts(), this.loadTranslations()]).then(
+      () => undefined,
+    );
   }
 
   private registerHelpers() {
@@ -292,8 +300,39 @@ export class TemplateService {
     templateName: ReceiptTemplate,
     data: TemplateData,
   ): Promise<string> {
+    await this.ready;
     const template = await this.loadTemplate(templateName);
-    return template(data);
+    const language = this.translations.has(data.language)
+      ? data.language
+      : "en";
+    const translations = {
+      ...this.translations.get(language),
+      ...data.translations,
+    };
+    const defaultTitle = DEFAULT_RECEIPT_TITLE[language];
+    // Existing settings resolve an unset title to the language's default. Carry
+    // that provenance explicitly so specialised styles can retain their names.
+    const hasCustomReceiptTitle =
+      data.hasCustomReceiptTitle ??
+      Boolean(
+        data.receiptTitle?.trim() && data.receiptTitle.trim() !== defaultTitle,
+      );
+    const specialisedTitle =
+      templateName === ReceiptTemplate.DELIVERY
+        ? translations.deliveryNote
+        : templateName === ReceiptTemplate.PROFORMA
+          ? translations.proformaInvoice
+          : defaultTitle;
+    return template({
+      ...data,
+      language,
+      translations,
+      fontRegular: data.fontRegular || this.fonts.get("regular") || "",
+      fontBold: data.fontBold || this.fonts.get("bold") || "",
+      receiptTitle: hasCustomReceiptTitle
+        ? data.receiptTitle
+        : specialisedTitle,
+    });
   }
 
   prepareTemplateData(
@@ -319,6 +358,7 @@ export class TemplateService {
     primaryColor?: string,
     paymentTerms?: string,
     deliveryTerms?: string,
+    hasCustomReceiptTitle?: boolean,
   ): TemplateData {
     const formatCurrency = (cents: number) =>
       MoneyUtil.formatCentsToCurrency(cents, order.currency);
@@ -345,6 +385,14 @@ export class TemplateService {
         receiptTitle ||
         DEFAULT_RECEIPT_TITLE[language] ||
         DEFAULT_RECEIPT_TITLE.en,
+      language: DEFAULT_RECEIPT_TITLE[language] ? language : "en",
+      hasCustomReceiptTitle:
+        hasCustomReceiptTitle ??
+        Boolean(
+          receiptTitle?.trim() &&
+            receiptTitle.trim() !==
+              (DEFAULT_RECEIPT_TITLE[language] || DEFAULT_RECEIPT_TITLE.en),
+        ),
       receiptNumber,
       orderDate: new Date(order.created_at).toLocaleString(locale),
       generatedAt: new Date().toLocaleString(locale),

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -311,6 +311,8 @@
                 max-width: none;
             }
         }
+        {{> printLayout}}
+        .logo { max-height: 64px; }
     </style>
 </head>
 <body>
@@ -326,7 +328,7 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div>
                     {{#if primaryColor}}
@@ -459,15 +461,16 @@
         <div class="footer">
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
-            {{#if footerSubtitle}}
-            <div class="footer-subtitle">{{footerSubtitle}}</div>
-            {{/if}}
+
             {{else}}
             {{#if translations.thankYou}}
             <div class="footer-title">{{translations.thankYou}}</div>
             {{else}}
             <div class="footer-title">Thank you for your business!</div>
             {{/if}}
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-subtitle">{{footerSubtitle}}</div>
             {{/if}}
             {{#if generatedAt}}
             <div class="generated-at">{{generatedAt}}</div>

@@ -1,3 +1,6 @@
+import { DocumentConfigService } from "./services/document-config.service";
+import { DocumentAssetsService } from "./services/document-assets.service";
+import { legacyConfig } from "./document-config";
 import { SettingsController } from "./settings.controller";
 import { SettingsService } from "./services/settings.service";
 import { LogoStorageService } from "../../common/services/logo-storage.service";
@@ -7,6 +10,7 @@ import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { SubscriptionService } from "../subscription/subscription.service";
 
 jest.mock("../receipts/templates/metadata", () => ({
+  getTemplateCapabilities: jest.fn().mockReturnValue({ revision: 2 }),
   TEMPLATE_METADATA: {
     standard: {
       id: "standard",
@@ -33,6 +37,8 @@ describe("SettingsController", () => {
   let logoStorageService: jest.Mocked<LogoStorageService>;
   let configService: jest.Mocked<ConfigService>;
   let subscriptionService: jest.Mocked<SubscriptionService>;
+  let documents: { read: jest.Mock; save: jest.Mock };
+  let assets: { preview: jest.Mock };
   const mockUser = { id: "user-1" } as User;
   const mockReq = { user: mockUser };
 
@@ -70,11 +76,22 @@ describe("SettingsController", () => {
       assertCanUseTemplate: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    documents = {
+      read: jest
+        .fn()
+        .mockResolvedValue({ config: legacyConfig(null), revision: 0 }),
+      save: jest.fn().mockResolvedValue({ revision: 1 }),
+    };
+    assets = {
+      preview: jest.fn().mockResolvedValue(Buffer.from("fake-image")),
+    };
     controller = new SettingsController(
       configService,
       logoStorageService,
       settingsService,
       subscriptionService,
+      documents as unknown as DocumentConfigService,
+      assets as unknown as DocumentAssetsService,
     );
   });
 
@@ -91,7 +108,7 @@ describe("SettingsController", () => {
       expect(result.message).toBe(
         "Logo uploaded successfully to Object Storage",
       );
-      expect(result.url).toBe("https://s3.example.com/logo.png");
+      expect(result.url).toBe("/settings/logo?revision=1");
       expect(result.userId).toBe("user-1");
     });
 
@@ -101,7 +118,7 @@ describe("SettingsController", () => {
       ).rejects.toThrow(ApiErrorResponse);
     });
 
-    it("should delete old logo before uploading new one", async () => {
+    it("should replace logo without deleting the old object first", async () => {
       const file = {
         buffer: Buffer.from("image-data"),
         originalname: "logo.png",
@@ -110,8 +127,13 @@ describe("SettingsController", () => {
 
       await controller.uploadLogo(file, mockReq);
 
-      expect(logoStorageService.deleteUserLogo).toHaveBeenCalledWith("user-1");
-      expect(logoStorageService.uploadLogo).toHaveBeenCalled();
+      expect(logoStorageService.deleteUserLogo).not.toHaveBeenCalled();
+      expect(documents.save).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ logoAction: "replace" }),
+        0,
+        file,
+      );
     });
 
     it("should handle error when no existing logo to delete", async () => {
@@ -126,14 +148,12 @@ describe("SettingsController", () => {
 
       const result = await controller.uploadLogo(file, mockReq);
 
-      expect(result.url).toBe("https://s3.example.com/logo.png");
+      expect(result.url).toBe("/settings/logo?revision=1");
     });
 
     it("should throw if upload fails", async () => {
       logoStorageService.deleteUserLogo.mockResolvedValue(undefined);
-      logoStorageService.uploadLogo.mockRejectedValue(
-        new Error("Upload failed"),
-      );
+      documents.save.mockRejectedValue(new Error("Upload failed"));
 
       const file = {
         buffer: Buffer.from("image-data"),
@@ -167,7 +187,7 @@ describe("SettingsController", () => {
     });
 
     it("should return 404 if logo not found", async () => {
-      logoStorageService.downloadLogo.mockRejectedValue(new Error("Not found"));
+      assets.preview.mockRejectedValue(new Error("Not found"));
 
       const mockRes = {
         set: jest.fn(),
@@ -214,14 +234,16 @@ describe("SettingsController", () => {
     it("should delete logo successfully", async () => {
       const result = await controller.deleteLogo(mockReq);
 
-      expect(logoStorageService.deleteUserLogo).toHaveBeenCalledWith("user-1");
+      expect(documents.save).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ logoAction: "remove" }),
+        0,
+      );
       expect(result.message).toBe("Logo deleted successfully");
     });
 
     it("should throw on delete failure", async () => {
-      logoStorageService.deleteUserLogo.mockRejectedValue(
-        new Error("Delete failed"),
-      );
+      documents.save.mockRejectedValue(new Error("Delete failed"));
 
       await expect(controller.deleteLogo(mockReq)).rejects.toThrow(
         ApiErrorResponse,

@@ -1,3 +1,4 @@
+import type { RenderSnapshot } from "../services/document-render.service";
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -56,7 +57,7 @@ export class Receipt {
   status: ReceiptStatus;
 
   @ApiProperty({ required: false })
-  @Column({ type: "text", nullable: true })
+  @Column({ type: "text", nullable: true, select: false })
   html_snapshot?: string;
 
   @ApiProperty({ required: false })
@@ -103,6 +104,31 @@ export class Receipt {
   @ManyToOne(() => User, (user) => user.receipts)
   @JoinColumn({ name: "user_id" })
   user: User;
+
+  @Column({ type: "integer", default: 0 }) active_revision: number;
+  @Column({ type: "jsonb", nullable: true, select: false })
+  active_snapshot: RenderSnapshot | null;
+  @Column({ type: "jsonb", nullable: true, select: false })
+  pending_snapshot: RenderSnapshot | null;
+  @Column({ type: "text", nullable: true, select: false }) pending_html:
+    | string
+    | null;
+  @Column({ type: "uuid", nullable: true, select: false }) pending_id:
+    | string
+    | null;
+  @Column({ type: "integer", nullable: true, select: false })
+  pending_expected_revision: number | null;
+  @Column({ type: "varchar", length: 20, nullable: true }) replacement_status:
+    | "processing"
+    | "failed"
+    | null;
+  @Column({ type: "varchar", length: 500, nullable: true }) replacement_error:
+    | string
+    | null;
+  @Column({ type: "uuid", nullable: true, select: false })
+  active_logo_asset_id: string | null;
+  @Column({ type: "uuid", nullable: true, select: false })
+  pending_logo_asset_id: string | null;
 
   @ApiProperty()
   @CreateDateColumn()

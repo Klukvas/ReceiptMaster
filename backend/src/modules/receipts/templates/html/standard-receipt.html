@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -191,10 +191,7 @@
         }
         
         .footer {
-            position: fixed;
-            bottom: 20mm;
-            left: 20mm;
-            right: 20mm;
+            position: static;
             text-align: center;
             font-size: 12px;
             color: #666;
@@ -234,9 +231,10 @@
         
         @media print {
             .footer {
-                position: fixed;
+                position: static;
             }
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -244,7 +242,7 @@
         <!-- Header -->
         <div class="header">
             {{#if hasCustomLogo}}
-            <img src="{{logoPath}}" alt="Logo" class="logo">
+            <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
             {{/if}}
             <div>
                 <div class="company-name">{{companyName}}</div>

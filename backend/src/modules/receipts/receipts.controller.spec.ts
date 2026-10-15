@@ -13,7 +13,7 @@ describe("ReceiptsController", () => {
       generateReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
       generateCompactReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
       generateStandardReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
-      findAll: jest.fn().mockResolvedValue([]),
+      findAll: jest.fn().mockResolvedValue({ data: [], total: 0 }),
       findOne: jest.fn().mockResolvedValue({ id: "r1" }),
       getReceiptPdf: jest.fn(),
       printReceipt: jest.fn().mockResolvedValue({ success: true }),
@@ -43,6 +43,8 @@ describe("ReceiptsController", () => {
       expect(receiptsService.generateReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
+        { logoAction: "keep" },
+        undefined,
       );
     });
   });
@@ -50,9 +52,11 @@ describe("ReceiptsController", () => {
   describe("createCompactReceipt", () => {
     it("should create compact receipt", () => {
       const _result = controller.createCompactReceipt("order-1", mockReq);
-      expect(receiptsService.generateCompactReceipt).toHaveBeenCalledWith(
+      expect(receiptsService.generateReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
+        { logoAction: "keep" },
+        undefined,
       );
     });
   });
@@ -60,16 +64,18 @@ describe("ReceiptsController", () => {
   describe("createStandardReceipt", () => {
     it("should create standard receipt", () => {
       const _result = controller.createStandardReceipt("order-1", mockReq);
-      expect(receiptsService.generateStandardReceipt).toHaveBeenCalledWith(
+      expect(receiptsService.generateReceipt).toHaveBeenCalledWith(
         "order-1",
         mockUser,
+        { logoAction: "keep" },
+        undefined,
       );
     });
   });
 
   describe("findAll", () => {
-    it("should return all receipts", () => {
-      const _result = controller.findAll(mockReq, undefined, undefined);
+    it("should return all receipts", async () => {
+      const _result = await controller.findAll(mockReq, undefined, undefined);
       expect(receiptsService.findAll).toHaveBeenCalledWith(mockUser, {
         offset: undefined,
         limit: undefined,
@@ -234,6 +240,13 @@ describe("ReceiptsController", () => {
       expect(receiptsService.regenerateReceiptPdf).toHaveBeenCalledWith(
         "r1",
         mockUser,
+        {
+          mode: "reproduce",
+          expectedActiveRevision: undefined,
+          confirmReconstruction: undefined,
+          selection: { logoAction: "keep" },
+        },
+        undefined,
       );
     });
   });

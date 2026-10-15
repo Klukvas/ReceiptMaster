@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -367,6 +367,7 @@
                 position: fixed;
             }
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -378,7 +379,7 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div>
                     <div class="company-name">{{companyName}}</div>
@@ -388,7 +389,7 @@
                 </div>
             </div>
             <div class="header-right">
-                <div class="proforma-title">{{#if translations.proformaInvoice}}{{translations.proformaInvoice}}{{else}}Proforma Invoice{{/if}}</div>
+                <div class="proforma-title">{{receiptTitle}}</div>
                 <div class="invoice-meta">
                     <div><strong>{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No:{{/if}}</strong> {{receiptNumber}}</div>
                     <div><strong>{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</strong> {{orderDate}}</div>

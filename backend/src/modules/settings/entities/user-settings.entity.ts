@@ -6,6 +6,8 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
+import type { DocumentConfig } from "../document-config";
+
 @Entity("user_settings")
 export class UserSettings {
   @PrimaryGeneratedColumn("uuid")
@@ -70,6 +72,15 @@ export class UserSettings {
 
   @Column({ default: false })
   onboardingCompleted: boolean;
+
+  @Column({ type: "jsonb", nullable: true })
+  document_config: DocumentConfig | null;
+
+  @Column({ type: "integer", default: 0 })
+  document_config_revision: number;
+
+  @Column({ type: "uuid", nullable: true })
+  logo_asset_id: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

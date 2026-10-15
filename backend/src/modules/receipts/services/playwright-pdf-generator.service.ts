@@ -6,23 +6,33 @@ import * as fs from "fs/promises";
 export class PlaywrightPdfGenerator {
   private readonly logger = new Logger(PlaywrightPdfGenerator.name);
   private browser: Browser | null = null;
+  private initializing: Promise<void> | undefined;
 
   async initialize(): Promise<void> {
-    if (!this.browser) {
-      this.logger.log("Initializing Playwright browser...");
-      this.browser = await chromium.launch({
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--disable-gpu",
-        ],
-      });
-      this.logger.log("Playwright browser initialized");
+    if (this.browser?.isConnected()) return;
+    if (!this.initializing) this.initializing = this.launchBrowser();
+    try {
+      await this.initializing;
+    } finally {
+      this.initializing = undefined;
     }
+  }
+
+  private async launchBrowser(): Promise<void> {
+    this.logger.log("Initializing Playwright browser...");
+    this.browser = await chromium.launch({
+      executablePath:
+        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+      chromiumSandbox: true,
+      args: [
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
+      ],
+    });
+    this.logger.log("Playwright browser initialized");
   }
 
   async generatePdf(html: string, options: PdfOptions = {}): Promise<Buffer> {
@@ -32,9 +42,34 @@ export class PlaywrightPdfGenerator {
       throw new Error("Browser not initialized");
     }
 
-    const page = await this.browser.newPage();
+    const context = await this.browser.newContext({
+      javaScriptEnabled: false,
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    await context.route("**/*", (route) =>
+      /^data:/i.test(route.request().url()) ? route.continue() : route.abort(),
+    );
 
     try {
+      const { width, height, contentBasedHeight, ...rest } = options;
+      const margins = {
+        top: "20mm",
+        bottom: "20mm",
+        left: "15mm",
+        right: "15mm",
+        ...options.margin,
+      };
+      if (contentBasedHeight && width) {
+        await page.setViewportSize({
+          width: Math.ceil(
+            this.toPixels(width) -
+              this.toPixels(margins.left) -
+              this.toPixels(margins.right),
+          ),
+          height: 800,
+        });
+      }
       // Set content and wait for it to load
       await page.setContent(html, {
         waitUntil: "networkidle",
@@ -43,25 +78,26 @@ export class PlaywrightPdfGenerator {
 
       // Emulate print media for consistent styling
       await page.emulateMedia({ media: "print" });
+      await page.evaluate(() => document.fonts.ready);
 
       // When width/height are provided, omit format (Playwright doesn't allow both)
-      const { width, height, ...rest } = options;
+      const measuredHeight = contentBasedHeight
+        ? `${Math.ceil(await page.evaluate(() => document.body.getBoundingClientRect().height)) + this.toPixels(margins.top) + this.toPixels(margins.bottom) + 2}px`
+        : height;
+      const { format: requestedFormat, ...pdfRest } = rest;
       const baseOptions =
-        width || height ? { width, height } : { format: "A4" as const };
+        width || measuredHeight
+          ? { width, height: measuredHeight }
+          : { format: requestedFormat || ("A4" as const) };
 
       // Generate PDF with optimized settings
       const pdfBuffer = await page.pdf({
         ...baseOptions,
-        margin: {
-          top: "20mm",
-          bottom: "20mm",
-          left: "15mm",
-          right: "15mm",
-        },
+        margin: margins,
         printBackground: true,
         preferCSSPageSize: false,
         displayHeaderFooter: false,
-        ...rest,
+        ...pdfRest,
       });
 
       this.logger.log("PDF generated successfully");
@@ -70,8 +106,20 @@ export class PlaywrightPdfGenerator {
       this.logger.error("Error generating PDF:", error);
       throw error;
     } finally {
-      await page.close();
+      await context.close();
     }
+  }
+
+  private toPixels(length: string): number {
+    const match = /^(\d+(?:\.\d+)?)(mm|cm|in|px)$/.exec(length);
+    if (!match) throw new Error(`Unsupported PDF length: ${length}`);
+    const factors: Record<string, number> = {
+      mm: 96 / 25.4,
+      cm: 96 / 2.54,
+      in: 96,
+      px: 1,
+    };
+    return Number(match[1]) * factors[match[2]];
   }
 
   async generatePdfFromFile(
@@ -83,6 +131,7 @@ export class PlaywrightPdfGenerator {
   }
 
   async cleanup(): Promise<void> {
+    if (this.initializing) await this.initializing;
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -99,6 +148,7 @@ export interface PdfOptions {
   format?: "A4" | "A3" | "A2" | "A1" | "A0" | "Letter" | "Legal" | "Tabloid";
   width?: string;
   height?: string;
+  contentBasedHeight?: boolean;
   margin?: {
     top?: string;
     bottom?: string;

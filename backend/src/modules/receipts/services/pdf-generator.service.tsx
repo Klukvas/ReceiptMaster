@@ -99,6 +99,7 @@ export class PdfGeneratorService {
     primaryColor?: string,
     paymentTerms?: string,
     deliveryTerms?: string,
+    hasCustomReceiptTitle?: boolean,
   ): Promise<{ filePath: string; url: string; html: string }> {
     try {
       this.logger.log(`Starting ${style} PDF generation using Playwright...`);
@@ -182,6 +183,7 @@ export class PdfGeneratorService {
         primaryColor,
         paymentTerms,
         deliveryTerms,
+        hasCustomReceiptTitle,
       );
 
       // Render HTML template

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -335,6 +335,12 @@
                 max-width: none;
             }
         }
+        {{> printLayout}}
+        .items-table th:nth-child(1) { width: 8%; }
+        .items-table th:nth-child(2) { width: 42%; }
+        .items-table th:nth-child(3) { width: 10%; }
+        .items-table th:nth-child(4), .items-table th:nth-child(5) { width: 20%; }
+        img[alt="Logo"] { max-height: 80px; }
     </style>
 </head>
 <body>
@@ -342,7 +348,7 @@
         <!-- Company Header -->
         <div class="company-header">
             {{#if hasCustomLogo}}
-            <img src="{{logoPath}}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;">
+            <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}margin-bottom:10px;" alt="Logo"></span>
             {{/if}}
             <div class="company-name">{{companyName}}</div>
             {{#if companyTagline}}
@@ -373,7 +379,6 @@
         
         <!-- Document Type Header -->
         <div class="document-header">
-            <div class="document-type-left">{{#if translations.debitMemo}}{{translations.debitMemo}}{{else}}Debit Memo{{/if}}</div>
             <div class="document-type-center">{{receiptTitle}}</div>
             <div class="document-type-right">{{#if translations.original}}{{translations.original}}{{else}}Original{{/if}}</div>
         </div>
@@ -381,7 +386,7 @@
         <!-- Client Details -->
         <div class="client-details">
             <div class="client-info">
-                <div class="client-label">M/s. :</div>
+                <div class="client-label">{{translations.billToLabel}}</div>
                 <div class="client-data">
                     {{recipientName}}<br>
                     {{#if recipientAddress}}{{recipientAddress}}<br>{{/if}}
@@ -453,9 +458,7 @@
             {{#if footerTitle}}
             <div class="note-section" style="margin-bottom: 16px;">
                 <div class="note-label">{{footerTitle}}</div>
-                {{#if footerSubtitle}}
-                <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
-                {{/if}}
+
             </div>
             {{else}}
             <div class="note-section">
@@ -463,6 +466,9 @@
                 <div class="note-line"></div>
             </div>
             {{/if}}
+                {{#if footerSubtitle}}
+                <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
+                {{/if}}
         </div>
     </div>
 </body>

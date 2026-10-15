@@ -92,3 +92,7 @@ for the full script list and [`PROJECT.md`](../../PROJECT.md) for infrastructure
 These describe real code as of the *Last Updated* date, with file paths so you can verify.
 If you change a documented pattern, endpoint, or flow, update the matching doc in the same
 change — the routing table above is only useful if an agent can trust it.
+
+## Document customization map
+
+Account configuration, tenant presets and immutable logo assets live in `backend/src/modules/settings/document-config*`, `services/document-*.service.ts` and their entities. Frozen preparation/promotion live in receipt `services/document-render`, `receipt-snapshot`, `receipt-artifact` and `receipt-projection`. `frontend/src/hooks/useDocumentDraft.ts` and settings `DocumentEditor` share the Settings and Orders customization workflow. No permanent render-history subsystem is added; each receipt has one active document and at most one pending candidate.

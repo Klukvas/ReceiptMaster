@@ -78,11 +78,24 @@ export class ReceiptOutboxService implements OnModuleDestroy {
           const receipts = this.dataSource.getRepository(Receipt);
           const receipt = await receipts.findOne({
             where: { id: entry.receipt_id, user_id: entry.user_id },
+            select: [
+              "id",
+              "user_id",
+              "generation_id",
+              "status",
+              "replacement_status",
+              "active_revision",
+              "pending_id",
+            ],
           });
           if (
             !receipt ||
             receipt.generation_id !== entry.generation_id ||
-            receipt.status !== ReceiptStatus.PROCESSING
+            (receipt.status !== ReceiptStatus.PROCESSING &&
+              !(
+                receipt.status === ReceiptStatus.GENERATED &&
+                receipt.replacement_status === "processing"
+              ))
           ) {
             await this.dataSource
               .getRepository(ReceiptGenerationOutbox)
@@ -99,13 +112,27 @@ export class ReceiptOutboxService implements OnModuleDestroy {
               await receipts.update(
                 {
                   id: receipt.id,
+                  user_id: entry.user_id,
                   generation_id: entry.generation_id,
-                  status: ReceiptStatus.PROCESSING,
+                  status: receipt.status,
+                  ...(receipt.status === ReceiptStatus.GENERATED
+                    ? {
+                        replacement_status: "processing" as const,
+                        active_revision: receipt.active_revision,
+                        pending_id: receipt.pending_id,
+                      }
+                    : {}),
                 },
-                {
-                  status: ReceiptStatus.FAILED,
-                  error_message: "Receipt generation stopped; please retry",
-                },
+                receipt.status === ReceiptStatus.GENERATED
+                  ? {
+                      replacement_status: "failed",
+                      replacement_error:
+                        "Replacement stopped; retry the frozen candidate",
+                    }
+                  : {
+                      status: ReceiptStatus.FAILED,
+                      error_message: "Receipt generation stopped; please retry",
+                    },
               );
             }
             return;

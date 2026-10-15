@@ -45,7 +45,7 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
       "Современный дизайн",
       "Акцентные полосы",
       "Карточки метаданных",
-      "QR код оплаты",
+      "Полные суммы позиций",
     ],
     colors: {
       primary: "#2563EB",
@@ -124,7 +124,7 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
       "Волновая графика",
       "Мягкий дизайн",
       "Дружественный вид",
-      "Анимированные элементы",
+      "Статичная графика для PDF",
     ],
     colors: {
       primary: "#3B82F6",
@@ -224,7 +224,8 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
     preview: "/templates/previews/thermal.png",
     pdfOptions: {
       width: "80mm",
-      preferCSSPageSize: true,
+      contentBasedHeight: true,
+      preferCSSPageSize: false,
       margin: { top: "3mm", bottom: "3mm", left: "2mm", right: "2mm" },
     },
   },
@@ -326,3 +327,88 @@ export const getTemplatesByCategory = (
     (template) => template.category === category,
   );
 };
+
+export type TemplateCapabilities = {
+  revision: number;
+  companyFields: string[];
+  recipientFields: string[];
+  money: boolean;
+  accent: boolean;
+  terms: boolean;
+  generatedAt: boolean;
+  paper: "A4" | "thermal";
+  logo: {
+    minWidth: number;
+    maxWidth: number;
+    maxHeight: number;
+    alignments: Array<"auto" | "left" | "center" | "right">;
+  };
+};
+const fullCompany = [
+  "companyName",
+  "companyAddress",
+  "companyEmail",
+  "companyPhone",
+  "companyTaxId",
+  "companyIban",
+  "companySwift",
+  "companyWebsite",
+  "companyTagline",
+];
+/** Capabilities describe bindings in the HTML, independently of subscription access. */
+export function getTemplateCapabilities(id: string): TemplateCapabilities {
+  if (!Object.prototype.hasOwnProperty.call(TEMPLATE_METADATA, id))
+    throw new Error("Unknown template");
+  const recipientContacts = [
+    "standard",
+    "compact",
+    "elegant",
+    "corporate",
+    "thermal",
+    "dark",
+    "branded",
+    "delivery",
+    "proforma",
+  ].includes(id)
+    ? ["recipientEmail", "recipientPhone"]
+    : ["vintage", "tech"].includes(id)
+      ? ["recipientEmail"]
+      : [];
+  return {
+    revision: 2,
+    companyFields:
+      id === "compact"
+        ? ["companyName", "companyTagline"]
+        : id === "delivery"
+          ? [
+              "companyName",
+              "companyAddress",
+              "companyEmail",
+              "companyPhone",
+              "companyWebsite",
+            ]
+          : [...fullCompany],
+    recipientFields: [
+      "recipientName",
+      "recipientAddress",
+      ...recipientContacts,
+    ],
+    money: id !== "delivery",
+    accent: id === "branded",
+    terms: id === "proforma",
+    generatedAt: [
+      "standard",
+      "thermal",
+      "dark",
+      "branded",
+      "proforma",
+    ].includes(id),
+    paper: id === "thermal" ? "thermal" : "A4",
+    logo: {
+      minWidth: 24,
+      maxWidth: id === "thermal" ? 120 : 200,
+      maxHeight: id === "thermal" ? 72 : 120,
+      alignments: ["auto", "left", "center", "right"],
+    },
+  };
+}

@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thermal Receipt</title>
     <style>
         @page {
-            size: 80mm auto;
-            margin: 2mm;
+            size: auto;
+            margin: 3mm 2mm;
         }
 
         * {
@@ -133,7 +133,9 @@
         }
 
         .items-header-qty {
-            width: 30px;
+            width: 44px;
+            flex-shrink: 0;
+            white-space: nowrap;
             text-align: center;
         }
 
@@ -239,6 +241,9 @@
             margin-top: 6px;
             color: #000;
         }
+        {{> printLayout}}
+        .logo { max-height: 40px; max-width: 160px; }
+        .header-left { max-width: 100%; }
     </style>
 </head>
 <body>
@@ -246,7 +251,7 @@
         <!-- Logo -->
         {{#if hasCustomLogo}}
         <div class="logo-section">
-            <img src="{{logoPath}}" alt="Logo" class="logo">
+            <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
         </div>
         {{/if}}
 

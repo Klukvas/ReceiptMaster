@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -194,6 +194,9 @@
             font-size: 20.8px;
             color: white;
         }
+        {{> printLayout}}
+        .logo { max-height: 52px; }
+        .footer { margin-top: 16px; text-align: center; }
     </style>
 </head>
 <body>
@@ -201,7 +204,7 @@
         <!-- Header -->
         <div class="header">
             {{#if hasCustomLogo}}
-            <img src="{{logoPath}}" alt="Logo" class="logo">
+            <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
             {{/if}}
             <div>
                 <div class="company-name">{{companyName}}</div>
@@ -281,6 +284,10 @@
                 <span class="total-label">{{#if translations.grandTotal}}{{translations.grandTotal}}{{else}}Total{{/if}}</span>
                 <span class="total-value">{{total}}</span>
             </div>
+        </div>
+        <div class="footer">
+            {{#if footerTitle}}<div class="footer-title">{{footerTitle}}</div>{{/if}}
+            {{#if footerSubtitle}}<div class="footer-text">{{footerSubtitle}}</div>{{/if}}
         </div>
     </div>
 </body>

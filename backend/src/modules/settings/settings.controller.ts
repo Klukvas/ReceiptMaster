@@ -1,3 +1,7 @@
+import { Optional } from "@nestjs/common";
+import { DocumentConfigService } from "./services/document-config.service";
+import { DocumentAssetsService } from "./services/document-assets.service";
+import { parseSettingsInput, settingsInput } from "./dto/settings-input";
 import {
   Controller,
   Post,
@@ -21,7 +25,7 @@ import {
   CompanyInfoResponseDto,
   TemplateInfoDto,
 } from "./dto/settings-response.dto";
-import { ApiErrors } from "../../common/errors/ApiError";
+import { ApiErrors, ApiErrorResponse } from "../../common/errors/ApiError";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
@@ -30,7 +34,10 @@ import { LogoStorageService } from "../../common/services/logo-storage.service";
 import { SettingsService } from "./services/settings.service";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
-import { TEMPLATE_METADATA } from "../receipts/templates/metadata";
+import {
+  getTemplateCapabilities,
+  TEMPLATE_METADATA,
+} from "../receipts/templates/metadata";
 import { SubscriptionService } from "../subscription/subscription.service";
 
 @ApiTags("settings")
@@ -45,19 +52,36 @@ export class SettingsController {
     private logoStorageService: LogoStorageService,
     private settingsService: SettingsService,
     private subscriptionService: SubscriptionService,
+    @Optional() private readonly documents?: DocumentConfigService,
+    @Optional() private readonly assets?: DocumentAssetsService,
   ) {}
 
   @Post("logo/upload")
   @UseInterceptors(
     FileInterceptor("logo", {
       fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|svg)$/)) {
-          return callback(new Error("Only image files are allowed!"), false);
+        if (
+          ![
+            "image/jpg",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/svg+xml",
+          ].includes(file.mimetype)
+        ) {
+          return callback(
+            ApiErrors.VALIDATION_ERROR("logo", "Use PNG, JPEG, GIF or SVG"),
+            false,
+          );
         }
         callback(null, true);
       },
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
+        fileSize: 5 * 1024 * 1024,
+        files: 1,
+        fields: 0,
+        parts: 2,
+        headerPairs: 40,
       },
     }),
   )
@@ -70,19 +94,15 @@ export class SettingsController {
     }
 
     try {
-      // Удаляем старый логотип пользователя, если он существует
-      try {
-        await this.logoStorageService.deleteUserLogo(req.user.id);
-      } catch (error) {
-        // Игнорируем ошибку, если логотип не найден
-        this.logger.log("No existing logo to delete for user:", req.user.id);
-      }
-
       // Загружаем новый логотип в Object Storage
-      const url = await this.logoStorageService.uploadLogo(
-        file.buffer,
+      const version = await this.documents.read(req.user.id);
+      const saved = await this.documents.save(
         req.user.id,
+        { config: version.config, logoAction: "replace" },
+        version.revision,
+        file,
       );
+      const url = `/settings/logo?revision=${saved.revision}`;
 
       return {
         message: "Logo uploaded successfully to Object Storage",
@@ -93,6 +113,7 @@ export class SettingsController {
         userId: req.user.id,
       };
     } catch (error) {
+      if (error instanceof ApiErrorResponse) throw error;
       throw ApiErrors.FILE_UPLOAD_FAILED("logo");
     }
   }
@@ -101,14 +122,18 @@ export class SettingsController {
   async getLogo(@Res() res: Response, @Request() req: { user: User }) {
     try {
       // Получаем логотип пользователя из Object Storage
-      const logoBuffer = await this.logoStorageService.downloadLogo(
-        req.user.id,
-      );
+      const version = await this.documents.read(req.user.id);
+      const logoBuffer = await this.assets.preview(req.user.id, {
+        config: version.config,
+        logoAction: "keep",
+      });
+      if (!logoBuffer)
+        return res.status(404).json({ message: "Logo not found" });
 
       res.set({
         "Content-Type": "image/png",
         "Content-Length": logoBuffer.length.toString(),
-        "Cache-Control": "public, max-age=3600", // Кешируем на 1 час
+        "Cache-Control": "private, no-store", // Кешируем на 1 час
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET",
         "Access-Control-Allow-Headers":
@@ -125,7 +150,11 @@ export class SettingsController {
   @Get("logo/exists")
   async checkLogoExists(@Request() req: { user: User }) {
     try {
-      const hasLogo = await this.logoStorageService.userHasLogo(req.user.id);
+      const version = await this.documents.read(req.user.id);
+      const hasLogo =
+        Boolean(version.config.logo.assetId) ||
+        (version.revision === 0 &&
+          (await this.logoStorageService.userHasLogo(req.user.id)));
       return {
         hasLogo,
         userId: req.user.id,
@@ -139,7 +168,12 @@ export class SettingsController {
   @Post("logo/delete")
   async deleteLogo(@Request() req: { user: User }) {
     try {
-      await this.logoStorageService.deleteUserLogo(req.user.id);
+      const version = await this.documents.read(req.user.id);
+      await this.documents.save(
+        req.user.id,
+        { config: version.config, logoAction: "remove" },
+        version.revision,
+      );
       return {
         message: "Logo deleted successfully",
         userId: req.user.id,
@@ -190,6 +224,7 @@ export class SettingsController {
         category: template.category,
         features: template.features,
         colors: template.colors,
+        capabilities: getTemplateCapabilities(template.id),
         locked: allowedIds !== null && !allowedIds.includes(template.id),
       })),
     };
@@ -207,11 +242,12 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { templateId: string },
   ) {
+    const input = parseSettingsInput(settingsInput.template, body);
     await this.subscriptionService.assertCanUseTemplate(
       req.user.id,
-      body.templateId,
+      input.templateId,
     );
-    await this.settingsService.setUserTemplate(req.user.id, body.templateId);
+    await this.settingsService.setUserTemplate(req.user.id, input.templateId);
     return { message: "Template setting updated successfully" };
   }
 
@@ -226,7 +262,8 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { title: string },
   ) {
-    await this.settingsService.setReceiptTitle(req.user.id, body.title);
+    const input = parseSettingsInput(settingsInput.title, body);
+    await this.settingsService.setReceiptTitle(req.user.id, input.title);
     return { message: "Receipt title updated successfully" };
   }
 
@@ -243,7 +280,8 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { language: string },
   ) {
-    await this.settingsService.setTemplateLanguage(req.user.id, body.language);
+    const input = parseSettingsInput(settingsInput.language, body);
+    await this.settingsService.setTemplateLanguage(req.user.id, input.language);
     return { message: "Template language updated successfully" };
   }
 
@@ -258,7 +296,8 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { footerTitle: string },
   ) {
-    await this.settingsService.setFooterTitle(req.user.id, body.footerTitle);
+    const input = parseSettingsInput(settingsInput.footerTitle, body);
+    await this.settingsService.setFooterTitle(req.user.id, input.footerTitle);
     return { message: "Footer title updated successfully" };
   }
 
@@ -275,11 +314,26 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { footerSubtitle: string },
   ) {
+    const input = parseSettingsInput(settingsInput.footerSubtitle, body);
     await this.settingsService.setFooterSubtitle(
       req.user.id,
-      body.footerSubtitle,
+      input.footerSubtitle,
     );
     return { message: "Footer subtitle updated successfully" };
+  }
+
+  @Post("footer")
+  async updateFooter(
+    @Request() req: { user: User },
+    @Body() body: { footerTitle: string; footerSubtitle: string },
+  ) {
+    const input = parseSettingsInput(settingsInput.footer, body);
+    await this.settingsService.setFooter(
+      req.user.id,
+      input.footerTitle,
+      input.footerSubtitle,
+    );
+    return { message: "Footer updated successfully" };
   }
 
   @Get("primary-color")
@@ -293,13 +347,8 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { primaryColor: string },
   ) {
-    if (body.primaryColor && !/^#[0-9A-Fa-f]{6}$/.test(body.primaryColor)) {
-      throw ApiErrors.VALIDATION_ERROR(
-        "primaryColor",
-        "Must be a valid hex color (#RRGGBB)",
-      );
-    }
-    await this.settingsService.setPrimaryColor(req.user.id, body.primaryColor);
+    const input = parseSettingsInput(settingsInput.color, body);
+    await this.settingsService.setPrimaryColor(req.user.id, input.primaryColor);
     return { message: "Primary color updated successfully" };
   }
 
@@ -314,19 +363,8 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { paymentTerms: string },
   ) {
-    if (
-      body.paymentTerms !== undefined &&
-      typeof body.paymentTerms !== "string"
-    ) {
-      throw ApiErrors.VALIDATION_ERROR("paymentTerms", "Must be a string");
-    }
-    if (body.paymentTerms && body.paymentTerms.length > 500) {
-      throw ApiErrors.VALIDATION_ERROR(
-        "paymentTerms",
-        "Must not exceed 500 characters",
-      );
-    }
-    await this.settingsService.setPaymentTerms(req.user.id, body.paymentTerms);
+    const input = parseSettingsInput(settingsInput.payment, body);
+    await this.settingsService.setPaymentTerms(req.user.id, input.paymentTerms);
     return { message: "Payment terms updated successfully" };
   }
 
@@ -341,21 +379,10 @@ export class SettingsController {
     @Request() req: { user: User },
     @Body() body: { deliveryTerms: string },
   ) {
-    if (
-      body.deliveryTerms !== undefined &&
-      typeof body.deliveryTerms !== "string"
-    ) {
-      throw ApiErrors.VALIDATION_ERROR("deliveryTerms", "Must be a string");
-    }
-    if (body.deliveryTerms && body.deliveryTerms.length > 500) {
-      throw ApiErrors.VALIDATION_ERROR(
-        "deliveryTerms",
-        "Must not exceed 500 characters",
-      );
-    }
+    const input = parseSettingsInput(settingsInput.delivery, body);
     await this.settingsService.setDeliveryTerms(
       req.user.id,
-      body.deliveryTerms,
+      input.deliveryTerms,
     );
     return { message: "Delivery terms updated successfully" };
   }
@@ -384,7 +411,8 @@ export class SettingsController {
       companyTagline?: string;
     },
   ) {
-    await this.settingsService.updateCompanyInfo(req.user.id, body);
+    const input = parseSettingsInput(settingsInput.company, body);
+    await this.settingsService.updateCompanyInfo(req.user.id, input);
     return { message: "Company information updated successfully" };
   }
 }

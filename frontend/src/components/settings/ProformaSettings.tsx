@@ -1,142 +1,135 @@
-import { useState, useEffect } from"react";
-import { useMutation, useQueryClient } from"@tanstack/react-query";
-import { FileText, Loader2 } from"lucide-react";
-import { settingsApi } from"../../lib/api";
-import { useTranslation } from"../../hooks/useTranslation";
+import type { ReceiptDesignSettings } from "../../lib/api";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { FileText, Loader2 } from "lucide-react";
+import { settingsApi } from "../../lib/api";
+import { parseApiError } from "../../lib/api-errors";
+import { useTranslation } from "../../hooks/useTranslation";
 import {
- useReceiptDesignSettings,
- RECEIPT_DESIGN_QUERY_KEY,
-} from"../../hooks/useReceiptDesignSettings";
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
+import { SettingsLoadError } from "./SettingsLoadError";
+import { Button } from "../ui/Button";
 
+function TermsField({
+  field,
+  label,
+  saved,
+  disabled,
+}: {
+  disabled: boolean;
+  field: "paymentTerms" | "deliveryTerms";
+  label: string;
+  saved: string;
+}) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<string>();
+  const value = draft ?? saved;
+  const mutation = useMutation({
+    mutationFn:
+      field === "paymentTerms"
+        ? settingsApi.updatePaymentTerms
+        : settingsApi.updateDeliveryTerms,
+    onSuccess: async (_response, submitted) => {
+      queryClient.setQueryData<ReceiptDesignSettings>(
+        RECEIPT_DESIGN_QUERY_KEY,
+        (previous) =>
+          previous ? { ...previous, [field]: submitted } : previous,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: RECEIPT_DESIGN_QUERY_KEY,
+      });
+      setDraft(undefined);
+    },
+  });
+  return (
+    <div>
+      <label htmlFor={field} className="block text-sm font-medium mb-1.5">
+        {label}
+      </label>
+      <textarea
+        id={field}
+        value={value}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={disabled || mutation.isPending}
+        maxLength={500}
+        rows={3}
+        className="w-full rounded-lg border border-[var(--color-border)] bg-elevated p-3 text-sm"
+      />
+      <div className="text-xs text-content-tertiary">{value.length}/500</div>
+      {mutation.isError && (
+        <p role="alert" className="text-danger-base">
+          {t(
+            "settings.saveFailed",
+            "Changes were not saved. Retry Save to keep your draft.",
+          )}
+          : {parseApiError(mutation.error).message}
+        </p>
+      )}
+      <div className="flex justify-end gap-3 mt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={draft === undefined || mutation.isPending}
+          onClick={() => {
+            setDraft(undefined);
+            mutation.reset();
+          }}
+        >
+          {t("common.cancel", "Cancel")}
+        </Button>
+        <Button
+          size="sm"
+          disabled={disabled || value === saved || mutation.isPending}
+          onClick={() => mutation.mutate(value)}
+        >
+          {mutation.isPending
+            ? t("common.saving", "Saving...")
+            : t("common.save", "Save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
 export const ProformaSettings = () => {
- const { t } = useTranslation();
- const queryClient = useQueryClient();
-
- const [paymentTerms, setPaymentTerms] = useState("");
- const [deliveryTerms, setDeliveryTerms] = useState("");
-
- const { data: designData, isLoading } = useReceiptDesignSettings();
-
- useEffect(() => {
- if (designData?.paymentTerms !== undefined) {
- setPaymentTerms(designData.paymentTerms);
- }
- if (designData?.deliveryTerms !== undefined) {
- setDeliveryTerms(designData.deliveryTerms);
- }
- }, [designData]);
-
- const paymentMutation = useMutation({
- mutationFn: (terms: string) => settingsApi.updatePaymentTerms(terms),
- onSuccess: () => {
- queryClient.invalidateQueries({
- queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
- });
- },
- });
-
- const deliveryMutation = useMutation({
- mutationFn: (terms: string) => settingsApi.updateDeliveryTerms(terms),
- onSuccess: () => {
- queryClient.invalidateQueries({
- queryKey: [...RECEIPT_DESIGN_QUERY_KEY],
- });
- },
- });
-
- if (isLoading) {
- return (
- <div className="flex justify-center py-4">
- <Loader2 className="h-5 w-5 animate-spin text-content-tertiary" />
- </div>
- );
- }
-
- return (
- <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">
- <div className="flex items-center gap-3 mb-4">
- <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent-light)]">
- <FileText className="h-4 w-4 text-accent-base" />
- </div>
- <div>
- <h3 className="text-sm font-semibold text-content">
- {t("settings.proformaSettings","Proforma Settings")}
- </h3>
- <p className="text-xs text-content-tertiary">
- {t(
-"settings.proformaSettingsDescription",
-"Payment and delivery terms shown on proforma invoices",
- )}
- </p>
- </div>
- </div>
-
- <div className="space-y-4">
- <div>
- <label className="block text-sm font-medium text-content-secondary mb-1.5">
- {t("settings.paymentTermsLabel","Payment Terms")}
- </label>
- <textarea
- value={paymentTerms}
- onChange={(e) => setPaymentTerms(e.target.value)}
- onBlur={() => paymentMutation.mutate(paymentTerms)}
- placeholder={t(
-"settings.paymentTermsPlaceholder",
-"e.g., Net 30 days from invoice date",
- )}
- maxLength={500}
- rows={3}
- className="w-full rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content placeholder-content-tertiary resize-none"
- />
- <div className="flex justify-between mt-1">
- <p className="text-xs text-content-tertiary">
- {t(
-"settings.paymentTermsHint",
-"Displayed on proforma invoice template",
- )}
- </p>
- <span className="text-xs text-content-tertiary">
- {paymentTerms.length}/500
- </span>
- </div>
- </div>
-
- <div>
- <label className="block text-sm font-medium text-content-secondary mb-1.5">
- {t("settings.deliveryTermsLabel","Delivery Terms")}
- </label>
- <textarea
- value={deliveryTerms}
- onChange={(e) => setDeliveryTerms(e.target.value)}
- onBlur={() => deliveryMutation.mutate(deliveryTerms)}
- placeholder={t(
-"settings.deliveryTermsPlaceholder",
-"e.g., EXW, FOB, CIF — Incoterms 2020",
- )}
- maxLength={500}
- rows={3}
- className="w-full rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content placeholder-content-tertiary resize-none"
- />
- <div className="flex justify-between mt-1">
- <p className="text-xs text-content-tertiary">
- {t(
-"settings.deliveryTermsHint",
-"Displayed on proforma invoice template",
- )}
- </p>
- <span className="text-xs text-content-tertiary">
- {deliveryTerms.length}/500
- </span>
- </div>
- </div>
- </div>
-
- {(paymentMutation.isPending || deliveryMutation.isPending) && (
- <div className="flex items-center gap-2 mt-3 text-xs text-content-tertiary">
- <Loader2 className="h-3 w-3 animate-spin" />
- {t("common.saving","Saving...")}
- </div>
- )}
- </div>
- );
+  const { t } = useTranslation();
+  const { data, isLoading, error, refetch } = useReceiptDesignSettings();
+  if (error && !data)
+    return <SettingsLoadError error={error} retry={refetch} />;
+  if (isLoading || !data) return <Loader2 className="h-5 w-5 animate-spin" />;
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <FileText className="h-5 w-5" />
+        <div>
+          <h3 className="text-sm font-semibold">
+            {t("settings.proformaSettings", "Proforma Settings")}
+          </h3>
+          <p className="text-xs text-content-tertiary">
+            {t(
+              "settings.proformaSettingsDescription",
+              "Payment and delivery terms shown on proforma invoices",
+            )}
+          </p>
+        </div>
+      </div>
+      {error && <SettingsLoadError error={error} retry={refetch} />}
+      <div className="space-y-4">
+        <TermsField
+          disabled={Boolean(error)}
+          field="paymentTerms"
+          label={t("settings.paymentTermsLabel", "Payment Terms")}
+          saved={data.paymentTerms || ""}
+        />
+        <TermsField
+          disabled={Boolean(error)}
+          field="deliveryTerms"
+          label={t("settings.deliveryTermsLabel", "Delivery Terms")}
+          saved={data.deliveryTerms || ""}
+        />
+      </div>
+    </div>
+  );
 };

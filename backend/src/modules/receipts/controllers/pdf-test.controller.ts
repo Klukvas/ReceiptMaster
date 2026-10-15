@@ -14,7 +14,10 @@ import { Response } from "express";
 import { TemplateService, ReceiptTemplate } from "../services/template.service";
 import { PlaywrightPdfGenerator } from "../services/playwright-pdf-generator.service";
 import { JwtAuthGuard } from "../../users/guards/jwt-auth.guard";
-import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
+import { getTemplateMetadata } from "../templates/metadata";
+import { Order } from "../../orders/entities/order.entity";
+import { OrderItem } from "../../orders/entities/order-item.entity";
+import { Recipient } from "../../recipients/entities/recipient.entity";
 
 const VALID_TEMPLATES = new Set(Object.values(ReceiptTemplate));
 const VALID_LANGUAGES = new Set(["en", "ru", "uk"]);
@@ -78,7 +81,10 @@ export class PdfTestController {
     try {
       const validatedTemplate = validateTemplate(template);
       const validatedLanguage = validateLanguage(language);
-      const testData = this.getTestData(withLogo === "true", validatedLanguage);
+      const testData = await this.getTestData(
+        withLogo === "true",
+        validatedLanguage,
+      );
       const html = await this.templateService.renderTemplate(
         validatedTemplate,
         testData,
@@ -95,256 +101,47 @@ export class PdfTestController {
     }
   }
 
-  private getTestData(withLogo: boolean = true, language: string = "en") {
-    let logoData = {
-      hasCustomLogo: false,
-      logoPath: undefined,
-    };
-
-    if (withLogo) {
-      // Create a simple SVG logo as base64
-      const logoSvg = `
-        <svg width="120" height="40" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
-          <rect width="120" height="40" fill="#2563EB" rx="8"/>
-          <text x="60" y="26" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">TECH</text>
-        </svg>
-      `;
-
-      const logoSvgBase64 = Buffer.from(logoSvg).toString("base64");
-      const logoDataUrl = `data:image/svg+xml;base64,${logoSvgBase64}`;
-
-      logoData = {
-        hasCustomLogo: true,
-        logoPath: logoDataUrl,
-      };
-    }
-
-    return {
-      companyName: "Tech Solutions LLC",
-      ...logoData,
-      receiptTitle: DEFAULT_RECEIPT_TITLE[language] || DEFAULT_RECEIPT_TITLE.en,
-      receiptNumber: "2025-000123",
-      orderDate: new Date().toLocaleString(
-        TemplateService.getLocaleForLanguage(language),
-      ),
-      generatedAt: new Date().toLocaleString(
-        TemplateService.getLocaleForLanguage(language),
-      ),
-      recipientName: "Олександр Петренко",
-      recipientEmail: "oleksandr.petrenko@example.com",
-      recipientPhone: "+380501234567",
-      recipientAddress: "вул. Хрещатик, 22, оф. 15, Київ, 01001",
-      items: [
-        {
-          productName: "Веб-розробка сайту",
-          qty: 1,
-          unitPrice: "15,000.00 ₴",
-          lineTotal: "15,000.00 ₴",
-        },
-        {
-          productName: "Дизайн логотипу",
-          qty: 1,
-          unitPrice: "3,500.00 ₴",
-          lineTotal: "3,500.00 ₴",
-        },
-        {
-          productName: "Технічна підтримка (1 місяць)",
-          qty: 1,
-          unitPrice: "2,000.00 ₴",
-          lineTotal: "2,000.00 ₴",
-        },
-      ],
-      subtotal: "20,500.00 ₴",
-      total: "20,500.00 ₴",
-      fontRegular: "",
-      fontBold: "",
-      translations: this.getTranslations(language),
-    };
-  }
-
-  private getTranslations(language: string) {
-    // Fallback translations in case the service hasn't loaded them yet
-    const fallbackTranslations: Record<string, Record<string, string>> = {
-      en: {
-        date: "Date:",
-        invoiceDate: "Invoice Date:",
-        invoiceNo: "Invoice No:",
-        due: "Due",
-        recipient: "Recipient:",
-        email: "Email:",
-        phone: "Phone:",
-        address: "Address:",
-        billTo: "Bill To",
-        billedTo: "Billed To",
-        from: "From",
-        fromLabel: "From:",
-        billToLabel: "Bill To:",
-        item: "Item",
-        description: "Description",
-        productName: "Product Name",
-        qty: "Qty",
-        unit: "Unit",
-        unitPrice: "Unit Price",
-        price: "Price",
-        rate: "Rate",
-        tax: "Tax",
-        amount: "Amount",
-        subtotal: "Subtotal",
-        subTotal: "Sub Total:",
-        total: "Total",
-        grandTotal: "Grand Total",
-        invoiceTotal: "Invoice Total",
-        summary: "Summary",
-        discount: "Discount",
-        shipping: "Shipping",
-        notes: "Notes",
-        terms: "Terms",
-        paymentInfo: "Payment Info",
-        payment: "Payment",
-        scanToPay: "Scan to pay",
-        thankYou: "Thank you for your purchase!",
-        footerMessage: "If you have any questions, please contact us.",
-        generatedAt: "Receipt generated:",
-        note: "Note:",
-        debitMemo: "Debit Memo",
-        taxInvoice: "TAX INVOICE",
-        original: "Original",
-        srNo: "SrNo",
-        gstinNo: "GSTIN No:",
-        billAmount: "Bill Amount: Thirty Thousand Forty Four Only",
-        centralTax: "Central Tax (9.00 %):",
-        stateTax: "State Tax (9.00 %):",
-        termsAndConditions: "Terms & Conditions:",
-        terms1: "Goods once sold will not be taken back.",
-        terms2:
-          "Our risk and responsibility ceases as soon as the goods are delivered to the carrier.",
-        forCompany: "For, {{companyName}}",
-        authorisedSignatory: "(Authorised Signatory)",
-        taxId: "Tax ID",
-        iban: "IBAN",
-        swift: "SWIFT",
-      },
-      ru: {
-        date: "Дата:",
-        invoiceDate: "Дата счета:",
-        invoiceNo: "Номер счета:",
-        due: "Срок",
-        recipient: "Получатель:",
-        email: "Email:",
-        phone: "Телефон:",
-        address: "Адрес:",
-        billTo: "Получатель",
-        billedTo: "Получатель",
-        from: "Отправитель",
-        fromLabel: "От:",
-        billToLabel: "Кому:",
-        item: "Товар",
-        description: "Описание",
-        productName: "Наименование товара",
-        qty: "Кол-во",
-        unit: "Ед.",
-        unitPrice: "Цена за ед.",
-        price: "Цена",
-        rate: "Цена",
-        tax: "Налог",
-        amount: "Сумма",
-        subtotal: "Промежуточный итог",
-        subTotal: "Промежуточный итог:",
-        total: "Итого",
-        grandTotal: "Общий итог",
-        invoiceTotal: "Сумма счета",
-        summary: "Итоги",
-        discount: "Скидка",
-        shipping: "Доставка",
-        notes: "Примечания",
-        terms: "Условия",
-        paymentInfo: "Информация об оплате",
-        payment: "Оплата",
-        scanToPay: "Сканируйте для оплаты",
-        thankYou: "Спасибо за покупку!",
-        footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
-        generatedAt: "Чек сгенерирован:",
-        note: "Примечание:",
-        debitMemo: "Дебетовая записка",
-        taxInvoice: "НАЛОГОВАЯ НАКЛАДНАЯ",
-        original: "Оригинал",
-        srNo: "№",
-        gstinNo: "Налоговый номер:",
-        billAmount: "Сумма счета: Тридцать тысяч сорок четыре только",
-        centralTax: "Центральный налог (9.00 %):",
-        stateTax: "Государственный налог (9.00 %):",
-        termsAndConditions: "Условия и положения:",
-        terms1: "Товары после продажи не принимаются обратно.",
-        terms2:
-          "Наш риск и ответственность прекращаются, как только товары доставлены перевозчику.",
-        forCompany: "За, {{companyName}}",
-        authorisedSignatory: "(Уполномоченная подпись)",
-        taxId: "Налоговый номер",
-        iban: "IBAN",
-        swift: "SWIFT",
-      },
-      uk: {
-        date: "Дата:",
-        invoiceDate: "Дата рахунку:",
-        invoiceNo: "Номер рахунку:",
-        due: "Термін",
-        recipient: "Одержувач:",
-        email: "Email:",
-        phone: "Телефон:",
-        address: "Адреса:",
-        billTo: "Одержувач",
-        billedTo: "Одержувач",
-        from: "Відправник",
-        fromLabel: "Від:",
-        billToLabel: "Кому:",
-        item: "Товар",
-        description: "Опис",
-        productName: "Назва товару",
-        qty: "Кількість",
-        unit: "Од.",
-        unitPrice: "Ціна за од.",
-        price: "Ціна",
-        rate: "Ціна",
-        tax: "Податок",
-        amount: "Сума",
-        subtotal: "Проміжний підсумок",
-        subTotal: "Проміжний підсумок:",
-        total: "Разом",
-        grandTotal: "Загальний підсумок",
-        invoiceTotal: "Сума рахунку",
-        summary: "Підсумки",
-        discount: "Знижка",
-        shipping: "Доставка",
-        notes: "Примітки",
-        terms: "Умови",
-        paymentInfo: "Інформація про оплату",
-        payment: "Оплата",
-        scanToPay: "Скануйте для оплати",
-        thankYou: "Дякуємо за покупку!",
-        footerMessage: "Якщо у вас є питання, будь ласка, зв'яжіться з нами.",
-        generatedAt: "Чек згенеровано:",
-        note: "Примітка:",
-        debitMemo: "Дебетова записка",
-        taxInvoice: "ПОДАТКОВА НАКЛАДНА",
-        original: "Оригінал",
-        srNo: "№",
-        gstinNo: "Податковий номер:",
-        billAmount: "Сума рахунку: Тридцять тисяч сорок чотири тільки",
-        centralTax: "Центральний податок (9.00 %):",
-        stateTax: "Державний податок (9.00 %):",
-        termsAndConditions: "Умови та положення:",
-        terms1: "Товари після продажу не приймаються назад.",
-        terms2:
-          "Наш ризик та відповідальність припиняються, як тільки товари доставлені перевізнику.",
-        forCompany: "За, {{companyName}}",
-        authorisedSignatory: "(Уповноважений підпис)",
-        taxId: "Податковий номер",
-        iban: "IBAN",
-        swift: "SWIFT",
-      },
-    };
-
-    return fallbackTranslations[language] || fallbackTranslations.en;
+  private async getTestData(withLogo: boolean = true, language: string = "en") {
+    await this.templateService.ready;
+    const logoSvg =
+      '<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="40" fill="#2563EB" rx="8"/><text x="60" y="26" text-anchor="middle" fill="white" font-family="Arial" font-size="14">TECH</text></svg>';
+    const logoPath = withLogo
+      ? `data:image/svg+xml;base64,${Buffer.from(logoSvg).toString("base64")}`
+      : undefined;
+    const items = [
+      { name: "Веб-розробка сайту", cents: 1500000 },
+      { name: "Дизайн логотипу", cents: 350000 },
+      { name: "Технічна підтримка (1 місяць)", cents: 200000 },
+    ].map(({ name, cents }) =>
+      Object.assign(new OrderItem(), {
+        product_name: name,
+        qty: 1,
+        unit_price_cents: cents,
+        line_total_cents: cents,
+      }),
+    );
+    const order = Object.assign(new Order(), {
+      currency: "UAH",
+      created_at: new Date(),
+      subtotal_cents: 2050000,
+      total_cents: 2050000,
+      items,
+      recipient: Object.assign(new Recipient(), {
+        name: "Олександр Петренко",
+        email: "oleksandr.petrenko@example.com",
+        phone: "+380501234567",
+        address: "вул. Хрещатик, 22, оф. 15, Київ, 01001",
+      }),
+    });
+    return this.templateService.prepareTemplateData(
+      order,
+      "2025-000123",
+      { companyName: "Tech Solutions LLC" },
+      withLogo,
+      logoPath,
+      undefined,
+      language,
+    );
   }
 
   @Post("generate-test-pdf")
@@ -355,7 +152,7 @@ export class PdfTestController {
     try {
       const validatedTemplate = validateTemplate(body.template);
       const validatedLanguage = validateLanguage(body.language);
-      const testData = this.getTestData(
+      const testData = await this.getTestData(
         body.withLogo !== false,
         validatedLanguage,
       );
@@ -367,7 +164,10 @@ export class PdfTestController {
       );
 
       // Generate PDF
-      const pdfBuffer = await this.playwrightPdfGenerator.generatePdf(html);
+      const pdfBuffer = await this.playwrightPdfGenerator.generatePdf(
+        html,
+        getTemplateMetadata(validatedTemplate)?.pdfOptions,
+      );
 
       // Set response headers
       res.setHeader("Content-Type", "application/pdf");

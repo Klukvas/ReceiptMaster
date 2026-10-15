@@ -11,8 +11,14 @@ export type Product = components["schemas"]["Product"] & {
   supplier_id?: string | null;
 };
 export type OrderItem = components["schemas"]["OrderItem"];
-export type Order = components["schemas"]["Order"];
-export type Receipt = components["schemas"]["Receipt"];
+export type Order = Omit<components["schemas"]["Order"], "receipts"> & {
+  receipts: Receipt[];
+};
+export type Receipt = components["schemas"]["Receipt"] & {
+  active_revision?: number;
+  replacement_status?: "processing" | "failed" | null;
+  replacement_error?: string | null;
+};
 
 // Recipient & Supplier have server-computed fields not in the entity schema
 export type Recipient = components["schemas"]["Recipient"] & {

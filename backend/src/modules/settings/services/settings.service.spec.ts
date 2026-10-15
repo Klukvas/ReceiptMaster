@@ -30,6 +30,8 @@ describe("SettingsService", () => {
   beforeEach(async () => {
     settingsRepo = {
       findOne: jest.fn(),
+      findOneOrFail: jest.fn().mockResolvedValue(mockSettings),
+      upsert: jest.fn().mockResolvedValue({}),
       create: jest.fn((data) => ({ ...data })),
       save: jest.fn((data) => Promise.resolve({ id: "settings-1", ...data })),
     };
@@ -76,8 +78,9 @@ describe("SettingsService", () => {
 
       await service.setUserTemplate("user-1", "elegant");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ templateId: "elegant" }),
+        ["userId"],
       );
     });
 
@@ -86,8 +89,10 @@ describe("SettingsService", () => {
 
       await service.setUserTemplate("user-1", "compact");
 
-      expect(settingsRepo.create).toHaveBeenCalledWith({ userId: "user-1" });
-      expect(settingsRepo.save).toHaveBeenCalled();
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
+        { userId: "user-1", templateId: "compact" },
+        ["userId"],
+      );
     });
   });
 
@@ -117,8 +122,9 @@ describe("SettingsService", () => {
         receiptTitle: "Receipt",
       });
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ receiptTitle: "Receipt" }),
+        ["userId"],
       );
     });
   });
@@ -184,8 +190,9 @@ describe("SettingsService", () => {
 
       await service.setReceiptTitle("user-1", "Накладна");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ receiptTitle: "Накладна" }),
+        ["userId"],
       );
     });
   });
@@ -208,8 +215,9 @@ describe("SettingsService", () => {
 
       await service.setTemplateLanguage("user-1", "uk");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ templateLanguage: "uk" }),
+        ["userId"],
       );
     });
   });
@@ -272,11 +280,12 @@ describe("SettingsService", () => {
         companyPhone: "+9999",
       });
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           companyName: "New Corp",
           companyPhone: "+9999",
         }),
+        ["userId"],
       );
     });
 
@@ -288,11 +297,12 @@ describe("SettingsService", () => {
         companyName: "Updated",
       });
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           companyName: "Updated",
-          companyEmail: "info@acme.com", // unchanged
+          // Only provided fields are written; untouched columns stay in the database.
         }),
+        ["userId"],
       );
     });
   });
@@ -303,8 +313,9 @@ describe("SettingsService", () => {
 
       await service.setFooterTitle("user-1", "Thanks for shopping");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ footerText: "Thanks for shopping" }),
+        ["userId"],
       );
     });
 
@@ -324,8 +335,9 @@ describe("SettingsService", () => {
 
       await service.setFooterSubtitle("user-1", "Come back soon");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ subFooterText: "Come back soon" }),
+        ["userId"],
       );
     });
 
@@ -354,7 +366,7 @@ describe("SettingsService", () => {
         companyTagline: "Better every day",
       });
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           companyAddress: "456 Oak Ave",
           companyEmail: "new@corp.com",
@@ -365,6 +377,7 @@ describe("SettingsService", () => {
           companyWebsite: "https://newcorp.com",
           companyTagline: "Better every day",
         }),
+        ["userId"],
       );
     });
 
@@ -410,8 +423,9 @@ describe("SettingsService", () => {
 
       await service.completeOnboarding("user-1");
 
-      expect(settingsRepo.save).toHaveBeenCalledWith(
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ onboardingCompleted: true }),
+        ["userId"],
       );
     });
 
@@ -426,6 +440,26 @@ describe("SettingsService", () => {
   });
 
   describe("getAllPdfSettings", () => {
+    it.each([
+      ["en", "Invoice"],
+      ["ru", "Инвойс"],
+      ["uk", "Інвойс"],
+    ])(
+      "preserves stored title provenance for %s even when it equals the default",
+      async (language, title) => {
+        settingsRepo.findOne.mockResolvedValue({
+          ...mockSettings,
+          receiptTitle: title,
+          templateLanguage: language,
+        });
+        const settings = await service.getAllPdfSettings("user-1");
+        expect(settings).toMatchObject({
+          receiptTitle: title,
+          hasCustomReceiptTitle: true,
+        });
+      },
+    );
+
     it("should return all PDF-related settings with custom title", async () => {
       settingsRepo.findOne.mockResolvedValue({
         ...mockSettings,

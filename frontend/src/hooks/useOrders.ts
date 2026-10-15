@@ -15,7 +15,11 @@ const RECEIPT_POLL_INTERVAL_MS = 4000;
 
 const hasGeneratingReceipt = (orders: Order[]): boolean =>
   orders.some((order) =>
-    order.receipts?.some((receipt) => receipt.status === "processing"),
+    order.receipts?.some(
+      (receipt) =>
+        receipt.status === "processing" ||
+        receipt.replacement_status === "processing",
+    ),
   );
 
 /**

@@ -1,3 +1,8 @@
+import { DocumentAsset } from "./entities/document-asset.entity";
+import { DocumentPreset } from "./entities/document-preset.entity";
+import { DocumentAssetsService } from "./services/document-assets.service";
+import { DocumentConfigService } from "./services/document-config.service";
+import { DocumentConfigController } from "./document-config.controller";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -11,12 +16,22 @@ import { CacheModule } from "../../common/modules/cache.module";
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([UserSettings]),
+    TypeOrmModule.forFeature([UserSettings, DocumentAsset, DocumentPreset]),
     SubscriptionModule,
     CacheModule,
   ],
-  controllers: [SettingsController],
-  providers: [SettingsService, LogoStorageService],
-  exports: [SettingsService, LogoStorageService],
+  controllers: [SettingsController, DocumentConfigController],
+  providers: [
+    SettingsService,
+    LogoStorageService,
+    DocumentAssetsService,
+    DocumentConfigService,
+  ],
+  exports: [
+    SettingsService,
+    LogoStorageService,
+    DocumentAssetsService,
+    DocumentConfigService,
+  ],
 })
 export class SettingsModule {}

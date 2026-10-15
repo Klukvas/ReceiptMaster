@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -301,23 +301,7 @@
             margin-bottom: 8px;
         }
         
-        .qr-code {
-            width: 80px;
-            height: 80px;
-            border: 1px solid #E5E7EB;
-            border-radius: 4px;
-            margin: 0 auto 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 8px;
-            color: #9CA3AF;
-        }
         
-        .qr-label {
-            font-size: 9px;
-            color: #6B7280;
-        }
         
         /* International */
         .fx-info {
@@ -328,6 +312,7 @@
             background: #F3F4F6;
             border-radius: 4px;
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -339,7 +324,7 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div>
                     {{#if companyTagline}}
@@ -435,7 +420,6 @@
                     <th class="col-item">{{#if translations.item}}{{translations.item}}{{else}}Item{{/if}}</th>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
                     <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
-                    <th class="col-tax">{{#if translations.tax}}{{translations.tax}}{{else}}Tax{{/if}}</th>
                     <th class="col-total">{{#if translations.total}}{{translations.total}}{{else}}Total{{/if}}</th>
                 </tr>
             </thead>
@@ -445,7 +429,6 @@
                     <td class="col-item">{{productName}}</td>
                     <td class="col-qty">{{qty}}</td>
                     <td class="col-price">{{unitPrice}}</td>
-                    <td class="col-tax">{{taxAmount}}</td>
                     <td class="col-total">{{lineTotal}}</td>
                 </tr>
                 {{/each}}
@@ -492,14 +475,15 @@
             <div class="notes-section">
                 {{#if footerTitle}}
                 <div class="notes-title">{{footerTitle}}</div>
-                {{#if footerSubtitle}}
-                <div class="notes-content">{{footerSubtitle}}</div>
-                {{/if}}
+
                 {{else}}
                 {{#if notes}}
                 <div class="notes-title">{{#if translations.notes}}{{translations.notes}}{{else}}Notes{{/if}}</div>
                 <div class="notes-content">{{notes}}</div>
                 {{/if}}
+                {{/if}}
+                {{#if footerSubtitle}}
+                <div class="notes-content">{{footerSubtitle}}</div>
                 {{/if}}
                 
                 {{#if paymentInfo}}
@@ -507,16 +491,6 @@
                 <div class="notes-content">{{paymentInfo}}</div>
                 {{/if}}
             </div>
-            
-            {{#if qrUri}}
-            <div class="payment-section">
-                <div class="payment-title">{{#if translations.payment}}{{translations.payment}}{{else}}Payment{{/if}}</div>
-                <div class="qr-code">
-                    <img src="{{qrUri}}" alt="QR Code" style="max-width: 100%; max-height: 100%;">
-                </div>
-                <div class="qr-label">{{#if translations.scanToPay}}{{translations.scanToPay}}{{else}}Scan to pay{{/if}}</div>
-            </div>
-            {{/if}}
         </div>
     </div>
 </body>

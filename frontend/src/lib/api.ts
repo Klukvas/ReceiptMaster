@@ -379,6 +379,15 @@ export const receiptsApi = {
   },
 };
 
+export type CompanyInfo = {
+  companyName: string; companyAddress: string; companyEmail: string; companyPhone: string;
+  companyTaxId: string; companyIban: string; companySwift: string; companyWebsite: string; companyTagline: string;
+};
+export type ReceiptDesignSettings = {
+  receiptTitle: string; hasCustomReceiptTitle?: boolean; templateId: string; templateLanguage: string;
+  footerTitle: string; footerSubtitle: string; primaryColor: string; paymentTerms: string; deliveryTerms: string;
+};
+
 export const settingsApi = {
   uploadLogo: (file: File) => {
     const formData = new FormData();
@@ -394,17 +403,7 @@ export const settingsApi = {
 
   deleteLogo: () => api.post("/settings/logo/delete"),
 
-  getReceiptDesign: () =>
-    api.get<{
-      receiptTitle: string;
-      templateId: string;
-      templateLanguage: string;
-      footerTitle: string;
-      footerSubtitle: string;
-      primaryColor: string;
-      paymentTerms: string;
-      deliveryTerms: string;
-    }>("/settings/receipt-design"),
+  getReceiptDesign: () => api.get<{ data: ReceiptDesignSettings }>("/settings/receipt-design"),
 
   getTemplateSettings: () =>
     api.get<{ templateId: string }>("/settings/template"),
@@ -451,18 +450,9 @@ export const settingsApi = {
   updateReceiptTitle: (title: string) =>
     api.post("/settings/receipt-title", { title }),
 
-  getCompanyInfo: () =>
-    api.get<{
-      companyName: string;
-      companyAddress: string;
-      companyEmail: string;
-      companyPhone: string;
-      companyTaxId: string;
-      companyIban: string;
-      companySwift: string;
-      companyWebsite: string;
-      companyTagline: string;
-    }>("/settings/company-info"),
+  getCompanyInfo: () => api.get<{ data: CompanyInfo }>("/settings/company-info"),
+
+  updateFooter: (footer: { footerTitle: string; footerSubtitle: string }) => api.post("/settings/footer", footer),
 
   getPrimaryColor: () =>
     api.get<{ primaryColor: string }>("/settings/primary-color"),

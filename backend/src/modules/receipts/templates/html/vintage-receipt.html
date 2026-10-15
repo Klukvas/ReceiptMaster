@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -309,6 +309,7 @@
             color: #8C6B4A;
             margin-top: 10px;
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -316,10 +317,12 @@
         <!-- Header -->
         <div class="header">
             <div class="invoice-title">{{receiptTitle}}</div>
+            <div class="invoice-number">{{translations.invoiceNo}} {{receiptNumber}}</div>
+            <div class="invoice-date">{{translations.date}} {{orderDate}}</div>
             <div class="ornament"></div>
             <div class="logo-section">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
             </div>
         </div>
@@ -377,7 +380,6 @@
                     <th class="col-item">{{#if translations.item}}{{translations.item}}{{else}}Item{{/if}}</th>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
                     <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
-                    <th class="col-tax">{{#if translations.tax}}{{translations.tax}}{{else}}Tax{{/if}}</th>
                     <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
             </thead>
@@ -387,7 +389,6 @@
                     <td class="col-item">{{productName}}</td>
                     <td class="col-qty">{{qty}}</td>
                     <td class="col-price">{{unitPrice}}</td>
-                    <td class="col-tax">{{taxAmount}}</td>
                     <td class="col-amount">{{lineTotal}}</td>
                 </tr>
                 {{/each}}
@@ -422,13 +423,14 @@
         <div class="footer">
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
-            {{#if footerSubtitle}}
-            <div class="footer-text">{{footerSubtitle}}</div>
-            {{/if}}
+
             {{else}}
             {{#if terms}}
             <div class="terms">{{terms}}</div>
             {{/if}}
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
             {{/if}}
             
             {{#if companyIban}}

@@ -39,6 +39,9 @@ export class ReceiptDesignResponseDto {
   receiptTitle: string;
 
   @ApiProperty()
+  hasCustomReceiptTitle: boolean;
+
+  @ApiProperty()
   templateId: string;
 
   @ApiProperty()

@@ -1,360 +1,76 @@
 import { Processor, WorkerHost, OnWorkerEvent } from "@nestjs/bullmq";
-import { Logger } from "@nestjs/common";
-import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
 import { Job } from "bullmq";
-import * as crypto from "crypto";
-import * as fs from "fs/promises";
-import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
-import { Order } from "../orders/entities/order.entity";
-import {
-  PdfGeneratorService,
-  ReceiptStyle,
-} from "./services/pdf-generator.service";
-import { PdfStorageService } from "../../common/services/pdf-storage.service";
-import { SettingsService } from "../settings/services/settings.service";
+import { Logger } from "@nestjs/common";
 import { runWithTenant } from "../../common/tenancy/tenant-context";
 import { ReceiptsGateway } from "./receipts.gateway";
-
+import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 export interface ReceiptGenerationJobData {
   receiptId: string;
   orderId: string;
   userId: string;
   generationId: string;
 }
-
 export const RECEIPT_GENERATION_QUEUE = "receipt-generation";
-
 @Processor(RECEIPT_GENERATION_QUEUE, { concurrency: 1 })
 export class ReceiptGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(ReceiptGenerationProcessor.name);
-
   constructor(
-    @InjectRepository(Receipt)
-    private receiptsRepository: Repository<Receipt>,
-    @InjectRepository(Order)
-    private ordersRepository: Repository<Order>,
-    @InjectDataSource()
-    private dataSource: DataSource,
-    private pdfGeneratorService: PdfGeneratorService,
-    private pdfStorageService: PdfStorageService,
-    private settingsService: SettingsService,
-    private receiptsGateway: ReceiptsGateway,
+    private readonly artifacts: ReceiptArtifactService,
+    private readonly gateway: ReceiptsGateway,
   ) {
     super();
   }
-
-  private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
-    const map: Record<string, ReceiptStyle> = {
-      standard: ReceiptStyle.STANDARD,
-      compact: ReceiptStyle.COMPACT,
-      classic: ReceiptStyle.CLASSIC,
-      modern: ReceiptStyle.MODERN,
-      elegant: ReceiptStyle.ELEGANT,
-      vintage: ReceiptStyle.VINTAGE,
-      tech: ReceiptStyle.TECH,
-      wave: ReceiptStyle.WAVE,
-      minimal: ReceiptStyle.MINIMAL,
-      corporate: ReceiptStyle.CORPORATE,
-      thermal: ReceiptStyle.THERMAL,
-      dark: ReceiptStyle.DARK,
-      branded: ReceiptStyle.BRANDED,
-      delivery: ReceiptStyle.DELIVERY,
-      proforma: ReceiptStyle.PROFORMA,
-    };
-    return map[templateId] || ReceiptStyle.COMPACT;
-  }
-
-  private async updateProgress(
-    receiptId: string,
-    orderId: string,
-    userId: string,
-    progress: number,
-    stage: string,
-    generationId: string,
-  ): Promise<boolean> {
-    const result = await this.receiptsRepository.update(
-      {
-        id: receiptId,
-        user_id: userId,
-        generation_id: generationId,
-        status: ReceiptStatus.PROCESSING,
-      },
-      { progress },
-    );
-    if (!result.affected) return false;
-    this.receiptsGateway.emitProgress(userId, {
-      receiptId,
-      orderId,
-      progress,
-      stage,
-    });
-    return true;
-  }
-
   async process(job: Job<ReceiptGenerationJobData>): Promise<void> {
-    return runWithTenant(job.data.userId, () => this.processInTenant(job));
-  }
-
-  private async processInTenant(
-    job: Job<ReceiptGenerationJobData>,
-  ): Promise<void> {
-    const { receiptId, orderId, userId, generationId } = job.data;
-    this.logger.log(
-      `Processing receipt generation: receipt=${receiptId}, order=${orderId}`,
-    );
-
-    try {
-      const current = await this.receiptsRepository.findOne({
-        where: { id: receiptId, user_id: userId },
-      });
-      if (!current) throw new Error("Receipt is not visible yet");
-      if (
-        current.status !== ReceiptStatus.PROCESSING ||
-        current.generation_id !== generationId
-      )
-        return;
-      // Stage 1: Loading order data
-      if (
-        !(await this.updateProgress(
-          receiptId,
-          orderId,
-          userId,
-          10,
-          "loading_order",
-          generationId,
-        ))
-      )
-        return;
-
-      const order = await this.ordersRepository.findOne({
-        where: { id: orderId, user_id: userId },
-        relations: ["recipient", "items"],
-      });
-
-      if (!order) {
-        this.logger.error(`Order ${orderId} not found for user ${userId}`);
-        throw new Error("Order not found");
-      }
-
-      // Stage 2: Loading settings
-      if (
-        !(await this.updateProgress(
-          receiptId,
-          orderId,
-          userId,
-          20,
-          "loading_settings",
-          generationId,
-        ))
-      )
-        return;
-
-      const receipt = await this.receiptsRepository.findOne({
-        where: { id: receiptId, user_id: userId },
-      });
-
-      if (!receipt) throw new Error("Receipt is not visible yet");
-      if (
-        receipt.status !== ReceiptStatus.PROCESSING ||
-        receipt.generation_id !== generationId
-      ) {
-        this.logger.warn(
-          `Receipt ${receiptId} not found or not in PROCESSING state`,
-        );
-        return;
-      }
-
-      const pdfSettings = await this.settingsService.getAllPdfSettings(userId);
-      const receiptStyle = this.getReceiptStyleFromTemplateId(
-        pdfSettings.templateId,
-      );
-
-      this.logger.log(
-        `Generating PDF for receipt ${receipt.number} with template ${pdfSettings.templateId}`,
-      );
-
-      // Stage 3: Generating PDF
-      if (
-        !(await this.updateProgress(
-          receiptId,
-          orderId,
-          userId,
-          40,
-          "generating_pdf",
-          generationId,
-        ))
-      )
-        return;
-
-      const { filePath, url, html } =
-        await this.pdfGeneratorService.generateReceiptPdf(
-          order,
-          receipt.number,
-          pdfSettings.companyInfo,
-          userId,
-          receiptStyle,
-          pdfSettings.receiptTitle,
-          pdfSettings.templateLanguage,
-          pdfSettings.footerTitle,
-          pdfSettings.footerSubtitle,
-          pdfSettings.primaryColor,
-          pdfSettings.paymentTerms,
-          pdfSettings.deliveryTerms,
-        );
-
-      // Stage 4: Computing hash
-      if (
-        !(await this.updateProgress(
-          receiptId,
-          orderId,
-          userId,
-          70,
-          "computing_hash",
-          generationId,
-        ))
-      )
-        return;
-
-      let fileBuffer: Buffer;
-      if (filePath.startsWith("object-storage://")) {
-        const parsed = this.pdfStorageService.parseObjectStoragePath(filePath);
-        if (!parsed) {
-          throw new Error(`Invalid object storage path: ${filePath}`);
-        }
-        fileBuffer = await this.pdfStorageService.downloadFile(
-          parsed.bucket,
-          parsed.key,
-        );
-      } else {
-        fileBuffer = await fs.readFile(filePath);
-      }
-      const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-
-      // Stage 5: Saving to database
-      if (
-        !(await this.updateProgress(
-          receiptId,
-          orderId,
-          userId,
-          80,
-          "saving",
-          generationId,
-        ))
-      )
-        return;
-
-      const completed = await this.dataSource.transaction(async (manager) => {
-        const updated = await manager.update(
-          Receipt,
-          {
-            id: receiptId,
-            user_id: userId,
-            generation_id: generationId,
-            status: ReceiptStatus.PROCESSING,
-          },
-          {
-            pdf_path: filePath,
-            pdf_url: url,
-            hash,
-            html_snapshot: html,
-            template_id: pdfSettings.templateId,
-            template_version: 1,
-            status: ReceiptStatus.GENERATED,
-            progress: 100,
-          },
-        );
-
-        if (!updated.affected) return false;
-        await manager.update(
-          Order,
-          { id: orderId, user_id: userId },
-          { is_locked: true },
-        );
-        return true;
-      });
-
-      if (!completed) return;
-
-      // Emit completion event
-      this.receiptsGateway.emitCompleted(userId, {
+    await runWithTenant(job.data.userId, async () => {
+      const { receiptId, orderId, userId, generationId } = job.data;
+      const receipt = await this.artifacts.execute(
         receiptId,
-        orderId,
-        pdfUrl: url,
-        receiptNumber: receipt.number,
-      });
-
-      this.logger.log(
-        `Receipt ${receipt.number} generated successfully. Order ${orderId} locked.`,
+        userId,
+        generationId,
+        () =>
+          this.gateway.emitProgress(userId, {
+            receiptId,
+            orderId,
+            progress: 40,
+            stage: "generating_pdf",
+          }),
       );
-    } catch (error) {
-      // Log and rethrow so BullMQ retries. The receipt is only marked FAILED
-      // once every attempt is exhausted — see onFailed() — so retries keep the
-      // receipt in PROCESSING instead of prematurely flipping its status.
-      this.logger.error(
-        `Receipt ${receiptId} generation attempt ${(job.attemptsMade ?? 0) + 1}/${
-          job.opts?.attempts ?? 1
-        } failed: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
+      if (receipt)
+        this.gateway.emitCompleted(userId, {
+          receiptId,
+          orderId,
+          pdfUrl: receipt.pdf_url,
+          receiptNumber: receipt.number,
+        });
+    });
   }
-
   @OnWorkerEvent("failed")
   async onFailed(
     job: Job<ReceiptGenerationJobData>,
     error: Error,
   ): Promise<void> {
-    if (!job) return;
-
-    const attempts = job.opts.attempts ?? 1;
-    // Fires after every failed attempt; only act once retries are exhausted.
-    if (job.attemptsMade < attempts) {
-      return;
-    }
-
-    const { receiptId, orderId, userId, generationId } = job.data;
+    if (!job || job.attemptsMade < (job.opts.attempts ?? 1)) return;
     this.logger.error(
-      `Receipt ${receiptId} permanently failed after ${job.attemptsMade} attempts: ${error?.message}`,
+      `Frozen render ${job.data.receiptId} failed: ${error.message}`,
     );
-    await runWithTenant(userId, () =>
-      this.markFailed(
-        receiptId,
-        orderId,
-        userId,
-        error?.message ?? "Receipt generation failed",
-        generationId,
-      ),
-    );
-  }
-
-  private async markFailed(
-    receiptId: string,
-    orderId: string,
-    userId: string,
-    errorMessage: string,
-    generationId: string,
-  ): Promise<void> {
     try {
-      const result = await this.receiptsRepository.update(
-        {
-          id: receiptId,
-          user_id: userId,
-          generation_id: generationId,
-          status: ReceiptStatus.PROCESSING,
-        },
-        { status: ReceiptStatus.FAILED, error_message: errorMessage },
-      );
-      if (!result.affected) return;
-      this.receiptsGateway.emitFailed(userId, {
-        receiptId,
-        orderId,
-        error: errorMessage,
+      await runWithTenant(job.data.userId, async () => {
+        if (
+          await this.artifacts.failed(
+            job.data.receiptId,
+            job.data.userId,
+            job.data.generationId,
+          )
+        )
+          this.gateway.emitFailed(job.data.userId, {
+            receiptId: job.data.receiptId,
+            orderId: job.data.orderId,
+            error: "Generation failed; retry the frozen document.",
+          });
       });
-    } catch (err) {
-      this.logger.error(
-        `Failed to mark receipt ${receiptId} as failed: ${err.message}`,
+    } catch (failure) {
+      this.logger.warn(
+        `Failure state will be reconciled by the outbox: ${failure instanceof Error ? failure.message : "state update failed"}`,
       );
     }
   }

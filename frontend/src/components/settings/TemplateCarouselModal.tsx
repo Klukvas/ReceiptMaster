@@ -11,6 +11,7 @@ interface Template {
 }
 
 interface TemplateCarouselModalProps {
+  language?: string;
   isOpen: boolean;
   onClose: () => void;
   templates: Template[];
@@ -20,6 +21,7 @@ interface TemplateCarouselModalProps {
 
 export const TemplateCarouselModal = ({
   isOpen,
+  language,
   onClose,
   templates,
   initialTemplateId,
@@ -186,7 +188,7 @@ export const TemplateCarouselModal = ({
           <div className="w-full max-w-2xl h-full">
             <TemplatePreviewIframe
               templateId={current.id}
-              language={currentLanguage}
+              language={language || currentLanguage}
               height={previewHeight}
             />
           </div>

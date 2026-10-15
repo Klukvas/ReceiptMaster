@@ -11,6 +11,7 @@ jest.mock("fs/promises", () => ({
 jest.mock("handlebars", () => {
   const instance = {
     registerHelper: jest.fn(),
+    registerPartial: jest.fn(),
     compile: jest
       .fn()
       .mockReturnValue((data: any) => `<html>${JSON.stringify(data)}</html>`),

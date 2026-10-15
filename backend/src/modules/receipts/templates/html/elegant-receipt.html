@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -272,6 +272,7 @@
         .discount-row {
             color: #EF4444;
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -280,9 +281,10 @@
         <div class="header">
             <div class="invoice-title">{{receiptTitle}}</div>
             <div class="invoice-number">{{receiptNumber}}</div>
+            <div class="invoice-date">{{translations.date}} {{orderDate}}</div>
             <div class="logo-section">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
             </div>
         </div>
@@ -342,7 +344,6 @@
                 <tr>
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
-                    <th class="col-unit">{{#if translations.unit}}{{translations.unit}}{{else}}Unit{{/if}}</th>
                     <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
                     <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
                 </tr>
@@ -357,7 +358,6 @@
                         {{/if}}
                     </td>
                     <td class="col-qty">{{qty}}</td>
-                    <td class="col-unit">{{unit}}</td>
                     <td class="col-unit-price">{{unitPrice}}</td>
                     <td class="col-amount">{{lineTotal}}</td>
                 </tr>
@@ -395,13 +395,14 @@
         <div class="footer">
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
-            {{#if footerSubtitle}}
-            <div class="footer-text">{{footerSubtitle}}</div>
-            {{/if}}
+
             {{else}}
             {{#if terms}}
             <div class="terms">{{terms}}</div>
             {{/if}}
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
             {{/if}}
         </div>
     </div>

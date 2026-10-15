@@ -1,3 +1,8 @@
+import {
+  documentMoney,
+  documentDate,
+  type DocumentConfig,
+} from "../lib/document-config";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
@@ -10,6 +15,10 @@ const API_BASE_URL =
 const publicApi = axios.create({ baseURL: API_BASE_URL });
 
 interface PublicReceiptData {
+  money?: boolean;
+  metadataUnavailable?: boolean;
+  formatting?: DocumentConfig["formatting"];
+  documentLanguage?: string;
   receipt: {
     id: string;
     number: string;
@@ -17,6 +26,7 @@ interface PublicReceiptData {
     order: {
       id: string;
       currency: string;
+      created_at?: string;
       subtotal_cents: number;
       total_cents: number;
       items: Array<{
@@ -44,23 +54,6 @@ interface PublicReceiptData {
     receiptTitle?: string;
   };
 }
-
-const formatCurrency = (cents: number, currency: string = "UAH") => {
-  const amount = cents / 100;
-  return new Intl.NumberFormat("uk-UA", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
-};
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-};
 
 export const PublicReceiptPage = () => {
   const { token } = useParams<{ token: string }>();
@@ -127,6 +120,28 @@ export const PublicReceiptPage = () => {
 
   const { receipt, companyInfo } = data;
   const { order } = receipt;
+  const formatCurrency = (cents: number, currency: string) =>
+    data.formatting
+      ? documentMoney(cents, currency, data.formatting)
+      : String(cents / 100);
+  const formatDate = (date: string) =>
+    data.formatting
+      ? documentDate(date, data.documentLanguage || "en", data.formatting)
+      : date;
+  if (!order)
+    return (
+      <div className="mx-auto max-w-2xl p-8 text-content">
+        <h1>#{receipt.number}</h1>
+        <p>
+          Detailed metadata is unavailable for this legacy document. Download
+          the original PDF.
+        </p>
+        <button onClick={handleDownload} disabled={downloading}>
+          Download PDF
+        </button>
+        {downloadError && <p role="alert">Download failed. Please retry.</p>}
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-surface-alt">
@@ -172,7 +187,7 @@ export const PublicReceiptPage = () => {
             )}
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-content-tertiary">
               <span>#{receipt.number}</span>
-              <span>{formatDate(receipt.created_at)}</span>
+              <span>{formatDate(order.created_at || receipt.created_at)}</span>
             </div>
           </div>
 
@@ -183,25 +198,33 @@ export const PublicReceiptPage = () => {
                 <tr className="text-xs font-semibold uppercase tracking-wider text-content-tertiary border-b border-[var(--color-border-light)]">
                   <th className="text-left pb-2">Item</th>
                   <th className="text-center pb-2 w-16">Qty</th>
-                  <th className="text-right pb-2 w-28">Price</th>
-                  <th className="text-right pb-2 w-28">Total</th>
+                  {data.money !== false && (
+                    <th className="text-right pb-2 w-28">Price</th>
+                  )}
+                  {data.money !== false && (
+                    <th className="text-right pb-2 w-28">Total</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border-light)]">
-                {order.items.map((item) => (
-                  <tr key={item.id}>
+                {order.items.map((item, index) => (
+                  <tr key={`${index}-${item.product_name}`}>
                     <td className="py-3 text-sm text-content">
                       {item.product_name}
                     </td>
                     <td className="py-3 text-sm text-content-tertiary text-center">
                       {item.qty}
                     </td>
-                    <td className="py-3 text-sm text-content-tertiary text-right tabular-nums">
-                      {formatCurrency(item.unit_price_cents, order.currency)}
-                    </td>
-                    <td className="py-3 text-sm font-medium text-content text-right tabular-nums">
-                      {formatCurrency(item.line_total_cents, order.currency)}
-                    </td>
+                    {data.money !== false && (
+                      <td className="py-3 text-sm text-content-tertiary text-right tabular-nums">
+                        {formatCurrency(item.unit_price_cents, order.currency)}
+                      </td>
+                    )}
+                    {data.money !== false && (
+                      <td className="py-3 text-sm font-medium text-content text-right tabular-nums">
+                        {formatCurrency(item.line_total_cents, order.currency)}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -209,23 +232,24 @@ export const PublicReceiptPage = () => {
           </div>
 
           {/* Totals */}
-          <div className="px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-content-tertiary">Subtotal</span>
-              <span className="text-sm tabular-nums text-content-secondary">
-                {formatCurrency(order.subtotal_cents, order.currency)}
-              </span>
+          {data.money !== false && (
+            <div className="px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-content-tertiary">Subtotal</span>
+                <span className="text-sm tabular-nums text-content-secondary">
+                  {formatCurrency(order.subtotal_cents, order.currency)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-[var(--color-border)]">
+                <span className="text-base font-semibold text-content">
+                  Total
+                </span>
+                <span className="text-xl font-bold tabular-nums text-content">
+                  {formatCurrency(order.total_cents, order.currency)}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-[var(--color-border)]">
-              <span className="text-base font-semibold text-content">
-                Total
-              </span>
-              <span className="text-xl font-bold tabular-nums text-content">
-                {formatCurrency(order.total_cents, order.currency)}
-              </span>
-            </div>
-          </div>
-
+          )}
           {/* Recipient */}
           {order.recipient && (
             <div className="px-6 py-4 border-t border-[var(--color-border-light)]">

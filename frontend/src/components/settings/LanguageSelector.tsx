@@ -1,7 +1,14 @@
-import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReceiptDesignSettings } from "../../lib/api";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Globe, Check } from "lucide-react";
 import toast from "react-hot-toast";
+import { parseApiError } from "../../lib/api-errors";
+import { SettingsLoadError } from "./SettingsLoadError";
+import {
+  useReceiptDesignSettings,
+  RECEIPT_DESIGN_QUERY_KEY,
+} from "../../hooks/useReceiptDesignSettings";
 import { settingsApi } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { SettingsSection } from "./SettingsSection";
@@ -18,44 +25,32 @@ export const LanguageSelector = () => {
   const queryClient = useQueryClient();
   const [selectedLanguage, setSelectedLanguage] = useState<string>("");
 
-  const { data: currentLanguage, isLoading: isLoadingCurrent } = useQuery({
-    queryKey: ["templateLanguage"],
-    queryFn: async () => {
-      const response = await settingsApi.getTemplateLanguage();
-      return response.data;
-    },
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
+  const {
+    data,
+    isLoading: isLoadingCurrent,
+    error,
+    refetch,
+  } = useReceiptDesignSettings();
 
   const updateLanguageMutation = useMutation({
     mutationFn: (language: string) =>
       settingsApi.updateTemplateLanguage(language),
-    onSuccess: (_data, language) => {
-      queryClient.invalidateQueries({ queryKey: ["templateLanguage"] });
-      setSelectedLanguage(language);
+    onSuccess: async (_response, submitted) => {
+      queryClient.setQueryData<ReceiptDesignSettings>(
+        RECEIPT_DESIGN_QUERY_KEY,
+        (previous) =>
+          previous ? { ...previous, templateLanguage: submitted } : previous,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: RECEIPT_DESIGN_QUERY_KEY,
+      });
+      setSelectedLanguage("");
       toast.success(
         t("settings.languageUpdated", "Template language updated successfully"),
       );
     },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message ||
-          t(
-            "settings.languageUpdateFailed",
-            "Failed to update template language",
-          ),
-      );
-    },
+    onError: (error: unknown) => toast.error(parseApiError(error).message),
   });
-
-  useEffect(() => {
-    const language = currentLanguage?.data?.language;
-    if (language && !selectedLanguage) {
-      setSelectedLanguage(language);
-    }
-  }, [currentLanguage, selectedLanguage]);
 
   const handleLanguageSelect = (languageCode: string) => {
     setSelectedLanguage(languageCode);
@@ -67,6 +62,7 @@ export const LanguageSelector = () => {
     }
   };
 
+  if (error) return <SettingsLoadError error={error} retry={refetch} />;
   if (isLoadingCurrent) {
     return (
       <SettingsSection
@@ -89,7 +85,7 @@ export const LanguageSelector = () => {
     );
   }
 
-  const currentLanguageCode = currentLanguage?.data?.language || "en";
+  const currentLanguageCode = data?.templateLanguage || "en";
   const selectedLanguageCode = selectedLanguage || currentLanguageCode;
   const hasChanges = selectedLanguageCode !== currentLanguageCode;
 
@@ -110,6 +106,7 @@ export const LanguageSelector = () => {
             <button
               key={language.code}
               type="button"
+              disabled={updateLanguageMutation.isPending || !data}
               onClick={() => handleLanguageSelect(language.code)}
               className={`relative flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-all duration-200 ${
                 isSelected
@@ -163,7 +160,7 @@ export const LanguageSelector = () => {
             variant="outline"
             size="sm"
             onClick={() => setSelectedLanguage(currentLanguageCode)}
-            disabled={!hasChanges}
+            disabled={!hasChanges || updateLanguageMutation.isPending || !data}
           >
             {t("common.cancel", "Cancel")}
           </Button>

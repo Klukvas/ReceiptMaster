@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -282,6 +282,7 @@
             text-align: center;
             margin-top: 10px;
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -296,7 +297,7 @@
             <div class="header-row-1">
                 {{#if hasCustomLogo}}
                 <div class="logo-section">
-                    <img src="{{logoPath}}" alt="Logo" class="logo">
+                    <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 </div>
                 {{/if}}
                 <div class="invoice-meta">
@@ -427,13 +428,14 @@
         <div class="footer">
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
-            {{#if footerSubtitle}}
-            <div class="footer-text">{{footerSubtitle}}</div>
-            {{/if}}
+
             {{else}}
             {{#if terms}}
             <div class="terms">{{terms}}</div>
             {{/if}}
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
             {{/if}}
             
            

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -261,6 +261,10 @@
                 max-width: none;
             }
         }
+        {{> printLayout}}
+        .items-table .col-num { width: 8%; }
+        .items-table .col-product { width: 75%; }
+        .items-table .col-qty { width: 17%; }
     </style>
 </head>
 <body>
@@ -272,7 +276,7 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div>
                     <div class="company-name">{{companyName}}</div>
@@ -293,7 +297,7 @@
         </div>
 
         <!-- Document Title -->
-        <div class="document-title">{{translations.deliveryNote}}</div>
+        <div class="document-title">{{receiptTitle}}</div>
 
         <!-- From / To Sections -->
         <div class="info-sections">
@@ -360,23 +364,17 @@
                 <div class="signature-caption">{{translations.signature}}</div>
             </div>
             <div class="signature-block">
-                <div class="signature-label">{{translations.date}}:</div>
+                <div class="signature-label">{{translations.date}}</div>
                 <div class="signature-line"></div>
                 <div class="signature-caption">{{translations.date}}</div>
             </div>
         </div>
 
         <!-- Footer -->
-        {{#if footerTitle}}
         <div class="footer">
-            <div>
-                <div class="footer-title">{{footerTitle}}</div>
-                {{#if footerSubtitle}}
-                <div class="footer-subtitle">{{footerSubtitle}}</div>
-                {{/if}}
-            </div>
+            {{#if footerTitle}}<div class="footer-title">{{footerTitle}}</div>{{/if}}
+            {{#if footerSubtitle}}<div class="footer-subtitle">{{footerSubtitle}}</div>{{/if}}
         </div>
-        {{/if}}
     </div>
 </body>
 </html>

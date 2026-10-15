@@ -1,8 +1,10 @@
+import sharp = require("sharp");
 import { LogoStorageService } from "./logo-storage.service";
 
 // Mock aws-sdk
 jest.mock("aws-sdk", () => {
   const mockS3 = {
+    config: { update: jest.fn() },
     upload: jest.fn().mockReturnThis(),
     getObject: jest.fn().mockReturnThis(),
     deleteObject: jest.fn().mockReturnThis(),
@@ -58,7 +60,11 @@ describe("LogoStorageService", () => {
       });
 
       const result = await service.uploadLogo(
-        Buffer.from("image-data"),
+        await sharp({
+          create: { width: 2, height: 2, channels: 3, background: "blue" },
+        })
+          .png()
+          .toBuffer(),
         "user-1",
       );
 
@@ -70,7 +76,11 @@ describe("LogoStorageService", () => {
     it("should download logo", async () => {
       s3Mock.getObject.mockReturnValue({
         promise: jest.fn().mockResolvedValue({
-          Body: Buffer.from("image-data"),
+          Body: await sharp({
+            create: { width: 2, height: 2, channels: 3, background: "blue" },
+          })
+            .png()
+            .toBuffer(),
         }),
       });
 

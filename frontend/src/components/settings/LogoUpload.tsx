@@ -31,21 +31,23 @@ export const LogoUpload = () => {
     gcTime: 0,
   });
 
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
+
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const isDeleted = logoError && (logoError as any)?.response?.status === 404;
-
-    if (logoData && hasLogo && !logoError && !isDeleted) {
+    if (logoData && hasLogo && !logoError) {
       const url = URL.createObjectURL(logoData.data);
       setLogoUrl(url);
       return () => {
         URL.revokeObjectURL(url);
       };
     } else {
-      if (logoUrl) {
-        URL.revokeObjectURL(logoUrl);
-      }
       setLogoUrl(null);
     }
   }, [logoData, hasLogo, logoError]);
@@ -80,8 +82,11 @@ export const LogoUpload = () => {
     },
   });
 
+  const isPending = uploadMutation.isPending || deleteLogoMutation.isPending;
+
   const validateAndSetFile = useCallback(
     (file: File) => {
+      if (isPending) return;
       if (!file.type.match(/^image\/(jpg|jpeg|png|gif|svg\+xml)$/)) {
         toast.error(
           t(
@@ -101,7 +106,7 @@ export const LogoUpload = () => {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
     },
-    [t],
+    [t, isPending],
   );
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -130,10 +135,11 @@ export const LogoUpload = () => {
   }, []);
 
   const handleUpload = () => {
-    if (selectedFile) uploadMutation.mutate(selectedFile);
+    if (!isPending && selectedFile) uploadMutation.mutate(selectedFile);
   };
 
   const handleRemove = () => {
+    if (isPending) return;
     setSelectedFile(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
@@ -143,7 +149,12 @@ export const LogoUpload = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDeleteLogo = () => {
+    if (isPending) return;
     setShowDeleteConfirm(true);
+  };
+
+  const handleChooseFile = () => {
+    if (!isPending) fileInputRef.current?.click();
   };
 
   const formatFileSize = (bytes: number) => {
@@ -195,10 +206,19 @@ export const LogoUpload = () => {
               </p>
             </div>
             <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleChooseFile}
+              disabled={isPending}
+            >
+              {t("settings.replaceLogo", "Replace Logo")}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={handleDeleteLogo}
-              disabled={deleteLogoMutation.isPending}
+              disabled={isPending}
               className="shrink-0 text-danger-base border-[var(--color-danger-light)] hover:bg-[var(--color-danger-light)]"
             >
               <Trash2 className="h-4 w-4 mr-1.5" />
@@ -210,7 +230,7 @@ export const LogoUpload = () => {
         )}
 
         {/* Upload Area */}
-        {!logoLoading && !hasCurrentLogo && (
+        {!logoLoading && (!hasCurrentLogo || selectedFile) && (
           <div
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -239,17 +259,15 @@ export const LogoUpload = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    onClick={handleUpload}
-                    disabled={uploadMutation.isPending}
-                  >
+                  <Button size="sm" onClick={handleUpload} disabled={isPending}>
                     {uploadMutation.isPending
                       ? t("settings.uploading", "Uploading...")
                       : t("settings.uploadLogo", "Upload")}
                   </Button>
                   <button
+                    aria-label={t("common.cancel", "Cancel")}
                     onClick={handleRemove}
+                    disabled={isPending}
                     className="p-1.5 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors"
                   >
                     <X className="h-4 w-4" />
@@ -259,7 +277,8 @@ export const LogoUpload = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleChooseFile}
+                disabled={isPending}
                 className="flex w-full flex-col items-center py-8 px-4 cursor-pointer"
               >
                 <div
@@ -285,21 +304,23 @@ export const LogoUpload = () => {
                 </p>
               </button>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
           </div>
         )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/svg+xml"
+          onChange={handleFileSelect}
+          disabled={isPending}
+          className="hidden"
+        />
       </SettingsSection>
 
       <ConfirmModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={() => {
+          if (isPending) return;
           deleteLogoMutation.mutate();
           setShowDeleteConfirm(false);
         }}
@@ -308,7 +329,7 @@ export const LogoUpload = () => {
           "settings.confirmDeleteLogo",
           "Are you sure you want to delete the logo?",
         )}
-        isLoading={deleteLogoMutation.isPending}
+        isLoading={isPending}
       />
     </>
   );

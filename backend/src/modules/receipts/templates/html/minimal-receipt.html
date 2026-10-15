@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -253,6 +253,7 @@
         .currency {
             font-weight: 500;
         }
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -261,11 +262,12 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div class="invoice-title">{{receiptTitle}}</div>
             </div>
             <div class="invoice-number">№ {{receiptNumber}}</div>
+            <div class="invoice-date">{{translations.date}} {{orderDate}}</div>
         </div>
         
         <!-- Company Info -->
@@ -373,13 +375,14 @@
         <div class="footer">
             {{#if footerTitle}}
             <div class="footer-title">{{footerTitle}}</div>
-            {{#if footerSubtitle}}
-            <div class="footer-text">{{footerSubtitle}}</div>
-            {{/if}}
+
             {{else}}
             {{#if terms}}
             <div class="terms">{{terms}}</div>
             {{/if}}
+            {{/if}}
+            {{#if footerSubtitle}}
+            <div class="footer-text">{{footerSubtitle}}</div>
             {{/if}}
             
             {{#if companyIban}}

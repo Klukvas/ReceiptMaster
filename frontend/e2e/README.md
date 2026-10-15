@@ -72,3 +72,64 @@ added, the assertions port over as-is.
 - `support/harness.mjs` — browser, API mocks, mock receipts gateway
 - `support/fixtures.mjs` — deterministic API payloads
 - `support/runner.mjs` — pass/fail collector and polling helpers
+
+## Receipt settings regressions
+
+This isolated fixture renders the real SettingsPage, Axios and React Query against synthetic
+HTTP data. It never calls real databases, object storage, billing or printers. In one terminal:
+
+```bash
+tmux new-session -d -s settings-regression 'cd /Users/andreypavlenko/Desktop/Projects/b2c/market && SETTINGS_PORT=4318 node backend/test/serve-settings-regressions.cjs'
+SETTINGS_ORIGIN=http://127.0.0.1:4318 node frontend/e2e/settings-regressions.cjs
+```
+
+The fixture uses the existing `frontend/dist/assets/*.css`; run the frontend build first.
+`SETTINGS_EVIDENCE` changes its generated bundle/output directory. Optional `SETTINGS_BASELINE`
+points at a directory mirroring baseline source paths, allowing the same browser assertions to
+prove the original failures without changing the working tree. The Nest HTTP and real image
+format checks run separately with `cd backend && yarn test --runInBand settings logo-storage`.
+
+The 22 browser scenarios include delayed logo upload/delete conflicts, confirmed template and
+automatic en/ru/uk titles after a successful POST followed by a failed GET, custom title
+provenance, and title draft recovery through failed GET/Retry. Logo delays use Playwright route
+promises and synthetic responses. Chromium sandbox stays enabled. `E2E_CHROME_PATH` selects the
+local Chrome executable; `SETTINGS_REPORT` and `SETTINGS_SCREENSHOTS` select evidence paths.
+The fixture bundles source at startup: rebuild/restart only the current fixture after edits and
+after any active browser run finishes; preserve a baseline fixture needed for review.
+
+### Unified document features (2026-10-15)
+
+`template-features.cjs` tests current unified Save/Discard, staged logos, real PDF previews,
+capabilities, presets, revision conflicts, mobile layout and the Orders customization editor.
+The fixture runs actual Nest controllers/services, React, Axios, Query and Chrome rendering;
+its database, outbox publication and object storage are explicit synthetic doubles. It never
+connects to real application services. The older `settings-regressions.cjs` and its fixture
+retain the earlier individual-save contract and historical evidence; use the new suite for
+current SettingsPage behavior.
+
+From the repository root, build CSS with `cd frontend && yarn build`. Start in a uniquely
+named tmux session, from `backend/`:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+TEMPLATE_FIXTURE_PORT=4327 TEMPLATE_EVIDENCE=temp/template-features-20261015-225300 \
+./node_modules/.bin/ts-node --transpile-only test/serve-template-features.ts
+```
+
+Run `node frontend/e2e/template-features.cjs` from the repository root against a fresh fixture.
+`TEMPLATE_FIXTURE_URL`, `TEMPLATE_EVIDENCE` and `E2E_CHROME_PATH` can override defaults.
+The fixture serves `http://127.0.0.1:4327`, `/fixture/state`, synthetic failure controls at
+`POST /fixture/control`, and explicit synthetic worker execution at `POST /fixture/run-jobs`.
+Its manifest records the served JavaScript hash and source entrypoints. Keep the fixture
+running for independent review; do not use these controls against a real API.
+
+Backend feature checks: from `backend/`, run
+`yarn jest --config test/jest-e2e.json --runInBand --testPathPattern template-features.e2e-spec.ts`.
+PDF evidence: `test/verify-template-features-pdfs.ts` renders the current 53-scenario matrix;
+`test/verify-template-features-pdfs.py` inspects its manifest/PDFs using pdfplumber/pypdf.
+Restricted-role PostgreSQL migration/concurrency tests are implemented in
+`backend/test/template-features-sql.e2e-spec.ts`. They require an explicitly isolated server
+on port 55447 and `TEMPLATE_PG_PORT=55447` (optional `TEMPLATE_PG_USER`). They create and
+clean only a uniquely named synthetic database/runtime role. They are skipped unless that
+opt-in is present. Synthetic tests are not
+DB/S3 integration certification. Do not run real migrations for this workflow.

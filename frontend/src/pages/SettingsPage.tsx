@@ -12,15 +12,8 @@ import {
   Loader2,
   AlertTriangle,
 } from "lucide-react";
-import { LogoUpload } from "../components/settings/LogoUpload";
-import { CompanyInfoCustomizer } from "../components/settings/CompanyInfoCustomizer";
-import { TemplateSelector } from "../components/settings/TemplateSelector";
-import { LanguageSelector } from "../components/settings/LanguageSelector";
-import { ReceiptTitleCustomizer } from "../components/settings/ReceiptTitleCustomizer";
-import { FooterCustomizer } from "../components/settings/FooterCustomizer";
-import { PrimaryColorPicker } from "../components/settings/PrimaryColorPicker";
-import { ProformaSettings } from "../components/settings/ProformaSettings";
-import { TestReceiptButton } from "../components/settings/TestReceiptButton";
+import { DocumentEditor } from "../components/settings/DocumentEditor";
+import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
@@ -304,6 +297,7 @@ const SubscriptionTab = () => {
 };
 
 export const SettingsPage = () => {
+  const documentDraft = useDocumentDraft();
   const { t } = useTranslation();
   // H3: Validate tab query parameter against known values
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
@@ -392,25 +386,16 @@ export const SettingsPage = () => {
 
       {/* Tab Content */}
       <div className="space-y-5">
-        {activeTab === "company" && (
-          <>
-            <LogoUpload />
-            <CompanyInfoCustomizer />
-          </>
-        )}
-
-        {activeTab === "receipt" && (
-          <>
-            <ReceiptTitleCustomizer />
-            <TemplateSelector />
-            <FooterCustomizer />
-            <PrimaryColorPicker />
-            <ProformaSettings />
-            <TestReceiptButton />
-          </>
-        )}
-
-        {activeTab === "language" && <LanguageSelector />}
+        <div hidden={!["company", "receipt", "language"].includes(activeTab)}>
+          <DocumentEditor
+            model={documentDraft}
+            section={
+              activeTab === "company" || activeTab === "language"
+                ? activeTab
+                : "receipt"
+            }
+          />
+        </div>
 
         {activeTab === "subscription" && <SubscriptionTab />}
 

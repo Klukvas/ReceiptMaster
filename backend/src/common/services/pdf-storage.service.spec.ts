@@ -9,6 +9,7 @@ jest.mock("aws-sdk", () => {
     deleteObject: jest.fn().mockReturnThis(),
     headObject: jest.fn().mockReturnThis(),
     promise: jest.fn(),
+    config: { update: jest.fn() },
   };
   return {
     S3: jest.fn(() => mockS3),

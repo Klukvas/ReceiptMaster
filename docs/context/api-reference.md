@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-16
 
 **Total Endpoints:** 90 across 12 controllers. This reference covers all controllers exhaustively.
 
@@ -899,7 +899,7 @@ File: `backend/src/modules/receipts/receipts.controller.ts` (13 endpoints)
 
 **POST** `/receipts/orders/:orderId/receipt`
 
-Generates PDF receipt/invoice for confirmed order using user's default template. Generation is asynchronous.
+Generates a frozen PDF receipt/invoice for a confirmed order. Optional config/preset/overrides and staged logo use the document draft envelope described below; empty body uses defaults. Generation is asynchronous and account defaults are unchanged.
 
 **Path Params:**
 - `orderId` (string, UUID) — Order to generate receipt for
@@ -1088,21 +1088,15 @@ Voids a receipt and unlocks its order for editing.
 
 ---
 
-### Regenerate Receipt PDF
+### Regenerate / replace Receipt PDF
 
 **POST** `/receipts/:id/regenerate`
 
-Forces re-generation of receipt PDF from current order and settings. PDF-only conditional updates
-preserve concurrent share revocation and refuse to overwrite an intervening void.
+Empty body or `{ mode: "reproduce" }` queues reproduction from the frozen active snapshot (or retries a failed frozen candidate). **Compatibility change:** it no longer silently applies current account settings. Legacy trustworthy HTML uses known legacy PDF options; absent trustworthy content returns 409 `RECONSTRUCTION_REQUIRED` and preserves any active PDF.
 
-**Path Params:**
-- `id` (string, UUID)
+Explicit replacement accepts `{ mode: "replace", expectedActiveRevision, config?, presetId?, presetRevision?, overrides?, logoAction?, confirmReconstruction? }` as JSON or the multipart draft envelope. Config and preset selection are mutually exclusive. Replacement of a legacy document without frozen transaction input requires `confirmReconstruction: true`; it does not assert historical fidelity. Reproduce rejects config/logo changes. A stale revision or running replacement returns 409.
 
-**Response** (200): `Receipt`
-
-**Errors:**
-- 404 `RECEIPT_NOT_FOUND`
-- 500 — PDF generation error
+Returns a small receipt status projection. Generated status/PDF remain active until a successful guarded promotion. Poll `replacement_status` (`processing`/`failed`/null) and `active_revision`; a successful replacement changes the PDF served by existing share links. Failure never deletes the old PDF or restores revoked tokens/void status.
 
 ---
 
@@ -1245,7 +1239,7 @@ Generates URL for Paddle customer portal (manage billing, cancel, etc.).
 
 All endpoints require JWT auth. Scoped to authenticated user.
 
-File: `backend/src/modules/settings/settings.controller.ts` (26 endpoints)
+File: `backend/src/modules/settings/settings.controller.ts` (27 endpoints)
 
 ### Receipt Design & Template
 
@@ -1253,7 +1247,7 @@ File: `backend/src/modules/settings/settings.controller.ts` (26 endpoints)
 
 **GET** `/settings/receipt-design`
 
-Returns current receipt customization settings.
+Returns current receipt customization settings, including `hasCustomReceiptTitle`. Blank/null stored titles are automatic: the receipt language and template determine their display title (Delivery/Proforma have specialized titles); an explicitly stored title such as `Invoice` remains custom. The unset Branded accent color resolves to `#3B82F6`.
 
 **Response** (200): See `backend/src/modules/settings/dto/settings-response.dto.ts` ReceiptDesignResponseDto
 
@@ -1299,7 +1293,7 @@ Returns user's currently selected template ID.
 
 **POST** `/settings/template`
 
-Updates user's template selection. Validates against subscription plan.
+Updates user's template selection. Validates the known nonempty template ID before checking the subscription plan (unknown IDs return 400 on every plan; locked known templates return 402).
 
 **Request Body:**
 ```typescript
@@ -1335,7 +1329,7 @@ Returns current receipt title (e.g., "Invoice", "Receipt", "Proforma").
 
 **POST** `/settings/receipt-title`
 
-Sets custom receipt title.
+Sets custom receipt title (required string, at most 200 characters; blank/whitespace restores the automatic localized title).
 
 **Request Body:**
 ```typescript
@@ -1366,7 +1360,7 @@ Returns current receipt template language.
 
 **POST** `/settings/template-language`
 
-Sets template rendering language.
+Sets template rendering language. Only `en`, `ru` and `uk` are accepted.
 
 **Request Body:**
 ```typescript
@@ -1379,6 +1373,12 @@ Sets template rendering language.
 ```
 
 ---
+
+#### Update Footer Atomically
+
+**POST** `/settings/footer`
+
+Body: `{ footerTitle: string, footerSubtitle: string }` (both required, at most 500 characters each; blank strings clear the corresponding text). Validates both fields before one partial database upsert, so a failed request cannot save only one field. The existing individual footer routes remain compatible and update only their supplied column.
 
 #### Get Footer Title
 
@@ -1487,7 +1487,11 @@ Uploads company logo (replaces existing). File stored in Object Storage.
 **Request:** Multipart form data
 - `logo` (file) — Image file (JPG, PNG, GIF, SVG)
   - Max size: 5 MB
-  - Validated by MIME type
+  - Exact MIME allowlist and real byte-format validation; mismatched MIME/bytes are rejected
+  - PNG/JPEG/GIF/static SVG are normalized to PNG before storage (GIF first frame)
+  - At most 4096 × 4096 input pixels per dimension, 16M decoded pixels; output fits within 2048 × 2048 (or 1024 × 1024 when needed to keep the normalized PNG under 5 MB)
+  - SVG scripts, event handlers, foreign objects and external resources are rejected; local fragment references are supported
+  - The stable `logos/logo-{userId}.png` key is overwritten after successful validation, without pre-deleting the existing object
 
 **Response** (200):
 ```typescript
@@ -1512,11 +1516,11 @@ Uploads company logo (replaces existing). File stored in Object Storage.
 
 **GET** `/settings/logo`
 
-Retrieves user's uploaded logo as image file.
+Retrieves the selected immutable tenant logo as PNG, with legacy fixed-key reads normalized in memory until an authorized Save/generation copies them. GET never rewrites storage.
 
 **Response** (200): Binary image file
 - Content-Type: image/png
-- Cached for 1 hour (Cache-Control: public, max-age=3600)
+- Cache-Control: private, no-store
 
 **Errors:**
 - 404 — Logo not found
@@ -1577,7 +1581,7 @@ Returns all company/business information.
 
 **POST** `/settings/company-info`
 
-Updates company details (all fields optional).
+Updates only supplied company fields. At least one recognized field is required; optional blank strings clear values. Every supplied value must be a string. Name: 200 chars; address/tagline/website: 500; email: 254; phone/tax ID/IBAN/SWIFT: 100. Nonblank email and website receive format validation (HTTP(S), with or without explicit protocol).
 
 **Request Body:**
 ```typescript
@@ -1745,17 +1749,17 @@ Downloads receipt PDF using public share token (no auth).
 
 ## Test & Development Endpoints
 
-**DEV/TEST-ONLY** — Do not rely on these in production. Subject to change.
+**Template previews** — authenticated sample-data rendering without creating orders or receipts.
 
 File: `backend/src/modules/receipts/controllers/pdf-test.controller.ts` (3 endpoints)
 
-These endpoints are guarded by JWT auth but exist purely for development and testing receipt templates.
+These JWT-guarded endpoints also serve the settings/onboarding template previews. They use shared translations and fonts, and do not persist sample data. Test PDFs use each template's production PDF options, including the content-sized 80 mm Thermal roll.
 
 ### Generate Test PDF (GET)
 
 **GET** `/pdf-test/generate-test-pdf`
 
-Generates test PDF with sample data (development only).
+Generates a PDF with sample data and the selected template's production page options.
 
 **Query Params:**
 - `template` (string, optional) — Template ID: "standard", "compact", etc. Default: "standard"
@@ -1764,7 +1768,7 @@ Generates test PDF with sample data (development only).
 
 **Response** (200): Binary PDF file
 
-**Valid Templates:** standard, compact, elegant, minimal, classic, modern
+**Valid Templates:** standard, compact, classic, modern, elegant, vintage, tech, wave, minimal, corporate, thermal, dark, branded, delivery, proforma. Invalid template/language values return HTTP 400.
 
 **Valid Languages:** en, ru, uk
 
@@ -1774,7 +1778,7 @@ Generates test PDF with sample data (development only).
 
 **POST** `/pdf-test/generate-test-pdf`
 
-Generates test PDF with sample data (development only).
+Generates a PDF with sample data and the selected template's production page options.
 
 **Request Body:**
 ```typescript
@@ -1793,7 +1797,7 @@ Generates test PDF with sample data (development only).
 
 **GET** `/pdf-test/preview-template`
 
-Renders template as HTML (no PDF) for quick testing.
+Renders the same prepared sample data as localised HTML, including selected-language `lang`, shared fonts, Delivery signature labels and Proforma labels/watermark. No PDF or stored receipt is created.
 
 **Query Params:**
 - `template` (string, optional)
@@ -1990,3 +1994,28 @@ Emitted if generation fails:
 - [backend-patterns.md](./backend-patterns.md) — How to extend the API
 - [business-logic.md](./business-logic.md) — Domain rules and flows
 - [frontend.md](./frontend.md) — Frontend client documentation (peer agent)
+
+## Versioned document configuration and previews
+
+All routes require JWT auth. New read routes reject unknown query parameters; UUID paths, complete configs, partial overrides and write bodies use strict Zod validation. Complete V1 config includes company fields, template ID, document language, automatic/custom title (custom text must contain non-whitespace characters; literal `Invoice` stays custom), footer/accent/terms, tenant logo reference/layout, per-contact visibility and bounded Intl formatting. Unsupported values are retained. Logo bytes/storage keys are never config fields.
+
+- `GET /settings/document-config` → `{ data: { config, revision } }`, without creating a settings row.
+- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with reload/compare/discard UX.
+- `GET /settings/document-presets` → `{ data: [{ id, name, revision, updated_at }] }` summaries.
+- `GET /settings/document-presets/:id` → editable `{ data: { id, name, revision, config } }`.
+- `POST /settings/document-presets` → create with `name` and draft.
+- `PUT /settings/document-presets/:id` → update with `name`, draft and `expectedRevision`.
+- `DELETE /settings/document-presets/:id` → JSON `{ expectedRevision }`, returns `{ data: { deleted: true } }`.
+- `POST /receipts/preview` → actual PDF bytes, `private, no-store`; complete unsaved draft plus optional authorized `orderId` (sample data otherwise). No persistence. At most two expensive previews concurrently (429 while busy).
+
+Draft writes/preview accept multipart `payload` containing JSON plus optional `logo` file: one file ≤5 MiB, payload ≤64 KiB, bounded fields/parts/headers. `logoAction` is `keep` (default), `replace` (requires file) or `remove` (forbids file). Unknown fields/parts, MIME/byte mismatch, unsafe SVG and out-of-range values are rejected. JSON bodies work when no file is supplied.
+
+Formatting `dateStyle` is `numeric | short | medium | long`. Legacy defaults use `numeric` (four-digit year, original numeric date/time presentation), medium time, language-resolved hour cycle and explicit deployment timezone. Stored explicit styles are not rewritten. Blank custom titles return friendly 400 validation; the old receipt-title endpoint still accepts blank as an automatic-title reset.
+
+Account Save needs a complete config; preset create/update use complete copies. Generation/replacement can use `config` or `presetId`+`presetRevision`, followed by partial `overrides`. Effective template entitlement is enforced. Presets have 1–80 character trimmed names, maximum 20 per tenant and bounded revisions. Foreign-tenant preset/logo IDs are rejected. Saving/selecting presets does not change defaults.
+
+`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
+
+Receipt list/create/get/void/share-revoke responses use small allowlisted projections; internal HTML/config/pending assets are private. New public metadata uses frozen visible values and formatting, with Delivery money omitted. Legacy metadata is explicitly unavailable when historical projection cannot be trusted; existing PDF access is preserved.
+
+Automatic Corporate logos preserve the original 80 px height cap and 10 px bottom margin; explicit sizing remains within declared bounds. A tenant with 25 live unexpired uploading PDF/logo leases receives a retryable 409 on new upload reservation. Expired uncertain PUT intent stays durable but does not block ordinary new uploads; existing ready assets and preview remain available.

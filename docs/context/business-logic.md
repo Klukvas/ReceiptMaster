@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-16
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -111,47 +111,10 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
 
 **High-Level Process:**
 
-1. **Create / reuse Receipt Record** (`PROCESSING`)
-   - Check: order is CONFIRMED
-   - If a receipt already exists for the order:
-     - `GENERATED` → reject (`RECEIPT_ALREADY_EXISTS`)
-     - `FAILED` → **retry**: reset to `PROCESSING`/`progress: 0`, clear `error_message`,
-       assign a fresh generation UUID and insert a durable outbox entry
-     - `PROCESSING` with a generation → return it, regardless of original receipt age;
-       the outbox recovers missing queue jobs without creating competing generations
-   - Otherwise create a new Receipt with `status: PROCESSING`, `progress: 0`
-   - File: `backend/src/modules/receipts/receipts.service.ts::generateReceipt()`
-
-2. **Commit durable queue intent, then publish** (BullMQ — `attempts: 3`, exponential backoff)
-   - Lock the order and save receipt plus outbox entry atomically; Redis is called after commit
-   - Dispatcher retries queue outages every 10 seconds and recreates missing Redis jobs
-   - Stable job identity includes receipt UUID and generation UUID; duplicate dispatch is safe
-   - Return the committed receipt without waiting for Redis readiness
-   - Dedicated publication attempts are bounded; failed clients disconnect and the next scan retries
-   - Files: `receipts.service.ts`, `receipt-outbox.service.ts`
-
-3. **Process Job** (background worker, sequential)
-   - Load order + recipient + items + products
-   - Load user settings (logo, language, receipt template)
-   - Select template based on `receipt_template_id` (from UserSettings)
-   - Render HTML from template
-   - Convert HTML → PDF via headless Chromium (**Playwright**)
-   - Upload PDF to S3 (Hetzner Object Storage)
-   - Update Receipt: `status: GENERATED`, `pdf_url: s3_url`, `progress: 100`; lock the order
-   - Emit WebSocket completion event
-   - File: `backend/src/modules/receipts/receipt-generation.processor.ts`
-
-4. **Failure handling** (important)
-   - A failed attempt is rethrown so BullMQ retries (transient S3 `ServiceUnavailable`
-     is the classic cause). The receipt stays `PROCESSING` across retries.
-   - Only once **all attempts are exhausted** does `onFailed()` set `status: FAILED`
-     with `error_message` and emit `receipt.failed`. This prevents a receipt from
-     sitting in `PROCESSING` forever after a transient outage.
-   - Missing rows throw to trigger retries; all worker writes include tenant and generation guards.
-     An older job cannot update a newer generation. The dispatcher also recovers exhausted jobs
-     if the failed-event database update was lost.
-   - The user can then retry from the UI (Retry button on the failure toast, or the
-     normal "generate" action), which re-runs step 1's retry path.
+1. **Prepare and freeze outside locks.** Resolve authoritative account defaults or a preset plus validated document overrides. Capture transaction/recipient values, title provenance, contact visibility, document language and formatting. Load immutable normalized logo bytes and compile final HTML with embedded fonts/logo and complete PDF options.
+2. **Commit durable intent.** Revalidate authoritative revisions and locked order/recipient inputs in a short transaction. Create/reuse the unique order receipt, save one pending candidate, and insert an identifier-only outbox entry. Quota enforcement is serialized; the existing ten-generated-receipt eviction policy remains. Publish to Redis after commit.
+3. **Render the frozen candidate.** BullMQ retries use stored HTML/options only; changes to settings, logos, recipients or templates do not change a queued candidate. Each attempt uploads to a fresh immutable key. Promotion atomically checks tenant/generation/pending/active-version/order/lifecycle and switches the entire active document.
+4. **Retry and replacement.** Initial generation uses PROCESSING/FAILED. A generated document keeps its active PDF and public availability during replacement, with separate processing/failed replacement status. A failed candidate stays retryable and the old artifact is never deleted first. A default failed-generation retry reuses its frozen candidate; an explicitly supplied new configuration prepares a new design while retaining captured transaction inputs. Legacy jobs without frozen candidates require explicit owner reconstruction. Empty-body regeneration now reproduces frozen content; applying current/new design requires explicit `replace`. This deliberately changes the former current-settings regeneration behavior. Missing active files repair only from trustworthy frozen HTML/options; temporary download failures do not cause reconstruction. Legacy missing snapshots require explicit owner-confirmed reconstruction, and historical fidelity is not invented. Share revocation and concurrent void cannot be undone by promotion.
 
 5. **Emit Progress** (WebSocket)
    - On job start, each stage, and completion/failure
@@ -198,7 +161,23 @@ File: `backend/src/modules/subscription/config/plans.config.ts`
 
 **Language Support:**
 
-Receipt title is language-aware (not hardcoded "Invoice" or "Receipt").
+Receipt title and the HTML `lang` use the selected `en`/`ru`/`uk` language. Delivery and
+Proforma use their localised document names when the raw stored title is null,
+empty or whitespace. Explicitly saved nonempty titles are preserved even when equal
+to the language's invoice default.
+`SettingsService.getAllPdfSettings()` preserves this provenance in the internal
+`hasCustomReceiptTitle` flag, passed through generation, regeneration and test receipts.
+Legacy callers that omit provenance still recognise the language's default title. Delivery remains
+price-free and Proforma retains its watermark; neither implies payment was received.
+Every style supports footer title and subtitle independently. Item columns display only
+real order fields (description, quantity, unit price and line total), without invented
+units or item taxes. Corporate does not label an ordinary invoice a debit memo.
+
+A4 styles wrap long fields, bound logos in both dimensions, keep fitting item rows intact,
+and keep totals/end blocks together. The Standard footer flows after the totals. Thermal
+is an 80 mm roll with a height measured from the rendered content, including loaded fonts;
+production PDFs and test PDFs use the same metadata and generator. Modern has no QR payment
+feature and Wave graphics are static in PDF.
 
 File: `backend/src/modules/settings/services/settings.service.ts::getTemplateLanguage()`
 
@@ -475,28 +454,15 @@ File: `backend/src/modules/recipients/recipients.service.ts::create()`
 
 ### 7. Settings & Customization
 
-**Entity:**
+`user_settings` stores versioned complete `document_config`, a revision and a tenant-owned immutable logo pointer. Old individual field/logo endpoints adapt to this same persistence boundary. Explicit custom-title provenance is retained, including literal `Invoice` and surrounding nonblank whitespace. New V1 custom titles must contain non-whitespace text; automatic title mode resolves Delivery/Proforma by document language. The legacy title endpoint still maps blank/whitespace to automatic. Reads and preview do not create default settings rows.
 
-File: `backend/src/modules/settings/entities/user-settings.entity.ts`
+Named tenant presets are independent copies (maximum 20, trimmed 1–80 character names, optimistic revisions). Explicit preset selection/use does not save account defaults. Per-document configuration is accepted from the Orders customization editor, with no account change. Unsupported template values remain in configurations but are excluded from rendering.
 
-- `receipt_template_id`: Which template style to use for receipts
-- `receipt_title`: What to call receipts ("Invoice" vs "Receipt" vs "Proforma", language-aware)
-- `logo_url`: S3 URL to user's uploaded logo
-- `template_language`: Language for receipt text
+Money/date preferences control presentation only: bounded number/date locales, currency display, date/time style, hour cycle and valid IANA timezone. Integer cents and order currency are unchanged. Legacy defaults retain ru-RU money formatting, document-language numeric dates with four-digit years and seconds, visible contacts, automatic logo sizing and explicit deployment timezone for future documents. Numeric dates match the old TemplateService `toLocaleString(locale)` presentation in that timezone; en defaults h12, ru/uk h23. Short/medium/long date styles remain explicit choices. Configuration and timezone freeze with the candidate; existing stored choices and frozen HTML are unchanged.
 
-**Access:**
+Logo Save normalizes a compact PNG, uploads an immutable tenant asset before the settings transaction, then switches config/pointer in one DB commit. Upload or DB failure leaves the prior account configuration and logo valid. Removal detaches references; reference-aware leased cleanup runs through scheduled bounded tenant sweeps after a 24-hour grace. PDF uploads have durable intent, guarded attachment and transactional retirement; replacement failure preserves the active PDF. Cleanup retries storage failures and never deletes a referenced active/pending logo or active PDF. Preview normalization stays entirely in memory. Logo bytes are embedded once in frozen HTML and never repeated as base64 in configuration JSON.
 
-File: `backend/src/modules/settings/services/settings.service.ts`
-
-- `getSettings(userId)`: Load user settings, create defaults if not exists
-- `updateSettings(userId, updates)`: Update specific fields
-
-**Logo Upload:**
-
-- User uploads logo via `/settings/logo` endpoint
-- Stored in S3 (`LOGOS_BUCKET`)
-- URL saved to UserSettings
-- Inserted in receipt PDF on render
+Public metadata uses the active frozen visible projection. Internal snapshots/configs and pending asset references do not enter ordinary receipt/order/share JSON. Legacy PDFs with no frozen metadata remain downloadable with metadata explicitly unavailable.
 
 ---
 
@@ -650,3 +616,11 @@ Files:
 - [backend-patterns.md](./backend-patterns.md) — NestJS module structure, services, guards, interceptors
 - [api-reference.md](./api-reference.md) — HTTP endpoints, request/response bodies
 - [frontend.md](./frontend.md) — React UI, how these flows surface to users
+
+## Receipt design settings consistency
+
+Blank/null/whitespace stored receipt titles use the selected document language and template: Delivery/Proforma retain their specialized localized names. A nonblank stored title, including the literal `Invoice`, remains custom. The UI receives explicit `hasCustomReceiptTitle` provenance; it shares the document-language query with the gallery rather than using the interface language for document previews.
+
+Branded alone uses the configured accent (`#3B82F6` when unset); Proforma alone displays payment/delivery terms. All nine company fields survive partial company updates. Logo replacement validates and normalizes PNG/JPEG/GIF/static SVG to PNG before overwriting the existing fixed key; a failed upload does not pre-delete the previous logo. Footer title/subtitle save together atomically.
+
+The ten-generated-receipt limit is rechecked under the tenant lock at each successful initial promotion, including multiple already queued candidates. Only eligible oldest generated documents are evicted; processing/failed receipts and other tenants are preserved. Eviction first chooses oldest rows, then locks/refetches their IDs in stable order before retiring any PDF/logo lease and deleting tenant-scoped pointers. Repair and promotion acquire their current receipt row before PDF lease locks. Order-file deletion explicitly requires the tenant and takes tenant → order → receipt-batch → lease locks, with no tenant lock added after an order lock. Replacements do not consume another slot. Outbox terminal reconciliation cannot overwrite a promoted or changed candidate. Late uploads retain durable cleanup intent until settlement, while only live unexpired uploading leases consume the 25 concurrent-upload slots, with per-object backoff and independent PDF/logo sweeps; there is no eager deletion after ambiguous commits. Automatic logos retain each original template cap and spacing, including Corporate 80 px with 10 px bottom margin.

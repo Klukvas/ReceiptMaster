@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="{{language}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -239,7 +239,7 @@
         }
         
         .totals-table {
-            width: 20%;
+            width: 280px;
             border-collapse: collapse;
         }
         
@@ -322,6 +322,7 @@
             line-height: 1.4;
         }
         
+        {{> printLayout}}
     </style>
 </head>
 <body>
@@ -336,7 +337,7 @@
         <div class="header">
             <div class="header-left">
                 {{#if hasCustomLogo}}
-                <img src="{{logoPath}}" alt="Logo" class="logo">
+                <span class="document-logo-slot" style="{{logoSlotStyle}}"><img src="{{logoPath}}" style="{{logoStyle}}" alt="Logo" class="logo"></span>
                 {{/if}}
                 <div>
                     <div class="invoice-title">{{receiptTitle}}</div>
@@ -352,9 +353,11 @@
                 <div class="meta-item">
                     <span class="meta-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span> <span class="meta-value">{{orderDate}}</span>
                 </div>
+                {{#if dueDate}}
                 <div class="meta-item">
                     <span class="meta-label">{{#if translations.due}}{{translations.due}}{{else}}Due{{/if}}</span> <span class="meta-value">{{dueDate}}</span>
                 </div>
+                {{/if}}
             </div>
         </div>
         
@@ -465,14 +468,15 @@
             <div class="terms-section">
                 {{#if footerTitle}}
                 <div class="terms-title">{{footerTitle}}</div>
-                {{#if footerSubtitle}}
-                <div class="terms-content">{{footerSubtitle}}</div>
-                {{/if}}
+
                 {{else}}
                 {{#if terms}}
                 <div class="terms-title">{{#if translations.terms}}{{translations.terms}}{{else}}Terms{{/if}}</div>
                 <div class="terms-content">{{terms}}</div>
                 {{/if}}
+                {{/if}}
+                {{#if footerSubtitle}}
+                <div class="terms-content">{{footerSubtitle}}</div>
                 {{/if}}
             </div>
         </div>

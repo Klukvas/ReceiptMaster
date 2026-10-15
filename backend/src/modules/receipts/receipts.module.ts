@@ -1,3 +1,10 @@
+import { DocumentArtifact } from "./entities/document-artifact.entity";
+import { DocumentArtifactsService } from "./services/document-artifacts.service";
+import { DocumentStorageMaintenanceService } from "./services/document-storage-maintenance.service";
+import { DocumentRenderService } from "./services/document-render.service";
+import { ReceiptSnapshotService } from "./services/receipt-snapshot.service";
+import { ReceiptArtifactService } from "./services/receipt-artifact.service";
+import { DocumentPreviewController } from "./document-preview.controller";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { BullModule } from "@nestjs/bullmq";
@@ -28,7 +35,12 @@ import { ReceiptsGateway } from "./receipts.gateway";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Receipt, Order, ReceiptGenerationOutbox]),
+    TypeOrmModule.forFeature([
+      Receipt,
+      Order,
+      ReceiptGenerationOutbox,
+      DocumentArtifact,
+    ]),
     BullModule.registerQueue({ name: RECEIPT_GENERATION_QUEUE }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -41,11 +53,17 @@ import { ReceiptsGateway } from "./receipts.gateway";
   ],
   controllers: [
     ReceiptsController,
+    DocumentPreviewController,
     PublicReceiptsController,
     PdfTestController,
   ],
   providers: [
     ReceiptsService,
+    DocumentRenderService,
+    ReceiptSnapshotService,
+    ReceiptArtifactService,
+    DocumentArtifactsService,
+    DocumentStorageMaintenanceService,
     ReceiptOutboxService,
     {
       provide: RECEIPT_PUBLISHER_FACTORY,

@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-16
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -353,6 +353,16 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 ```
 
 **Convention:** Organize translation keys hierarchically (orders.recipient, settings.receiptTitle, etc.). Check JSON files for the full key structure.
+
+### Receipt template previews
+
+`components/settings/TemplatePreviewIframe.tsx` is shared by template settings, the
+carousel and onboarding. It loads authenticated HTML through React Query, keyed by
+template and language. A4 previews use a 794×1123 CSS-pixel canvas; Thermal uses an
+80 mm (about 302 px) canvas and measures its content after fonts finish loading, matching
+the production roll layout. Thermal previews cap scale at 1 so a roll is not stretched
+to A4 width. The iframe remains script-disabled; `allow-same-origin` permits its parent
+to read layout dimensions. Format/accessibility and error labels use all three locales.
 
 ### Real-Time Updates: WebSocket
 
@@ -731,3 +741,23 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 ---
 
 **Remember:** The frontend is a thin client. Business logic lives in services + backend. Hooks orchestrate React Query. Contexts hold session state. Components render. Start with the services/hooks layer, not the UI.
+
+## Document configuration and shared draft
+
+`useDocumentDraft` reads `GET /settings/document-config` through Axios/React Query and owns the complete unsaved configuration, base revision, staged logo, and preview request version. `SettingsPage` keeps it mounted across Company, Receipt Design and Language tabs. `DocumentEditor` uses the existing semantic colors, typography, cards and template carousel. Subscription and interface language remain independent of the saved document configuration.
+
+One **Save changes / Discard** bar covers all document fields and logo replacement/removal. Changes do not upload logos until an explicit save/generation/preset action. Reset design only changes the draft's appearance; company values, asset reference, terms and formatting are retained, and Discard reverses the reset. Failed saves keep drafts. Custom titles require non-whitespace text (native required/pattern handling and the shared draft payload guard); errors retain the current draft. Numeric legacy date style is labeled separately from explicit Short/Medium/Long, and the example includes the four-digit year. Revision conflicts offer saved-value comparison, reload of the saved base, and Discard; reloading alone keeps the draft.
+
+The server owns template capabilities, returned by `/settings/templates`. Unsupported controls explain that values are retained. Accent applies only to Branded; terms only to Proforma. Logo alignment stays inside the real template slot. Manual sizing uses smaller Thermal bounds; automatic sizing retains the original template geometry. Contact visibility removes values before HTML/public metadata preparation.
+
+**Refresh preview** posts the complete unsaved multipart draft to `/receipts/preview` and displays actual PDF bytes. Draft changes mark it stale. AbortController, request sequence and draft version guard late responses; old blob URLs are revoked. Navigation links, indexed browser Back/Forward and browser unload warn about unsaved changes; cancelling Back/Forward restores the current route and draft. Opening the PDF in a new tab keeps the draft. Headless Chrome may show a dark native PDF iframe; verification uses valid PDF bytes/text and the Open PDF preview link, and does not treat that screenshot as proof of native viewer rendering.
+
+Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. Maximum 20 presets; names and revisions are validated by the server.
+
+The Orders action menu opens `CustomizeDocumentModal`, using the same editor with **This document only** scope. Generation sends a complete config and optional staged logo without saving defaults. Existing generated documents use explicit `replace`, expected active revision and a share-link replacement warning. Legacy reconstruction requires confirmation. Replacement status is separate from the active generated receipt; order polling recognizes it.
+
+`PublicReceiptPage` uses the frozen visible projection and formatting preferences. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
+
+Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract and evidence.
+
+Closing Orders customization through Escape, Close or successful generation/retry restores focus to the surviving More actions button. Cancelling unsaved-draft confirmation leaves focus trapped inside the open editor.

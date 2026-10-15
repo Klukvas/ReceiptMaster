@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-16
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -639,6 +639,22 @@ throw ApiErrors.BAD_REQUEST("Invalid input");       // 400
 export class QueueModule {}
 ```
 
+**Receipt rendering:** `modules/receipts/services/template.service.ts` exposes an awaited
+`ready` promise for translations and fonts. `renderTemplate()` waits for it and fills
+assets even if `prepareTemplateData()` was called during startup. All 15 HTML styles use
+the shared Handlebars `printLayout` partial from `templates/print-layout.ts` for text
+containment, logo bounds and print fragmentation. Preview fixtures use the same data
+preparation and dictionaries as production.
+
+`PlaywrightPdfGenerator` waits for `document.fonts.ready` before PDF capture. Thermal
+metadata requests `contentBasedHeight`: the generator lays out at the printable roll
+width and measures body height plus page margins. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
+can optionally select an installed browser (for local offline verification); when unset,
+Playwright uses its normal bundled Chromium. No machine-specific path is in production
+code. The offline regression entry points are `backend/test/verify-receipt-templates.ts`
+and `backend/test/verify-receipt-pdfs.py`; evidence belongs in a fresh
+`backend/temp/receipt-fix-*` directory and requires no DB, S3, printer or external API.
+
 **Receipt worker:** `modules/receipts/receipt-generation.processor.ts`
 
 ```typescript
@@ -650,36 +666,25 @@ export interface ReceiptGenerationJobData {
 }
 ```
 
-`ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`), enters the validated job tenant,
-loads the confirmed order and settings, renders/uploads the PDF, then conditionally marks the
-current generation GENERATED and locks the order in one database transaction. Progress updates
-and WebSocket events apply only while that same generation is PROCESSING. Exceptions propagate
-to BullMQ for retries; only exhausted attempts mark FAILED. Missing rows are retryable errors,
-and obsolete jobs return without modifying newer generations.
+`ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`) in the validated job tenant. `ReceiptSnapshotService` resolves authoritative configuration, captures transaction/recipient data, normalizes/loads immutable logos and compiles final HTML **before** durable intent. No S3 or Chromium work runs under a database lock. A short transaction rechecks account/preset revisions, locked source fingerprints, entitlement and order eligibility, then stores one pending candidate plus the identifier-only outbox entry. Tenant quota enforcement remains serialized; `MAX_RECEIPTS = 10` retains its existing eligible eviction policy.
 
-**Durable receipt publication:**
+`ReceiptArtifactService` renders only stored HTML and complete PDF options, then uploads to an immutable attempt key. Promotion checks tenant, generation, pending identity, expected active revision, confirmed/locked order and non-void lifecycle, switching all active artifact/config/template/public metadata together. It never writes public-token fields. A generated document stays generated and publicly downloadable during replacement, with separate `replacement_status`/`replacement_error`. Failed candidates remain retryable; explicit new config on a failed generation replaces its design, while a plain retry reuses the frozen candidate. The outbox recognizes replacements and reconciles exhausted jobs without destroying active PDFs.
 
-`generateReceipt()` locks the order, creates/reuses a PROCESSING receipt with a new
-`generation_id` and `generation_started_at`, and inserts `receipt_generation_outbox` in the
-same transaction. It never calls Redis inside that transaction. Receipt numbers come from the
-existing migration-created PostgreSQL function through the current transaction manager; no
-runtime DDL or second pooled connection is needed.
+Snapshot/HTML/pending-asset entity columns use `select: false`; internal services explicitly select them. Receipt controllers return an allowlist, and nested order receipts cannot load the large private columns by default. Public metadata explicitly selects and projects frozen visible values; it never queries live settings for new documents.
 
-`ReceiptOutboxService` dispatches committed entries in the background and every 10 seconds;
-HTTP receipt creation does not wait for Redis readiness. A dedicated publisher client disables
-offline command buffering, uses finite request retries and a two-second deadline for each Redis
-operation. A failed/timed-out publisher is disconnected synchronously and recreated on the next
-scan; cleanup cannot hold the dispatch running flag. Worker connections keep their BullMQ retry
-configuration. Stable
-job IDs (`receipt-<receiptId>-<generationId>`) make repeated publication idempotent. Redis errors
-leave durable intent for retry; published entries remain until their receipt is terminal so lost
-Redis jobs can be recreated. A retained failed/completed job with a PROCESSING row is reconciled
-to FAILED. The operational outbox is not tenant RLS filtered; receipt access during dispatch runs
-inside the entry's validated tenant context.
+`DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded objects have a 24-hour grace. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving MAX_RECEIPTS = 10. Legacy local filesystem files are not processed by immutable object-storage cleanup.
+
+The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
+
+The additive `1792100000000-DocumentConfiguration` migration adds config/revision/logo columns, tenant assets/presets, one active snapshot and one pending replacement. New tables have FORCE RLS with explicit USING/WITH CHECK and tenant-qualified asset foreign keys. A trigger validates the legacy varchar settings tenant against the asset owner. It deliberately does not retrofit unrelated settings RLS.
+
+Preview captures the complete raw multipart envelope in a buffer capped at 6 MiB (including preamble/epilogue, independent of Content-Length), then replays it to Multer after parser setup. Oversize returns 413; incomplete/aborted requests never reach the controller. JSON paths are unchanged. Multer retains one payload ≤64 KiB, one file ≤5 MiB and bounded parts/headers. Expensive preview work remains limited to two concurrent operations. It normalizes staged images in memory and returns `private, no-store` PDF bytes without account, asset, receipt, outbox or PDF persistence. The Chrome context disables page JavaScript/service workers and blocks external/file requests. Interface language is separate from document language and bounded Intl formatting, including an explicit IANA timezone.
+
+The existing dispatcher still publishes after commit, every 10 seconds, with stable receipt/generation job IDs and bounded Redis calls. Publication failure leaves durable intent. Jobs carry IDs only.
 
 Jobs retry three times with exponential backoff. Workers throw for missing receipt/order rows
 so transient visibility failures retry. Progress, completion and exhausted-failure writes all
-match receipt, tenant, generation and PROCESSING status. Superseded jobs cannot overwrite a new
+match receipt, tenant, generation and PROCESSING or pending-replacement status. Superseded jobs cannot overwrite a new
 manual retry. Existing queued/active generations are never reset merely because created_at is
 old. The upgrade migration backfills legacy PROCESSING rows into a fresh durable generation.
 
@@ -952,3 +957,17 @@ direct webhook handling and scheduled subscription downgrades. Stored entitlemen
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
+
+## Settings writes and logo images
+
+Settings use a partial TypeORM `upsert` on the existing unique `userId`: only supplied columns participate in `ON CONFLICT DO UPDATE`, so independent field saves cannot replay stale whole-row snapshots. All settings request bodies use Zod schemas in `settings/dto/settings-input.ts` and map validation issues to the existing API error envelope. Combined footer updates validate both fields before one upsert. Regression tests exercise detached in-memory snapshots, actual generated PostgreSQL SQL without a connection, and the real Nest HTTP controller against synthetic repositories.
+
+LogoStorageService accepts validated PNG/JPEG/GIF/static SVG buffers and normalizes them through the backend runtime `sharp` dependency. Both uploads and legacy reads return real PNG bytes at the historical fixed key; reads do not mutate storage. SVG is decoded from memory without a base file, rejects active/external content, and is never served raw. Pixel/dimension/byte limits and a decoder timeout reduce abuse; they are not a hard process memory/CPU sandbox for native SVG metadata parsing.
+
+FIX2 fencing: initial promotions take the same tenant advisory lock as creation and evict only oldest existing generated receipts when needed, so multiple queued initial candidates cannot exceed ten generated documents. Replacement reconciliation CAS includes observed processing state, active revision and pending ID; promotion/new candidates/void win. Workers emit progress only after a conditional observed-candidate claim, with no async gap before emission. Missing-path/hash repair uses SQL `IS NULL` guards.
+
+Upload cleanup records now carry `upload_pending`, `cleanup_token` and capped retry attempts (unapplied migration `1792100000002-DocumentUploadFencing`). Across logos and PDFs, at most 25 live unexpired uploading leases per tenant may reserve intent, serialized separately from content transactions. Expired uncertain PUTs retain deleting tombstones and repeat reference-checked collection after 24 hours until the uploader settles. Deleting tombstones never consume upload capacity, including when collection extends their cleanup retry time; ordinary new uploads need no operational reconciliation. Arbitrary process suspension is not assumed to have a finite lifetime, so uncertain metadata is never forgotten by a TTL. Settlement fences expired uploaders and refreshes/recreates reference-aware cleanup intent with a new token. Collector finalization CAS cannot remove that refreshed intent. Each object failure moves its retry time by exponential backoff capped at 24 hours; each collector runs independently. No S3/browser work occurs in DB transactions. Migration backfills use temporary owner-only policies in a transaction and drop them before commit, preserving FORCE RLS. The settings logo-owner trigger covers changes to both logo pointer and tenant key.
+
+Installed TypeORM MigrationExecutor uses its default `all` transaction mode for all three document migrations. Neither storage migration declares a per-migration transaction override; both backfill guards require an active transaction. Synthetic executor regressions cover ordered up/down, temporary owner-only SELECT/UPDATE policies removed before commit, and rollback without residual policies. Live PostgreSQL behavior remains an opt-in verification.
+
+FIX4 retirement ordering: oldest eligible selection precedes stable-ID batch receipt locks/refetch (including select:false active/pending logo references and current PDF path), before any retirement lease or delete. Promotion/repair lock their current receipt before PDF attachment/retirement. Order-file deletion requires an explicit tenant and locks tenant before order, then the receipt batch; no external I/O runs under these locks. Synthetic wait-for regressions exercise precreation/promotion eviction against repair, stale pointer refetch and order deletion; live PostgreSQL remains opt-in.

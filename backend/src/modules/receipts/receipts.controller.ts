@@ -1,3 +1,21 @@
+import { HttpException } from "@nestjs/common";
+import { ApiErrorResponse } from "../../common/errors/ApiError";
+import { ParseUUIDPipe, UseInterceptors, UploadedFile } from "@nestjs/common";
+import { z } from "zod";
+import { selectionSchema } from "../settings/document-config";
+import {
+  DocumentMultipart,
+  documentPayload,
+} from "../settings/document-multipart";
+import { receiptProjection } from "./services/receipt-projection";
+const regenerationSchema = selectionSchema
+  .innerType()
+  .extend({
+    mode: z.enum(["reproduce", "replace"]).default("reproduce"),
+    expectedActiveRevision: z.number().int().min(0).max(2147483646).optional(),
+    confirmReconstruction: z.boolean().optional(),
+  })
+  .strict();
 import {
   Controller,
   Get,
@@ -50,11 +68,21 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createReceipt(
-    @Param("orderId") orderId: string,
+  @UseInterceptors(DocumentMultipart())
+  async createReceipt(
+    @Param("orderId", ParseUUIDPipe) orderId: string,
     @Request() req: { user: User },
+    @Body() body: unknown = {},
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.receiptsService.generateReceipt(orderId, req.user);
+    return receiptProjection(
+      await this.receiptsService.generateReceipt(
+        orderId,
+        req.user,
+        documentPayload(selectionSchema, body, file),
+        file,
+      ),
+    );
   }
 
   @Post("orders/:orderId/receipt/compact")
@@ -67,11 +95,21 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createCompactReceipt(
-    @Param("orderId") orderId: string,
+  @UseInterceptors(DocumentMultipart())
+  async createCompactReceipt(
+    @Param("orderId", ParseUUIDPipe) orderId: string,
     @Request() req: { user: User },
+    @Body() body: unknown = {},
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.receiptsService.generateCompactReceipt(orderId, req.user);
+    return receiptProjection(
+      await this.receiptsService.generateReceipt(
+        orderId,
+        req.user,
+        documentPayload(selectionSchema, body, file),
+        file,
+      ),
+    );
   }
 
   @Post("orders/:orderId/receipt/standard")
@@ -84,11 +122,21 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Невозможно создать чек" })
   @ApiResponse({ status: 404, description: "Заказ не найден" })
   @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
-  createStandardReceipt(
-    @Param("orderId") orderId: string,
+  @UseInterceptors(DocumentMultipart())
+  async createStandardReceipt(
+    @Param("orderId", ParseUUIDPipe) orderId: string,
     @Request() req: { user: User },
+    @Body() body: unknown = {},
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.receiptsService.generateStandardReceipt(orderId, req.user);
+    return receiptProjection(
+      await this.receiptsService.generateReceipt(
+        orderId,
+        req.user,
+        documentPayload(selectionSchema, body, file),
+        file,
+      ),
+    );
   }
 
   @Get()
@@ -100,14 +148,14 @@ export class ReceiptsController {
   })
   @ApiQuery({ name: "offset", required: false, description: "Offset" })
   @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
-  findAll(
+  async findAll(
     @Request() req: { user: User },
     @Query("offset") offset?: string,
     @Query("limit") limit?: string,
   ) {
     const parsedOffset = offset ? parseInt(offset, 10) : undefined;
     const parsedLimit = limit ? parseInt(limit, 10) : undefined;
-    return this.receiptsService.findAll(req.user, {
+    const result = await this.receiptsService.findAll(req.user, {
       offset:
         Number.isFinite(parsedOffset) && parsedOffset! >= 0
           ? parsedOffset
@@ -117,6 +165,7 @@ export class ReceiptsController {
           ? parsedLimit
           : undefined,
     });
+    return { ...result, data: result.data.map(receiptProjection) };
   }
 
   @Get(":id")
@@ -127,8 +176,11 @@ export class ReceiptsController {
     type: Receipt,
   })
   @ApiResponse({ status: 404, description: "Чек не найден" })
-  findOne(@Param("id") id: string, @Request() req: { user: User }) {
-    return this.receiptsService.findOne(id, req.user);
+  async findOne(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
+    return receiptProjection(await this.receiptsService.findOne(id, req.user));
   }
 
   @Get(":id/pdf")
@@ -136,7 +188,7 @@ export class ReceiptsController {
   @ApiResponse({ status: 200, description: "PDF файл получен" })
   @ApiResponse({ status: 404, description: "PDF файл не найден" })
   async getPdf(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Res() res: Response,
     @Request() req: { user: User },
   ) {
@@ -166,6 +218,8 @@ export class ReceiptsController {
       res.send(buffer);
     } catch (error) {
       this.logger.error("Error serving PDF:", error);
+      if (error instanceof HttpException || error instanceof ApiErrorResponse)
+        throw error;
       res.status(500).json({ error: "Ошибка при получении PDF файла" });
     }
   }
@@ -181,7 +235,7 @@ export class ReceiptsController {
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при печати" })
   async printReceipt(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Request() req: { user: User },
     @Query("printer") printer?: string,
   ) {
@@ -198,11 +252,13 @@ export class ReceiptsController {
   @ApiResponse({ status: 400, description: "Receipt is already voided" })
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async voidReceipt(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { reason: string },
     @Request() req: { user: User },
   ) {
-    return this.receiptsService.voidReceipt(id, req.user, body.reason);
+    return receiptProjection(
+      await this.receiptsService.voidReceipt(id, req.user, body.reason),
+    );
   }
 
   @Post("test-preview")
@@ -235,11 +291,38 @@ export class ReceiptsController {
   })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при регенерации PDF" })
+  @UseInterceptors(DocumentMultipart())
   async regenerateReceiptPdf(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Request() req: { user: User },
+    @Body() body: unknown = {},
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.receiptsService.regenerateReceiptPdf(id, req.user);
+    const {
+      mode,
+      expectedActiveRevision,
+      confirmReconstruction,
+      ...selection
+    } = documentPayload(regenerationSchema, body, file);
+    if (
+      mode === "reproduce" &&
+      (file ||
+        selection.config ||
+        selection.presetId ||
+        selection.overrides ||
+        selection.logoAction !== "keep")
+    )
+      throw new (await import("@nestjs/common")).BadRequestException(
+        "Reproduce cannot apply new configuration; use replace",
+      );
+    return receiptProjection(
+      await this.receiptsService.regenerateReceiptPdf(
+        id,
+        req.user,
+        { mode, expectedActiveRevision, confirmReconstruction, selection },
+        file,
+      ),
+    );
   }
 
   @Post(":id/share")
@@ -249,7 +332,10 @@ export class ReceiptsController {
     description: "Public link generated",
   })
   @ApiResponse({ status: 404, description: "Receipt not found" })
-  async shareReceipt(@Param("id") id: string, @Request() req: { user: User }) {
+  async shareReceipt(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.receiptsService.generatePublicToken(id, req.user);
   }
 
@@ -258,9 +344,11 @@ export class ReceiptsController {
   @ApiResponse({ status: 200, description: "Public link revoked" })
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async revokeShareReceipt(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Request() req: { user: User },
   ) {
-    return this.receiptsService.revokePublicToken(id, req.user);
+    return receiptProjection(
+      await this.receiptsService.revokePublicToken(id, req.user),
+    );
   }
 }

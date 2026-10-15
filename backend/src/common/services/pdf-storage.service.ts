@@ -7,6 +7,10 @@ import { ApiErrors } from "../errors/ApiError";
 export class PdfStorageService extends BaseObjectStorageService {
   constructor(configService: ConfigService) {
     super(configService);
+    this.s3.config.update({
+      httpOptions: { timeout: 60000, connectTimeout: 10000 },
+      maxRetries: 2,
+    });
   }
 
   /**

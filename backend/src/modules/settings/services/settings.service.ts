@@ -1,9 +1,14 @@
+import { Optional } from "@nestjs/common";
+import { DocumentConfigService } from "./document-config.service";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { UserSettings } from "../entities/user-settings.entity";
 import { CacheService } from "../../../common/services/cache.service";
-import { DEFAULT_RECEIPT_TITLE } from "../../receipts/templates/translations/defaults";
+import {
+  DEFAULT_PRIMARY_COLOR,
+  resolveReceiptTitle,
+} from "../../receipts/templates/translations/defaults";
 
 const SETTINGS_CACHE_TTL = 3600; // 1 hour
 
@@ -13,6 +18,7 @@ export class SettingsService {
     @InjectRepository(UserSettings)
     private userSettingsRepository: Repository<UserSettings>,
     private cacheService: CacheService,
+    @Optional() private readonly documents?: DocumentConfigService,
   ) {}
 
   private settingsCacheKey(userId: string): string {
@@ -58,15 +64,43 @@ export class SettingsService {
     return this.userSettingsRepository.save(created);
   }
 
+  // PostgreSQL ON CONFLICT updates only the supplied columns. Independent settings
+  // saves cannot write an older SELECT snapshot over another setting.
+  private async patchSettings(
+    userId: string,
+    updates: Partial<UserSettings>,
+  ): Promise<void> {
+    if (
+      this.documents &&
+      !Object.keys(updates).every((key) => key === "onboardingCompleted")
+    ) {
+      await this.documents.patchLegacy(userId, updates);
+    } else {
+      await this.userSettingsRepository.upsert({ ...updates, userId }, [
+        "userId",
+      ]);
+    }
+    await this.invalidateCache(userId);
+  }
+
+  async setFooter(
+    userId: string,
+    footerTitle: string,
+    footerSubtitle: string,
+  ): Promise<void> {
+    await this.patchSettings(userId, {
+      footerText: footerTitle,
+      subFooterText: footerSubtitle,
+    });
+  }
+
   async getUserTemplate(userId: string): Promise<string> {
     const settings = await this.getCachedSettings(userId);
     return settings?.templateId || "standard";
   }
 
   async setUserTemplate(userId: string, templateId: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({ ...settings, templateId });
-    await this.invalidateCache(userId);
+    await this.patchSettings(userId, { templateId });
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | null> {
@@ -77,30 +111,34 @@ export class SettingsService {
     userId: string,
     updates: Partial<UserSettings>,
   ): Promise<UserSettings> {
-    const settings = await this.getOrCreateSettings(userId);
-    const merged = { ...settings, ...updates, userId };
-    const saved = await this.userSettingsRepository.save(merged);
+    if (
+      this.documents &&
+      !Object.keys(updates).every((key) => key === "onboardingCompleted")
+    ) {
+      await this.documents.patchLegacy(userId, updates);
+    } else {
+      await this.userSettingsRepository.upsert({ ...updates, userId }, [
+        "userId",
+      ]);
+    }
     await this.invalidateCache(userId);
-    return saved;
+    return this.userSettingsRepository.findOneOrFail({ where: { userId } });
   }
 
   async getReceiptTitle(userId: string): Promise<string> {
     const settings = await this.getCachedSettings(userId);
     const lang = settings?.templateLanguage || "en";
-    return (
-      settings?.receiptTitle ||
-      DEFAULT_RECEIPT_TITLE[lang] ||
-      DEFAULT_RECEIPT_TITLE.en
+    return resolveReceiptTitle(
+      settings?.receiptTitle,
+      settings?.templateId,
+      lang,
     );
   }
 
   async setReceiptTitle(userId: string, title: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       receiptTitle: title,
     });
-    await this.invalidateCache(userId);
   }
 
   async getTemplateLanguage(userId: string): Promise<string> {
@@ -109,12 +147,9 @@ export class SettingsService {
   }
 
   async setTemplateLanguage(userId: string, language: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       templateLanguage: language,
     });
-    await this.invalidateCache(userId);
   }
 
   async getFooterTitle(userId: string): Promise<string | undefined> {
@@ -123,12 +158,9 @@ export class SettingsService {
   }
 
   async setFooterTitle(userId: string, footerTitle: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       footerText: footerTitle,
     });
-    await this.invalidateCache(userId);
   }
 
   async getFooterSubtitle(userId: string): Promise<string | undefined> {
@@ -140,12 +172,9 @@ export class SettingsService {
     userId: string,
     footerSubtitle: string,
   ): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       subFooterText: footerSubtitle,
     });
-    await this.invalidateCache(userId);
   }
 
   async getCompanyInfo(userId: string): Promise<Partial<UserSettings>> {
@@ -168,8 +197,6 @@ export class SettingsService {
     userId: string,
     companyInfo: Partial<UserSettings>,
   ): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-
     const companyFields: Record<string, unknown> = {};
     if (companyInfo.companyName !== undefined)
       companyFields.companyName = companyInfo.companyName;
@@ -190,8 +217,7 @@ export class SettingsService {
     if (companyInfo.companyTagline !== undefined)
       companyFields.companyTagline = companyInfo.companyTagline;
 
-    await this.userSettingsRepository.save({ ...settings, ...companyFields });
-    await this.invalidateCache(userId);
+    await this.patchSettings(userId, companyFields);
   }
 
   async getOnboardingStatus(userId: string): Promise<{ completed: boolean }> {
@@ -200,29 +226,23 @@ export class SettingsService {
   }
 
   async completeOnboarding(userId: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       onboardingCompleted: true,
     });
-    await this.invalidateCache(userId);
   }
 
   async getPrimaryColor(userId: string): Promise<string | undefined> {
     const settings = await this.getCachedSettings(userId);
-    return settings?.primaryColor || undefined;
+    return settings?.primaryColor || DEFAULT_PRIMARY_COLOR;
   }
 
   async setPrimaryColor(userId: string, color: string): Promise<void> {
     if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
       throw new Error("Invalid hex color value. Must match #RRGGBB format.");
     }
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       primaryColor: color,
     });
-    await this.invalidateCache(userId);
   }
 
   async getPaymentTerms(userId: string): Promise<string | undefined> {
@@ -231,12 +251,9 @@ export class SettingsService {
   }
 
   async setPaymentTerms(userId: string, terms: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       paymentTerms: terms,
     });
-    await this.invalidateCache(userId);
   }
 
   async getDeliveryTerms(userId: string): Promise<string | undefined> {
@@ -245,16 +262,14 @@ export class SettingsService {
   }
 
   async setDeliveryTerms(userId: string, terms: string): Promise<void> {
-    const settings = await this.getOrCreateSettings(userId);
-    await this.userSettingsRepository.save({
-      ...settings,
+    await this.patchSettings(userId, {
       deliveryTerms: terms,
     });
-    await this.invalidateCache(userId);
   }
 
   async getReceiptDesignSettings(userId: string): Promise<{
     receiptTitle: string;
+    hasCustomReceiptTitle: boolean;
     templateId: string;
     templateLanguage: string;
     footerTitle: string;
@@ -266,15 +281,17 @@ export class SettingsService {
     const settings = await this.getCachedSettings(userId);
     const lang = settings?.templateLanguage || "en";
     return {
-      receiptTitle:
-        settings?.receiptTitle ||
-        DEFAULT_RECEIPT_TITLE[lang] ||
-        DEFAULT_RECEIPT_TITLE.en,
+      receiptTitle: resolveReceiptTitle(
+        settings?.receiptTitle,
+        settings?.templateId,
+        lang,
+      ),
+      hasCustomReceiptTitle: Boolean(settings?.receiptTitle?.trim()),
       templateId: settings?.templateId || "standard",
       templateLanguage: lang,
       footerTitle: settings?.footerText || "",
       footerSubtitle: settings?.subFooterText || "",
-      primaryColor: settings?.primaryColor || "",
+      primaryColor: settings?.primaryColor || DEFAULT_PRIMARY_COLOR,
       paymentTerms: settings?.paymentTerms || "",
       deliveryTerms: settings?.deliveryTerms || "",
     };
@@ -298,6 +315,7 @@ export class SettingsService {
     };
     templateId: string;
     receiptTitle: string;
+    hasCustomReceiptTitle: boolean;
     templateLanguage: string;
     footerTitle?: string;
     footerSubtitle?: string;
@@ -321,10 +339,12 @@ export class SettingsService {
         companyTagline: settings?.companyTagline || undefined,
       },
       templateId: settings?.templateId || "standard",
-      receiptTitle:
-        settings?.receiptTitle ||
-        DEFAULT_RECEIPT_TITLE[lang] ||
-        DEFAULT_RECEIPT_TITLE.en,
+      receiptTitle: resolveReceiptTitle(
+        settings?.receiptTitle,
+        settings?.templateId,
+        lang,
+      ),
+      hasCustomReceiptTitle: Boolean(settings?.receiptTitle?.trim()),
       templateLanguage: lang,
       footerTitle: settings?.footerText || undefined,
       footerSubtitle: settings?.subFooterText || undefined,
