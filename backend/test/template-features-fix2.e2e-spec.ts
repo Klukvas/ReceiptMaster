@@ -19,7 +19,12 @@ import { DocumentConfiguration1792100000000 } from "../src/config/migrations/179
 import { DocumentStorageLeases1792100000001 } from "../src/config/migrations/1792100000001-DocumentStorageLeases";
 import { DataSource, EntitySchema, QueryRunner } from "typeorm";
 import { randomUUID } from "crypto";
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
+
+const EVIDENCE_DIR =
+  process.env.TEMPLATE_EVIDENCE ||
+  "temp/template-features-20261015-225300/fix3";
+mkdirSync(EVIDENCE_DIR, { recursive: true });
 import sharp = require("sharp");
 
 type Row = Record<string, unknown>;
@@ -108,7 +113,7 @@ describe("FIX2 actual production service regressions (synthetic persistence/stor
         (await f.artifacts.repair(active.id, TENANT)).subarray(0, 4).toString(),
       ).toBe("%PDF");
       writeFileSync(
-        `${process.env.TEMPLATE_EVIDENCE || "temp/template-features-20261015-225300/fix3"}/repair-${kind}-${process.env.FIX2_BASELINE ? "red" : "green"}-sql.json`,
+        `${EVIDENCE_DIR}/repair-${kind}-${process.env.FIX2_BASELINE ? "red" : "green"}-sql.json`,
         JSON.stringify({ sql, parameters }, null, 2),
       );
       expect(sql).toMatch(/"hash" IS NULL/);

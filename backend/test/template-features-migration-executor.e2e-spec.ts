@@ -10,7 +10,12 @@ import { MigrationExecutor } from "typeorm/migration/MigrationExecutor";
 import { DocumentConfiguration1792100000000 } from "../src/config/migrations/1792100000000-DocumentConfiguration";
 import { DocumentStorageLeases1792100000001 } from "../src/config/migrations/1792100000001-DocumentStorageLeases";
 import { DocumentUploadFencing1792100000002 } from "../src/config/migrations/1792100000002-DocumentUploadFencing";
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
+
+const EVIDENCE_DIR =
+  process.env.TEMPLATE_EVIDENCE ||
+  "temp/template-features-20261015-225300/fix3";
+mkdirSync(EVIDENCE_DIR, { recursive: true });
 
 function seam(failAt?: string, override?: number) {
   const instances: MigrationInterface[] = [
@@ -170,7 +175,7 @@ describe("installed MigrationExecutor unchanged default all", () => {
     expect(s.events.filter((e) => e === "BEGIN")).toHaveLength(4);
     expect(s.events.filter((e) => e === "COMMIT")).toHaveLength(4);
     writeFileSync(
-      `${process.env.TEMPLATE_EVIDENCE || "temp/template-features-20261015-225300/fix3"}/migration-executor-success.json`,
+      `${EVIDENCE_DIR}/migration-executor-success.json`,
       JSON.stringify(
         {
           executor: require.resolve("typeorm/migration/MigrationExecutor"),
@@ -216,7 +221,7 @@ describe("installed MigrationExecutor unchanged default all", () => {
       });
       expect(s.runner.isTransactionActive).toBe(false);
       writeFileSync(
-        `${process.env.TEMPLATE_EVIDENCE || "temp/template-features-20261015-225300/fix3"}/migration-rollback-${failure.startsWith("SELECT") ? "0001" : "0002"}.json`,
+        `${EVIDENCE_DIR}/migration-rollback-${failure.startsWith("SELECT") ? "0001" : "0002"}.json`,
         JSON.stringify(
           { events: s.events, finalCatalog: s.catalog() },
           null,
