@@ -128,16 +128,26 @@ describe("UsersService", () => {
   });
 
   describe("refreshToken", () => {
+    it.each([undefined, null, "", 1, {}, [], "x".repeat(128), "a".repeat(127)])(
+      "rejects malformed token %p before querying",
+      async (token) => {
+        await expect(service.refreshToken(token as string)).rejects.toThrow(
+          ApiErrorResponse,
+        );
+        expect(refreshTokenRepo.findOne).not.toHaveBeenCalled();
+        expect(refreshTokenRepo.save).not.toHaveBeenCalled();
+      },
+    );
     it("should rotate refresh token and return new tokens", async () => {
       const existingToken = {
-        token: "old-token",
+        token: "a".repeat(128),
         revoked: false,
         expires_at: new Date(Date.now() + 86400000),
         user: mockUser,
       };
       refreshTokenRepo.findOne.mockResolvedValue(existingToken);
 
-      const result = await service.refreshToken("old-token");
+      const result = await service.refreshToken("a".repeat(128));
 
       expect(result.access_token).toBe("jwt-token");
       expect(existingToken.revoked).toBe(true);
@@ -154,13 +164,13 @@ describe("UsersService", () => {
 
     it("should throw if refresh token is expired", async () => {
       refreshTokenRepo.findOne.mockResolvedValue({
-        token: "expired-token",
+        token: "b".repeat(128),
         revoked: false,
         expires_at: new Date(Date.now() - 86400000),
         user: mockUser,
       });
 
-      await expect(service.refreshToken("expired-token")).rejects.toThrow(
+      await expect(service.refreshToken("b".repeat(128))).rejects.toThrow(
         ApiErrorResponse,
       );
     });
@@ -168,10 +178,10 @@ describe("UsersService", () => {
 
   describe("revokeRefreshToken", () => {
     it("should revoke a specific refresh token", async () => {
-      await service.revokeRefreshToken("token-123");
+      await service.revokeRefreshToken("c".repeat(128));
 
       expect(refreshTokenRepo.update).toHaveBeenCalledWith(
-        { token: "token-123" },
+        { token: "c".repeat(128) },
         { revoked: true },
       );
     });

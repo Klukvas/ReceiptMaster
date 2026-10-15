@@ -7,11 +7,13 @@ import toast from "react-hot-toast";
 type CheckoutLoading = "pro" | "business" | "manage" | null;
 
 export const useCheckout = () => {
-  const { paddle } = usePaddle();
+  const { paddle, billingEnabled } = usePaddle();
   const { t } = useTranslation();
   const [loading, setLoading] = useState<CheckoutLoading>(null);
 
   const handleUpgrade = async (plan: "pro" | "business") => {
+    if (!billingEnabled || !paddle) return;
+
     setLoading(plan);
     try {
       const { transactionId } = await subscriptionApi.checkout(plan);
@@ -46,6 +48,7 @@ export const useCheckout = () => {
   };
 
   const handleManage = async () => {
+    if (!billingEnabled) return;
     setLoading("manage");
     try {
       const { url } = await subscriptionApi.portal();
@@ -59,5 +62,5 @@ export const useCheckout = () => {
     }
   };
 
-  return { loading, handleUpgrade, handleManage };
+  return { loading, handleUpgrade, handleManage, billingEnabled };
 };

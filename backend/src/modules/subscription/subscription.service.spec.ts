@@ -259,6 +259,7 @@ describe("SubscriptionService", () => {
       };
 
       const manager = {
+        query: jest.fn().mockResolvedValue([]),
         findOne: jest.fn().mockResolvedValue(makeSubscription("free")),
         createQueryBuilder: jest.fn().mockReturnValue(txQb),
       } as any;
@@ -271,7 +272,6 @@ describe("SubscriptionService", () => {
         UserSubscription,
         expect.objectContaining({
           where: { user_id: userId },
-          lock: { mode: "pessimistic_read" },
         }),
       );
     });
@@ -284,6 +284,7 @@ describe("SubscriptionService", () => {
       };
 
       const manager = {
+        query: jest.fn().mockResolvedValue([]),
         findOne: jest.fn().mockResolvedValue(makeSubscription("free")),
         createQueryBuilder: jest.fn().mockReturnValue(txQb),
       } as any;
@@ -301,6 +302,7 @@ describe("SubscriptionService", () => {
       };
 
       const manager = {
+        query: jest.fn().mockResolvedValue([]),
         findOne: jest.fn().mockResolvedValue(null),
         createQueryBuilder: jest.fn().mockReturnValue(txQb),
       } as any;
@@ -312,6 +314,7 @@ describe("SubscriptionService", () => {
 
     it("should pass for business plan in transaction", async () => {
       const manager = {
+        query: jest.fn().mockResolvedValue([]),
         findOne: jest.fn().mockResolvedValue(makeSubscription("business")),
         createQueryBuilder: jest.fn(),
       } as any;

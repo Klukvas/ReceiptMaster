@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   HttpCode,
   HttpStatus,
@@ -23,6 +24,11 @@ export class PaddleController {
 
   constructor(private readonly paddleService: PaddleService) {}
 
+  @Get("billing/config")
+  getBillingConfig(): { billingEnabled: boolean } {
+    return { billingEnabled: this.paddleService.isBillingEnabled() };
+  }
+
   /** C1: Rate-limited. C2: Signature failure (400) separated from processing failure (500). */
   @Post("paddle/webhook")
   @HttpCode(HttpStatus.OK)
@@ -33,6 +39,7 @@ export class PaddleController {
     @Req() req: RawBodyRequest<Request>,
     @Headers("paddle-signature") signature?: string,
   ) {
+    this.paddleService.assertBillingEnabled();
     if (!signature) {
       throw new BadRequestException("Missing Paddle-Signature header");
     }

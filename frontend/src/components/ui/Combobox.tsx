@@ -20,6 +20,12 @@ interface ComboboxProps {
  disabled?: boolean;
  required?: boolean;
  onClear?: () => void;
+ selectedOption?: ComboboxOption;
+ onSearchChange?: (search: string) => void;
+ onLoadMore?: () => void;
+ isLoading?: boolean;
+ loadMoreText?: string;
+ loadingText?: string;
 }
 
 export const Combobox = ({
@@ -33,12 +39,20 @@ export const Combobox = ({
  required = false,
  onClear,
  noResultsText,
+ selectedOption: retainedOption,
+ onSearchChange,
+ onLoadMore,
+ isLoading,
+ loadMoreText,
+ loadingText,
 }: ComboboxProps) => {
  const [isOpen, setIsOpen] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+ useEffect(() => { onSearchChange?.(searchTerm); }, [searchTerm, onSearchChange]);
  const inputRef = useRef<HTMLInputElement>(null);
  const listRef = useRef<HTMLUListElement>(null);
+ const dropdownRef = useRef<HTMLDivElement>(null);
  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
  // Cleanup timeout on unmount
@@ -51,7 +65,7 @@ export const Combobox = ({
  }, []);
 
  // Фильтруем опции по поисковому запросу
- const filteredOptions = options.filter(option => {
+ const filteredOptions = onSearchChange ? options : options.filter(option => {
  const query = searchTerm.toLowerCase();
  const labelMatch = option.label.toLowerCase().includes(query);
  const searchTextMatch = option.searchText?.toLowerCase().includes(query);
@@ -60,7 +74,7 @@ export const Combobox = ({
  });
 
  // Находим выбранную опцию
- const selectedOption = options.find(option => option.value === value);
+ const selectedOption = retainedOption ?? options.find(option => option.value === value);
 
  // Обработка открытия/закрытия
  const toggleOpen = () => {
@@ -210,7 +224,7 @@ export const Combobox = ({
  // Закрытие при клике вне компонента
  useEffect(() => {
  const handleClickOutside = (event: MouseEvent) => {
- if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+ if (inputRef.current && !inputRef.current.contains(event.target as Node) && !dropdownRef.current?.contains(event.target as Node)) {
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);
@@ -280,10 +294,11 @@ export const Combobox = ({
  {/* Dropdown */}
  {isOpen && (
  <div
+ ref={dropdownRef}
  className="absolute z-50 w-full mt-1.5 bg-elevated border border-[var(--color-border)] rounded-xl shadow-lg shadow-[var(--color-shadow)] animate-dropdown-in overflow-hidden"
  >
  <ul ref={listRef} role="listbox" className="py-1 max-h-60 overflow-auto scrollbar-thin">
- {filteredOptions.length === 0 ? (
+ {isLoading ? <li className="px-3.5 py-4 text-sm text-content-tertiary">{loadingText}</li> : filteredOptions.length === 0 ? (
  <li className="px-3.5 py-4 text-sm text-center text-content-tertiary">
  {noResultsText || 'Nothing found'}
  </li>
@@ -313,6 +328,7 @@ export const Combobox = ({
  ))
  )}
  </ul>
+ {onLoadMore && <button type="button" disabled={isLoading} onClick={onLoadMore} className="w-full p-2 text-sm text-accent-base">{loadMoreText}</button>}
  </div>
  )}
 

@@ -1,3 +1,4 @@
+import { usePaddle } from "../../providers/PaddleProvider";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Moon, Sun, Menu, X } from "lucide-react";
 import { LoginModal } from "../auth/LoginModal";
@@ -16,6 +17,7 @@ interface LandingShellProps {
 
 export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const { t } = useTranslation();
+  const { billingEnabled } = usePaddle();
   const { isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -103,7 +105,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
         <div className="landing-nav-pill">
           <a href="/#features">{t("landing.nav.features")}</a>
           <a href="/#how-it-works">{t("landing.nav.howItWorks")}</a>
-          <a href="/#pricing">{t("landing.nav.pricing")}</a>
+          {billingEnabled && <a href="/#pricing">{t("landing.nav.pricing")}</a>}
           <a href="/blog">{t("landing.nav.blog")}</a>
         </div>
 
@@ -176,13 +178,15 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
           >
             {t("landing.nav.howItWorks")}
           </a>
-          <a
-            href="/#pricing"
-            className="landing-mobile-menu-link"
-            onClick={closeMobileMenu}
-          >
-            {t("landing.nav.pricing")}
-          </a>
+          {billingEnabled && (
+            <a
+              href="/#pricing"
+              className="landing-mobile-menu-link"
+              onClick={closeMobileMenu}
+            >
+              {t("landing.nav.pricing")}
+            </a>
+          )}
           <a
             href="/blog"
             className="landing-mobile-menu-link"

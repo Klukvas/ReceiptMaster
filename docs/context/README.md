@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-09-08
+**Last Updated:** 2026-10-15
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -16,7 +16,8 @@ should not need to read all four to be productive.
 
 ReceiptMaster is a **multi-tenant SaaS** for order management, invoice/receipt PDF generation,
 and business analytics. Users create orders for recipients, generate branded receipt PDFs
-(async), and are billed by plan (Free / Pro / Business) via Paddle.
+(async), and have plan limits (Free / Pro / Business). Paddle payments are explicitly disabled
+by default; existing entitlements and quotas still apply.
 
 | Layer | Stack |
 |---|---|
@@ -25,7 +26,7 @@ and business analytics. Users create orders for recipients, generate branded rec
 | **Infra** | Docker Compose, single Hetzner server, Nginx, S3 (receipt storage), Telegram (notifications) |
 | **Repo** | Yarn workspaces monorepo (`backend/`, `frontend/`) — Node 20 |
 
-Multi-tenancy is enforced by `user_id` scoping **plus** PostgreSQL Row-Level Security — see
+Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context on each query connection and PostgreSQL Row-Level Security — see
 [backend-patterns.md](./backend-patterns.md).
 
 ---
@@ -54,7 +55,7 @@ market/
 │       ├── modules/         # orders, products, receipts, recipients, settings,
 │       │                    #   subscription, suppliers, users, paddle, telegram
 │       ├── common/          # guards, interceptors, filters, pipes, subscribers,
-│       │                    #   middleware (tenancy), services, utils, entities, dto
+│       │                    #   tenancy (ALS/interceptor/query runners), middleware, services, utils, entities, dto
 │       └── config/          # env schema (Zod), TypeORM config, migrations
 ├── frontend/                # React app
 │   ├── src/

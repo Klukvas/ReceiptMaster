@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-09-08
+**Last Updated:** 2026-10-15
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -255,6 +255,27 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 // Render table with items, handle sort clicks
 ```
 
+### Order forms and selection safety
+
+- `useOrderProducts` / `useOrderRecipients` (`hooks/useOrderOptions.ts`) use server search
+  with a 300ms debounce and explicit **25-record** pages. Load more fetches only the next
+  page. List keys are `[entity, 'order-options', search]`; selected record keys are
+  `[entity, 'order-option', id]`. They never write into the table's list query keys.
+- Selected records are retained separately and hydrated with `GET /products/:id` and
+  `GET /recipients/:id`, including original edit-order IDs beyond the first page.
+  `OrderEntitySelect` connects this data to the server-search mode of `Combobox`;
+  create-order product search keeps its viewport-aware portal.
+- A custom price of **zero cents** is an explicit override. Empty input clears the override
+  and uses the product price. Edit mutation failures render `parseApiError` messages in
+  an alert and keep the form and its values open.
+- Line totals use each product's currency; single-currency summaries use that currency.
+  Mixed currencies show an error and cannot be submitted; no conversion rate exists.
+- `OrdersPage` clears selection when search, filters, sort, page or page size changes,
+  and while refetching. `useServerPagination.isSearchPending` also covers the debounce
+  window. Bulk operations receive only selected IDs present in the current ready page;
+  approval requires a nonempty selection of draft orders. Bulk deletion revalidates
+  selection at confirmation time.
+
 ## State & Context
 
 ### AuthContext: `contexts/AuthContext.tsx` + `contexts/AuthContext.types.ts`
@@ -307,9 +328,9 @@ const { theme, toggleTheme, setTheme } = useTheme()
 ### Other Contexts
 
 **PaddleProvider** (`providers/PaddleProvider.tsx`):
-- Initializes Paddle SDK (`@paddle/paddle-js`)
+- Initializes Paddle SDK (`@paddle/paddle-js`) only when the explicit build flag and backend capability are both enabled.
 - Token from `VITE_PADDLE_CLIENT_TOKEN` env var
-- Environment: `VITE_PADDLE_ENVIRONMENT` (sandbox | production)
+- Enabled production requires explicit `VITE_PADDLE_ENVIRONMENT=production`; development can use sandbox. Invalid values fail initialization.
 - Exported `usePaddle()` hook provides `paddle` instance for checkout
 - See `useCheckout` hook for usage
 
@@ -371,7 +392,35 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   re-fetches `['orders']` every 4s while any listed order has a `processing` receipt,
   so the row's "generating" chip clears from server state without a page reload.
 
+### Production image and proxy configuration
+
+- CI publishes images only on a trusted `push` to `main`. Both Docker Hub images use
+  the full commit SHA; production compose requires `IMAGE_TAG` for both services.
+  Deployment transfers an allowlisted SHA archive and waits for both builds to succeed; existing production files are preserved.
+- The current release sets `VITE_BILLING_ENABLED=false` and overrides backend
+  `BILLING_ENABLED=false`, so Paddle secrets may be absent. When explicitly enabled,
+  frontend builds require the public client token and production environment; backend
+  production validation requires complete Paddle settings and frontend URL. Example env
+  files contain only empty values. Deployment preserves the existing secret environment.
+- `.dockerignore` excludes local `.env*` files from the frontend build context. Private
+  package authentication uses a BuildKit secret during the Yarn install; the token is
+  not persisted in a Docker layer. PR verification uses only the standard read-only
+  GitHub token; publish/deploy credentials are confined to main-push jobs.
+- Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
+  `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
+  directly to the backend. `/receipts` is the socket namespace, not the transport path.
+
 ### Billing & Checkout
+
+Strict `VITE_BILLING_ENABLED` defaults to false. The provider does not contact Paddle or
+initialize its SDK while disabled. An enabled build first checks the authoritative public
+`/billing/config` capability; only server-enabled billing initializes the SDK. Production
+requires the public token and explicit production environment. Hooks guard programmatic
+checkout/portal calls too. Disabled UI hides pricing/upgrade/manage actions, while current
+plan and usage remain visible; quota dialogs explain the current plan without purchase
+buttons. `release.json` exposes the immutable image SHA and billing flag for deployment
+verification.
+
 
 **useCheckout hook** (`hooks/useCheckout.ts`):
 ```typescript
@@ -650,7 +699,7 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic.
 2. **Query key consistency** — always invalidate the same key after mutations (e.g., `['orders']` after `deleteOrder`).
 3. **Image/asset paths** — public assets in `frontend/public/` (referenced as `/logo-icon.svg`).
-4. **Env vars** — prefix with `VITE_` for Vite to expose to client. Check `.env.example`.
+4. **Env vars** — prefix public client settings with `VITE_` for Vite to expose them. Check `frontend/env.example`; never put backend secrets in Vite settings.
 5. **localStorage keys** — `auth_token`, `refresh_token`, `theme`, and per-table settings (e.g., `orders_itemsPerPage`).
 6. **i18n key fallback** — if key not in translation, falls back to English. Make sure all strings are in `en/translation.json` first.
 7. **Lazy loading** — pages imported with `React.lazy()` to reduce bundle. Don't use dynamic imports for components not at route level.

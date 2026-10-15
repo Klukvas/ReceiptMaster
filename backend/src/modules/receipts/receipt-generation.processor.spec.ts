@@ -39,6 +39,7 @@ import {
   ReceiptGenerationProcessor,
   ReceiptGenerationJobData,
 } from "./receipt-generation.processor";
+import { tenantStore } from "../../common/tenancy/tenant-context";
 import { ReceiptStatus } from "./entities/receipt.entity";
 import { ReceiptStyle } from "./services/pdf-generator.service";
 
@@ -55,7 +56,7 @@ describe("ReceiptGenerationProcessor", () => {
   beforeEach(() => {
     receiptsRepository = {
       findOne: jest.fn(),
-      update: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     ordersRepository = {
@@ -112,26 +113,29 @@ describe("ReceiptGenerationProcessor", () => {
       data: {
         receiptId: "receipt-1",
         orderId: "order-1",
-        userId: "user-1",
+        userId: "11111111-1111-4111-8111-111111111111",
+        generationId: "generation-1",
       } as ReceiptGenerationJobData,
     };
 
     it("should process receipt generation successfully", async () => {
-      ordersRepository.findOne.mockResolvedValue({
-        id: "order-1",
-        recipient: { name: "John" },
-        items: [],
+      ordersRepository.findOne.mockImplementation(async () => {
+        expect(tenantStore.getStore()).toEqual({
+          userId: "11111111-1111-4111-8111-111111111111",
+        });
+        return { id: "order-1", recipient: { name: "John" }, items: [] };
       });
 
       receiptsRepository.findOne.mockResolvedValue({
         id: "receipt-1",
         number: "2025-000001",
         status: ReceiptStatus.PROCESSING,
+        generation_id: "generation-1",
       });
 
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
-          update: jest.fn().mockResolvedValue(undefined),
+          update: jest.fn().mockResolvedValue({ affected: 1 }),
         };
         return cb(manager);
       });
@@ -140,7 +144,7 @@ describe("ReceiptGenerationProcessor", () => {
 
       expect(receiptsGateway.emitProgress).toHaveBeenCalled();
       expect(receiptsGateway.emitCompleted).toHaveBeenCalledWith(
-        "user-1",
+        "11111111-1111-4111-8111-111111111111",
         expect.objectContaining({
           receiptId: "receipt-1",
           orderId: "order-1",
@@ -149,18 +153,17 @@ describe("ReceiptGenerationProcessor", () => {
       );
     });
 
-    it("should mark failed if order not found", async () => {
+    it("throws for missing order so BullMQ retries", async () => {
+      receiptsRepository.findOne.mockResolvedValue({
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "generation-1",
+      });
       ordersRepository.findOne.mockResolvedValue(null);
 
-      await processor.process(mockJob as any);
-
-      expect(receiptsGateway.emitFailed).toHaveBeenCalledWith(
-        "user-1",
-        expect.objectContaining({
-          receiptId: "receipt-1",
-          error: "Order not found",
-        }),
+      await expect(processor.process(mockJob as any)).rejects.toThrow(
+        "Order not found",
       );
+      expect(receiptsGateway.emitFailed).not.toHaveBeenCalled();
     });
 
     it("should return early if receipt not in PROCESSING state", async () => {
@@ -180,7 +183,7 @@ describe("ReceiptGenerationProcessor", () => {
       expect(pdfGeneratorService.generateReceiptPdf).not.toHaveBeenCalled();
     });
 
-    it("should return early if receipt not found", async () => {
+    it("throws for a missing receipt so BullMQ retries", async () => {
       ordersRepository.findOne.mockResolvedValue({
         id: "order-1",
         recipient: { name: "John" },
@@ -189,7 +192,9 @@ describe("ReceiptGenerationProcessor", () => {
 
       receiptsRepository.findOne.mockResolvedValue(null);
 
-      await processor.process(mockJob as any);
+      await expect(processor.process(mockJob as any)).rejects.toThrow(
+        "Receipt is not visible yet",
+      );
 
       expect(pdfGeneratorService.generateReceiptPdf).not.toHaveBeenCalled();
     });
@@ -205,6 +210,7 @@ describe("ReceiptGenerationProcessor", () => {
         id: "receipt-1",
         number: "2025-000001",
         status: ReceiptStatus.PROCESSING,
+        generation_id: "generation-1",
       });
 
       pdfGeneratorService.generateReceiptPdf.mockResolvedValue({
@@ -224,7 +230,7 @@ describe("ReceiptGenerationProcessor", () => {
 
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
-          update: jest.fn().mockResolvedValue(undefined),
+          update: jest.fn().mockResolvedValue({ affected: 1 }),
         };
         return cb(manager);
       });
@@ -248,6 +254,7 @@ describe("ReceiptGenerationProcessor", () => {
         id: "receipt-1",
         number: "2025-000001",
         status: ReceiptStatus.PROCESSING,
+        generation_id: "generation-1",
       });
 
       pdfGeneratorService.generateReceiptPdf.mockResolvedValue({
@@ -274,6 +281,7 @@ describe("ReceiptGenerationProcessor", () => {
         id: "receipt-1",
         number: "2025-000001",
         status: ReceiptStatus.PROCESSING,
+        generation_id: "generation-1",
       });
 
       pdfGeneratorService.generateReceiptPdf.mockRejectedValue(
@@ -285,33 +293,45 @@ describe("ReceiptGenerationProcessor", () => {
       );
     });
 
-    it("should handle markFailed error gracefully", async () => {
-      // Allow updateProgress to succeed but order lookup fails
-      ordersRepository.findOne.mockResolvedValue(null);
-
-      // Let updateProgress succeed, but markFailed's update call fails
-      let callCount = 0;
-      receiptsRepository.update.mockImplementation(() => {
-        callCount++;
-        // First call is updateProgress (stage: loading_order) - succeed
-        if (callCount === 1) return Promise.resolve(undefined);
-        // Second call is markFailed - fail
-        return Promise.reject(new Error("DB error"));
+    it("ignores superseded generations", async () => {
+      receiptsRepository.findOne.mockResolvedValue({
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "new-generation",
       });
-
-      // Should not throw additionally - markFailed error is swallowed
       await processor.process(mockJob as any);
+      expect(pdfGeneratorService.generateReceiptPdf).not.toHaveBeenCalled();
+      expect(receiptsRepository.update).not.toHaveBeenCalled();
     });
+  });
+
+  it("does not emit progress when its conditional generation update loses the race", async () => {
+    receiptsRepository.update.mockResolvedValueOnce({ affected: 0 });
+    await (processor as any).updateProgress(
+      "receipt-1",
+      "order-1",
+      "11111111-1111-4111-8111-111111111111",
+      40,
+      "generating_pdf",
+      "old-generation",
+    );
+    expect(receiptsGateway.emitProgress).not.toHaveBeenCalled();
   });
 
   describe("onFailed", () => {
     const jobData = {
       receiptId: "receipt-1",
       orderId: "order-1",
-      userId: "user-1",
+      userId: "11111111-1111-4111-8111-111111111111",
+      generationId: "generation-1",
     } as ReceiptGenerationJobData;
 
     it("marks the receipt FAILED once retries are exhausted", async () => {
+      receiptsRepository.update.mockImplementation(async () => {
+        expect(tenantStore.getStore()).toEqual({
+          userId: "11111111-1111-4111-8111-111111111111",
+        });
+        return { affected: 1 };
+      });
       const job = {
         data: jobData,
         opts: { attempts: 3 },
@@ -321,14 +341,19 @@ describe("ReceiptGenerationProcessor", () => {
       await processor.onFailed(job as any, new Error("S3 unavailable"));
 
       expect(receiptsRepository.update).toHaveBeenCalledWith(
-        { id: "receipt-1", status: ReceiptStatus.PROCESSING },
+        {
+          id: "receipt-1",
+          user_id: "11111111-1111-4111-8111-111111111111",
+          generation_id: "generation-1",
+          status: ReceiptStatus.PROCESSING,
+        },
         expect.objectContaining({
           status: ReceiptStatus.FAILED,
           error_message: "S3 unavailable",
         }),
       );
       expect(receiptsGateway.emitFailed).toHaveBeenCalledWith(
-        "user-1",
+        "11111111-1111-4111-8111-111111111111",
         expect.objectContaining({ receiptId: "receipt-1" }),
       );
     });

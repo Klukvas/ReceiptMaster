@@ -3,10 +3,12 @@ import {
   subscriptionApi,
   type SubscriptionStatus,
 } from "../lib/subscriptionApi";
+import { usePaddle } from "../providers/PaddleProvider";
 import { useAuth } from "./useAuth";
 
 export const useSubscription = () => {
   const { isAuthenticated } = useAuth();
+  const { billingEnabled } = usePaddle();
 
   const {
     data: status,
@@ -20,5 +22,5 @@ export const useSubscription = () => {
     enabled: isAuthenticated,
   });
 
-  return { status, isLoading, isError, refetch };
+  return { status, isLoading, isError, refetch, billingEnabled };
 };

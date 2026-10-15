@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-08-26
+**Last Updated:** 2026-10-15
 
 **Total Endpoints:** 90 across 12 controllers. This reference covers all controllers exhaustively.
 
@@ -72,23 +72,26 @@ Authenticates user and returns tokens. Rate-limited to 5 attempts per 60 seconds
 
 **POST** `/auth/refresh` (no auth required)
 
-Issues a new access token using a valid refresh token.
+Issues a new access token using a valid stored opaque refresh token. `refresh_token` must be a
+string of exactly 128 lowercase hexadecimal characters; malformed bodies return 400 before token
+lookup, and invalid/expired tokens return 401. Logout uses the same validated request body.
 
 **Request Body:**
 ```typescript
 { refresh_token: string }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
   access_token: string,
   refresh_token: string,
-  expires_in: number
+  user: { id: string; email: string }
 }
 ```
 
 **Errors:**
+- 400 — Malformed/missing refresh token
 - 401 `UNAUTHORIZED` — Invalid or expired refresh token
 
 ---
@@ -99,9 +102,9 @@ Issues a new access token using a valid refresh token.
 
 Revokes the refresh token.
 
-**Response** (200):
+**Response** (201):
 ```typescript
-{ ok: true }
+{ message: "Logged out successfully" }
 ```
 
 ---
@@ -190,7 +193,7 @@ File: `backend/src/modules/products/products.controller.ts` (8 endpoints)
 Creates a new product in user's catalog.
 
 **Errors:**
-- 402 `PRODUCT_LIMIT_EXCEEDED` — Free plan limit (5 products)
+- 402 `PRODUCT_LIMIT_EXCEEDED` — Free plan limit (10 products)
 - 409 `PRODUCT_ALREADY_EXISTS` — Duplicate name
 
 **Request Body:**
@@ -534,12 +537,12 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 **Request Body:**
 ```typescript
 {
-  recipient_id: string,       // UUID
+  recipientId: string,       // UUID
   items: [
     {
-      product_id: string,     // UUID
-      quantity: number,       // min 1
-      unit_price_cents: number, // in cents
+      productId: string,     // UUID
+      qty: number,       // min 1
+      unitPriceCents?: number, // integer cents, zero allowed
     }
   ]
 }
@@ -562,12 +565,18 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 ```
 
 **Special Response Header:**
-- `X-Idempotency-Replayed: true` — Returned from cache (HTTP 200 instead of 201)
+- `X-Idempotency-Replayed: true` — Returned from cache (original response status is reused)
+
+Duplicate `productId` entries and products with different currencies are rejected on create/update
+with 400 `VALIDATION_ERROR`. Supply items as `{ productId, qty, unitPriceCents? }`; an explicit
+`unitPriceCents: 0` is valid. Idempotency replays run before monthly quota refusal; parallel creates
+are serialized per user for the quota check.
 
 **Errors:**
+- 400 `VALIDATION_ERROR` — Duplicate product or mixed currencies
 - 404 `RECIPIENT_NOT_FOUND` — Recipient doesn't exist
 - 404 `PRODUCT_NOT_FOUND` — Product doesn't exist
-- 402 `ORDER_MONTHLY_LIMIT_EXCEEDED` — Free plan limit (50 orders/month)
+- 402 `ORDER_MONTHLY_LIMIT_EXCEEDED` — Free plan limit (20 orders/month)
 
 ---
 
@@ -622,15 +631,18 @@ Modifies draft order. Cannot update once confirmed.
 **Request Body:**
 ```typescript
 {
-  recipient_id?: string,
-  items?: OrderItem[]
+  recipientId?: string,
+  items?: Array<{ productId: string; qty: number; unitPriceCents?: number }>
   // Only modifiable in DRAFT state
 }
 ```
 
 **Response** (200): `Order`
 
+Replaced items restore removed products' stock and reserve the new items atomically.
+
 **Errors:**
+- 400 `VALIDATION_ERROR` — Duplicate product IDs or mixed currencies
 - 400 `ORDER_CANNOT_BE_MODIFIED` — Order is not DRAFT
 
 ---
@@ -898,7 +910,7 @@ Generates PDF receipt/invoice for confirmed order using user's default template.
   id: string,
   order_id: string,
   user_id: string,
-  status: "pending",      // Job queued; transitions to "generating" → "generated"
+  status: "processing",   // Durable intent committed; transitions to "generated" or "failed"
   pdf_url: null,          // Populated when generation completes
   progress: 0,            // 0-100
   created_at: Date,
@@ -910,6 +922,10 @@ Generates PDF receipt/invoice for confirmed order using user's default template.
 - 404 `ORDER_NOT_FOUND` — Order doesn't exist or not confirmed
 - 409 `RECEIPT_ALREADY_EXISTS` — Receipt already generated for this order
 - 402 `TEMPLATE_PLAN_RESTRICTED` — Template not allowed on user's plan
+
+Receipt creation commits a durable outbox entry with the receipt before publishing to Redis.
+Queue outages retry automatically without blocking the HTTP response on Redis readiness. Repeated requests return an existing PROCESSING generation;
+FAILED retries create a new generation. Existing active generations are not reset by receipt age.
 
 **Note:** Monitor progress via WebSocket `/receipts/progress/:userId` or poll `/receipts/:id`.
 
@@ -1076,7 +1092,8 @@ Voids a receipt and unlocks its order for editing.
 
 **POST** `/receipts/:id/regenerate`
 
-Forces re-generation of receipt PDF from current order and settings.
+Forces re-generation of receipt PDF from current order and settings. PDF-only conditional updates
+preserve concurrent share revocation and refuse to overwrite an intervening void.
 
 **Path Params:**
 - `id` (string, UUID)
@@ -1108,7 +1125,8 @@ Generates a test PDF using current user's settings (no order required).
 
 **POST** `/receipts/:id/share`
 
-Creates a public token allowing unauthenticated access to receipt PDF.
+Creates a public token allowing unauthenticated access to receipt PDF. Concurrent creators receive
+the same winning token; a concurrent void cannot be overwritten by a late share update.
 
 **Path Params:**
 - `id` (string, UUID)
@@ -1131,15 +1149,13 @@ Creates a public token allowing unauthenticated access to receipt PDF.
 
 **POST** `/receipts/:id/share/revoke`
 
-Disables public access to receipt.
+Persists SQL NULL for the share token. Public metadata and PDF requests using the revoked token
+return 404. Voiding also clears the share token.
 
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200):
-```typescript
-{ message: "Public link revoked" }
-```
+**Response** (201): `Receipt` with `public_token: null`
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1147,6 +1163,14 @@ Disables public access to receipt.
 ---
 
 ## Subscription & Billing
+
+`GET /api/v1/billing/config` is public and returns `{ billingEnabled: boolean }`.
+`BILLING_ENABLED` defaults to false. When false, checkout, portal and signed webhook
+POSTs return HTTP 503 with `errorCode: BILLING_DISABLED` and perform no payment or
+subscription mutations. Subscription status/usage reads and existing plan limits remain
+available. Direct webhook service entry points and scheduled canceled-plan downgrades
+are also disabled. Enabling production billing requires all Paddle settings below.
+
 
 All endpoints require JWT auth.
 
@@ -1685,7 +1709,9 @@ File: `backend/src/modules/receipts/public-receipts.controller.ts` (2 endpoints)
 
 **GET** `/public/receipts/:token`
 
-Retrieves receipt data using public share token (no auth).
+Retrieves receipt data using a 64-character hexadecimal share token (no auth). Access is limited
+to the generated receipt and its order/items/recipient; the token grants no writes or access to
+other data from the owner. Malformed, revoked and void tokens return 404.
 
 **Path Params:**
 - `token` (string) — Public share token from `/receipts/:id/share`

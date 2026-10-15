@@ -1,17 +1,13 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Trash2 } from "lucide-react";
-import {
-  ordersApi,
-  productsApi,
-  recipientsApi,
-  formatCurrency,
-  type Order,
-} from "../../lib/api";
+import { ordersApi, formatCurrency, type Order } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
-import { Combobox } from "../ui/Combobox";
+import { OrderRecipientSelect, OrderProductSelect } from "./OrderEntitySelect";
+import { useOrderProducts } from "../../hooks/useOrderOptions";
+import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
 
 interface EditOrderFormProps {
@@ -37,16 +33,19 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   );
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
   const queryClient = useQueryClient();
+  const [backendError, setBackendError] = useState("");
 
-  const { data: productsData } = useQuery({
-    queryKey: ["products"],
-    queryFn: () => productsApi.getAll({ limit: 100 }),
-  });
-
-  const { data: recipientsData } = useQuery({
-    queryKey: ["recipients"],
-    queryFn: () => recipientsApi.getAll({ limit: 100 }),
-  });
+  const productOptions = useOrderProducts(items.map((item) => item.productId));
+  const products = productOptions.records;
+  const currencies = [
+    ...new Set(
+      items.flatMap((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return product ? [product.currency] : [];
+      }),
+    ),
+  ];
+  const hasMixedCurrencies = currencies.length > 1;
 
   const updateMutation = useMutation({
     mutationFn: ({
@@ -63,6 +62,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       onClose();
     },
+    onError: (error: unknown) => setBackendError(parseApiError(error).message),
   });
 
   const addItem = () => {
@@ -72,6 +72,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   const removeItem = (index: number) => {
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== index));
+      setPriceInputs({});
     }
   };
 
@@ -80,13 +81,22 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
     field: keyof OrderItem,
     value: string | number | undefined,
   ) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
+    setItems((previous) =>
+      previous.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
+      ),
+    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setBackendError("");
+    if (
+      hasMixedCurrencies ||
+      productOptions.isHydrating ||
+      productOptions.error
+    )
+      return;
 
     const validItems = items.filter((item) => item.productId && item.qty > 0);
     if (validItems.length === 0) {
@@ -105,13 +115,12 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   };
 
   const getProduct = (productId: string) => {
-    return productsData?.data?.data?.find((p) => p.id === productId);
+    return products.find((p) => p.id === productId);
   };
 
   const calculateItemTotal = (item: OrderItem) => {
     const product = getProduct(item.productId);
-    if (!product) return 0;
-    const unitPrice = item.unitPriceCents ?? product.sale_price_cents;
+    const unitPrice = item.unitPriceCents ?? product?.sale_price_cents ?? 0;
     return unitPrice * item.qty;
   };
 
@@ -132,24 +141,31 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {backendError && (
+            <p
+              role="alert"
+              className="p-3 rounded-lg bg-[var(--color-danger-light)] text-sm text-danger-base"
+            >
+              {backendError}
+            </p>
+          )}
+          {hasMixedCurrencies && (
+            <p role="alert" className="text-sm text-danger-base">
+              {t("orders.mixedCurrencies")}
+            </p>
+          )}
+          {productOptions.error && (
+            <p role="alert" className="text-sm text-danger-base">
+              {parseApiError(productOptions.error).message}
+            </p>
+          )}
           <div>
             <label className="block text-sm font-medium text-content-secondary mb-1">
               {t("orders.recipient")}
             </label>
-            <Combobox
-              options={
-                recipientsData?.data?.data?.map((recipient) => ({
-                  value: recipient.id,
-                  label: `${recipient.name}${recipient.email ? ` (${recipient.email})` : ""}`,
-                  searchText:
-                    `${recipient.name} ${recipient.email || ""} ${recipient.phone || ""}`.trim(),
-                })) || []
-              }
+            <OrderRecipientSelect
               value={recipientId}
               onChange={setRecipientId}
-              placeholder={t("orders.selectRecipient")}
-              searchPlaceholder={t("orders.searchRecipient")}
-              required
             />
           </div>
 
@@ -171,21 +187,13 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                 >
                   <div className="flex items-center gap-2">
                     <div className="flex-1 min-w-0">
-                      <Combobox
-                        options={
-                          productsData?.data?.data?.map((product) => ({
-                            value: product.id,
-                            label: `${product.name} - ${formatCurrency(product.sale_price_cents, product.currency)}`,
-                            searchText: `${product.name}`.trim(),
-                          })) || []
-                        }
+                      <OrderProductSelect
                         value={item.productId}
-                        onChange={(value) =>
-                          updateItem(index, "productId", value)
-                        }
-                        placeholder={t("orders.selectProduct")}
-                        searchPlaceholder={t("orders.searchProduct")}
-                        required
+                        onChange={(value) => {
+                          updateItem(index, "productId", value);
+                          updateItem(index, "unitPriceCents", undefined);
+                          setPriceInputs({});
+                        }}
                       />
                     </div>
                     {items.length > 1 && (
@@ -235,17 +243,14 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                                 ...prev,
                                 [index]: value,
                               }));
-                              if (
-                                value === "" ||
-                                value === "." ||
-                                value === "0."
-                              ) {
-                                updateItem(index, "unitPriceCents", undefined);
-                              } else if (value === "0") {
+                              if (value === "" || value === ".") {
                                 updateItem(index, "unitPriceCents", undefined);
                               } else {
                                 const numValue = parseFloat(value);
-                                if (!isNaN(numValue) && numValue >= 0) {
+                                if (
+                                  Number.isFinite(numValue) &&
+                                  numValue >= 0
+                                ) {
                                   const cents = Math.round(numValue * 100);
                                   updateItem(index, "unitPriceCents", cents);
                                 }
@@ -257,8 +262,8 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                                 .replace(",", ".");
                               if (
                                 value &&
-                                !isNaN(parseFloat(value)) &&
-                                parseFloat(value) > 0
+                                Number.isFinite(parseFloat(value)) &&
+                                parseFloat(value) >= 0
                               ) {
                                 const numValue = parseFloat(value);
                                 const cents = Math.round(numValue * 100);
@@ -300,7 +305,10 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                       );
                     })()}
                     <div className="ml-auto text-sm font-medium text-content">
-                      {formatCurrency(calculateItemTotal(item))}
+                      {formatCurrency(
+                        calculateItemTotal(item),
+                        getProduct(item.productId)?.currency ?? order.currency,
+                      )}
                     </div>
                   </div>
                 </div>
@@ -311,14 +319,42 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
           <div className="border-t border-[var(--color-border)] pt-4">
             <div className="flex justify-between items-center text-lg font-semibold text-content">
               <span>{t("orders.total")}:</span>
-              <span>{formatCurrency(calculateTotal())}</span>
+              <span>
+                {hasMixedCurrencies
+                  ? currencies.map((currency) => (
+                      <span key={currency} className="block">
+                        {formatCurrency(
+                          items
+                            .filter(
+                              (item) =>
+                                getProduct(item.productId)?.currency ===
+                                currency,
+                            )
+                            .reduce(
+                              (total, item) => total + calculateItemTotal(item),
+                              0,
+                            ),
+                          currency,
+                        )}
+                      </span>
+                    ))
+                  : formatCurrency(
+                      calculateTotal(),
+                      currencies[0] ?? order.currency,
+                    )}
+              </span>
             </div>
           </div>
 
           <div className="flex space-x-3 pt-4">
             <Button
               type="submit"
-              disabled={updateMutation.isPending}
+              disabled={
+                updateMutation.isPending ||
+                hasMixedCurrencies ||
+                productOptions.isHydrating ||
+                !!productOptions.error
+              }
               className="flex-1"
             >
               {updateMutation.isPending

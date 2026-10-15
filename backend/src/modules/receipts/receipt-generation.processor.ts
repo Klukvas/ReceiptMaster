@@ -13,12 +13,14 @@ import {
 } from "./services/pdf-generator.service";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { SettingsService } from "../settings/services/settings.service";
+import { runWithTenant } from "../../common/tenancy/tenant-context";
 import { ReceiptsGateway } from "./receipts.gateway";
 
 export interface ReceiptGenerationJobData {
   receiptId: string;
   orderId: string;
   userId: string;
+  generationId: string;
 }
 
 export const RECEIPT_GENERATION_QUEUE = "receipt-generation";
@@ -69,31 +71,61 @@ export class ReceiptGenerationProcessor extends WorkerHost {
     userId: string,
     progress: number,
     stage: string,
-  ): Promise<void> {
-    await this.receiptsRepository.update(receiptId, { progress });
+    generationId: string,
+  ): Promise<boolean> {
+    const result = await this.receiptsRepository.update(
+      {
+        id: receiptId,
+        user_id: userId,
+        generation_id: generationId,
+        status: ReceiptStatus.PROCESSING,
+      },
+      { progress },
+    );
+    if (!result.affected) return false;
     this.receiptsGateway.emitProgress(userId, {
       receiptId,
       orderId,
       progress,
       stage,
     });
+    return true;
   }
 
   async process(job: Job<ReceiptGenerationJobData>): Promise<void> {
-    const { receiptId, orderId, userId } = job.data;
+    return runWithTenant(job.data.userId, () => this.processInTenant(job));
+  }
+
+  private async processInTenant(
+    job: Job<ReceiptGenerationJobData>,
+  ): Promise<void> {
+    const { receiptId, orderId, userId, generationId } = job.data;
     this.logger.log(
       `Processing receipt generation: receipt=${receiptId}, order=${orderId}`,
     );
 
     try {
+      const current = await this.receiptsRepository.findOne({
+        where: { id: receiptId, user_id: userId },
+      });
+      if (!current) throw new Error("Receipt is not visible yet");
+      if (
+        current.status !== ReceiptStatus.PROCESSING ||
+        current.generation_id !== generationId
+      )
+        return;
       // Stage 1: Loading order data
-      await this.updateProgress(
-        receiptId,
-        orderId,
-        userId,
-        10,
-        "loading_order",
-      );
+      if (
+        !(await this.updateProgress(
+          receiptId,
+          orderId,
+          userId,
+          10,
+          "loading_order",
+          generationId,
+        ))
+      )
+        return;
 
       const order = await this.ordersRepository.findOne({
         where: { id: orderId, user_id: userId },
@@ -102,24 +134,31 @@ export class ReceiptGenerationProcessor extends WorkerHost {
 
       if (!order) {
         this.logger.error(`Order ${orderId} not found for user ${userId}`);
-        await this.markFailed(receiptId, orderId, userId, "Order not found");
-        return;
+        throw new Error("Order not found");
       }
 
       // Stage 2: Loading settings
-      await this.updateProgress(
-        receiptId,
-        orderId,
-        userId,
-        20,
-        "loading_settings",
-      );
+      if (
+        !(await this.updateProgress(
+          receiptId,
+          orderId,
+          userId,
+          20,
+          "loading_settings",
+          generationId,
+        ))
+      )
+        return;
 
       const receipt = await this.receiptsRepository.findOne({
-        where: { id: receiptId },
+        where: { id: receiptId, user_id: userId },
       });
 
-      if (!receipt || receipt.status !== ReceiptStatus.PROCESSING) {
+      if (!receipt) throw new Error("Receipt is not visible yet");
+      if (
+        receipt.status !== ReceiptStatus.PROCESSING ||
+        receipt.generation_id !== generationId
+      ) {
         this.logger.warn(
           `Receipt ${receiptId} not found or not in PROCESSING state`,
         );
@@ -136,13 +175,17 @@ export class ReceiptGenerationProcessor extends WorkerHost {
       );
 
       // Stage 3: Generating PDF
-      await this.updateProgress(
-        receiptId,
-        orderId,
-        userId,
-        40,
-        "generating_pdf",
-      );
+      if (
+        !(await this.updateProgress(
+          receiptId,
+          orderId,
+          userId,
+          40,
+          "generating_pdf",
+          generationId,
+        ))
+      )
+        return;
 
       const { filePath, url, html } =
         await this.pdfGeneratorService.generateReceiptPdf(
@@ -161,13 +204,17 @@ export class ReceiptGenerationProcessor extends WorkerHost {
         );
 
       // Stage 4: Computing hash
-      await this.updateProgress(
-        receiptId,
-        orderId,
-        userId,
-        70,
-        "computing_hash",
-      );
+      if (
+        !(await this.updateProgress(
+          receiptId,
+          orderId,
+          userId,
+          70,
+          "computing_hash",
+          generationId,
+        ))
+      )
+        return;
 
       let fileBuffer: Buffer;
       if (filePath.startsWith("object-storage://")) {
@@ -185,22 +232,49 @@ export class ReceiptGenerationProcessor extends WorkerHost {
       const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
 
       // Stage 5: Saving to database
-      await this.updateProgress(receiptId, orderId, userId, 80, "saving");
+      if (
+        !(await this.updateProgress(
+          receiptId,
+          orderId,
+          userId,
+          80,
+          "saving",
+          generationId,
+        ))
+      )
+        return;
 
-      await this.dataSource.transaction(async (manager) => {
-        await manager.update(Receipt, receiptId, {
-          pdf_path: filePath,
-          pdf_url: url,
-          hash,
-          html_snapshot: html,
-          template_id: pdfSettings.templateId,
-          template_version: 1,
-          status: ReceiptStatus.GENERATED,
-          progress: 100,
-        });
+      const completed = await this.dataSource.transaction(async (manager) => {
+        const updated = await manager.update(
+          Receipt,
+          {
+            id: receiptId,
+            user_id: userId,
+            generation_id: generationId,
+            status: ReceiptStatus.PROCESSING,
+          },
+          {
+            pdf_path: filePath,
+            pdf_url: url,
+            hash,
+            html_snapshot: html,
+            template_id: pdfSettings.templateId,
+            template_version: 1,
+            status: ReceiptStatus.GENERATED,
+            progress: 100,
+          },
+        );
 
-        await manager.update(Order, { id: orderId }, { is_locked: true });
+        if (!updated.affected) return false;
+        await manager.update(
+          Order,
+          { id: orderId, user_id: userId },
+          { is_locked: true },
+        );
+        return true;
       });
+
+      if (!completed) return;
 
       // Emit completion event
       this.receiptsGateway.emitCompleted(userId, {
@@ -240,15 +314,18 @@ export class ReceiptGenerationProcessor extends WorkerHost {
       return;
     }
 
-    const { receiptId, orderId, userId } = job.data;
+    const { receiptId, orderId, userId, generationId } = job.data;
     this.logger.error(
       `Receipt ${receiptId} permanently failed after ${job.attemptsMade} attempts: ${error?.message}`,
     );
-    await this.markFailed(
-      receiptId,
-      orderId,
-      userId,
-      error?.message ?? "Receipt generation failed",
+    await runWithTenant(userId, () =>
+      this.markFailed(
+        receiptId,
+        orderId,
+        userId,
+        error?.message ?? "Receipt generation failed",
+        generationId,
+      ),
     );
   }
 
@@ -257,12 +334,19 @@ export class ReceiptGenerationProcessor extends WorkerHost {
     orderId: string,
     userId: string,
     errorMessage: string,
+    generationId: string,
   ): Promise<void> {
     try {
-      await this.receiptsRepository.update(
-        { id: receiptId, status: ReceiptStatus.PROCESSING },
+      const result = await this.receiptsRepository.update(
+        {
+          id: receiptId,
+          user_id: userId,
+          generation_id: generationId,
+          status: ReceiptStatus.PROCESSING,
+        },
         { status: ReceiptStatus.FAILED, error_message: errorMessage },
       );
+      if (!result.affected) return;
       this.receiptsGateway.emitFailed(userId, {
         receiptId,
         orderId,

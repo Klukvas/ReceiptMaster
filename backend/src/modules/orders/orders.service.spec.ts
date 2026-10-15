@@ -541,21 +541,13 @@ describe("OrdersService", () => {
 
   describe("remove", () => {
     it("should soft delete order and restore quantities", async () => {
-      ordersRepo.findOne.mockResolvedValue({
-        ...mockOrder,
-        id: "order-1",
-      });
-
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
           find: jest.fn().mockResolvedValue([{ product_id: "prod-1", qty: 2 }]),
-          findOne: jest.fn().mockResolvedValue({
-            id: "prod-1",
-            quantity: 5,
-          }),
+          findOne: jest.fn().mockResolvedValue({ ...mockOrder }),
           save: jest.fn(),
           softDelete: jest.fn(),
-          increment: jest.fn(),
+          increment: jest.fn().mockResolvedValue({ affected: 1 }),
         };
         return cb(manager);
       });
@@ -565,18 +557,13 @@ describe("OrdersService", () => {
     });
 
     it("should handle product not found during removal", async () => {
-      ordersRepo.findOne.mockResolvedValue({
-        ...mockOrder,
-        id: "order-1",
-      });
-
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
           find: jest.fn().mockResolvedValue([{ product_id: "prod-1", qty: 2 }]),
-          findOne: jest.fn().mockResolvedValue(null),
+          findOne: jest.fn().mockResolvedValue({ ...mockOrder }),
           save: jest.fn(),
           softDelete: jest.fn(),
-          increment: jest.fn(),
+          increment: jest.fn().mockResolvedValue({ affected: 0 }),
         };
         return cb(manager);
       });

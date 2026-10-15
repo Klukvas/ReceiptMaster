@@ -36,6 +36,8 @@ import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { SettingsService } from "../settings/services/settings.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
+import { ReceiptOutboxService } from "./receipt-outbox.service";
+import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { RECEIPT_GENERATION_QUEUE } from "./receipt-generation.processor";
 import * as fs from "fs/promises";
 
@@ -79,7 +81,13 @@ describe("ReceiptsService", () => {
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue(mockReceipt),
       save: jest.fn((data) => Promise.resolve(data)),
-      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      update: jest.fn().mockImplementation(async (_where, values) => {
+        receiptsRepo.findOneOrFail.mockResolvedValue({
+          ...mockReceipt,
+          ...values,
+        });
+        return { affected: 1 };
+      }),
       delete: jest.fn(),
     };
 
@@ -119,11 +127,13 @@ describe("ReceiptsService", () => {
 
     receiptQueue = {
       add: jest.fn().mockResolvedValue({}),
+      dispatch: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReceiptsService,
+        { provide: ReceiptOutboxService, useValue: receiptQueue },
         { provide: getRepositoryToken(Receipt), useValue: receiptsRepo },
         { provide: getRepositoryToken(Order), useValue: ordersRepo },
         { provide: PdfGeneratorService, useValue: pdfGeneratorService },
@@ -174,182 +184,141 @@ describe("ReceiptsService", () => {
   });
 
   describe("generateReceipt", () => {
-    it("should create a receipt and enqueue PDF generation", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(mockOrder) // order lookup
-            .mockResolvedValueOnce(null), // existing receipt check
-          create: jest.fn((entity, data) => ({ ...data })),
-          save: jest.fn((entity, data) =>
-            Promise.resolve({ id: "receipt-1", ...data }),
-          ),
-          count: jest.fn().mockResolvedValue(0),
-          find: jest.fn().mockResolvedValue([]),
-          delete: jest.fn(),
-        };
-        return cb(manager);
+    function transaction(existing: Partial<Receipt> | null = null) {
+      const manager = {
+        findOne: jest
+          .fn()
+          .mockResolvedValueOnce(mockOrder)
+          .mockResolvedValueOnce(existing),
+        findOneOrFail: jest.fn().mockImplementation(async () => ({
+          ...existing,
+          status: ReceiptStatus.PROCESSING,
+        })),
+        create: jest.fn((_entity, data) => ({ ...data })),
+        save: jest.fn(async (_entity, data) => ({ id: "receipt-1", ...data })),
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000001" }]),
+        count: jest.fn().mockResolvedValue(0),
+      };
+      dataSource.transaction.mockImplementation(async (callback) =>
+        callback(manager),
+      );
+      return manager;
+    }
+
+    it("commits the receipt and durable intent before publication", async () => {
+      const manager = transaction();
+      let committed = false;
+      dataSource.transaction.mockImplementation(async (callback) => {
+        const result = await callback(manager);
+        expect(receiptQueue.dispatch).not.toHaveBeenCalled();
+        committed = true;
+        return result;
       });
-
-      dataSource.query.mockResolvedValue([{ receipt_number: "2025-000001" }]);
-
+      receiptQueue.dispatch.mockImplementation(async () =>
+        expect(committed).toBe(true),
+      );
       const result = await service.generateReceipt("order-1", mockUser);
-
-      expect(result).toBeDefined();
-      expect(receiptQueue.add).toHaveBeenCalledWith(
-        "generate",
+      expect(result.status).toBe(ReceiptStatus.PROCESSING);
+      expect(manager.save).toHaveBeenCalledWith(
+        ReceiptGenerationOutbox,
         expect.objectContaining({
-          orderId: "order-1",
-          userId: "user-1",
+          receipt_id: "receipt-1",
+          generation_id: result.generation_id,
         }),
+      );
+      expect(receiptQueue.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns the committed receipt while Redis publication is still waiting", async () => {
+      const manager = transaction();
+      let finishPublication: () => void;
+      receiptQueue.dispatch.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPublication = resolve;
+          }),
+      );
+      const result = service.generateReceipt("order-1", mockUser);
+      const outcome = await Promise.race([
+        result.then(() => "returned"),
+        new Promise((resolve) => setTimeout(() => resolve("blocked"), 25)),
+      ]);
+      finishPublication?.();
+      await result;
+      expect(manager.save).toHaveBeenCalledWith(
+        ReceiptGenerationOutbox,
         expect.any(Object),
+      );
+      expect(outcome).toBe("returned");
+    });
+
+    it("does not publish a rolled-back receipt", async () => {
+      const manager = transaction();
+      manager.save.mockRejectedValueOnce(new Error("write failed"));
+      await expect(
+        service.generateReceipt("order-1", mockUser),
+      ).rejects.toThrow("write failed");
+      expect(receiptQueue.dispatch).not.toHaveBeenCalled();
+    });
+
+    it("returns a pending generation regardless of receipt age", async () => {
+      const existing = {
+        ...mockReceipt,
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "old-generation",
+        created_at: new Date(0),
+      };
+      const manager = transaction(existing);
+      expect(await service.generateReceipt("order-1", mockUser)).toEqual(
+        existing,
+      );
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it("retries a failed receipt with a new durable generation", async () => {
+      const manager = transaction({
+        ...mockReceipt,
+        status: ReceiptStatus.FAILED,
+        generation_id: "old-generation",
+      });
+      await service.generateReceipt("order-1", mockUser);
+      expect(manager.update).toHaveBeenCalledWith(
+        Receipt,
+        { id: "receipt-1", user_id: "user-1" },
+        expect.objectContaining({
+          status: ReceiptStatus.PROCESSING,
+          generation_id: expect.any(String),
+          public_token: null,
+        }),
+      );
+      expect(manager.save).toHaveBeenCalledWith(
+        ReceiptGenerationOutbox,
+        expect.objectContaining({
+          generation_id: expect.not.stringMatching(/^old-generation$/),
+        }),
       );
     });
 
-    it("should throw if order not found", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest.fn().mockResolvedValue(null),
-        };
-        return cb(manager);
-      });
-
-      await expect(
-        service.generateReceipt("unknown", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
+    it("refuses generated and void receipts", async () => {
+      for (const status of [ReceiptStatus.GENERATED, ReceiptStatus.VOID]) {
+        transaction({ ...mockReceipt, status });
+        await expect(
+          service.generateReceipt("order-1", mockUser),
+        ).rejects.toThrow(ApiErrorResponse);
+      }
     });
 
-    it("should throw if order is not confirmed", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest.fn().mockResolvedValue({
-            ...mockOrder,
-            status: OrderStatus.DRAFT,
-          }),
-        };
-        return cb(manager);
-      });
-
+    it("rejects missing and unconfirmed orders", async () => {
+      const manager = transaction();
+      manager.findOne.mockReset().mockResolvedValueOnce(null);
       await expect(
         service.generateReceipt("order-1", mockUser),
       ).rejects.toThrow(ApiErrorResponse);
-    });
-
-    it("should return existing receipt if genuinely still processing", async () => {
-      const processingReceipt = {
-        ...mockReceipt,
-        status: ReceiptStatus.PROCESSING,
-        created_at: new Date(), // fresh — not stale
-      };
-
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(mockOrder)
-            .mockResolvedValueOnce(processingReceipt),
-        };
-        return cb(manager);
-      });
-
-      const result = await service.generateReceipt("order-1", mockUser);
-
-      expect(result).toEqual(processingReceipt);
-      // A genuinely in-progress receipt must NOT spawn a duplicate job
-      expect(receiptQueue.add).not.toHaveBeenCalled();
-    });
-
-    it("should re-queue generation for a previously FAILED receipt", async () => {
-      const failedReceipt = {
-        ...mockReceipt,
-        status: ReceiptStatus.FAILED,
-        error_message: "Service is unable to handle request.",
-        created_at: new Date(),
-      };
-      const managerUpdate = jest.fn().mockResolvedValue({ affected: 1 });
-
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(mockOrder)
-            .mockResolvedValueOnce(failedReceipt),
-          update: managerUpdate,
-          findOneOrFail: jest.fn().mockResolvedValue({
-            ...failedReceipt,
-            status: ReceiptStatus.PROCESSING,
-            progress: 0,
-          }),
-        };
-        return cb(manager);
-      });
-
-      const result = await service.generateReceipt("order-1", mockUser);
-
-      // Row is reset to PROCESSING (reused, since order_id is unique)
-      expect(managerUpdate).toHaveBeenCalledWith(
-        Receipt,
-        failedReceipt.id,
-        expect.objectContaining({
-          status: ReceiptStatus.PROCESSING,
-          progress: 0,
-        }),
-      );
-      // And a fresh job is enqueued for the same receipt
-      expect(receiptQueue.add).toHaveBeenCalledWith(
-        "generate",
-        expect.objectContaining({
-          receiptId: failedReceipt.id,
-          orderId: "order-1",
-        }),
-        expect.any(Object),
-      );
-      expect(result.status).toBe(ReceiptStatus.PROCESSING);
-    });
-
-    it("should re-queue a stuck PROCESSING receipt that is stale", async () => {
-      const staleProcessing = {
-        ...mockReceipt,
-        status: ReceiptStatus.PROCESSING,
-        created_at: new Date(Date.now() - 60 * 60 * 1000), // 1h old → stale
-      };
-      const managerUpdate = jest.fn().mockResolvedValue({ affected: 1 });
-
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(mockOrder)
-            .mockResolvedValueOnce(staleProcessing),
-          update: managerUpdate,
-          findOneOrFail: jest
-            .fn()
-            .mockResolvedValue({ ...staleProcessing, progress: 0 }),
-        };
-        return cb(manager);
-      });
-
-      await service.generateReceipt("order-1", mockUser);
-
-      expect(managerUpdate).toHaveBeenCalled();
-      expect(receiptQueue.add).toHaveBeenCalled();
-    });
-
-    it("should throw if receipt already exists (generated)", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          findOne: jest
-            .fn()
-            .mockResolvedValueOnce(mockOrder)
-            .mockResolvedValueOnce({
-              ...mockReceipt,
-              status: ReceiptStatus.GENERATED,
-            }),
-        };
-        return cb(manager);
-      });
-
+      transaction()
+        .findOne.mockReset()
+        .mockResolvedValueOnce({ ...mockOrder, status: OrderStatus.DRAFT });
       await expect(
         service.generateReceipt("order-1", mockUser),
       ).rejects.toThrow(ApiErrorResponse);
@@ -574,7 +543,7 @@ describe("ReceiptsService", () => {
 
       expect(result.filename).toBe("receipt-2025-000001.pdf");
       expect(pdfGeneratorService.generateReceiptPdf).toHaveBeenCalled();
-      expect(receiptsRepo.save).toHaveBeenCalled();
+      expect(receiptsRepo.update).toHaveBeenCalled();
     });
 
     it("should regenerate PDF when file not found in object storage", async () => {
@@ -896,31 +865,18 @@ describe("ReceiptsService", () => {
   });
 
   describe("generateReceiptNumber", () => {
-    it("should use PostgreSQL function", async () => {
-      dataSource.query
-        .mockResolvedValueOnce([{ exists: true }])
-        .mockResolvedValueOnce([{ receipt_number: "2025-000042" }]);
-
-      const result = await (service as any).generateReceiptNumber();
-      expect(result).toBe("2025-000042");
-    });
-
-    it("should create function if not exists", async () => {
-      dataSource.query
-        .mockResolvedValueOnce([{ exists: false }])
-        .mockResolvedValueOnce(undefined) // CREATE SEQUENCE
-        .mockResolvedValueOnce(undefined) // CREATE FUNCTION
-        .mockResolvedValueOnce([{ receipt_number: "2025-000001" }]);
-
-      const result = await (service as any).generateReceiptNumber();
-      expect(result).toBe("2025-000001");
-    });
-
-    it("should fallback to timestamp-based number on error", async () => {
-      dataSource.query.mockRejectedValue(new Error("DB error"));
-
-      const result = await (service as any).generateReceiptNumber();
-      expect(result).toMatch(/^\d{4}-\d{6}$/);
+    it("uses the current transaction connection and propagates database failures", async () => {
+      const manager = {
+        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000042" }]),
+      };
+      expect(await (service as any).generateReceiptNumber(manager)).toBe(
+        "2026-000042",
+      );
+      expect(dataSource.query).not.toHaveBeenCalled();
+      manager.query.mockRejectedValueOnce(new Error("DB error"));
+      await expect(
+        (service as any).generateReceiptNumber(manager),
+      ).rejects.toThrow("DB error");
     });
   });
 
@@ -1022,8 +978,9 @@ describe("ReceiptsService", () => {
       expect(result.token).toBeDefined();
       expect(result.token).toHaveLength(64);
       expect(result.url).toContain("/r/");
-      expect(receiptsRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ public_token: expect.any(String) }),
+      expect(receiptsRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: ReceiptStatus.GENERATED }),
+        { public_token: expect.any(String) },
       );
     });
 
@@ -1090,7 +1047,7 @@ describe("ReceiptsService", () => {
 
       expect(receiptsRepo.update).toHaveBeenCalledWith(
         { id: "receipt-1" },
-        expect.objectContaining({ public_token: undefined }),
+        expect.objectContaining({ public_token: null }),
       );
     });
 
@@ -1107,11 +1064,11 @@ describe("ReceiptsService", () => {
     it("should return receipt data with company info", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         order: mockOrder,
       });
 
-      const result = await service.getPublicReceipt("valid-token");
+      const result = await service.getPublicReceipt("a".repeat(64));
 
       expect(result.receipt).toBeDefined();
       expect(result.companyInfo).toBeDefined();
@@ -1132,11 +1089,11 @@ describe("ReceiptsService", () => {
     it("should return PDF buffer from local file", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         pdf_path: "/local/receipt.pdf",
       });
 
-      const result = await service.getPublicReceiptPdf("valid-token");
+      const result = await service.getPublicReceiptPdf("a".repeat(64));
 
       expect(result.filename).toBe("receipt-2025-000001.pdf");
       expect(Buffer.isBuffer(result.buffer)).toBe(true);
@@ -1145,7 +1102,7 @@ describe("ReceiptsService", () => {
     it("should return PDF buffer from object storage", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         pdf_path: "object-storage://bucket/key.pdf",
       });
 
@@ -1158,7 +1115,7 @@ describe("ReceiptsService", () => {
         Buffer.from("pdf-content"),
       );
 
-      const result = await service.getPublicReceiptPdf("valid-token");
+      const result = await service.getPublicReceiptPdf("a".repeat(64));
 
       expect(result.filename).toBe("receipt-2025-000001.pdf");
       expect(pdfStorageService.downloadFile).toHaveBeenCalledWith(
@@ -1178,11 +1135,11 @@ describe("ReceiptsService", () => {
     it("should throw if receipt has no pdf_path", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         pdf_path: null,
       });
 
-      await expect(service.getPublicReceiptPdf("valid-token")).rejects.toThrow(
+      await expect(service.getPublicReceiptPdf("a".repeat(64))).rejects.toThrow(
         ApiErrorResponse,
       );
     });
@@ -1190,13 +1147,13 @@ describe("ReceiptsService", () => {
     it("should throw if object storage path is invalid", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         pdf_path: "object-storage://invalid",
       });
 
       pdfStorageService.parseObjectStoragePath.mockReturnValue(null);
 
-      await expect(service.getPublicReceiptPdf("valid-token")).rejects.toThrow(
+      await expect(service.getPublicReceiptPdf("a".repeat(64))).rejects.toThrow(
         ApiErrorResponse,
       );
     });
@@ -1451,7 +1408,7 @@ describe("ReceiptsService", () => {
     it("should throw when object storage file does not exist", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
-        public_token: "valid-token",
+        public_token: "a".repeat(64),
         pdf_path: "object-storage://bucket/key.pdf",
       });
 
@@ -1461,7 +1418,7 @@ describe("ReceiptsService", () => {
       });
       pdfStorageService.fileExists.mockResolvedValue(false);
 
-      await expect(service.getPublicReceiptPdf("valid-token")).rejects.toThrow(
+      await expect(service.getPublicReceiptPdf("a".repeat(64))).rejects.toThrow(
         ApiErrorResponse,
       );
     });

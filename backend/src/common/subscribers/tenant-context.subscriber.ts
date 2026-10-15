@@ -1,4 +1,5 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { tenantStore } from "../tenancy/tenant-context";
+export { tenantStore } from "../tenancy/tenant-context";
 import {
   EventSubscriber,
   EntitySubscriberInterface,
@@ -14,7 +15,6 @@ import {
  * Usage from middleware / interceptor:
  *   tenantStore.run({ userId: req.user.id }, () => next());
  */
-export const tenantStore = new AsyncLocalStorage<{ userId: string }>();
 
 /**
  * TypeORM entity subscriber that injects `SET LOCAL app.current_user_id`

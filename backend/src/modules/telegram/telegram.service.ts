@@ -14,6 +14,7 @@ import {
   TelegramCallbackQuery,
 } from "./interfaces/telegram.interface";
 import { UserSession, UserState } from "./interfaces/cart.interface";
+import { runWithTenant } from "../../common/tenancy/tenant-context";
 import { CacheService } from "../../common/services/cache.service";
 
 // Session TTL in seconds (4 hours) — Redis handles expiration
@@ -61,19 +62,6 @@ export class TelegramService {
       }
       throw err;
     });
-
-    // Create idempotency table for update_id if it doesn't exist (Postgres)
-    void this.ensureUpdatesTable();
-  }
-
-  /** Idempotency: table of processed update_id */
-  private async ensureUpdatesTable() {
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS tg_updates (
-        processed_update_id BIGINT PRIMARY KEY,
-        processed_at TIMESTAMPTZ DEFAULT now()
-      );
-    `);
   }
 
   /** Returns true if this update was already processed */
@@ -160,6 +148,22 @@ export class TelegramService {
 
   /** Main update handler (doesn't throw exceptions outside) */
   async handleWebhook(update: TelegramUpdate) {
+    if (!this.botOwnerUserId) {
+      const chatId =
+        update.message?.chat.id ?? update.callback_query?.message?.chat.id;
+      if (chatId !== undefined)
+        await this.sendMessage(
+          chatId,
+          "❌ Бот не настроен. Обратитесь к администратору.",
+        );
+      return;
+    }
+    return runWithTenant(this.botOwnerUserId, () =>
+      this.handleWebhookInTenant(update),
+    );
+  }
+
+  private async handleWebhookInTenant(update: TelegramUpdate) {
     try {
       // idempotency
       if (update?.update_id == null) return;
@@ -305,6 +309,14 @@ export class TelegramService {
 
   /** Create order from Telegram with transaction and locking */
   async createOrderFromTelegram(dto: CreateTelegramOrderDto): Promise<Order> {
+    return runWithTenant(this.botOwnerUserId, () =>
+      this.createOrderInTenant(dto),
+    );
+  }
+
+  private async createOrderInTenant(
+    dto: CreateTelegramOrderDto,
+  ): Promise<Order> {
     if (!this.botOwnerUserId) {
       throw ApiErrors.INTERNAL_SERVER_ERROR(
         "Telegram bot is not configured properly (missing TELEGRAM_BOT_OWNER_USER_ID)",

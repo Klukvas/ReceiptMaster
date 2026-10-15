@@ -166,18 +166,32 @@ export const OrdersPage = () => {
  // Keep the "generating" chips honest even when no socket event lands
  useReceiptGenerationPolling(pagination.items);
 
- // Clear selection when page or filters change
+ // Invalidate immediately on view changes, including the search debounce window.
+ const selectionScope = JSON.stringify([
+   pagination.currentPage, pagination.itemsPerPage, pagination.searchQuery,
+   pagination.sortBy, pagination.sortOrder, statusFilter, startDate, endDate, minAmount, maxAmount,
+ ]);
+ const [selectedScope, setSelectedScope] = useState(selectionScope);
+ const selectionReady = selectedScope === selectionScope && !pagination.isFetching && !pagination.isSearchPending && !pagination.error;
+ const validSelectedKeys = useMemo(() => new Set(
+   selectionReady ? pagination.items.filter(order => selectedKeys.has(order.id)).map(order => order.id) : [],
+ ), [selectionReady, pagination.items, selectedKeys]);
  useEffect(() => {
- setSelectedKeys(new Set());
- }, [pagination.currentPage, statusFilter, setSelectedKeys]);
-
- // Compute whether all selected orders on current page are draft
- const allSelectedAreDraft = useMemo(() => {
- if (selectedKeys.size === 0) return false;
- return pagination.items
- .filter((o) => selectedKeys.has(o.id))
- .every((o) => o.status ==="draft");
- }, [selectedKeys, pagination.items]);
+   setSelectedKeys(new Set());
+   setSelectedScope(selectionScope);
+   handleCloseConfirm();
+ // handleCloseConfirm is an inline hook callback; only scope changes should close the modal.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [selectionScope, setSelectedKeys]);
+ useEffect(() => {
+   if (pagination.isFetching) setSelectedKeys(new Set());
+ }, [pagination.isFetching, setSelectedKeys]);
+ const changeSelection = (keys: Set<string>) => {
+   if (!selectionReady) return;
+   setSelectedKeys(new Set(pagination.items.filter(order => keys.has(order.id)).map(order => order.id)));
+ };
+ const allSelectedAreDraft = validSelectedKeys.size > 0 && pagination.items
+   .filter(order => validSelectedKeys.has(order.id)).every(order => order.status === 'draft');
 
  const renderOrderActions = useCallback(
  (order: Order) => (
@@ -355,8 +369,8 @@ export const OrdersPage = () => {
  showSearch
  showColumnToggle
  selectable
- selectedKeys={selectedKeys}
- onSelectionChange={setSelectedKeys}
+ selectedKeys={validSelectedKeys}
+ onSelectionChange={changeSelection}
  searchPlaceholder={t("orders.searchPlaceholder")}
  emptyIcon={
  <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-2" />
@@ -368,12 +382,12 @@ export const OrdersPage = () => {
  />
 
  {/* Floating bulk toolbar */}
- {selectedKeys.size > 0 && (
+ {validSelectedKeys.size > 0 && (
  <OrderBulkToolbar
- selectedCount={selectedKeys.size}
+ selectedCount={validSelectedKeys.size}
  allSelectedAreDraft={allSelectedAreDraft}
- onBatchApprove={handleBatchApprove}
- onBatchDelete={handleBulkDeleteConfirm}
+ onBatchApprove={() => { if (allSelectedAreDraft) handleBatchApprove([...validSelectedKeys]); }}
+ onBatchDelete={() => { if (validSelectedKeys.size > 0) handleBulkDeleteConfirm(); }}
  onClearSelection={clearSelection}
  isApproving={isBatchApproving}
  isDeleting={isBatchDeleting}
@@ -405,9 +419,9 @@ export const OrdersPage = () => {
 
  {/* Confirm action modal (cancel / delete / bulk delete) */}
  <ConfirmModal
- isOpen={confirmAction.isOpen}
+ isOpen={confirmAction.isOpen && (confirmAction.type !== "bulkDelete" || validSelectedKeys.size > 0)}
  onClose={handleCloseConfirm}
- onConfirm={handleConfirmAction}
+ onConfirm={() => handleConfirmAction([...validSelectedKeys])}
  title={
  confirmAction.type ==="cancel"
  ? t("orders.cancelOrder","Cancel Order")
@@ -422,7 +436,7 @@ export const OrdersPage = () => {
 "Are you sure you want to cancel this order?",
  )
  : confirmAction.type ==="bulkDelete"
- ? t("orders.batchDeleteMessage", { count: selectedKeys.size })
+ ? t("orders.batchDeleteMessage", { count: validSelectedKeys.size })
  : t("orders.deleteOrderMessage")
  }
  confirmLabel={

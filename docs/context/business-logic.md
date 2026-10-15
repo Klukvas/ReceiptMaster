@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-09-08
+**Last Updated:** 2026-10-15
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -47,21 +47,24 @@ export enum OrderStatus {
 
 **Creation Flow:**
 
-1. **Validate Subscription Limits**
-   - Check if user's plan allows more orders this month
-   - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreateOrder()`
-   - If limit exceeded: throw `ORDER_MONTHLY_LIMIT_EXCEEDED`
-
-2. **Check Idempotency**
-   - If `Idempotency-Key` header provided, check if order was already created
-   - Return cached response with `X-Idempotency-Replayed: true` header
-   - Expires after 24 hours
+1. **Check Idempotency**
+   - If `Idempotency-Key` is provided, lock it and replay the cached response before checking quota
+   - Replays still work when the account has since reached its monthly order limit
+   - Expires after 24 hours; response includes `X-Idempotency-Replayed: true`
    - File: `backend/src/modules/orders/entities/idempotency-key.entity.ts`
+
+2. **Validate Subscription Limits**
+   - Acquire a transaction-scoped advisory lock per user before counting monthly orders
+   - This serializes creates across different products, including accounts with no subscription row
+   - Reject an additional order beyond the plan limit with `ORDER_MONTHLY_LIMIT_EXCEEDED`
+   - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreateOrderInTx()`
 
 3. **Validate References**
    - Recipient must exist and belong to the user
    - Each Product in OrderItems must exist and belong to the user
    - Throw `RECIPIENT_NOT_FOUND` or `PRODUCT_NOT_FOUND` if missing
+   - Reject duplicate `productId` entries and mixed product currencies with 400 `VALIDATION_ERROR`
+   - Optional custom `unitPriceCents` is an integer at least zero; explicit zero is preserved
 
 4. **Create Atomic Transaction**
    - Insert Order (DRAFT status)
@@ -85,9 +88,12 @@ File: `backend/src/modules/orders/orders.service.ts::confirm()`
 
 **Cancellation Flow:**
 
-Only DRAFT orders can be cancelled. Cancellation is a soft delete:
-- Set `deleted_at` timestamp
-- Status remains unchanged (but query filters exclude soft-deleted orders by default)
+Cancellation changes status to CANCELLED. Deletion is a separate soft-delete operation:
+- Lock live orders inside the transaction before restoring stock and setting `deleted_at`
+- Single and overlapping batch deletes restore reserved quantities exactly once
+- Batch order locks and affected product locks follow deterministic ID order
+- Updating line items locks and persists the union of old/new products, so removed products regain stock
+- Order updates/deletes invalidate dashboard caches
 
 File: `backend/src/modules/orders/orders.service.ts::cancel()`
 
@@ -109,17 +115,20 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
    - Check: order is CONFIRMED
    - If a receipt already exists for the order:
      - `GENERATED` → reject (`RECEIPT_ALREADY_EXISTS`)
-     - `PROCESSING` and still fresh → return it as-is (no duplicate job)
-     - `FAILED`, or a `PROCESSING` receipt older than `STALE_PROCESSING_MS`
-       (worker died mid-job) → **retry**: reset the row to `PROCESSING`/`progress: 0`,
-       clear `error_message`, re-enqueue
+     - `FAILED` → **retry**: reset to `PROCESSING`/`progress: 0`, clear `error_message`,
+       assign a fresh generation UUID and insert a durable outbox entry
+     - `PROCESSING` with a generation → return it, regardless of original receipt age;
+       the outbox recovers missing queue jobs without creating competing generations
    - Otherwise create a new Receipt with `status: PROCESSING`, `progress: 0`
    - File: `backend/src/modules/receipts/receipts.service.ts::generateReceipt()`
 
-2. **Enqueue Job** (async, BullMQ — `attempts: 3`, exponential backoff)
-   - Add job to `receipt-generation` queue
-   - Return receipt record immediately to user
-   - File: `backend/src/modules/receipts/receipts.service.ts` (calls queue)
+2. **Commit durable queue intent, then publish** (BullMQ — `attempts: 3`, exponential backoff)
+   - Lock the order and save receipt plus outbox entry atomically; Redis is called after commit
+   - Dispatcher retries queue outages every 10 seconds and recreates missing Redis jobs
+   - Stable job identity includes receipt UUID and generation UUID; duplicate dispatch is safe
+   - Return the committed receipt without waiting for Redis readiness
+   - Dedicated publication attempts are bounded; failed clients disconnect and the next scan retries
+   - Files: `receipts.service.ts`, `receipt-outbox.service.ts`
 
 3. **Process Job** (background worker, sequential)
    - Load order + recipient + items + products
@@ -138,6 +147,9 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
    - Only once **all attempts are exhausted** does `onFailed()` set `status: FAILED`
      with `error_message` and emit `receipt.failed`. This prevents a receipt from
      sitting in `PROCESSING` forever after a transient outage.
+   - Missing rows throw to trigger retries; all worker writes include tenant and generation guards.
+     An older job cannot update a newer generation. The dispatcher also recovers exhausted jobs
+     if the failed-event database update was lost.
    - The user can then retry from the UI (Retry button on the failure toast, or the
      normal "generate" action), which re-runs step 1's retry path.
 
@@ -178,8 +190,8 @@ Files: `backend/src/modules/receipts/templates/` (contains HTML templates)
 
 **Plan-Based Restrictions:**
 
-- Free plan: only STANDARD, COMPACT, CLASSIC templates
-- Pro plan: all except DARK, BRANDED, DELIVERY, PROFORMA
+- Free plan: STANDARD, COMPACT, MINIMAL, THERMAL templates
+- Pro plan: all templates
 - Business plan: all 15 templates
 
 File: `backend/src/modules/subscription/config/plans.config.ts`
@@ -192,7 +204,20 @@ File: `backend/src/modules/settings/services/settings.service.ts::getTemplateLan
 
 ---
 
+Sharing stores a random 64-character hexadecimal token. Revocation and voiding persist SQL NULL;
+both public metadata and PDF paths return 404 after revocation/voiding. Delayed PDF regeneration
+updates only PDF fields and cannot restore an old token/status. Concurrent share creation uses
+one winning token and cannot attach a token to an already voided receipt.
+
 ### 3. Subscription & Billing (Paddle)
+
+Payments are an explicit capability: strict `BILLING_ENABLED` defaults to false. The
+current release disables new payments, portal management, webhook processing and the
+scheduled canceled-subscription downgrade. Existing free/paid plans, stored subscription
+data, usage reads and quota enforcement are preserved. Disabled payment endpoints return
+503 `BILLING_DISABLED`; no SDK is constructed. Enabling billing in production requires
+complete Paddle credentials, price IDs, frontend URL and explicit production environment.
+
 
 **Entities:**
 
@@ -207,14 +232,14 @@ File: `backend/src/modules/subscription/config/plans.config.ts`
 ```typescript
 export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   free: {
-    maxProducts: 5,           // Can create up to 5 products
-    maxOrdersPerMonth: 50,    // Up to 50 orders/month
-    allowedTemplates: ["standard", "compact", "classic"],
+    maxProducts: 10,           // Can create up to 10 products
+    maxOrdersPerMonth: 20,    // Up to 20 orders/month
+    allowedTemplates: ["standard", "compact", "minimal", "thermal"],
   },
   pro: {
     maxProducts: 100,
-    maxOrdersPerMonth: 1000,
-    allowedTemplates: [/* 11 out of 15 */],
+    maxOrdersPerMonth: 500,
+    allowedTemplates: null, // all templates
   },
   business: {
     maxProducts: null,        // Unlimited
@@ -381,16 +406,11 @@ async login(loginDto: LoginDto): Promise<AuthResponseDto> {
 
 File: `backend/src/modules/users/users.service.ts::refreshToken()`
 
-```typescript
-async refreshToken(refreshToken: string): Promise<AuthResponseDto> {
-  const payload = this.jwtService.verify(refreshToken);  // Throws if invalid/expired
-  const user = await this.usersRepository.findOne({ where: { id: payload.sub } });
-  if (!user) throw ApiErrors.USER_NOT_FOUND(payload.sub);
-
-  const tokens = this.issueTokens(user);
-  return { user, ...tokens };
-}
-```
+Refresh/logout bodies use a real `RefreshTokenDto`: `refresh_token` must be a string of
+exactly 128 lowercase hexadecimal characters (the format produced by `randomBytes(64)`).
+The service independently rejects malformed input before any token repository lookup/update.
+Refresh looks up an unrevoked stored opaque token, rejects expired tokens, revokes the old token
+and issues a new access/refresh pair. It does not decode refresh tokens as JWTs.
 
 **JWT Strategy:**
 
@@ -486,6 +506,7 @@ File: `backend/src/modules/settings/services/settings.service.ts`
 
 File: `backend/src/modules/orders/orders.service.ts`
 
+Dashboard metrics exclude soft-deleted orders in all six raw revenue/turnover methods.
 Dashboard metrics are expensive (aggregations, date grouping). Solutions:
 
 1. **Cache with TTL** (5 minutes, configurable)
@@ -597,13 +618,14 @@ Files:
    - Template must be allowed by user's plan
 
 4. **Subscription Entitlements:**
-   - Free plan: max 5 products, 50 orders/month, 3 templates
-   - Pro plan: max 100 products, 1000 orders/month, 11 templates
+   - Free plan: max 10 products, 20 orders/month, 4 templates
+   - Pro plan: max 100 products, 500 orders/month, all templates
    - Business plan: unlimited everything
 
 5. **Tenant Isolation:**
    - Every query must filter by `user_id`
-   - RLS policies enforce this at DB level as defense-in-depth
+   - A post-auth interceptor and same-connection transaction-local context apply RLS to reads and writes
+   - Public receipt tokens grant only SELECT access to their receipt graph, never full owner access
    - No cross-tenant data leakage
 
 6. **Idempotency:**
@@ -611,8 +633,9 @@ Files:
    - Prevents duplicate orders if client retries
 
 7. **Soft Deletes:**
-   - Orders can be cancelled (soft-deleted via `deleted_at` timestamp)
+   - Orders are deleted via the `deleted_at` timestamp; cancellation is a separate status change
    - Queries exclude soft-deleted records unless explicitly included
+   - All six raw revenue/turnover aggregation queries also filter `o.deleted_at IS NULL`
    - Preserves audit trail
 
 8. **Data Integrity:**

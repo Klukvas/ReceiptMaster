@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, AlertCircle, Plus, Package, User } from "lucide-react";
-import { ordersApi, productsApi, recipientsApi } from "../../lib/api";
+import { ordersApi } from "../../lib/api";
 import { Button } from "../ui/Button";
-import { Combobox } from "../ui/Combobox";
+import { OrderRecipientSelect } from "./OrderEntitySelect";
+import { useOrderProducts } from "../../hooks/useOrderOptions";
+import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
 import { OrderLineItem } from "./OrderLineItem";
 import { OrderSummary } from "./OrderSummary";
@@ -26,15 +28,6 @@ const createItem = (): OrderItem => ({
   qty: 1,
 });
 
-const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error && typeof error === "object" && "response" in error) {
-    const response = (error as { response?: { data?: { message?: string } } })
-      .response;
-    return response?.data?.message || defaultMessage;
-  }
-  return defaultMessage;
-};
-
 export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
   const [recipientId, setRecipientId] = useState("");
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
@@ -43,18 +36,17 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
-  const { data: productsData } = useQuery({
-    queryKey: ["products"],
-    queryFn: () => productsApi.getAll({ limit: 100 }),
-  });
-
-  const { data: recipientsData } = useQuery({
-    queryKey: ["recipients"],
-    queryFn: () => recipientsApi.getAll({ limit: 100 }),
-  });
-
-  const products = productsData?.data?.data ?? [];
-  const recipients = recipientsData?.data?.data ?? [];
+  const productOptions = useOrderProducts(items.map((item) => item.productId));
+  const products = productOptions.records;
+  const currencies = [
+    ...new Set(
+      items.flatMap((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return product ? [product.currency] : [];
+      }),
+    ),
+  ];
+  const hasMixedCurrencies = currencies.length > 1;
 
   const createMutation = useMutation({
     mutationFn: ordersApi.create,
@@ -64,7 +56,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t("orders.failedToCreateOrder")));
+      setBackendError(parseApiError(error).message);
     },
   });
 
@@ -160,21 +152,24 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
     setErrors({});
     setBackendError("");
 
-    if (!validateForm()) return;
+    if (
+      !validateForm() ||
+      hasMixedCurrencies ||
+      productOptions.isHydrating ||
+      productOptions.error
+    )
+      return;
 
     const validItems = items.filter((item) => item.productId && item.qty > 0);
     createMutation.mutate({ recipientId, items: validItems });
   };
 
   const isFormValid =
-    recipientId && items.some((i) => i.productId && i.qty > 0);
-
-  const recipientOptions = recipients.map((r) => ({
-    value: r.id,
-    label: r.name,
-    searchText: `${r.name} ${r.email || ""} ${r.phone || ""}`.trim(),
-    subtitle: r.email || "",
-  }));
+    recipientId &&
+    items.some((i) => i.productId && i.qty > 0) &&
+    !hasMixedCurrencies &&
+    !productOptions.isHydrating &&
+    !productOptions.error;
 
   return (
     <div
@@ -232,18 +227,13 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                   {t("orders.recipient")}
                 </label>
               </div>
-              <Combobox
-                options={recipientOptions}
+              <OrderRecipientSelect
                 value={recipientId}
                 onChange={(value) => {
                   setRecipientId(value);
                   if (errors.recipient)
                     setErrors((prev) => ({ ...prev, recipient: "" }));
                 }}
-                placeholder={t("orders.selectRecipient")}
-                searchPlaceholder={t("orders.searchRecipient")}
-                noResultsText={t("orders.nothingFound")}
-                required
               />
               {errors.recipient ? (
                 <p className="mt-1.5 text-xs text-danger-base">
@@ -309,7 +299,23 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
             {/* ─── SECTION 3: Summary ─── */}
             {items.some((i) => i.productId) && (
               <section>
-                <OrderSummary subtotal={calculateTotal()} />
+                {hasMixedCurrencies ? (
+                  <p role="alert" className="text-sm text-danger-base">
+                    {t("orders.mixedCurrencies")}
+                  </p>
+                ) : (
+                  currencies[0] && (
+                    <OrderSummary
+                      subtotal={calculateTotal()}
+                      currency={currencies[0]}
+                    />
+                  )
+                )}
+                {productOptions.error && (
+                  <p role="alert" className="text-sm text-danger-base">
+                    {parseApiError(productOptions.error).message}
+                  </p>
+                )}
               </section>
             )}
           </div>

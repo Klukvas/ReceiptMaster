@@ -1,5 +1,6 @@
 {
   "common": {
+    "loadMore": "Завантажити ще",
     "loading": "Завантаження...",
     "error": "Помилка",
     "success": "Успішно",
@@ -66,6 +67,7 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "mixedCurrencies": "Усі товари в замовленні мають бути в одній валюті.",
     "title": "Замовлення",
     "createOrder": "Створити замовлення",
     "orderDetails": "Деталі замовлення",
@@ -158,8 +160,6 @@
     "orderId": "ID замовлення",
     "copyId": "Копіювати ID",
     "idCopied": "Скопійовано!",
-    "editOrder": "Редагувати замовлення",
-    "confirmOrder": "Підтвердити замовлення",
     "downloadReceipt": "Завантажити чек",
     "addProduct": "Додати товар",
     "recipientHelper": "Виберіть клієнта для цього замовлення",
@@ -605,13 +605,34 @@
       "label": "Шаблони чеків",
       "title": "15+ професійних шаблонів",
       "subtitle": "Від мінімалістичних рахунків до брендованих корпоративних чеків — оберіть ідеальний вигляд для вашого бізнесу. Кожен шаблон підтримує 3 мови.",
-      "modern": { "name": "Modern", "category": "Креативний" },
-      "elegant": { "name": "Elegant", "category": "Преміум" },
-      "dark": { "name": "Dark", "category": "Креативний" },
-      "vintage": { "name": "Vintage", "category": "Креативний" },
-      "corporate": { "name": "Corporate", "category": "Бізнес" },
-      "branded": { "name": "Branded", "category": "Преміум" },
-      "minimal": { "name": "Minimal", "category": "Мінімальний" }
+      "modern": {
+        "name": "Modern",
+        "category": "Креативний"
+      },
+      "elegant": {
+        "name": "Elegant",
+        "category": "Преміум"
+      },
+      "dark": {
+        "name": "Dark",
+        "category": "Креативний"
+      },
+      "vintage": {
+        "name": "Vintage",
+        "category": "Креативний"
+      },
+      "corporate": {
+        "name": "Corporate",
+        "category": "Бізнес"
+      },
+      "branded": {
+        "name": "Branded",
+        "category": "Преміум"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "category": "Мінімальний"
+      }
     },
     "cta": {
       "title": "Готові оптимізувати бізнес?",
@@ -778,7 +799,9 @@
     "checkoutError": "Не вдалося почати оформлення",
     "portalError": "Не вдалося відкрити портал оплати",
     "alreadyTopPlan": "У вас максимальний план!",
-    "paddleUnavailable": "Платіжна система недоступна. Оновіть сторінку."
+    "paddleUnavailable": "Платіжна система недоступна. Оновіть сторінку.",
+    "billingDisabled": "Оплата наразі недоступна. Ваш поточний тариф і ліміти продовжують діяти.",
+    "planUnavailable": "Недоступно на вашому поточному тарифі"
   },
   "errors": {
     "userAlreadyExists": "Користувач з таким email вже існує",

@@ -77,7 +77,15 @@ export class Receipt {
 
   @ApiProperty({ required: false })
   @Column({ type: "varchar", length: 64, nullable: true, unique: true })
-  public_token?: string;
+  public_token?: string | null;
+
+  @ApiHideProperty()
+  @Column({ type: "uuid", nullable: true })
+  generation_id?: string;
+
+  @ApiHideProperty()
+  @Column({ type: "timestamptz", nullable: true })
+  generation_started_at?: Date;
 
   @ApiProperty()
   @Column({ type: "integer", default: 0 })

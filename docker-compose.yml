@@ -54,8 +54,8 @@ services:
       - JWT_SECRET=pSPmil4N/FLgTDuIOhrGY17ne5Vk454z4dSa/shpbvQ=
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=http://localhost:3000
-      - AWS_ACCESS_KEY_ID=Q4VEDK3ALS0P6HS3IU54
-      - AWS_SECRET_ACCESS_KEY=nDhkjzjVWRJF2nHOYxOuvnETUv8wsAkOXhUKLQ9N
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=nbg1
       - S3_ENDPOINT=https://nbg1.your-objectstorage.com
       - LOGOS_BUCKET=marketflow-storage

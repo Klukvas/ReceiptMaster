@@ -4,8 +4,7 @@
 // meant production browsers dialled their own machine and never heard that a
 // receipt was done.
 
-import { chromium } from "playwright";
-import { BASE_URL } from "./support/harness.mjs";
+import { BASE_URL, launchBrowser } from "./support/harness.mjs";
 import { Results } from "./support/runner.mjs";
 
 const CASES = [
@@ -38,7 +37,7 @@ const CASES = [
 
 export const run = async () => {
   const results = new Results("receipt socket url");
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   const context = await browser.newContext();
   const page = await context.newPage();
 

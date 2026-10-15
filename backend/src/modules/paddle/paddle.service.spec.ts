@@ -37,8 +37,11 @@ describe("PaddleService", () => {
   const userId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
   const userEmail = "test@example.com";
 
-  const makeConfig = (overrides: Record<string, string | undefined> = {}) => {
-    const defaults: Record<string, string | undefined> = {
+  const makeConfig = (
+    overrides: Record<string, string | boolean | undefined> = {},
+  ) => {
+    const defaults: Record<string, string | boolean | undefined> = {
+      BILLING_ENABLED: true,
       PADDLE_API_KEY: undefined,
       PADDLE_WEBHOOK_SECRET: "whsec_test",
       PADDLE_ENVIRONMENT: "sandbox",
@@ -550,7 +553,8 @@ describe("PaddleService (with Paddle configured)", () => {
 
   const makeConfig = () => ({
     get: jest.fn((key: string) => {
-      const config: Record<string, string> = {
+      const config: Record<string, string | boolean> = {
+        BILLING_ENABLED: true,
         PADDLE_API_KEY: "test_api_key",
         PADDLE_WEBHOOK_SECRET: "whsec_test",
         PADDLE_ENVIRONMENT: "sandbox",
@@ -747,7 +751,8 @@ describe("PaddleService (with Paddle configured)", () => {
     it("should throw when webhook secret is not configured", async () => {
       const configNoSecret = {
         get: jest.fn((key: string) => {
-          const config: Record<string, string | undefined> = {
+          const config: Record<string, string | boolean | undefined> = {
+            BILLING_ENABLED: true,
             PADDLE_API_KEY: "test_api_key",
             PADDLE_WEBHOOK_SECRET: undefined,
             PADDLE_ENVIRONMENT: "sandbox",
@@ -783,7 +788,8 @@ describe("PaddleService (with Paddle configured)", () => {
       // Override config to clear pro price ID
       const configWithMissing = {
         get: jest.fn((key: string) => {
-          const config: Record<string, string | undefined> = {
+          const config: Record<string, string | boolean | undefined> = {
+            BILLING_ENABLED: true,
             PADDLE_API_KEY: "test_api_key",
             PADDLE_WEBHOOK_SECRET: "whsec_test",
             PADDLE_ENVIRONMENT: "sandbox",
@@ -813,5 +819,42 @@ describe("PaddleService (with Paddle configured)", () => {
         svc.createCheckoutTransaction(userId, userEmail, "pro"),
       ).rejects.toThrow(BadRequestException);
     });
+  });
+});
+
+describe("billing disabled", () => {
+  it("does not initialize Paddle or touch subscription data through payment entry points", async () => {
+    const { Paddle } = jest.requireMock("@paddle/paddle-node-sdk");
+    Paddle.mockClear();
+    const repository = {
+      findOne: jest.fn(),
+      update: jest.fn(),
+      createQueryBuilder: jest.fn(),
+    };
+    const config = {
+      get: (key: string) =>
+        key === "BILLING_ENABLED" ? false : "configured-test-value",
+    };
+    const disabled = new PaddleService(config as never, repository as never);
+    expect(Paddle).not.toHaveBeenCalled();
+    for (const operation of [
+      () =>
+        disabled.createCheckoutTransaction("user", "test@example.test", "pro"),
+      () => disabled.createPortalSession("user"),
+      () => disabled.verifyWebhook("{}", "signature"),
+      () =>
+        disabled.handleWebhookEvent({
+          eventType: "subscription.canceled",
+        } as never),
+    ]) {
+      await expect(operation()).rejects.toMatchObject({
+        errorCode: "BILLING_DISABLED",
+        statusCode: 503,
+      });
+    }
+    await disabled.downgradeCanceledSubscriptions();
+    expect(repository.findOne).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
   });
 });

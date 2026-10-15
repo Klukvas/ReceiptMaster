@@ -14,6 +14,8 @@ import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
+import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
+
 const REFRESH_TOKEN_EXPIRATION_DAYS = 30;
 
 @Injectable()
@@ -108,6 +110,7 @@ export class UsersService {
   }
 
   async refreshToken(token: string): Promise<AuthResponseDto> {
+    this.assertRefreshToken(token);
     const existing = await this.refreshTokenRepository.findOne({
       where: { token, revoked: false },
       relations: ["user"],
@@ -138,7 +141,14 @@ export class UsersService {
   }
 
   async revokeRefreshToken(token: string): Promise<void> {
+    this.assertRefreshToken(token);
     await this.refreshTokenRepository.update({ token }, { revoked: true });
+  }
+
+  private assertRefreshToken(token: unknown): asserts token is string {
+    if (typeof token !== "string" || !REFRESH_TOKEN_PATTERN.test(token)) {
+      throw ApiErrors.UNAUTHORIZED();
+    }
   }
 
   async revokeAllUserTokens(userId: string): Promise<void> {

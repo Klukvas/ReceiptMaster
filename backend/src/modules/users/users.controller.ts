@@ -21,6 +21,7 @@ import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
+import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { User } from "./entities/user.entity";
 
 @ApiTags("auth")
@@ -68,9 +69,7 @@ export class UsersController {
     type: AuthResponseDto,
   })
   @ApiResponse({ status: 401, description: "Invalid or expired refresh token" })
-  async refresh(
-    @Body() body: { refresh_token: string },
-  ): Promise<AuthResponseDto> {
+  async refresh(@Body() body: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.usersService.refreshToken(body.refresh_token);
   }
 
@@ -79,9 +78,7 @@ export class UsersController {
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Logout and revoke refresh token" })
   @ApiResponse({ status: 200, description: "Logged out successfully" })
-  async logout(
-    @Body() body: { refresh_token: string },
-  ): Promise<{ message: string }> {
+  async logout(@Body() body: RefreshTokenDto): Promise<{ message: string }> {
     await this.usersService.revokeRefreshToken(body.refresh_token);
     return { message: "Logged out successfully" };
   }

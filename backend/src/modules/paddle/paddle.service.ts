@@ -10,6 +10,7 @@ import {
   type EventEntity,
   type SubscriptionNotification,
 } from "@paddle/paddle-node-sdk";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { EnvConfig } from "../../config/env.schema";
 import {
   UserSubscription,
@@ -33,7 +34,7 @@ export class PaddleService {
   ) {
     const apiKey = this.configService.get("PADDLE_API_KEY");
 
-    if (apiKey) {
+    if (this.isBillingEnabled() && apiKey) {
       const env = this.configService.get("PADDLE_ENVIRONMENT");
       this.paddle = new Paddle(apiKey, {
         environment:
@@ -42,14 +43,27 @@ export class PaddleService {
       this.logger.log(`Paddle SDK initialized (${env})`);
     } else {
       this.paddle = null;
-      this.logger.warn("PADDLE_API_KEY not set — Paddle integration disabled");
+      this.logger.log(
+        this.isBillingEnabled()
+          ? "PADDLE_API_KEY not set — Paddle integration disabled"
+          : "Billing is disabled",
+      );
     }
 
     this.proPriceId = this.configService.get("PADDLE_PRO_PRICE_ID");
     this.businessPriceId = this.configService.get("PADDLE_BUSINESS_PRICE_ID");
   }
 
+  isBillingEnabled(): boolean {
+    return this.configService.get("BILLING_ENABLED", false) === true;
+  }
+
+  assertBillingEnabled(): void {
+    if (!this.isBillingEnabled()) throw ApiErrors.BILLING_DISABLED();
+  }
+
   private assertPaddleConfigured(): Paddle {
+    this.assertBillingEnabled();
     if (!this.paddle) {
       throw new BadRequestException("Paddle integration is not configured");
     }
@@ -146,6 +160,7 @@ export class PaddleService {
   }
 
   async handleWebhookEvent(event: EventEntity): Promise<void> {
+    this.assertBillingEnabled();
     this.logger.log(`Processing webhook event: ${event.eventType}`);
 
     switch (event.eventType) {
@@ -313,6 +328,7 @@ export class PaddleService {
    */
   @Cron("0 * * * *")
   async downgradeCanceledSubscriptions(): Promise<void> {
+    if (!this.isBillingEnabled()) return;
     const result = await this.subscriptionRepo
       .createQueryBuilder()
       .update(UserSubscription)

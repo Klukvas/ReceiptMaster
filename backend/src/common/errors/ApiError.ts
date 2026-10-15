@@ -25,6 +25,12 @@ export class ApiErrorResponse extends Error {
 
 // Предопределенные ошибки
 export const ApiErrors = {
+  BILLING_DISABLED: () =>
+    new ApiErrorResponse(
+      "Payments are currently unavailable",
+      "BILLING_DISABLED",
+      503,
+    ),
   // User errors
   USER_ALREADY_EXISTS: (email: string) =>
     new ApiErrorResponse(

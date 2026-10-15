@@ -3,11 +3,12 @@ import {
   useRef,
   useEffect,
   useCallback,
-  useMemo,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
 import { Minus, Plus, X, Info, Search, Package } from "lucide-react";
+import { useOrderProducts } from "../../hooks/useOrderOptions";
+import { parseApiError } from "../../lib/api-errors";
 import { formatCurrency } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
 import { computeDropdownPosition, readViewport } from "./dropdown-position";
@@ -57,7 +58,6 @@ export const OrderLineItem = ({
   if (!product) {
     return (
       <ProductSearchCard
-        products={products}
         canRemove={canRemove}
         onSelect={(productId) => onUpdate(index, "productId", productId)}
         onRemove={() => onRemove(index)}
@@ -84,14 +84,12 @@ export const OrderLineItem = ({
  ═══════════════════════════════════════════════════════ */
 
 interface ProductSearchCardProps {
-  products: Product[];
   canRemove: boolean;
   onSelect: (productId: string) => void;
   onRemove: () => void;
 }
 
 const ProductSearchCard = ({
-  products,
   canRemove,
   onSelect,
   onRemove,
@@ -113,15 +111,12 @@ const ProductSearchCard = ({
     };
   }, []);
 
-  const filtered = useMemo(
-    () =>
-      searchTerm
-        ? products.filter((p) =>
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()),
-          )
-        : products,
-    [products, searchTerm],
-  );
+  const query = useOrderProducts();
+  const { setSearch } = query;
+  useEffect(() => {
+    setSearch(searchTerm);
+  }, [searchTerm, setSearch]);
+  const filtered = query.options;
 
   const updateDropdownPosition = useCallback(() => {
     if (!containerRef.current) return;
@@ -299,7 +294,11 @@ const ProductSearchCard = ({
               role="listbox"
               className="py-1 flex-1 min-h-0 overflow-auto scrollbar-thin"
             >
-              {filtered.length === 0 ? (
+              {query.error ? (
+                <li role="alert">{parseApiError(query.error).message}</li>
+              ) : query.isSearching ? (
+                <li className="p-3 text-sm">{t("common.loading")}</li>
+              ) : filtered.length === 0 ? (
                 <li className="flex flex-col items-center py-6 text-center">
                   <Package className="w-6 h-6 text-content-tertiary mb-1.5" />
                   <span className="text-sm text-content-tertiary">
@@ -338,6 +337,16 @@ const ProductSearchCard = ({
                 ))
               )}
             </ul>
+            {query.hasNextPage && (
+              <button
+                type="button"
+                disabled={query.isSearching}
+                onClick={query.loadMore}
+                className="w-full p-2 text-sm text-accent-base"
+              >
+                {t("common.loadMore")}
+              </button>
+            )}
           </div>,
           document.body,
         )}
@@ -498,16 +507,11 @@ const SelectedProductCard = ({
                     .replace(/[^\d.,]/g, "")
                     .replace(",", ".");
                   setPriceInput(value);
-                  if (
-                    value === "" ||
-                    value === "." ||
-                    value === "0." ||
-                    value === "0"
-                  ) {
+                  if (value === "" || value === ".") {
                     onUpdate(index, "unitPriceCents", undefined);
                   } else {
                     const numValue = parseFloat(value);
-                    if (!isNaN(numValue) && numValue >= 0) {
+                    if (Number.isFinite(numValue) && numValue >= 0) {
                       onUpdate(
                         index,
                         "unitPriceCents",
@@ -522,8 +526,8 @@ const SelectedProductCard = ({
                     .replace(",", ".");
                   if (
                     value &&
-                    !isNaN(parseFloat(value)) &&
-                    parseFloat(value) > 0
+                    Number.isFinite(parseFloat(value)) &&
+                    parseFloat(value) >= 0
                   ) {
                     onUpdate(
                       index,
@@ -569,7 +573,7 @@ const SelectedProductCard = ({
 
         {/* Line total */}
         <span className="text-sm font-semibold text-content tabular-nums">
-          {formatCurrency(lineTotal)}
+          {formatCurrency(lineTotal, product.currency)}
         </span>
       </div>
 

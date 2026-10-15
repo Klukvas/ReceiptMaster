@@ -1,5 +1,6 @@
 {
   "common": {
+    "loadMore": "Загрузить ещё",
     "loading": "Загрузка...",
     "error": "Ошибка",
     "success": "Успешно",
@@ -66,6 +67,7 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "mixedCurrencies": "Все товары в заказе должны быть в одной валюте.",
     "title": "Заказы",
     "createOrder": "Создать заказ",
     "orderDetails": "Детали заказа",
@@ -158,8 +160,6 @@
     "orderId": "ID заказа",
     "copyId": "Копировать ID",
     "idCopied": "Скопировано!",
-    "editOrder": "Редактировать заказ",
-    "confirmOrder": "Подтвердить заказ",
     "downloadReceipt": "Скачать чек",
     "addProduct": "Добавить товар",
     "recipientHelper": "Выберите клиента для этого заказа",
@@ -605,13 +605,34 @@
       "label": "Шаблоны чеков",
       "title": "15+ профессиональных шаблонов",
       "subtitle": "От минималистичных счетов до брендированных корпоративных чеков — выберите идеальный вид для вашего бизнеса. Каждый шаблон поддерживает 3 языка.",
-      "modern": { "name": "Modern", "category": "Креативный" },
-      "elegant": { "name": "Elegant", "category": "Премиум" },
-      "dark": { "name": "Dark", "category": "Креативный" },
-      "vintage": { "name": "Vintage", "category": "Креативный" },
-      "corporate": { "name": "Corporate", "category": "Бизнес" },
-      "branded": { "name": "Branded", "category": "Премиум" },
-      "minimal": { "name": "Minimal", "category": "Минимальный" }
+      "modern": {
+        "name": "Modern",
+        "category": "Креативный"
+      },
+      "elegant": {
+        "name": "Elegant",
+        "category": "Премиум"
+      },
+      "dark": {
+        "name": "Dark",
+        "category": "Креативный"
+      },
+      "vintage": {
+        "name": "Vintage",
+        "category": "Креативный"
+      },
+      "corporate": {
+        "name": "Corporate",
+        "category": "Бизнес"
+      },
+      "branded": {
+        "name": "Branded",
+        "category": "Премиум"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "category": "Минимальный"
+      }
     },
     "cta": {
       "title": "Готовы оптимизировать бизнес?",
@@ -778,7 +799,9 @@
     "checkoutError": "Не удалось начать оформление",
     "portalError": "Не удалось открыть портал оплаты",
     "alreadyTopPlan": "У вас максимальный план!",
-    "paddleUnavailable": "Платёжная система недоступна. Обновите страницу."
+    "paddleUnavailable": "Платёжная система недоступна. Обновите страницу.",
+    "billingDisabled": "Оплата пока недоступна. Ваш текущий тариф и лимиты продолжают действовать.",
+    "planUnavailable": "Недоступно на вашем текущем тарифе"
   },
   "errors": {
     "userAlreadyExists": "Пользователь с таким email уже существует",

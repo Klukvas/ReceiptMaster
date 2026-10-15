@@ -66,6 +66,35 @@ export class OrdersService {
     return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
   }
 
+  private validateItems(items: CreateOrderDto["items"]): void {
+    if (!items.length) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "items",
+        "Order must contain at least one item",
+      );
+    }
+    if (new Set(items.map((item) => item.productId)).size !== items.length) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "items",
+        "Each product may appear only once in an order",
+      );
+    }
+  }
+
+  private orderCurrency(products: Product[]): string {
+    const currency = products[0]?.currency;
+    if (
+      !currency ||
+      products.some((product) => product.currency !== currency)
+    ) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "currency",
+        "All order products must use the same currency",
+      );
+    }
+    return currency;
+  }
+
   async create(
     createOrderDto: CreateOrderDto,
     user: User,
@@ -73,7 +102,6 @@ export class OrdersService {
   ): Promise<IdempotencyResponse> {
     // Advisory lock + idempotency check + order creation in a single transaction
     const result = await this.dataSource.transaction(async (manager) => {
-      await this.subscriptionService.assertCanCreateOrderInTx(manager, user.id);
       // Acquire advisory lock if idempotency key is provided (prevents race conditions)
       if (idempotencyKey) {
         await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
@@ -97,6 +125,9 @@ export class OrdersService {
         }
       }
 
+      await this.subscriptionService.assertCanCreateOrderInTx(manager, user.id);
+      this.validateItems(createOrderDto.items);
+
       // Check recipient existence and ownership
       const recipient = await manager.findOne(Recipient, {
         where: { id: createOrderDto.recipientId, user_id: user.id },
@@ -109,6 +140,7 @@ export class OrdersService {
       const productIds = createOrderDto.items.map((item) => item.productId);
       const products = await manager.find(Product, {
         where: { id: In(productIds), user_id: user.id },
+        order: { id: "ASC" },
         lock: { mode: "pessimistic_write" },
       });
 
@@ -120,7 +152,7 @@ export class OrdersService {
 
       // Check product quantities and calculate amounts
       let subtotalCents = 0;
-      const currency = products[0].currency; // Take currency from first product
+      const currency = this.orderCurrency(products);
 
       for (const itemDto of createOrderDto.items) {
         const product = productMap.get(itemDto.productId)!;
@@ -174,8 +206,10 @@ export class OrdersService {
         await manager.save(OrderItem, orderItem);
 
         // Decrease product quantity
-        product.quantity -= itemDto.qty;
-        await manager.save(Product, product);
+        await manager.save(Product, {
+          ...product,
+          quantity: product.quantity - itemDto.qty,
+        });
       }
 
       // Save idempotency key if provided
@@ -332,10 +366,11 @@ export class OrdersService {
     updateOrderDto: UpdateOrderDto,
     user: User,
   ): Promise<Order> {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       // Load order without relations to avoid conflicts with cascade operations
       const order = await manager.findOne(Order, {
         where: { id, user_id: user.id },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (!order) {
@@ -365,9 +400,10 @@ export class OrdersService {
 
       // If products are being updated
       if (updateOrderDto.items) {
+        this.validateItems(updateOrderDto.items);
         // First, restore quantities from existing order items with pessimistic locking
         const existingOrderItems = await manager.find(OrderItem, {
-          where: { order_id: id },
+          where: { order_id: id, user_id: user.id },
         });
 
         // Collect all product IDs that need to be updated (old + new)
@@ -381,7 +417,8 @@ export class OrdersService {
 
         // Lock all products that will be affected
         const allProducts = await manager.find(Product, {
-          where: { id: In(allProductIds) },
+          where: { id: In(allProductIds), user_id: user.id },
+          order: { id: "ASC" },
           lock: { mode: "pessimistic_write" },
         });
         const productMap = new Map(allProducts.map((p) => [p.id, p]));
@@ -390,7 +427,10 @@ export class OrdersService {
         for (const existingItem of existingOrderItems) {
           const product = productMap.get(existingItem.product_id);
           if (product) {
-            product.quantity += existingItem.qty;
+            productMap.set(product.id, {
+              ...product,
+              quantity: product.quantity + existingItem.qty,
+            });
           }
         }
 
@@ -406,7 +446,7 @@ export class OrdersService {
 
         // Check quantities and calculate new amounts
         let subtotalCents = 0;
-        const currency = ownedProducts[0].currency; // Take currency from first product
+        const currency = this.orderCurrency(ownedProducts);
 
         for (const itemDto of updateOrderDto.items) {
           const product = productMap.get(itemDto.productId)!;
@@ -455,9 +495,14 @@ export class OrdersService {
           await manager.save(OrderItem, orderItem);
 
           // Decrease product quantity
-          product.quantity -= itemDto.qty;
-          await manager.save(Product, product);
+          productMap.set(product.id, {
+            ...product,
+            quantity: product.quantity - itemDto.qty,
+          });
         }
+
+        // Persist the union, including products removed from the order.
+        await manager.save(Product, [...productMap.values()]);
       }
 
       // Save order
@@ -465,22 +510,25 @@ export class OrdersService {
 
       // Return order with full relations
       return manager.findOne(Order, {
-        where: { id },
+        where: { id, user_id: user.id },
         relations: ["recipient", "items", "receipts"],
       });
     });
+    await this.invalidateDashboardCache(user.id);
+    return result;
   }
 
   async remove(id: string, user: User): Promise<void> {
-    const order = await this.findOne(id, user);
-    if (!order) {
-      throw ApiErrors.ORDER_NOT_FOUND(id);
-    }
-
-    // Soft delete: restore product quantities and mark as deleted
+    // The live-order lock makes stock restoration single-winner, including batch overlap.
     await this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id, user_id: user.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
+
       const orderItems = await manager.find(OrderItem, {
-        where: { order_id: id },
+        where: { order_id: id, user_id: user.id },
       });
 
       // Aggregate quantity changes per product
@@ -493,13 +541,21 @@ export class OrdersService {
       }
 
       // Batch restore product quantities
-      for (const [productId, qty] of qtyUpdates) {
-        await manager.increment(Product, { id: productId }, "quantity", qty);
+      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await manager.increment(
+          Product,
+          { id: productId, user_id: user.id },
+          "quantity",
+          qty,
+        );
       }
 
       // Soft delete the order (sets deleted_at timestamp)
-      await manager.softDelete(Order, { id });
+      await manager.softDelete(Order, { id, user_id: user.id });
     });
+    await this.invalidateDashboardCache(user.id);
   }
 
   async markAsLocked(orderId: string, user: User): Promise<void> {
@@ -560,11 +616,13 @@ export class OrdersService {
     orderIds: string[],
     user: User,
   ): Promise<{ deleted: number }> {
-    const uniqueIds = [...new Set(orderIds)];
+    const uniqueIds = [...new Set(orderIds)].sort();
 
     const result = await this.dataSource.transaction(async (manager) => {
       const orders = await manager.find(Order, {
         where: { id: In(uniqueIds), user_id: user.id },
+        order: { id: "ASC" },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (orders.length !== uniqueIds.length) {
@@ -575,7 +633,7 @@ export class OrdersService {
 
       // Batch load all order items for all orders at once
       const allOrderItems = await manager.find(OrderItem, {
-        where: { order_id: In(uniqueIds) },
+        where: { order_id: In(uniqueIds), user_id: user.id },
       });
 
       // Aggregate quantity changes per product
@@ -588,11 +646,18 @@ export class OrdersService {
       }
 
       // Batch restore product quantities
-      for (const [productId, qty] of qtyUpdates) {
-        await manager.increment(Product, { id: productId }, "quantity", qty);
+      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await manager.increment(
+          Product,
+          { id: productId, user_id: user.id },
+          "quantity",
+          qty,
+        );
       }
 
-      await manager.softDelete(Order, { id: In(uniqueIds) });
+      await manager.softDelete(Order, { id: In(uniqueIds), user_id: user.id });
 
       return { deleted: orders.length };
     });
@@ -643,7 +708,7 @@ export class OrdersService {
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];
@@ -709,7 +774,7 @@ export class OrdersService {
       INNER JOIN recipients r ON r.id = o.recipient_id
       INNER JOIN order_items oi ON oi.order_id = o.id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];
@@ -768,7 +833,7 @@ export class OrdersService {
       FROM orders o
       INNER JOIN order_items oi ON oi.order_id = o.id
       INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];
@@ -831,7 +896,7 @@ export class OrdersService {
         o.currency
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];
@@ -895,7 +960,7 @@ export class OrdersService {
         o.currency
       FROM orders o
       INNER JOIN recipients r ON r.id = o.recipient_id
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];
@@ -952,7 +1017,7 @@ export class OrdersService {
         COUNT(o.id) as total_orders,
         o.currency
       FROM orders o
-      WHERE o.status = $1 AND o.user_id = $2
+      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
       const params: any[] = [OrderStatus.CONFIRMED, user.id];

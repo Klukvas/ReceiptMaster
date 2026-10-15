@@ -3,8 +3,7 @@
 // The module is TypeScript, so it is imported through the Vite dev server the
 // rest of the suite already runs against — same transform pipeline as the app.
 
-import { chromium } from "playwright";
-import { BASE_URL } from "./support/harness.mjs";
+import { BASE_URL, launchBrowser } from "./support/harness.mjs";
 import { Results } from "./support/runner.mjs";
 
 const PREFERRED_MAX_HEIGHT = 224;
@@ -59,7 +58,7 @@ const CASES = [
 
 export const run = async () => {
   const results = new Results("dropdown position");
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   const context = await browser.newContext();
   const page = await context.newPage();
 

@@ -18,11 +18,17 @@ import {
   ReceiptGenerationProcessor,
   RECEIPT_GENERATION_QUEUE,
 } from "./receipt-generation.processor";
+import {
+  RECEIPT_PUBLISHER_FACTORY,
+  createReceiptPublisherFactory,
+} from "./receipt-publisher";
+import { ReceiptOutboxService } from "./receipt-outbox.service";
+import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { ReceiptsGateway } from "./receipts.gateway";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Receipt, Order]),
+    TypeOrmModule.forFeature([Receipt, Order, ReceiptGenerationOutbox]),
     BullModule.registerQueue({ name: RECEIPT_GENERATION_QUEUE }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -40,6 +46,12 @@ import { ReceiptsGateway } from "./receipts.gateway";
   ],
   providers: [
     ReceiptsService,
+    ReceiptOutboxService,
+    {
+      provide: RECEIPT_PUBLISHER_FACTORY,
+      inject: [ConfigService],
+      useFactory: createReceiptPublisherFactory,
+    },
     PdfGeneratorService,
     TemplateService,
     PlaywrightPdfGenerator,

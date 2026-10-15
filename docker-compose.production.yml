@@ -33,7 +33,7 @@ services:
       - marketflow-network
 
   backend:
-    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:latest
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-backend:${IMAGE_TAG:?Set IMAGE_TAG to the published commit SHA}
     container_name: marketflow-backend
     expose:
       - "3000"
@@ -50,6 +50,13 @@ services:
       - API_PREFIX=api/v1
       - API_KEY=${API_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - BILLING_ENABLED=${BILLING_ENABLED:-false}
+      - PADDLE_API_KEY=${PADDLE_API_KEY:-}
+      - PADDLE_WEBHOOK_SECRET=${PADDLE_WEBHOOK_SECRET:-}
+      - PADDLE_PRO_PRICE_ID=${PADDLE_PRO_PRICE_ID:-}
+      - PADDLE_BUSINESS_PRICE_ID=${PADDLE_BUSINESS_PRICE_ID:-}
+      - PADDLE_ENVIRONMENT=production
+      - FRONTEND_URL=${FRONTEND_URL:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - RECEIPT_STORAGE_PATH=/app/receipts
       - RECEIPT_BASE_URL=${RECEIPT_BASE_URL:-http://localhost:3000}
@@ -73,7 +80,7 @@ services:
       - marketflow-network
 
   frontend:
-    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-frontend:latest
+    image: ${DOCKERHUB_USERNAME:-klukvas}/receiptmaster-frontend:${IMAGE_TAG:?Set IMAGE_TAG to the published commit SHA}
     container_name: marketflow-frontend
     ports:
       - "80:80"

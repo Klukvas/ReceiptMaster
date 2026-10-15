@@ -1,5 +1,6 @@
 {
   "common": {
+    "loadMore": "Load more",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
@@ -66,6 +67,7 @@
     "groupSystem": "System"
   },
   "orders": {
+    "mixedCurrencies": "All products in an order must use the same currency.",
     "title": "Orders",
     "createOrder": "Create Order",
     "orderDetails": "Order Details",
@@ -158,8 +160,6 @@
     "orderId": "Order ID",
     "copyId": "Copy ID",
     "idCopied": "Copied!",
-    "editOrder": "Edit Order",
-    "confirmOrder": "Confirm Order",
     "downloadReceipt": "Download Receipt",
     "addProduct": "Add Product",
     "recipientHelper": "Select the customer for this order",
@@ -404,7 +404,6 @@
     "deliveryTermsPlaceholder": "e.g., EXW, FOB, CIF — Incoterms 2020",
     "deliveryTermsHint": "Displayed on proforma invoice template"
   },
-  
   "receipts": {
     "generatingReceipt": "Generating receipt...",
     "receiptReady": "Receipt ready",
@@ -606,13 +605,34 @@
       "label": "Receipt templates",
       "title": "15+ professional templates",
       "subtitle": "From minimal invoices to branded corporate receipts — choose the perfect look for your business. Every template supports 3 languages.",
-      "modern": { "name": "Modern", "category": "Creative" },
-      "elegant": { "name": "Elegant", "category": "Premium" },
-      "dark": { "name": "Dark", "category": "Creative" },
-      "vintage": { "name": "Vintage", "category": "Creative" },
-      "corporate": { "name": "Corporate", "category": "Business" },
-      "branded": { "name": "Branded", "category": "Premium" },
-      "minimal": { "name": "Minimal", "category": "Minimal" }
+      "modern": {
+        "name": "Modern",
+        "category": "Creative"
+      },
+      "elegant": {
+        "name": "Elegant",
+        "category": "Premium"
+      },
+      "dark": {
+        "name": "Dark",
+        "category": "Creative"
+      },
+      "vintage": {
+        "name": "Vintage",
+        "category": "Creative"
+      },
+      "corporate": {
+        "name": "Corporate",
+        "category": "Business"
+      },
+      "branded": {
+        "name": "Branded",
+        "category": "Premium"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "category": "Minimal"
+      }
     },
     "cta": {
       "title": "Ready to streamline your business?",
@@ -779,7 +799,9 @@
     "checkoutError": "Failed to start checkout",
     "portalError": "Failed to open billing portal",
     "alreadyTopPlan": "You're on the top plan!",
-    "paddleUnavailable": "Payment system unavailable. Please refresh the page."
+    "paddleUnavailable": "Payment system unavailable. Please refresh the page.",
+    "billingDisabled": "Payments are currently unavailable. Your current plan and usage limits still apply.",
+    "planUnavailable": "Not included in your current plan"
   },
   "errors": {
     "userAlreadyExists": "User with this email already exists",

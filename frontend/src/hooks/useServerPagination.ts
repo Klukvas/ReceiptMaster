@@ -168,6 +168,7 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     total,
     isLoading: queryResult.isLoading,
     isFetching: queryResult.isFetching,
+    isSearchPending: searchQuery.trim() !== debouncedSearch.trim(),
     error: queryResult.error,
     currentPage,
     totalPages,

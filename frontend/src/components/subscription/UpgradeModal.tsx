@@ -48,12 +48,35 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { status } = useSubscription();
-  const { loading, handleUpgrade, handleManage } = useCheckout();
+  const { loading, handleUpgrade, handleManage, billingEnabled } =
+    useCheckout();
 
   const titleKey = TITLE_KEYS[reason];
   const descKey = DESC_KEYS[reason];
   const currentPlan = status?.plan ?? "free";
   const hasPaddleSub = status?.hasPaddleSubscription ?? false;
+
+  if (!billingEnabled)
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <div className="flex flex-col items-center text-center py-4">
+          <div className="mb-4">{REASON_ICONS[reason]}</div>
+          <h3 className="text-lg font-semibold text-content mb-2">
+            {t(
+              "subscription.planUnavailable",
+              "Not included in your current plan",
+            )}
+          </h3>
+          <p className="text-content-secondary mb-6">
+            {t(
+              "subscription.billingDisabled",
+              "Payments are currently unavailable. Your current plan and usage limits still apply.",
+            )}
+          </p>
+          <Button onClick={onClose}>{t("common.close", "Close")}</Button>
+        </div>
+      </Modal>
+    );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md">

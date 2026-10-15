@@ -133,7 +133,7 @@ export const useOrders = () => {
     setConfirmAction({ isOpen: true, type: "delete", order });
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = (validOrderIds: string[] = []) => {
     if (!confirmAction.type) return;
 
     if (confirmAction.type === "cancel" && confirmAction.order) {
@@ -141,7 +141,7 @@ export const useOrders = () => {
     } else if (confirmAction.type === "delete" && confirmAction.order) {
       deleteOrderMutation.mutate(confirmAction.order.id);
     } else if (confirmAction.type === "bulkDelete") {
-      batchDeleteMutation.mutate(Array.from(selectedKeys));
+      if (validOrderIds.length > 0) batchDeleteMutation.mutate(validOrderIds);
     }
   };
 
@@ -162,8 +162,8 @@ export const useOrders = () => {
   };
 
   // Batch action handlers
-  const handleBatchApprove = () => {
-    batchApproveMutation.mutate(Array.from(selectedKeys));
+  const handleBatchApprove = (validOrderIds: string[]) => {
+    if (validOrderIds.length > 0) batchApproveMutation.mutate(validOrderIds);
   };
 
   const handleBulkDeleteConfirm = () => {

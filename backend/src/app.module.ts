@@ -1,14 +1,15 @@
 import { Module, MiddlewareConsumer, NestModule } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { TypeOrmModule } from "@nestjs/typeorm";
+import { TypeOrmModule, TypeOrmModuleAsyncOptions } from "@nestjs/typeorm";
 import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { APP_FILTER, APP_INTERCEPTOR } from "@nestjs/core";
 import { envSchema } from "./config/env.schema";
 import { GlobalExceptionFilter } from "./common/filters/GlobalExceptionFilter";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
-import { TenantMiddleware } from "./common/middleware/tenant.middleware";
-import { TenantContextSubscriber } from "./common/subscribers/tenant-context.subscriber";
+import { TenantInterceptor } from "./common/tenancy/tenant.interceptor";
+import { installTenantContext } from "./common/tenancy/tenant-data-source";
+import { DataSource, DataSourceOptions } from "typeorm";
 import { AuditLogInterceptor } from "./common/interceptors/audit-log.interceptor";
 import { AuditLogService } from "./common/services/audit-log.service";
 import { AuditLog } from "./common/entities/audit-log.entity";
@@ -30,6 +31,7 @@ import { MigrationService } from "./common/services/migration.service";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      ignoreEnvFile: process.env.NODE_ENV === "test",
       validate: (config) => {
         const result = envSchema.safeParse(config);
         if (!result.success) {
@@ -56,7 +58,6 @@ import { MigrationService } from "./common/services/migration.service";
           database: configService.get("DB_NAME"),
           entities: [__dirname + "/**/*.entity{.ts,.js}"],
           migrations: [__dirname + "/config/migrations/*{.ts,.js}"],
-          subscribers: [TenantContextSubscriber],
           synchronize: false,
           logging: process.env.NODE_ENV === "development",
           extra: {
@@ -68,6 +69,19 @@ import { MigrationService } from "./common/services/migration.service";
         };
       },
       inject: [ConfigService],
+      dataSourceFactory: async (options) => {
+        const source = installTenantContext(
+          await new DataSource(
+            options as unknown as DataSourceOptions,
+          ).initialize(),
+        );
+        // Nest and the workspace can resolve separate TypeORM installations.
+        return source as unknown as Awaited<
+          ReturnType<
+            NonNullable<TypeOrmModuleAsyncOptions["dataSourceFactory"]>
+          >
+        >;
+      },
     }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
@@ -90,6 +104,7 @@ import { MigrationService } from "./common/services/migration.service";
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
     },
+    { provide: APP_INTERCEPTOR, useClass: TenantInterceptor },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,
@@ -101,6 +116,5 @@ import { MigrationService } from "./common/services/migration.service";
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestIdMiddleware).forRoutes("*");
-    consumer.apply(TenantMiddleware).forRoutes("*");
   }
 }

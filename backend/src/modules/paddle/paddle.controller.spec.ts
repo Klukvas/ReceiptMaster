@@ -7,6 +7,8 @@ describe("PaddleController", () => {
 
   beforeEach(() => {
     paddleService = {
+      isBillingEnabled: jest.fn().mockReturnValue(true),
+      assertBillingEnabled: jest.fn(),
       verifyWebhook: jest.fn(),
       handleWebhookEvent: jest.fn(),
     };

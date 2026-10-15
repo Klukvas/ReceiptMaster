@@ -68,7 +68,12 @@ const PLAN_COLORS: Record<
 const SubscriptionTab = () => {
   const { t } = useTranslation();
   const { status, isLoading } = useSubscription();
-  const { loading: upgrading, handleUpgrade, handleManage } = useCheckout();
+  const {
+    loading: upgrading,
+    handleUpgrade,
+    handleManage,
+    billingEnabled,
+  } = useCheckout();
 
   const currentPlan = status?.plan ?? "free";
   const paddleStatus = status?.paddleStatus;
@@ -116,8 +121,16 @@ const SubscriptionTab = () => {
 
   return (
     <div className="space-y-6">
+      {!billingEnabled && (
+        <p role="status" className="text-sm text-content-secondary">
+          {t(
+            "subscription.billingDisabled",
+            "Payments are currently unavailable. Your current plan and usage limits still apply.",
+          )}
+        </p>
+      )}
       {/* Status notices */}
-      {paddleStatus === "canceled" && periodEnd && (
+      {billingEnabled && paddleStatus === "canceled" && periodEnd && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-warning-light)] border border-[var(--color-warning-light)]">
           <AlertTriangle className="h-5 w-5 text-warning-base shrink-0" />
           <p className="text-sm text-warning-base">
@@ -132,7 +145,7 @@ const SubscriptionTab = () => {
         </div>
       )}
 
-      {paddleStatus === "past_due" && (
+      {billingEnabled && paddleStatus === "past_due" && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-danger-light)] border border-[var(--color-danger-light)]">
           <AlertTriangle className="h-5 w-5 text-danger-base shrink-0" />
           <p className="text-sm text-danger-base">
@@ -141,7 +154,7 @@ const SubscriptionTab = () => {
               "Payment failed. Please update your payment method.",
             )}
           </p>
-          {hasPaddleSub && (
+          {billingEnabled && hasPaddleSub && (
             <button
               onClick={handleManage}
               className="ml-auto text-sm font-medium text-danger-base underline"
@@ -165,7 +178,7 @@ const SubscriptionTab = () => {
               {t(`subscription.${currentPlan}`, currentPlan)}
             </span>
           </div>
-          {hasPaddleSub && (
+          {billingEnabled && hasPaddleSub && (
             <button
               onClick={handleManage}
               disabled={!!upgrading}
@@ -196,91 +209,96 @@ const SubscriptionTab = () => {
           </div>
         )}
 
-        {hasPaddleSub && periodEnd && paddleStatus === "active" && (
-          <p className="mt-4 text-xs text-content-tertiary">
-            {t("subscription.nextRenewal", "Next renewal")}:{""}
-            {new Date(periodEnd).toLocaleDateString()}
-          </p>
-        )}
+        {billingEnabled &&
+          hasPaddleSub &&
+          periodEnd &&
+          paddleStatus === "active" && (
+            <p className="mt-4 text-xs text-content-tertiary">
+              {t("subscription.nextRenewal", "Next renewal")}:{""}
+              {new Date(periodEnd).toLocaleDateString()}
+            </p>
+          )}
       </div>
 
       {/* Plan comparison */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {(["free", "pro", "business"] as const).map((plan) => {
-          const isCurrent = currentPlan === plan;
-          const colors = PLAN_COLORS[plan];
-          const isUpgrade =
-            (currentPlan === "free" &&
-              (plan === "pro" || plan === "business")) ||
-            (currentPlan === "pro" && plan === "business");
+      {billingEnabled && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {(["free", "pro", "business"] as const).map((plan) => {
+            const isCurrent = currentPlan === plan;
+            const colors = PLAN_COLORS[plan];
+            const isUpgrade =
+              (currentPlan === "free" &&
+                (plan === "pro" || plan === "business")) ||
+              (currentPlan === "pro" && plan === "business");
 
-          return (
-            <div
-              key={plan}
-              className={`relative rounded-xl border-2 p-5 ${colors.border} ${colors.bg} ${
-                isCurrent ? "ring-2 ring-[var(--color-ring)]" : ""
-              }`}
-            >
-              {isCurrent && (
-                <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-accent-base text-white text-xs rounded-full font-medium">
-                  {t("subscription.currentPlan", "Current Plan")}
+            return (
+              <div
+                key={plan}
+                className={`relative rounded-xl border-2 p-5 ${colors.border} ${colors.bg} ${
+                  isCurrent ? "ring-2 ring-[var(--color-ring)]" : ""
+                }`}
+              >
+                {isCurrent && (
+                  <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-accent-base text-white text-xs rounded-full font-medium">
+                    {t("subscription.currentPlan", "Current Plan")}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Crown
+                    className={`h-5 w-5 ${
+                      plan === "business"
+                        ? "text-purple-500 dark:text-purple-400"
+                        : plan === "pro"
+                          ? "text-accent-base"
+                          : "text-content-tertiary"
+                    }`}
+                  />
+                  <h4 className="font-semibold text-content">
+                    {t(`subscription.${plan}`, plan)}
+                  </h4>
                 </div>
-              )}
 
-              <div className="flex items-center gap-2 mb-3">
-                <Crown
-                  className={`h-5 w-5 ${
-                    plan === "business"
-                      ? "text-purple-500 dark:text-purple-400"
-                      : plan === "pro"
-                        ? "text-accent-base"
-                        : "text-content-tertiary"
-                  }`}
-                />
-                <h4 className="font-semibold text-content">
-                  {t(`subscription.${plan}`, plan)}
-                </h4>
-              </div>
+                <ul className="space-y-2 mb-4">
+                  {planFeatures(plan).map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center gap-2 text-sm text-content-secondary"
+                    >
+                      <Check className="h-3.5 w-3.5 text-success-base shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
 
-              <ul className="space-y-2 mb-4">
-                {planFeatures(plan).map((feature) => (
-                  <li
-                    key={feature}
-                    className="flex items-center gap-2 text-sm text-content-secondary"
+                {isUpgrade && !hasPaddleSub && (
+                  <button
+                    onClick={() => handleUpgrade(plan)}
+                    disabled={!!upgrading}
+                    className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
+                      plan === "business"
+                        ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+                        : "bg-accent-base hover:bg-accent-base-hover"
+                    } disabled:opacity-50`}
                   >
-                    <Check className="h-3.5 w-3.5 text-success-base shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              {isUpgrade && !hasPaddleSub && (
-                <button
-                  onClick={() => handleUpgrade(plan)}
-                  disabled={!!upgrading}
-                  className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
-                    plan === "business"
-                      ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
-                      : "bg-accent-base hover:bg-accent-base-hover"
-                  } disabled:opacity-50`}
-                >
-                  {upgrading === plan ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4" />
-                  )}
-                  {plan === "pro"
-                    ? t("subscription.upgradeToPro", "Upgrade to Pro")
-                    : t(
-                        "subscription.upgradeToBusiness",
-                        "Upgrade to Business",
-                      )}
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    {upgrading === plan ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4" />
+                    )}
+                    {plan === "pro"
+                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
+                      : t(
+                          "subscription.upgradeToBusiness",
+                          "Upgrade to Business",
+                        )}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

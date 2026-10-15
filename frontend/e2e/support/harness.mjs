@@ -92,8 +92,12 @@ export const startReceiptSocketServer = async () => {
   };
 };
 
+export const launchBrowser = () => chromium.launch(
+  process.env.E2E_CHROME_PATH ? { executablePath: process.env.E2E_CHROME_PATH } : {},
+);
+
 export const withPage = async ({ viewport }, run) => {
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   const context = await browser.newContext({
     viewport,
     deviceScaleFactor: 2,

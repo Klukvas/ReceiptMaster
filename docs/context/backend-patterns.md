@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-08-21
+**Last Updated:** 2026-10-15
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -154,9 +154,6 @@ export class OrdersService {
     idempotencyKey?: string,
   ): Promise<IdempotencyResponse> {
     const result = await this.dataSource.transaction(async (manager) => {
-      // Check subscription quota first
-      await this.subscriptionService.assertCanCreateOrderInTx(manager, user.id);
-
       // Prevent race conditions on duplicate create requests
       if (idempotencyKey) {
         await manager.query(
@@ -169,6 +166,9 @@ export class OrdersService {
           return { statusCode: 200, data: cachedResponse, isFromCache: true };
         }
       }
+
+      // Serialize per-user quota checks after idempotency replay
+      await this.subscriptionService.assertCanCreateOrderInTx(manager, user.id);
 
       // Create order + order items in one transaction
       const order = manager.create(Order, {
@@ -212,7 +212,7 @@ export class OrdersService {
     status?: OrderStatus,
     filters?: OrderFilters,
   ): Promise<PaginatedResponse<Order>> {
-    // Start with multi-tenant query (TenantMiddleware + RLS enforces user_id)
+    // Start with multi-tenant query (post-guard tenant context + RLS enforce user_id)
     let query = this.ordersRepository
       .createQueryBuilder("order")
       .where("order.user_id = :userId", { userId: user.id })
@@ -273,6 +273,10 @@ export class OrdersService {
 - Inject other services (cross-module) via constructor
 - Always accept `user: User` and filter queries by `user.id` (multi-tenancy)
 - Use TypeORM's `transaction()` for atomic operations (idempotency keys, ledger updates, etc.)
+- Replay an existing idempotency response before quota checks; serialize monthly order quotas with a per-user advisory transaction lock even when no subscription row exists
+- Lock live orders before stock changes; acquire affected order/product locks in deterministic ID order
+- Reject duplicate products and mixed currencies on create/update; persist the old/new product union on item replacement
+- Soft deletion must be explicit in raw SQL aggregates (`o.deleted_at IS NULL`), since ORM defaults do not apply to raw queries
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write
@@ -462,66 +466,49 @@ File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but sta
 
 Auto-generates `req.requestId` for logging and tracing. Applied globally.
 
-#### TenantMiddleware
+#### Tenant context after authentication
 
-File: `backend/src/common/middleware/tenant.middleware.ts`
+`common/tenancy/tenant.interceptor.ts` is registered before the audit interceptor. Guards
+populate `req.user` first, then the interceptor subscribes to the request handler inside
+`runWithTenant(user.id, ...)`. Middleware cannot establish this context before JWT guards run.
 
-```typescript
-@Injectable()
-export class TenantMiddleware implements NestMiddleware {
-  use(req: Request, _res: Response, next: NextFunction) {
-    const userId = (req as any).user?.id;
-    if (userId) {
-      // Run request handler inside an AsyncLocalStorage context
-      tenantStore.run({ userId }, () => next());
-    } else {
-      next();
-    }
-  }
-}
-```
+`common/tenancy/tenant-context.ts` stores either a validated UUID tenant or a validated public
+receipt token in AsyncLocalStorage. Receipt workers (including exhausted-failure callbacks) and
+Telegram owner entry points establish their own tenant context explicitly.
 
-**How it works:**
-1. After authentication, the middleware wraps the request handler in `tenantStore.run({ userId }, ...)`
-2. This stores `userId` in an `AsyncLocalStorage` (thread-local equivalent in Node.js)
-3. The `TenantContextSubscriber` (see below) reads this on every DB operation
+#### Connection-level RLS enforcement
 
-### Subscribers (Database Hooks)
+`common/tenancy/tenant-data-source.ts` decorates each TypeORM QueryRunner. Every contextual
+query, including SELECT and raw SQL, installs parameterized transaction-local
+`app.current_user_id` and `app.public_receipt_token` values on the same connection executing it.
+Ordinary contextual queries use a short BEGIN/COMMIT transaction; existing service transactions
+retain their atomic boundary and savepoints. Queries on a runner are serialized, transaction
+context changes are rejected, and failures roll back without leaking settings through the pool.
+Failed explicit transaction-control commands and uncertain COMMIT outcomes discard the physical
+connection; rollback/cleanup failures preserve the original operation error.
+Streaming queries fail closed until a tenant-aware streaming implementation exists.
 
-File: `backend/src/common/subscribers/tenant-context.subscriber.ts`
+Telegram update-id storage is provisioned by migration, with no runtime table DDL. Rollback keeps
+the legacy `tg_updates` table and its idempotency history.
 
-```typescript
-@EventSubscriber()
-export class TenantContextSubscriber implements EntitySubscriberInterface {
-  async beforeInsert(event: InsertEvent<any>) {
-    await this.setTenantContext(event.queryRunner);
-  }
-  async beforeUpdate(event: UpdateEvent<any>) {
-    await this.setTenantContext(event.queryRunner);
-  }
-  async beforeRemove(event: RemoveEvent<any>) {
-    await this.setTenantContext(event.queryRunner);
-  }
+The earlier pre-auth TenantMiddleware and write-only TenantContextSubscriber are not registered.
+Service predicates still filter by `user_id`; PostgreSQL RLS supplies a second boundary.
 
-  private async setTenantContext(queryRunner: { query: (q: string, p?: any[]) => Promise<any> }) {
-    const ctx = tenantStore.getStore();
-    if (ctx?.userId) {
-      await queryRunner.query(`SET LOCAL app.current_user_id = '${ctx.userId}'`);
-    }
-  }
-}
-```
+RLS requires a runtime database role that is neither a table owner, superuser nor BYPASSRLS.
+The application does not provision or change production roles. Run migrations with a separate
+privileged connection, then set `AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
+The switch parses the literal strings `true` and `false`; a typo fails startup validation.
+Tests use a disposable PostgreSQL cluster with a restricted non-owner role and a single pool
+connection; normal database defaults are never used by the opt-in audit suite.
 
-**Multi-Tenancy Model:**
-
-The backend uses **application-level** multi-tenancy with PostgreSQL **Row-Level Security (RLS)** enforcement:
-
-1. Each entity has a `user_id` foreign key
-2. Every query manually filters by `user_id = req.user.id`
-3. The subscriber injects `SET LOCAL app.current_user_id = <userId>` before every write transaction
-4. Database RLS policies enforce that users can only see/modify their own rows (defense in depth)
-
-**Important:** If RLS triggers fail, the operation rolls back. This is intentional — it's a safety net for bugs.
+Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
+recipients. A token grants access to exactly its generated receipt and related graph, not the
+owner's other data; it grants no writes. Revoked or void receipts are inaccessible. No public
+handler enters a full owner tenant context. Sharing uses a generated-status/NULL-token conditional
+update, so concurrent creators receive the same winning token and cannot restore a voided status.
+PDF regeneration updates only PDF fields, fenced by generated status; finishing a delayed render
+cannot restore a revoked token or overwrite a concurrent void. The receipt policy does not query orders, avoiding
+recursive RLS policy evaluation.
 
 ### Interceptors (Response & Audit)
 
@@ -652,72 +639,49 @@ throw ApiErrors.BAD_REQUEST("Invalid input");       // 400
 export class QueueModule {}
 ```
 
-**Processor Example:** Receipt Generation
-
-File: `backend/src/modules/receipts/receipt-generation.processor.ts`
+**Receipt worker:** `modules/receipts/receipt-generation.processor.ts`
 
 ```typescript
 export interface ReceiptGenerationJobData {
   receiptId: string;
   orderId: string;
   userId: string;
-}
-
-export const RECEIPT_GENERATION_QUEUE = "receipt-generation";
-
-@Processor(RECEIPT_GENERATION_QUEUE, { concurrency: 1 })  // Sequential
-export class ReceiptGenerationProcessor extends WorkerHost {
-  async process(job: Job<ReceiptGenerationJobData>): Promise<any> {
-    const { receiptId, orderId, userId } = job.data;
-
-    try {
-      // Load order + relations
-      const order = await this.ordersRepository.findOne({
-        where: { id: orderId, user_id: userId },
-        relations: ["recipient", "items"],
-      });
-      if (!order) throw new Error("Order not found");
-
-      // Generate PDF
-      const pdf = await this.pdfGeneratorService.generate(order, { /* style */ });
-
-      // Upload to S3
-      const s3Url = await this.pdfStorageService.upload(receiptId, pdf);
-
-      // Save receipt
-      await this.receiptsRepository.update(receiptId, {
-        status: ReceiptStatus.GENERATED,
-        pdf_url: s3Url,
-        progress: 100,
-      });
-
-      // Notify frontend via WebSocket
-      this.receiptsGateway.emitProgress(userId, { receiptId, progress: 100 });
-    } catch (error) {
-      this.logger.error("Receipt generation failed", error);
-      await this.receiptsRepository.update(receiptId, {
-        status: ReceiptStatus.FAILED,
-      });
-      throw error;  // BullMQ will retry
-    }
-  }
+  generationId: string;
 }
 ```
 
-**How to enqueue a job:**
+`ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`), enters the validated job tenant,
+loads the confirmed order and settings, renders/uploads the PDF, then conditionally marks the
+current generation GENERATED and locks the order in one database transaction. Progress updates
+and WebSocket events apply only while that same generation is PROCESSING. Exceptions propagate
+to BullMQ for retries; only exhausted attempts mark FAILED. Missing rows are retryable errors,
+and obsolete jobs return without modifying newer generations.
 
-```typescript
-// In ReceiptsService:
-await this.receiptQueue.add("receipt-generation", {
-  receiptId: receipt.id,
-  orderId: order.id,
-  userId: user.id,
-}, {
-  delay: 1000,
-  attempts: 3,
-  backoff: { type: "exponential", delay: 2000 },
-});
-```
+**Durable receipt publication:**
+
+`generateReceipt()` locks the order, creates/reuses a PROCESSING receipt with a new
+`generation_id` and `generation_started_at`, and inserts `receipt_generation_outbox` in the
+same transaction. It never calls Redis inside that transaction. Receipt numbers come from the
+existing migration-created PostgreSQL function through the current transaction manager; no
+runtime DDL or second pooled connection is needed.
+
+`ReceiptOutboxService` dispatches committed entries in the background and every 10 seconds;
+HTTP receipt creation does not wait for Redis readiness. A dedicated publisher client disables
+offline command buffering, uses finite request retries and a two-second deadline for each Redis
+operation. A failed/timed-out publisher is disconnected synchronously and recreated on the next
+scan; cleanup cannot hold the dispatch running flag. Worker connections keep their BullMQ retry
+configuration. Stable
+job IDs (`receipt-<receiptId>-<generationId>`) make repeated publication idempotent. Redis errors
+leave durable intent for retry; published entries remain until their receipt is terminal so lost
+Redis jobs can be recreated. A retained failed/completed job with a PROCESSING row is reconciled
+to FAILED. The operational outbox is not tenant RLS filtered; receipt access during dispatch runs
+inside the entry's validated tenant context.
+
+Jobs retry three times with exponential backoff. Workers throw for missing receipt/order rows
+so transient visibility failures retry. Progress, completion and exhausted-failure writes all
+match receipt, tenant, generation and PROCESSING status. Superseded jobs cannot overwrite a new
+manual retry. Existing queued/active generations are never reset merely because created_at is
+old. The upgrade migration backfills legacy PROCESSING rows into a fresh durable generation.
 
 **Processors registered in module:**
 
@@ -835,7 +799,12 @@ ConfigModule.forRoot({
 })
 ```
 
-If a required variable is missing, the app fails to start with a clear error. No silent failures.
+Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
+`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, a valid `FRONTEND_URL`, and explicitly
+`PADDLE_ENVIRONMENT=production`. Missing values or sandbox mode fail startup. Development/test
+may leave billing disabled. `.env.example` lists empty configuration keys; production image
+selection uses an explicit immutable `IMAGE_TAG`. Test-mode boot ignores `.env` files.
+If a required variable is missing, the app fails to start with a clear error.
 
 ---
 
@@ -957,7 +926,7 @@ async findAll(
 
 ## Key Takeaways
 
-- **Multi-tenant by design:** Every service method accepts `user: User`, filters by `user_id`, and the middleware + subscriber enforce it at the DB level
+- **Multi-tenant by design:** Every service method accepts `user: User`, filters by `user_id`, and the post-guard interceptor and query-runner context enforce it at the DB level
 - **Type-safe errors:** Use `ApiErrors.*` constants; never expose internals
 - **Async transactions:** For writes, use `dataSource.transaction()` to ensure atomicity and consistency
 - **Cache invalidation:** On write, invalidate related cache entries to prevent stale data
@@ -972,3 +941,14 @@ async findAll(
 - [api-reference.md](./api-reference.md) — All HTTP endpoints, request/response shapes
 - [business-logic.md](./business-logic.md) — Domain flows, subscriptions, billing, order lifecycle
 - [frontend.md](./frontend.md) — React client, components, state management
+
+### Explicit billing capability and releases
+
+`BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
+defaulting to false. Empty optional Paddle settings are accepted while OFF; ON production
+requires complete keys, prices, frontend URL and explicit production environment.
+`PaddleService` guards SDK construction, payment creation/portal, signature verification,
+direct webhook handling and scheduled subscription downgrades. Stored entitlements and
+quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
+`scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
+app-only deployment and retained-image rollback without production env rewrites.

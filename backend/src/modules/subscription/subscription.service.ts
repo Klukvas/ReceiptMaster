@@ -118,9 +118,14 @@ export class SubscriptionService {
     manager: EntityManager,
     userId: string,
   ): Promise<void> {
+    // A row lock cannot serialize users without a subscription row. Hold this
+    // per-user lock until the caller commits the quota check and order insert.
+    await manager.query(
+      "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+      ["order-monthly-quota", userId],
+    );
     const subscription = await manager.findOne(UserSubscription, {
       where: { user_id: userId },
-      lock: { mode: "pessimistic_read" },
     });
     const plan = subscription?.plan ?? "free";
     const limits = PLAN_LIMITS[plan];

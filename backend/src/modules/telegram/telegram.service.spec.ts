@@ -43,7 +43,7 @@ describe("TelegramService", () => {
     process.env = {
       ...originalEnv,
       TELEGRAM_BOT_TOKEN: "test-bot-token",
-      TELEGRAM_BOT_OWNER_USER_ID: "owner-1",
+      TELEGRAM_BOT_OWNER_USER_ID: "11111111-1111-4111-8111-111111111111",
     };
 
     recipientsRepo = {
@@ -221,9 +221,7 @@ describe("TelegramService", () => {
 
     it("should skip already processed updates", async () => {
       // rowCount === 0 means already processed
-      dataSource.query
-        .mockResolvedValueOnce(undefined) // ensureUpdatesTable
-        .mockResolvedValueOnce({ rowCount: 0 }); // isUpdateProcessed
+      dataSource.query.mockResolvedValueOnce({ rowCount: 0 }); // isUpdateProcessed
 
       await service.handleWebhook({
         update_id: 100,
@@ -390,7 +388,7 @@ describe("TelegramService", () => {
               findOne: jest.fn().mockResolvedValue({
                 id: "rec-1",
                 telegram_user_id: "100",
-                user_id: "owner-1",
+                user_id: "11111111-1111-4111-8111-111111111111",
               }),
               create: jest.fn((data: any) => data),
               save: jest.fn((data: any) => Promise.resolve(data)),
@@ -405,7 +403,7 @@ describe("TelegramService", () => {
                   sale_price_cents: 1000,
                   quantity: 10,
                   currency: "UAH",
-                  user_id: "owner-1",
+                  user_id: "11111111-1111-4111-8111-111111111111",
                 },
               ]),
               save: jest.fn((data: any) => Promise.resolve(data)),

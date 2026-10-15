@@ -1,9 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { InjectQueue } from "@nestjs/bullmq";
-import { Queue } from "bullmq";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
+import { Repository, DataSource, EntityManager, IsNull } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import {
@@ -19,10 +17,10 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
 import { SettingsService } from "../settings/services/settings.service";
-import {
-  RECEIPT_GENERATION_QUEUE,
-  ReceiptGenerationJobData,
-} from "./receipt-generation.processor";
+
+import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
+import { ReceiptOutboxService } from "./receipt-outbox.service";
+import { runWithPublicToken } from "../../common/tenancy/tenant-context";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,8 +32,6 @@ export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
   private readonly MAX_RECEIPTS = 10;
   /** A PROCESSING receipt older than this is treated as stuck and may be retried. */
-  private readonly STALE_PROCESSING_MS = 5 * 60 * 1000;
-  private receiptFunctionEnsuredPromise: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(Receipt)
@@ -48,8 +44,7 @@ export class ReceiptsService {
     private dataSource: DataSource,
     private configService: ConfigService,
     private settingsService: SettingsService,
-    @InjectQueue(RECEIPT_GENERATION_QUEUE)
-    private receiptQueue: Queue<ReceiptGenerationJobData>,
+    private receiptOutbox: ReceiptOutboxService,
   ) {}
 
   private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
@@ -92,127 +87,83 @@ export class ReceiptsService {
     }
   }
 
-  /**
-   * A receipt is "stale" when it has sat in PROCESSING longer than a generation
-   * job could realistically take (retries + backoff). Such a receipt means the
-   * worker died mid-job, so a retry is safe rather than a duplicate.
-   */
-  private isReceiptStale(receipt: Receipt): boolean {
-    const startedAt = receipt.created_at?.getTime() ?? 0;
-    return Date.now() - startedAt > this.STALE_PROCESSING_MS;
-  }
-
   async generateReceipt(orderId: string, user: User): Promise<Receipt> {
     let s3PathsToDelete: Array<{ bucket: string; key: string }> = [];
-
-    const savedReceipt = await this.dataSource.transaction(async (manager) => {
-      // Проверяем существование заказа и принадлежность пользователю
+    const receipt = await this.dataSource.transaction(async (manager) => {
+      // Lock the order before looking for its possibly absent receipt.
       const order = await manager.findOne(Order, {
         where: { id: orderId, user_id: user.id },
-        relations: ["recipient", "items"],
+        lock: { mode: "pessimistic_write" },
       });
-      if (!order) {
-        throw ApiErrors.ORDER_NOT_FOUND(orderId);
-      }
-
-      // Проверяем статус заказа
-      if (order.status !== OrderStatus.CONFIRMED) {
+      if (!order) throw ApiErrors.ORDER_NOT_FOUND(orderId);
+      if (order.status !== OrderStatus.CONFIRMED)
         throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
-      }
-
-      // A receipt already exists for this order (order_id is unique). Decide
-      // whether to block, return the in-progress one, or retry a stuck/failed one.
-      const existingReceipt = await manager.findOne(Receipt, {
-        where: [
-          { order_id: orderId, status: ReceiptStatus.GENERATED },
-          { order_id: orderId, status: ReceiptStatus.PROCESSING },
-          { order_id: orderId, status: ReceiptStatus.FAILED },
-        ],
+      const existing = await manager.findOne(Receipt, {
+        where: { order_id: orderId, user_id: user.id },
       });
-      if (existingReceipt) {
-        if (existingReceipt.status === ReceiptStatus.GENERATED) {
-          throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
-        }
-
-        // Genuinely in progress — return it without enqueuing a duplicate job.
-        if (
-          existingReceipt.status === ReceiptStatus.PROCESSING &&
-          !this.isReceiptStale(existingReceipt)
-        ) {
-          return existingReceipt;
-        }
-
-        // FAILED, or a PROCESSING receipt whose worker died mid-job: retry on the
-        // SAME row (order_id is unique, so we can't insert a fresh receipt here).
-        await manager.update(Receipt, existingReceipt.id, {
-          status: ReceiptStatus.PROCESSING,
-          progress: 0,
-          error_message: () => "NULL",
-        });
-
-        await this.receiptQueue.add(
-          "generate",
-          { receiptId: existingReceipt.id, orderId, userId: user.id },
+      if (existing?.status === ReceiptStatus.GENERATED)
+        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
+      // Pending generations are recovered by the outbox, never reset by age alone.
+      if (
+        existing?.status === ReceiptStatus.PROCESSING &&
+        existing.generation_id
+      )
+        return existing;
+      if (existing?.status === ReceiptStatus.VOID)
+        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
+      const generationId = crypto.randomUUID();
+      let result: Receipt;
+      if (existing) {
+        await manager.update(
+          Receipt,
+          { id: existing.id, user_id: user.id },
           {
-            attempts: 3,
-            backoff: { type: "exponential", delay: 5000 },
-            removeOnComplete: 100,
-            removeOnFail: 200,
+            status: ReceiptStatus.PROCESSING,
+            progress: 0,
+            error_message: () => "NULL",
+            generation_id: generationId,
+            generation_started_at: new Date(),
+            public_token: null,
           },
         );
-
-        this.logger.log(
-          `Receipt ${existingReceipt.number} re-queued for generation (order ${orderId}, was ${existingReceipt.status})`,
-        );
-
-        return await manager.findOneOrFail(Receipt, {
-          where: { id: existingReceipt.id },
+        result = await manager.findOneOrFail(Receipt, {
+          where: { id: existing.id, user_id: user.id },
         });
+      } else {
+        s3PathsToDelete = await this.cleanupOldReceipts(manager, user.id);
+        result = await manager.save(
+          Receipt,
+          manager.create(Receipt, {
+            order_id: orderId,
+            number: await this.generateReceiptNumber(manager),
+            status: ReceiptStatus.PROCESSING,
+            user_id: user.id,
+            generation_id: generationId,
+            generation_started_at: new Date(),
+          }),
+        );
       }
-
-      // Очищаем старые чеки перед созданием нового (S3 paths collected, not deleted yet)
-      s3PathsToDelete = await this.cleanupOldReceipts(manager, user.id);
-
-      // Генерируем номер чека
-      const receiptNumber = await this.generateReceiptNumber();
-
-      // Create receipt record with PROCESSING status
-      const receipt = manager.create(Receipt, {
-        order_id: orderId,
-        number: receiptNumber,
-        status: ReceiptStatus.PROCESSING,
-        user_id: user.id,
-      });
-
-      const result = await manager.save(Receipt, receipt);
-
-      // Enqueue background PDF generation job
-      await this.receiptQueue.add(
-        "generate",
-        {
-          receiptId: result.id,
-          orderId,
-          userId: user.id,
-        },
-        {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-          removeOnComplete: 100,
-          removeOnFail: 200,
-        },
+      await manager.save(
+        ReceiptGenerationOutbox,
+        manager.create(ReceiptGenerationOutbox, {
+          id: crypto.randomUUID(),
+          receipt_id: result.id,
+          order_id: orderId,
+          user_id: user.id,
+          generation_id: generationId,
+          published_at: null,
+        }),
       );
-
-      this.logger.log(
-        `Receipt ${receiptNumber} queued for generation (order ${orderId})`,
-      );
-
       return result;
     });
-
-    // Delete S3 files outside the transaction to avoid holding locks during I/O
+    // Redis publication only sees committed receipt/outbox records; failures retry later.
+    void this.receiptOutbox.dispatch().catch((error: unknown) => {
+      this.logger.warn(
+        `Receipt publication will retry: ${error instanceof Error ? error.message : "dispatch failed"}`,
+      );
+    });
     this.deleteS3FilesInBackground(s3PathsToDelete);
-
-    return savedReceipt;
+    return receipt;
   }
 
   async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
@@ -355,7 +306,7 @@ export class ReceiptsService {
           status: ReceiptStatus.VOID,
           voided_at: new Date(),
           void_reason: reason,
-          public_token: undefined,
+          public_token: null,
         },
       );
       const savedReceipt = await manager.findOneOrFail(Receipt, {
@@ -500,11 +451,12 @@ export class ReceiptsService {
           );
 
         // Обновляем путь к файлу в базе данных (immutable update)
-        await this.receiptsRepository.save({
-          ...receipt,
-          pdf_path: filePath,
-          pdf_url: url,
-        });
+        const updated = await this.receiptsRepository.update(
+          { id: receipt.id, user_id: user.id, status: ReceiptStatus.GENERATED },
+          { pdf_path: filePath, pdf_url: url },
+        );
+        if (!updated.affected)
+          throw ApiErrors.BAD_REQUEST("Receipt changed during regeneration");
 
         // Читаем новый файл
         let buffer: Buffer;
@@ -614,75 +566,25 @@ export class ReceiptsService {
     const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
 
     // Обновляем запись о чеке (immutable update)
-    const updatedReceipt = await this.receiptsRepository.save({
-      ...receipt,
-      pdf_path: filePath,
-      pdf_url: url,
-      hash,
+    const updated = await this.receiptsRepository.update(
+      { id: receipt.id, user_id: user.id, status: ReceiptStatus.GENERATED },
+      { pdf_path: filePath, pdf_url: url, hash },
+    );
+    if (!updated.affected)
+      throw ApiErrors.BAD_REQUEST("Receipt changed during regeneration");
+    const updatedReceipt = await this.receiptsRepository.findOneOrFail({
+      where: { id: receipt.id, user_id: user.id },
     });
     this.logger.log(`PDF успешно регенерирован: ${filePath}`);
 
     return updatedReceipt;
   }
 
-  private async generateReceiptNumber(): Promise<string> {
-    try {
-      // Сначала проверяем, существует ли функция, и создаем её если нет
-      await this.ensureReceiptNumberFunction();
-
-      // Используем функцию PostgreSQL для генерации номера чека
-      const _result = await this.dataSource.query(
-        "SELECT generate_receipt_number() as receipt_number",
-      );
-      return _result[0].receipt_number;
-    } catch (error) {
-      this.logger.error("Error generating receipt number:", error);
-      // Fallback: генерируем номер вручную
-      const year = new Date().getFullYear();
-      const timestamp = Date.now().toString().slice(-6);
-      return `${year}-${timestamp}`;
-    }
-  }
-
-  private async ensureReceiptNumberFunction(): Promise<void> {
-    if (!this.receiptFunctionEnsuredPromise) {
-      this.receiptFunctionEnsuredPromise =
-        this.doEnsureReceiptNumberFunction().catch((error) => {
-          // Reset so next call retries
-          this.receiptFunctionEnsuredPromise = null;
-          throw error;
-        });
-    }
-    return this.receiptFunctionEnsuredPromise;
-  }
-
-  private async doEnsureReceiptNumberFunction(): Promise<void> {
-    const checkResult = await this.dataSource.query(`
-      SELECT EXISTS (
-        SELECT 1 FROM pg_proc
-        WHERE proname = 'generate_receipt_number'
-      ) as exists
-    `);
-
-    if (!checkResult[0].exists) {
-      await this.dataSource.query(`
-        CREATE SEQUENCE IF NOT EXISTS receipt_number_seq START 1
-      `);
-
-      await this.dataSource.query(`
-        CREATE OR REPLACE FUNCTION generate_receipt_number()
-        RETURNS TEXT AS $$
-        DECLARE
-            year_part TEXT;
-            seq_part TEXT;
-        BEGIN
-            year_part := EXTRACT(YEAR FROM NOW())::TEXT;
-            seq_part := LPAD(nextval('receipt_number_seq')::TEXT, 6, '0');
-            RETURN year_part || '-' || seq_part;
-        END;
-        $$ LANGUAGE plpgsql
-      `);
-    }
+  private async generateReceiptNumber(manager: EntityManager): Promise<string> {
+    const result: Array<{ receipt_number: string }> = await manager.query(
+      "SELECT generate_receipt_number() as receipt_number",
+    );
+    return result[0].receipt_number;
   }
 
   /**
@@ -966,14 +868,28 @@ export class ReceiptsService {
 
     const token = crypto.randomBytes(32).toString("hex");
 
-    await this.receiptsRepository.save({
-      ...receipt,
-      public_token: token,
+    const updated = await this.receiptsRepository.update(
+      {
+        id: receipt.id,
+        user_id: user.id,
+        status: ReceiptStatus.GENERATED,
+        public_token: IsNull(),
+      },
+      { public_token: token },
+    );
+    if (updated.affected) return { token, url: `${frontendUrl}/r/${token}` };
+    const current = await this.receiptsRepository.findOne({
+      where: {
+        id: receipt.id,
+        user_id: user.id,
+        status: ReceiptStatus.GENERATED,
+      },
     });
-
+    if (!current?.public_token)
+      throw ApiErrors.BAD_REQUEST("Receipt changed while creating share link");
     return {
-      token,
-      url: `${frontendUrl}/r/${token}`,
+      token: current.public_token,
+      url: `${frontendUrl}/r/${current.public_token}`,
     };
   }
 
@@ -988,7 +904,7 @@ export class ReceiptsService {
 
     await this.receiptsRepository.update(
       { id: receiptId },
-      { public_token: undefined },
+      { public_token: null },
     );
 
     this.logger.log(`Public token revoked for receipt ${receipt.number}`);
@@ -998,7 +914,12 @@ export class ReceiptsService {
     });
   }
 
-  async getPublicReceipt(token: string): Promise<{
+  async getPublicReceipt(token: string) {
+    if (!/^[a-f0-9]{64}$/.test(token)) throw ApiErrors.NOT_FOUND("Receipt");
+    return runWithPublicToken(token, () => this.findPublicReceipt(token));
+  }
+
+  private async findPublicReceipt(token: string): Promise<{
     receipt: {
       id: string;
       number: string;
@@ -1075,6 +996,13 @@ export class ReceiptsService {
   }
 
   async getPublicReceiptPdf(
+    token: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    if (!/^[a-f0-9]{64}$/.test(token)) throw ApiErrors.NOT_FOUND("Receipt");
+    return runWithPublicToken(token, () => this.findPublicReceiptPdf(token));
+  }
+
+  private async findPublicReceiptPdf(
     token: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const receipt = await this.receiptsRepository.findOne({

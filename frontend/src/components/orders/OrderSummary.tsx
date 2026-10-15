@@ -3,7 +3,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 
 interface OrderSummaryProps {
  subtotal: number;
- currency?: string;
+ currency: string;
 }
 
 export const OrderSummary = ({ subtotal, currency }: OrderSummaryProps) => {
