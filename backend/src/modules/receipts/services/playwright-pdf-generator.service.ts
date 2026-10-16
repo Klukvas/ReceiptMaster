@@ -23,8 +23,13 @@ export class PlaywrightPdfGenerator {
     this.browser = await chromium.launch({
       executablePath:
         process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
-      chromiumSandbox: true,
+      // The production container runs as root under Docker's default seccomp
+      // profile, where Chromium's sandbox cannot start. Rendering is contained
+      // instead by disabling JavaScript and blocking every non-data: request.
+      chromiumSandbox: false,
       args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-accelerated-2d-canvas",
         "--no-first-run",

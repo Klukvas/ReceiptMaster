@@ -35,16 +35,25 @@ describe("shared preview browser startup", () => {
     expect(launch).toHaveBeenCalledTimes(2);
     await renderer.cleanup();
   });
-  it("does not launch again while its browser is connected and keeps sandbox enabled", async () => {
+  it("does not launch again while its browser is connected", async () => {
     launch.mockResolvedValue(browser);
     const renderer = new PlaywrightPdfGenerator();
     await renderer.initialize();
     await renderer.initialize();
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(launch).toHaveBeenCalledWith(
-      expect.objectContaining({ chromiumSandbox: true }),
-    );
-    expect(launch.mock.calls[0][0].args).not.toContain("--no-sandbox");
+    await renderer.cleanup();
+  });
+  // Chromium refuses to start with --no-zygote while its sandbox is enabled,
+  // which broke every receipt PDF in production on 2026-10-16.
+  it("never combines --no-zygote with an enabled sandbox", async () => {
+    launch.mockResolvedValue(browser);
+    const renderer = new PlaywrightPdfGenerator();
+    await renderer.initialize();
+    const options = launch.mock.calls[0][0] ?? {};
+    if (options.args?.includes("--no-zygote")) {
+      expect(options.chromiumSandbox).toBe(false);
+      expect(options.args).toContain("--no-sandbox");
+    }
     await renderer.cleanup();
   });
 });
