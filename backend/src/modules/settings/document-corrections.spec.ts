@@ -300,7 +300,8 @@ describe("durable document cleanup with synthetic storage only", () => {
   it("production maintenance selects bounded tenant IDs and enters their tenant context", async () => {
     const query = jest
       .spyOn(f.db.manager, "query")
-      .mockResolvedValue([{ user_id: TENANT }]);
+      // Postgres driver shape for UPDATE ... RETURNING: [rows, rowCount].
+      .mockResolvedValue([[{ user_id: TENANT }], 1]);
     const logos = jest
       .spyOn(f.assets, "collectExpired")
       .mockImplementation(async (id) => {

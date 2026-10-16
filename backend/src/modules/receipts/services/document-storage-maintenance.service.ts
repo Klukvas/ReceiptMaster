@@ -22,14 +22,15 @@ export class DocumentStorageMaintenanceService {
     this.running = true;
     try {
       // Claim at most ten tenants. No configuration or customer content is scanned globally.
-      const tenants: Array<{ user_id: string }> = await this.db.transaction(
-        (manager) =>
+      // TypeORM's Postgres driver returns [rows, rowCount] for UPDATE ... RETURNING, not rows.
+      const [tenants]: [Array<{ user_id: string }>, number] =
+        await this.db.transaction((manager) =>
           manager.query(`
         WITH due AS (SELECT user_id FROM document_storage_sweeps WHERE next_sweep_at < now()
           ORDER BY next_sweep_at,user_id LIMIT 10 FOR UPDATE SKIP LOCKED)
         UPDATE document_storage_sweeps s SET next_sweep_at=now()+interval '1 hour'
         FROM due WHERE s.user_id=due.user_id RETURNING s.user_id`),
-      );
+        );
       for (const { user_id } of tenants) {
         try {
           await runWithTenant(user_id, async () => {
