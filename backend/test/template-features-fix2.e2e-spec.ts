@@ -264,7 +264,10 @@ describe("FIX2 actual production service regressions (synthetic persistence/stor
     },
   );
   it("maintenance runs PDF collector even if logo collector fails on consecutive sweeps", async () => {
-    jest.spyOn(f.db.manager, "query").mockResolvedValue([{ user_id: TENANT }]);
+    // Postgres driver shape for UPDATE ... RETURNING: [rows, rowCount].
+    jest
+      .spyOn(f.db.manager, "query")
+      .mockResolvedValue([[{ user_id: TENANT }], 1]);
     const logos = jest
       .spyOn(f.assets, "collectExpired")
       .mockRejectedValue(new Error("logo service failed"));
