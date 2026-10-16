@@ -16,7 +16,7 @@ class ReleasePrecheckTests(unittest.TestCase):
         labels = {'com.docker.compose.config-hash': 'a' * 64, 'com.docker.compose.project': 'existing', 'com.docker.compose.project.working_dir': str(self.work), 'com.docker.compose.project.config_files': str(config)}
         self.containers = {service: {'Id': service, 'Image': 'sha256:old-' + service, 'Config': {'Labels': labels.copy(), 'Env': ['DB_NAME=fixture','DB_USERNAME=fixture'] if service == 'backend' else ['POSTGRES_DB=fixture','POSTGRES_USER=fixture']}, 'Mounts': [{}], 'NetworkSettings': {'Networks': {'existing-network': {}}, 'Ports': {'80/tcp': [{}]}}} for service in ('backend', 'frontend', 'postgres', 'redis')}
         self.ns = {}; exec(compile(PREFIX, '<release>', 'exec'), self.ns)
-        self.history = [name for name in self.ns['KNOWN_MIGRATIONS'] if name != self.ns['EXPECTED_MIGRATION']]
+        self.history = [name for name in self.ns['KNOWN_MIGRATIONS'] if name not in self.ns['EXPECTED_MIGRATIONS']]
         self.calls = []
         self.image_env = {'backend': [], 'frontend': []}
         def run(args, **kwargs):

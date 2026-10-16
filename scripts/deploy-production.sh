@@ -4,8 +4,8 @@ set -euo pipefail
 exec python3 - "$@" <<'PY'
 import contextlib, fcntl, hashlib, json, os, pathlib, re, subprocess, sys, time, urllib.request, urllib.parse
 
-EXPECTED_MIGRATION = 'ReceiptCapabilitiesAndOutbox1792000000000'
-KNOWN_MIGRATIONS = ['AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddOnboardingCompleted1761800000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DropPaymentStatusFromOrders1762400000000', 'MakeReceiptTitleNullable1762800000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002']
+EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002']
+KNOWN_MIGRATIONS = ['AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddOnboardingCompleted1761800000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'DropPaymentStatusFromOrders1762400000000', 'MakeReceiptTitleNullable1762800000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002']
 
 def run(args, *, data=None, capture=True):
     result = subprocess.run(args, input=data, stdout=subprocess.PIPE if capture else None,
@@ -186,13 +186,10 @@ def precheck(workdir, check_lock=True):
     history = sql(pg, 'SELECT name FROM migrations ORDER BY timestamp;').splitlines()
     if not history or any(not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]+', name) for name in history):
         raise RuntimeError('Invalid migration history')
-    if set(history) - set(KNOWN_MIGRATIONS) or set(KNOWN_MIGRATIONS) - set(history) - {EXPECTED_MIGRATION}:
+    if set(history) - set(KNOWN_MIGRATIONS) or set(KNOWN_MIGRATIONS) - set(history) - set(EXPECTED_MIGRATIONS):
         raise RuntimeError('Unexpected pending or unknown migrations')
-    if EXPECTED_MIGRATION not in history and sql(pg, "SELECT count(*) FROM pg_policies WHERE policyname IN ('public_receipt_read','public_order_read','public_item_read','public_recipient_read');") != '0':
-        raise RuntimeError('Capability policies exist without migration history')
-    if EXPECTED_MIGRATION not in history:
-        ready = sql(pg, "SELECT has_schema_privilege(current_user,'public','CREATE') AND to_regprocedure('uuid_generate_v4()') IS NOT NULL AND (SELECT bool_and(pg_has_role(current_user,c.relowner,'USAGE') OR (SELECT rolsuper FROM pg_roles WHERE rolname=current_user)) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('receipts','orders','order_items','recipients'));")
-        if ready != 't':
+    if set(EXPECTED_MIGRATIONS) - set(history):
+        if sql(pg, "SELECT has_schema_privilege(current_user,'public','CREATE');") != 't':
             raise RuntimeError('Privileged additive migration readiness unavailable')
     lock_path = actual_workdir.parent / '.receiptmaster-deploy.lock'
     if check_lock and lock_path.exists():
@@ -251,13 +248,14 @@ try { const fingerprint=await q.query("SELECT md5(current_database() || ':' || (
 const completed=new Set((await q.query('SELECT name FROM migrations')).map(r=>r.name));
 if([...completed].some(name=>!ds.migrations.some(m=>(m.name||m.constructor.name)===name))) throw Error('Unknown executed migration');
 const pending=ds.migrations.filter(m=>!completed.has(m.name||m.constructor.name));
-if(pending.some(m=>(m.name||m.constructor.name)!=='ReceiptCapabilitiesAndOutbox1792000000000')) throw Error('Unexpected pending migration');
+const expected=new Set(__EXPECTED_MIGRATIONS__);
+if(pending.some(m=>!expected.has(m.name||m.constructor.name))) throw Error('Unexpected pending migration');
 if(process.env.RELEASE_CHECK_ONLY==='true') return;
 await ds.runMigrations({transaction:'all'});
-for(const table of ['receipt_generation_outbox','tg_updates']) { const rows=await q.query("SELECT has_table_privilege(current_user,$1,'SELECT') AND has_table_privilege(current_user,$1,'INSERT') AND has_table_privilege(current_user,$1,'UPDATE') AND has_table_privilege(current_user,$1,'DELETE') AS ok",[table]); if(!rows[0].ok) throw Error('Runtime table privileges unavailable'); }
+for(const table of ['receipt_generation_outbox','tg_updates','document_assets','document_presets','document_artifacts','document_storage_sweeps']) { const rows=await q.query("SELECT has_table_privilege(current_user,$1,'SELECT') AND has_table_privilege(current_user,$1,'INSERT') AND has_table_privilege(current_user,$1,'UPDATE') AND has_table_privilege(current_user,$1,'DELETE') AS ok",[table]); if(!rows[0].ok) throw Error('Runtime table privileges unavailable'); }
 } finally { await q.query('SELECT pg_advisory_unlock(3217891453)'); await q.release(); await ds.destroy(); }
 })().catch(()=>{console.error('Migration readiness/apply failed');process.exitCode=1});
-"""
+""".replace('__EXPECTED_MIGRATIONS__', json.dumps(EXPECTED_MIGRATIONS))
         migration = migration_command(new, migration_code, database_identity, run_id=run_id)
         # This uses the exact same validated Compose environment as the new backend.
         check = migration_command(new, migration_code, database_identity, check_only=True, run_id=run_id)
