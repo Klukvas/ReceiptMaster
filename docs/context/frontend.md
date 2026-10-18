@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-18
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -110,7 +110,7 @@ frontend/
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`
 - `dashboardApi.*` — revenue & turnover analytics
 - `receiptsApi.getAll()`, `create()`, `getById()`, `getPdf()`, `getPrinters()`, `print()`, `regenerate()`, `void()`, `testPreview()`, `share()`, `revokeShare()`, `getTemplatePreviewHtml()`
-- `settingsApi.*` — logo upload, receipt design, templates, company info, payment/delivery terms
+- `settingsApi.*` — logo upload, receipt design, templates, company info, payment/delivery terms, auto-receipt flag (`getAutoReceipt` / `updateAutoReceipt`)
 
 **Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience.
 
@@ -744,7 +744,7 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 
 ## Document configuration and shared draft
 
-`useDocumentDraft` reads `GET /settings/document-config` through Axios/React Query and owns the complete unsaved configuration, base revision, staged logo, and preview request version. `SettingsPage` keeps it mounted across Company, Receipt Design and Language tabs. `DocumentEditor` uses the existing semantic colors, typography, cards and template carousel. Subscription and interface language remain independent of the saved document configuration.
+`useDocumentDraft` reads `GET /settings/document-config` through Axios/React Query and owns the complete unsaved configuration, base revision, staged logo, and preview request version. `SettingsPage` keeps it mounted across Company, Receipt Design and Language tabs. The Advanced tab renders `AutoReceiptSetting`: a switch backed by `useAutoReceiptSetting` / `useUpdateAutoReceiptSetting` (query key `['settings', 'auto-receipt']`, `GET`/`POST /settings/auto-receipt`). When on, the backend queues a receipt on single and bulk order confirmation, so `useOrders` invalidates `['receipts']` as well as `['orders']` after confirm and batch-approve. `DocumentEditor` uses the existing semantic colors, typography, cards and template carousel. Subscription and interface language remain independent of the saved document configuration.
 
 One **Save changes / Discard** bar covers all document fields and logo replacement/removal. Changes do not upload logos until an explicit save/generation/preset action. Reset design only changes the draft's appearance; company values, asset reference, terms and formatting are retained, and Discard reverses the reset. Failed saves keep drafts. Custom titles require non-whitespace text (native required/pattern handling and the shared draft payload guard); errors retain the current draft. Numeric legacy date style is labeled separately from explicit Short/Medium/Long, and the example includes the four-digit year. Revision conflicts offer saved-value comparison, reload of the saved base, and Discard; reloading alone keeps the draft.
 

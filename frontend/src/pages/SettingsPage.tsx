@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { DocumentEditor } from "../components/settings/DocumentEditor";
+import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
@@ -399,22 +400,7 @@ export const SettingsPage = () => {
 
         {activeTab === "subscription" && <SubscriptionTab />}
 
-        {activeTab === "advanced" && (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] py-16 px-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-alt mb-4">
-              <Wrench className="h-7 w-7 text-content-tertiary" />
-            </div>
-            <h3 className="text-base font-semibold text-content-secondary mb-1">
-              {t("settings.advancedTitle", "Advanced Settings Coming Soon")}
-            </h3>
-            <p className="text-sm text-content-tertiary text-center max-w-sm">
-              {t(
-                "settings.advancedDescription",
-                "This section will include API keys, webhooks, data export options, and more.",
-              )}
-            </p>
-          </div>
-        )}
+        {activeTab === "advanced" && <AutoReceiptSetting />}
       </div>
     </div>
   );

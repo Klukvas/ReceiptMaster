@@ -405,6 +405,14 @@ export const settingsApi = {
 
   getReceiptDesign: () => api.get<{ data: ReceiptDesignSettings }>("/settings/receipt-design"),
 
+  getAutoReceipt: () =>
+    api.get<{ data: { enabled: boolean } }>("/settings/auto-receipt"),
+
+  updateAutoReceipt: (enabled: boolean) =>
+    api.post<{ data: { enabled: boolean } }>("/settings/auto-receipt", {
+      enabled,
+    }),
+
   getTemplateSettings: () =>
     api.get<{ templateId: string }>("/settings/template"),
 

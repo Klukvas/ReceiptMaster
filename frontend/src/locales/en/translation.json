@@ -366,8 +366,6 @@
     "previewReceipt": "Preview",
     "downloadTest": "Download",
     "advancedComingSoon": "Advanced settings coming soon.",
-    "advancedTitle": "Advanced Settings Coming Soon",
-    "advancedDescription": "This section will include API keys, webhooks, data export options, and more.",
     "branding": "Branding",
     "contactInfo": "Contact Information",
     "legalBanking": "Legal & Banking",
@@ -411,7 +409,13 @@
     "colorHex": "Hex color",
     "colorInvalid": "Enter a color in #RRGGBB format.",
     "footerUpdated": "Footer updated successfully",
-    "replaceLogo": "Replace Logo"
+    "replaceLogo": "Replace Logo",
+    "autoReceiptTitle": "Automatic receipts",
+    "autoReceiptDescription": "Create a receipt as soon as an order is confirmed, including bulk approval.",
+    "autoReceiptLabel": "Automatically create a receipt when an order is confirmed",
+    "autoReceiptHint": "Your account keeps the 10 most recent receipts. Approving many orders at once replaces the oldest ones.",
+    "autoReceiptEnabled": "Receipts will be created on confirm",
+    "autoReceiptDisabled": "Automatic receipts turned off"
   },
   "receipts": {
     "generatingReceipt": "Generating receipt...",

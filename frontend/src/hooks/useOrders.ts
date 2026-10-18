@@ -71,6 +71,8 @@ export const useOrders = () => {
     mutationFn: (id: string) => orderService.confirmOrder(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      // Confirm may auto-create a receipt when the account setting is on.
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
     },
   });
 
@@ -104,6 +106,7 @@ export const useOrders = () => {
       orderService.batchApproveOrders(orderIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
       setSelectedKeys(new Set());
     },
   });
