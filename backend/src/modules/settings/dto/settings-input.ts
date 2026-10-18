@@ -32,6 +32,7 @@ export const settingsInput = {
       ),
   }),
   language: z.object({ language: z.enum(["en", "ru", "uk"]) }),
+  autoReceipt: z.object({ enabled: z.boolean() }).strict(),
   title: z.object({ title: text(200) }),
   footerTitle: z.object({ footerTitle: text(500) }),
   footerSubtitle: z.object({ footerSubtitle: text(500) }),

@@ -73,6 +73,9 @@ export class UserSettings {
   @Column({ default: false })
   onboardingCompleted: boolean;
 
+  @Column({ default: false })
+  autoGenerateReceipt: boolean;
+
   @Column({ type: "jsonb", nullable: true })
   document_config: DocumentConfig | null;
 

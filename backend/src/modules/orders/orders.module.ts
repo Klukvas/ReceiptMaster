@@ -10,6 +10,7 @@ import { Product } from "../products/entities/product.entity";
 import { Recipient } from "../recipients/entities/recipient.entity";
 import { ReceiptsModule } from "../receipts/receipts.module";
 import { SubscriptionModule } from "../subscription/subscription.module";
+import { SettingsModule } from "../settings/settings.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SubscriptionModule } from "../subscription/subscription.module";
     ]),
     ReceiptsModule,
     SubscriptionModule,
+    SettingsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, IdempotencyCleanupService],

@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-18
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -84,7 +84,9 @@ Only DRAFT orders can be confirmed. Once confirmed:
 - Order is locked (cannot be edited)
 - Can now generate Receipt
 
-File: `backend/src/modules/orders/orders.service.ts::confirm()`
+**Auto-generated receipt (opt-in):** when `user_settings.autoGenerateReceipt` is on, `confirm()` and `approveBatch()` call `ReceiptsService.generateReceipt(orderId, user)` with default settings for every newly confirmed order, after the status change has committed. Calls are sequential (generation takes the per-tenant advisory lock). Any failure — plan limits, snapshot validation, a settings lookup error — is logged and swallowed: confirmation always succeeds and the manual "Generate receipt" path remains. Because the account keeps only the 10 newest generated receipts, bulk-approving many orders with the flag on evicts older receipts (see the ten-generated-receipt limit in step 2 below).
+
+File: `backend/src/modules/orders/orders.service.ts::confirm()` / `autoGenerateReceipts()`
 
 **Cancellation Flow:**
 
@@ -107,7 +109,7 @@ receipt can later be `VOID`. There is at most **one receipt row per order** (uni
 
 File: `backend/src/modules/receipts/entities/receipt.entity.ts`
 
-**Trigger:** User requests PDF for a CONFIRMED order.
+**Trigger:** User requests PDF for a CONFIRMED order, or the order is confirmed while the account's `autoGenerateReceipt` setting is on.
 
 **High-Level Process:**
 

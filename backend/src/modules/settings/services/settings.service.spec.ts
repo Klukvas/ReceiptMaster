@@ -439,6 +439,35 @@ describe("SettingsService", () => {
     });
   });
 
+  describe("autoGenerateReceipt", () => {
+    it("defaults to false when the user has no settings row", async () => {
+      settingsRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getAutoGenerateReceipt("user-1")).resolves.toBe(
+        false,
+      );
+    });
+
+    it("saves the flag directly, bypassing the document-config path", async () => {
+      const documents = { patchLegacy: jest.fn() };
+      const cache = { del: jest.fn() };
+      const withDocuments = new SettingsService(
+        settingsRepo,
+        cache as any,
+        documents as any,
+      );
+
+      await withDocuments.setAutoGenerateReceipt("user-1", true);
+
+      expect(documents.patchLegacy).not.toHaveBeenCalled();
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
+        { autoGenerateReceipt: true, userId: "user-1" },
+        ["userId"],
+      );
+      expect(cache.del).toHaveBeenCalledWith("settings:user-1");
+    });
+  });
+
   describe("getAllPdfSettings", () => {
     it.each([
       ["en", "Invoice"],

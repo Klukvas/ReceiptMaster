@@ -12,6 +12,7 @@ import { CacheService } from "../../common/services/cache.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { SettingsService } from "../settings/services/settings.service";
 
 describe("OrdersService", () => {
   let service: OrdersService;
@@ -23,6 +24,7 @@ describe("OrdersService", () => {
   let dataSource: any;
   let receiptsService: any;
   let cacheService: any;
+  let settingsService: any;
   const mockUser = { id: "user-1" } as User;
 
   const mockOrder: Partial<Order> = {
@@ -69,7 +71,10 @@ describe("OrdersService", () => {
       query: jest.fn(),
     };
 
-    receiptsService = {};
+    receiptsService = { generateReceipt: jest.fn() };
+    settingsService = {
+      getAutoGenerateReceipt: jest.fn().mockResolvedValue(false),
+    };
     cacheService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -90,6 +95,7 @@ describe("OrdersService", () => {
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: ReceiptsService, useValue: receiptsService },
         { provide: CacheService, useValue: cacheService },
+        { provide: SettingsService, useValue: settingsService },
         {
           provide: SubscriptionService,
           useValue: {
@@ -184,6 +190,94 @@ describe("OrdersService", () => {
       await expect(service.confirm("order-1", mockUser)).rejects.toThrow(
         ApiErrorResponse,
       );
+    });
+  });
+
+  describe("auto-generated receipts", () => {
+    const approveDrafts = (ids: string[]) =>
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          find: jest
+            .fn()
+            .mockResolvedValue(
+              ids.map((id) => ({ id, status: OrderStatus.DRAFT })),
+            ),
+          update: jest.fn(),
+        }),
+      );
+
+    it("does not generate a receipt when the setting is off", async () => {
+      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+
+      await service.confirm("order-1", mockUser);
+
+      expect(receiptsService.generateReceipt).not.toHaveBeenCalled();
+    });
+
+    it("queues a receipt after confirm when the setting is on", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+
+      await service.confirm("order-1", mockUser);
+
+      expect(receiptsService.generateReceipt).toHaveBeenCalledWith(
+        "order-1",
+        mockUser,
+      );
+    });
+
+    it("still confirms the order when receipt generation fails", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      receiptsService.generateReceipt.mockRejectedValue(new Error("limit"));
+      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+
+      const result = await service.confirm("order-1", mockUser);
+
+      expect(result.status).toBe(OrderStatus.CONFIRMED);
+    });
+
+    it("still confirms the order when the setting lookup fails", async () => {
+      settingsService.getAutoGenerateReceipt.mockRejectedValue(
+        new Error("redis down"),
+      );
+      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+
+      const result = await service.confirm("order-1", mockUser);
+
+      expect(result.status).toBe(OrderStatus.CONFIRMED);
+      expect(receiptsService.generateReceipt).not.toHaveBeenCalled();
+    });
+
+    it("queues a receipt for every approved order and survives one failure", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      receiptsService.generateReceipt
+        .mockRejectedValueOnce(new Error("snapshot failed"))
+        .mockResolvedValueOnce({});
+      approveDrafts(["o1", "o2"]);
+
+      const result = await service.approveBatch(["o1", "o2", "o1"], mockUser);
+
+      expect(result.approved).toBe(2);
+      expect(receiptsService.generateReceipt.mock.calls).toEqual([
+        ["o1", mockUser],
+        ["o2", mockUser],
+      ]);
+    });
+
+    it("does not generate receipts when batch approval fails", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          find: jest
+            .fn()
+            .mockResolvedValue([{ id: "o1", status: OrderStatus.CONFIRMED }]),
+        }),
+      );
+
+      await expect(service.approveBatch(["o1"], mockUser)).rejects.toThrow(
+        ApiErrorResponse,
+      );
+      expect(receiptsService.generateReceipt).not.toHaveBeenCalled();
     });
   });
 

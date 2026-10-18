@@ -12,6 +12,13 @@ import {
 
 const SETTINGS_CACHE_TTL = 3600; // 1 hour
 
+// Account flags that are not part of the versioned document configuration,
+// so they bypass the legacy document-config patch path.
+const NON_DOCUMENT_KEYS: ReadonlySet<string> = new Set([
+  "onboardingCompleted",
+  "autoGenerateReceipt",
+]);
+
 @Injectable()
 export class SettingsService {
   constructor(
@@ -72,7 +79,7 @@ export class SettingsService {
   ): Promise<void> {
     if (
       this.documents &&
-      !Object.keys(updates).every((key) => key === "onboardingCompleted")
+      !Object.keys(updates).every((key) => NON_DOCUMENT_KEYS.has(key))
     ) {
       await this.documents.patchLegacy(userId, updates);
     } else {
@@ -113,7 +120,7 @@ export class SettingsService {
   ): Promise<UserSettings> {
     if (
       this.documents &&
-      !Object.keys(updates).every((key) => key === "onboardingCompleted")
+      !Object.keys(updates).every((key) => NON_DOCUMENT_KEYS.has(key))
     ) {
       await this.documents.patchLegacy(userId, updates);
     } else {
@@ -229,6 +236,18 @@ export class SettingsService {
     await this.patchSettings(userId, {
       onboardingCompleted: true,
     });
+  }
+
+  async getAutoGenerateReceipt(userId: string): Promise<boolean> {
+    const settings = await this.getCachedSettings(userId);
+    return settings?.autoGenerateReceipt ?? false;
+  }
+
+  async setAutoGenerateReceipt(
+    userId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.patchSettings(userId, { autoGenerateReceipt: enabled });
   }
 
   async getPrimaryColor(userId: string): Promise<string | undefined> {

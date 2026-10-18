@@ -198,6 +198,29 @@ export class SettingsController {
     return { data: { completed: true } };
   }
 
+  @Get("auto-receipt")
+  @ApiOperation({ summary: "Get auto-generate receipt on confirm flag" })
+  async getAutoReceipt(@Request() req: { user: User }) {
+    const enabled = await this.settingsService.getAutoGenerateReceipt(
+      req.user.id,
+    );
+    return { data: { enabled } };
+  }
+
+  @Post("auto-receipt")
+  @ApiOperation({ summary: "Toggle auto-generate receipt on confirm" })
+  async updateAutoReceipt(
+    @Request() req: { user: User },
+    @Body() body: { enabled: boolean },
+  ) {
+    const input = parseSettingsInput(settingsInput.autoReceipt, body);
+    await this.settingsService.setAutoGenerateReceipt(
+      req.user.id,
+      input.enabled,
+    );
+    return { data: { enabled: input.enabled } };
+  }
+
   @Get("receipt-design")
   @ApiOperation({ summary: "Get all receipt design settings" })
   @ApiResponse({ status: 200, type: ReceiptDesignResponseDto })

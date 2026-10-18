@@ -1,4 +1,4 @@
-import { Injectable, HttpStatus } from "@nestjs/common";
+import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In } from "typeorm";
@@ -15,6 +15,7 @@ import { ReceiptsService } from "../receipts/receipts.service";
 import { CacheService } from "../../common/services/cache.service";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { SettingsService } from "../settings/services/settings.service";
 
 const DASHBOARD_CACHE_TTL = 300; // 5 minutes
 
@@ -36,6 +37,8 @@ export interface IdempotencyResponse {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
@@ -52,10 +55,45 @@ export class OrdersService {
     private receiptsService: ReceiptsService,
     private cacheService: CacheService,
     private subscriptionService: SubscriptionService,
+    private settingsService: SettingsService,
   ) {}
 
   private async invalidateDashboardCache(userId: string): Promise<void> {
     await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+  }
+
+  /**
+   * Queues receipts for freshly confirmed orders when the account opted in.
+   * Confirmation is already committed, so a generation failure (plan limits,
+   * snapshot errors) is logged and the order keeps its manual "Generate" path.
+   * Sequential on purpose: generation serializes on a per-tenant advisory lock.
+   */
+  private async autoGenerateReceipts(
+    orderIds: string[],
+    user: User,
+  ): Promise<void> {
+    const isEnabled = await this.settingsService
+      .getAutoGenerateReceipt(user.id)
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Auto-receipt setting lookup failed for user ${user.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        return false;
+      });
+    if (!isEnabled) return;
+
+    for (const orderId of orderIds) {
+      try {
+        await this.receiptsService.generateReceipt(orderId, user);
+      } catch (error) {
+        this.logger.warn(
+          `Auto-receipt failed for order ${orderId} (user ${user.id}): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
   }
 
   private dashboardCacheKey(
@@ -345,6 +383,7 @@ export class OrdersService {
     order.status = OrderStatus.CONFIRMED;
     const saved = await this.ordersRepository.save(order);
     await this.invalidateDashboardCache(user.id);
+    await this.autoGenerateReceipts([saved.id], user);
     return saved;
   }
 
@@ -609,6 +648,7 @@ export class OrdersService {
     });
 
     await this.invalidateDashboardCache(user.id);
+    await this.autoGenerateReceipts(uniqueIds, user);
     return result;
   }
 

@@ -1,8 +1,8 @@
 # API Reference
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-18
 
-**Total Endpoints:** 90 across 12 controllers. This reference covers all controllers exhaustively.
+**Total Endpoints:** 92 across 12 controllers. This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -653,6 +653,8 @@ Replaced items restore removed products' stock and reserve the new items atomica
 
 Locks order, prevents further edits. Required before generating receipt.
 
+If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt on confirm](#auto-generate-receipt-on-confirm)), the default receipt is queued right after the status change, exactly as an empty-body `POST /receipts/orders/:orderId/receipt`. A generation failure is logged and never fails the confirm; the order stays confirmed and can be generated manually.
+
 **Response** (200): `Order` (status updated to `confirmed`)
 
 **Errors:**
@@ -698,7 +700,7 @@ Deletes an order.
 
 **POST** `/orders/batch-approve`
 
-Confirms multiple draft orders in one call.
+Confirms multiple draft orders in one call. With `autoGenerateReceipt` on, a default receipt is queued for each approved order after the transaction commits (sequentially, failures logged per order and never fail the response).
 
 **Request Body:**
 ```typescript
@@ -1239,7 +1241,7 @@ Generates URL for Paddle customer portal (manage billing, cancel, etc.).
 
 All endpoints require JWT auth. Scoped to authenticated user.
 
-File: `backend/src/modules/settings/settings.controller.ts` (27 endpoints)
+File: `backend/src/modules/settings/settings.controller.ts` (29 endpoints)
 
 ### Receipt Design & Template
 
@@ -1699,6 +1701,34 @@ Marks onboarding as complete.
 **Response** (200):
 ```typescript
 { data: { completed: true } }
+```
+
+---
+
+### Auto-generate receipt on confirm
+
+Account flag (`user_settings.autoGenerateReceipt`, default `false`). When on, `PATCH /orders/:id/confirm` and `POST /orders/batch-approve` queue the default receipt for each newly confirmed order.
+
+#### Get Auto-Receipt Flag
+
+**GET** `/settings/auto-receipt`
+
+**Response** (200):
+```typescript
+{ data: { enabled: boolean } }
+```
+
+---
+
+#### Set Auto-Receipt Flag
+
+**POST** `/settings/auto-receipt`
+
+**Request Body:** `{ enabled: boolean }` (strict; other keys → 400 `VALIDATION_ERROR`)
+
+**Response** (200):
+```typescript
+{ data: { enabled: boolean } }
 ```
 
 ---

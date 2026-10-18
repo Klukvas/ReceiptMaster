@@ -4,6 +4,7 @@ import { join } from "path";
 import { DataSource } from "typeorm";
 import { Client } from "pg";
 import { OrdersService } from "../src/modules/orders/orders.service";
+import { SettingsService } from "../src/modules/settings/services/settings.service";
 import { Order } from "../src/modules/orders/entities/order.entity";
 import { OrderItem } from "../src/modules/orders/entities/order-item.entity";
 import { IdempotencyKey } from "../src/modules/orders/entities/idempotency-key.entity";
@@ -84,6 +85,9 @@ describePg(
         {} as ReceiptsService,
         memoryCache,
         subscription,
+        {
+          getAutoGenerateReceipt: async () => false,
+        } as unknown as SettingsService,
       );
     });
 
