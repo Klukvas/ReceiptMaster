@@ -6,6 +6,7 @@ import * as request from "supertest";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { AppModule } from "../../src/app.module";
+import { assertDisposableTestDatabase } from "./test-database-guard";
 
 // Load .env.test BEFORE anything else — force-override all values
 dotenv.config({
@@ -17,6 +18,8 @@ export async function createTestApp(): Promise<{
   app: INestApplication;
   server: any;
 }> {
+  // Checked before compiling: compiling AppModule connects and may run migrations.
+  assertDisposableTestDatabase();
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
   })

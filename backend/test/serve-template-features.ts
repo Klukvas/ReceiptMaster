@@ -11,14 +11,17 @@ import {
 } from "../src/modules/receipts/templates/metadata";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { resolve, join } from "path";
 import { createHash } from "crypto";
 import { build } from "esbuild";
 import { json } from "express";
 async function main(): Promise<void> {
   const port = Number(process.env.TEMPLATE_FIXTURE_PORT || 4327);
+  // Same default as frontend/e2e/template-features.cjs, outside the repository.
   const output = resolve(
-    process.env.TEMPLATE_EVIDENCE || "temp/template-features-20261015-225300",
+    process.env.TEMPLATE_EVIDENCE ||
+      join(tmpdir(), "receiptmaster-template-features"),
   );
   mkdirSync(output, { recursive: true });
   const f = await createTemplateFixture(true, false);

@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-29
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -37,7 +37,7 @@ Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context
 |---|---|
 | A backend module, guard, interceptor, job, auth, tenancy, "how do we do X in Nest" | [**backend-patterns.md**](./backend-patterns.md) |
 | A domain flow — orders, receipt/PDF generation, billing, subscriptions, notifications | [**business-logic.md**](./business-logic.md) |
-| Calling / changing an HTTP endpoint (all 91 routes, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
+| Calling / changing an HTTP endpoint (all 104 routes, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
 | Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n | [**frontend.md**](./frontend.md) |
 
 Common combinations: a **full-stack feature** → `backend-patterns` + `frontend` + `api-reference`;
@@ -56,7 +56,8 @@ market/
 │       │                    #   subscription, suppliers, users, paddle, telegram
 │       ├── common/          # guards, interceptors, filters, pipes, subscribers,
 │       │                    #   tenancy (ALS/interceptor/query runners), middleware, services, utils, entities, dto
-│       └── config/          # env schema (Zod), TypeORM config, migrations
+│       ├── config/          # env schema (Zod), TypeORM config, migrations
+│       └── openapi/         # contract exporter/--check, shared Zod-derived schemas, doc decorators
 ├── frontend/                # React app
 │   ├── src/
 │   │   ├── main.tsx, App.tsx (routing + providers)

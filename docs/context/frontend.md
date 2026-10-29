@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-29
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -112,7 +112,7 @@ frontend/
 - `receiptsApi.getAll()`, `create()`, `getById()`, `getPdf()`, `getPrinters()`, `print()`, `regenerate()`, `void()`, `testPreview()`, `share()`, `revokeShare()`, `getTemplatePreviewHtml()`
 - `settingsApi.*` — logo upload, receipt design, templates, company info, payment/delivery terms, auto-receipt flag (`getAutoReceipt` / `updateAutoReceipt`)
 
-**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience.
+**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience. Wire types are derived from `api-types.generated.ts` (gitignored; `yarn openapi:generate` from `backend/openapi.json`) rather than hand-written: besides the entity types, `Receipt` (the `ReceiptProjection` the receipt routes return; `Order.receipts` reuses it), `InventoryValue` and the document types in `lib/document-config.ts` (`DocumentConfig`, `ConfigVersion`, `DocumentDraft`, `PresetSummary`, `Preset`) are aliases of `components["schemas"]`. `TemplateCapabilities`/`DocumentTemplate` stay hand-written. `templateId` is therefore the backend's template-ID union; values read from the templates list are narrowed at the call site.
 
 **Utilities** (lines 500–528):
 - `formatCurrency(cents, currency)` — e.g., `100` cents → "1.00 UAH"
@@ -758,6 +758,6 @@ The Orders action menu opens `CustomizeDocumentModal`, using the same editor wit
 
 `PublicReceiptPage` uses the frozen visible projection and formatting preferences. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
 
-Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract and evidence.
+Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage, and runs in CI as `browser-documents`; the other browser specs (`node frontend/e2e/run.mjs`) run as `browser-regression`. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract; it no longer matches the current SettingsPage and is not run in CI.
 
 Closing Orders customization through Escape, Close or successful generation/retry restores focus to the surviving More actions button. Cancelling unsaved-draft confirmation leaves focus trapped inside the open editor.

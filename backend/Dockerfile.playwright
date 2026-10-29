@@ -25,7 +25,7 @@ RUN yarn install --frozen-lockfile
 # Launch options mirror PlaywrightPdfGenerator: the container runs as root,
 # where Chromium's sandbox cannot start.
 RUN node -e "require('playwright').chromium \
-      .launch({ chromiumSandbox: false, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote'] }) \
+      .launch({ chromiumSandbox: false, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote', '--disable-gpu'] }) \
       .then(async (browser) => { \
         console.log('playwright ' + require('playwright/package.json').version + ' launched Chromium ' + browser.version()); \
         await browser.close(); \

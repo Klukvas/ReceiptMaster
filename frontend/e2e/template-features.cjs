@@ -1,12 +1,14 @@
 const { chromium } = require("playwright");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const sharp = require("sharp");
 const origin = process.env.TEMPLATE_FIXTURE_URL || "http://127.0.0.1:4327";
+// Same default as backend/test/serve-template-features.ts, outside the repository.
 const output = path.resolve(
   process.env.TEMPLATE_EVIDENCE ||
-    "backend/temp/template-features-20261015-225300",
+    path.join(os.tmpdir(), "receiptmaster-template-features"),
 );
 const results = [];
 async function check(name, operation) {
@@ -15,12 +17,13 @@ async function check(name, operation) {
   process.stdout.write(`PASS ${name}\n`);
 }
 (async () => {
-  const browser = await chromium.launch({
-    executablePath:
-      process.env.E2E_CHROME_PATH ||
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    chromiumSandbox: true,
-  });
+  fs.mkdirSync(output, { recursive: true });
+  // Playwright's bundled Chromium unless E2E_CHROME_PATH names another binary.
+  const browser = await chromium.launch(
+    process.env.E2E_CHROME_PATH
+      ? { executablePath: process.env.E2E_CHROME_PATH }
+      : {},
+  );
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1100 },
   });

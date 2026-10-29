@@ -1,14 +1,16 @@
 # API Reference
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-29
 
-**Total Endpoints:** 92 across 12 controllers. This reference covers all controllers exhaustively.
+**Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
 **Base URL:** `http://localhost:3000/api/v1` (in development; configure via `API_PREFIX` env var)
 
 **API Docs:** `{BASE_URL}/docs` (interactive Swagger UI)
+
+**Contract:** `backend/openapi.json` is generated from the controllers (`yarn openapi:export` in `backend/`; paths there have no `API_PREFIX`). CI's `contract-test` job fails when the committed file differs from the code or a routed handler is undocumented, then generates the frontend types from it and type-checks the frontend. Zod-validated bodies, the JSON/multipart document draft envelope, success bodies and `{ error, errorCode }` failures are documented for the document-config, preset, preview and receipt create/regenerate routes; receipt list/get/void/share/revoke document their projected bodies. POST handlers without `@HttpCode` answer 201 (Nest's default) and are documented that way; only the Telegram and Paddle webhooks set 200 explicitly. These 13 routes were missing from the contract until 2026-10-29: `GET /products/stock-value`, `GET`/`POST /settings/auto-receipt`, `POST /settings/footer`, `GET`/`PUT /settings/document-config`, `GET`/`POST /settings/document-presets`, `GET`/`PUT`/`DELETE /settings/document-presets/:id`, `POST /receipts/preview`, `GET /billing/config`. The Telegram webhook (`tg/webhook`) stays documented as a regular operation.
 
 ---
 
@@ -52,7 +54,7 @@ Authenticates user and returns tokens. Rate-limited to 5 attempts per 60 seconds
 | email | string | yes |
 | password | string | yes |
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
   user: { id, email, createdAt },
@@ -169,7 +171,7 @@ Changes authenticated user's password.
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { message: "Password changed successfully" }
 ```
@@ -709,7 +711,7 @@ Confirms multiple draft orders in one call. With `autoGenerateReceipt` on, a def
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { approved: number }
 ```
@@ -732,7 +734,7 @@ Soft-deletes multiple orders.
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { deleted: number }
 ```
@@ -906,23 +908,24 @@ Generates a frozen PDF receipt/invoice for a confirmed order. Optional config/pr
 **Path Params:**
 - `orderId` (string, UUID) — Order to generate receipt for
 
-**Response** (201):
+**Response** (201): `ReceiptProjection`, e.g.
 ```typescript
 {
   id: string,
   order_id: string,
-  user_id: string,
   status: "processing",   // Durable intent committed; transitions to "generated" or "failed"
   pdf_url: null,          // Populated when generation completes
   progress: 0,            // 0-100
-  created_at: Date,
-  updated_at: Date
+  created_at: string,
+  active_revision: number,
+  replacement_status: null
+  // …plus number, hash, template_id/version, error_message, voided_at, void_reason, public_token, replacement_error
 }
 ```
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND` — Order doesn't exist or not confirmed
-- 409 `RECEIPT_ALREADY_EXISTS` — Receipt already generated for this order
+- 409 `RECEIPT_ALREADY_EXISTS` — Receipt already generated for this order; also 409 when the selected preset changed since `presetRevision`
 - 402 `TEMPLATE_PLAN_RESTRICTED` — Template not allowed on user's plan
 
 Receipt creation commits a durable outbox entry with the receipt before publishing to Redis.
@@ -942,7 +945,7 @@ Forces compact template regardless of user's template setting.
 **Path Params:**
 - `orderId` (string, UUID)
 
-**Response** (201): `Receipt` (same shape as Create Receipt)
+**Response** (201): `ReceiptProjection` (same shape as Create Receipt)
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND`
@@ -960,7 +963,7 @@ Forces standard template regardless of user's template setting.
 **Path Params:**
 - `orderId` (string, UUID)
 
-**Response** (201): `Receipt`
+**Response** (201): `ReceiptProjection`
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND`
@@ -980,13 +983,15 @@ Paginated list of all user's generated receipts.
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
 | offset | number | 0 | |
-| limit | number | 10 | |
+| limit | number | 20 | At most 100 |
 
-**Response** (200):
+**Response** (200): `ReceiptListResponse`
 ```typescript
 {
-  data: Receipt[],
-  meta: { total: number, page: number, limit: number }
+  data: ReceiptProjection[],
+  total: number,
+  offset: number,
+  limit: number
 }
 ```
 
@@ -1001,7 +1006,7 @@ Retrieves receipt metadata and current status.
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200): `Receipt`
+**Response** (200): `ReceiptProjection`
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1039,7 +1044,7 @@ Sends generated receipt to physical printer.
 **Query Params:**
 - `printer` (string, optional) — Printer name; defaults to system default
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { ok: true }
 ```
@@ -1077,12 +1082,12 @@ Voids a receipt and unlocks its order for editing.
 **Path Params:**
 - `id` (string, UUID)
 
-**Request Body:**
+**Request Body** (optional, `ReceiptVoidRequest`):
 ```typescript
-{ reason: string }  // Required: reason for voiding
+{ reason?: string }  // Not validated; omitted leaves void_reason empty; at most 500 characters
 ```
 
-**Response** (200): `Receipt` (status updated)
+**Response** (201): `ReceiptProjection` (status updated)
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1098,7 +1103,9 @@ Empty body or `{ mode: "reproduce" }` queues reproduction from the frozen active
 
 Explicit replacement accepts `{ mode: "replace", expectedActiveRevision, config?, presetId?, presetRevision?, overrides?, logoAction?, confirmReconstruction? }` as JSON or the multipart draft envelope. Config and preset selection are mutually exclusive. Replacement of a legacy document without frozen transaction input requires `confirmReconstruction: true`; it does not assert historical fidelity. Reproduce rejects config/logo changes. A stale revision or running replacement returns 409.
 
-Returns a small receipt status projection. Generated status/PDF remain active until a successful guarded promotion. Poll `replacement_status` (`processing`/`failed`/null) and `active_revision`; a successful replacement changes the PDF served by existing share links. Failure never deletes the old PDF or restores revoked tokens/void status.
+**Response** (201): `ReceiptProjection`. Generated status/PDF remain active until a successful guarded promotion. Poll `replacement_status` (`processing`/`failed`/null) and `active_revision`; a successful replacement changes the PDF served by existing share links. Failure never deletes the old PDF or restores revoked tokens/void status.
+
+**Errors:** 400 invalid body or reproduce with new configuration; 402 `TEMPLATE_PLAN_RESTRICTED`; 404 `RECEIPT_NOT_FOUND`; 409 stale revision/preset, running replacement or `RECONSTRUCTION_REQUIRED`; 413 request above 6 MiB or logo above 5 MiB.
 
 ---
 
@@ -1108,7 +1115,7 @@ Returns a small receipt status projection. Generated status/PDF remain active un
 
 Generates a test PDF using current user's settings (no order required).
 
-**Response** (200): Binary PDF file
+**Response** (201): Binary PDF file
 - Content-Type: application/pdf
 - Inline preview of how receipts will look
 
@@ -1127,12 +1134,11 @@ the same winning token; a concurrent void cannot be overwritten by a late share 
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200):
+**Response** (201): `ReceiptShareResponse`
 ```typescript
 {
   token: string,           // Share token
-  public_url: string,      // Full public URL to view PDF
-  expires_at?: Date
+  url: string              // Full public URL (`<FRONTEND_URL>/r/<token>`)
 }
 ```
 
@@ -1151,7 +1157,7 @@ return 404. Voiding also clears the share token.
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (201): `Receipt` with `public_token: null`
+**Response** (201): `ReceiptProjection` with `public_token: null`
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1926,7 +1932,7 @@ No auth required. Returns API status.
 
 ## Error Response Format
 
-All errors follow this shape:
+All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 
 ```typescript
 {
@@ -1934,6 +1940,8 @@ All errors follow this shape:
   errorCode: string   // Machine-readable code (e.g., "ORDER_NOT_FOUND", "PRODUCT_LIMIT_EXCEEDED")
 }
 ```
+
+`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`.
 
 Common HTTP status codes:
 
@@ -2030,7 +2038,7 @@ Emitted if generation fails:
 All routes require JWT auth. New read routes reject unknown query parameters; UUID paths, complete configs, partial overrides and write bodies use strict Zod validation. Complete V1 config includes company fields, template ID, document language, automatic/custom title (custom text must contain non-whitespace characters; literal `Invoice` stays custom), footer/accent/terms, tenant logo reference/layout, per-contact visibility and bounded Intl formatting. Unsupported values are retained. Logo bytes/storage keys are never config fields.
 
 - `GET /settings/document-config` → `{ data: { config, revision } }`, without creating a settings row.
-- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with reload/compare/discard UX.
+- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with reload/compare/discard UX. The 409 body is the standard `{ error, errorCode: "HTTP_EXCEPTION" }`: the current revision is not included, so clients reload it with `GET`. Preset update/delete and receipt regeneration report stale revisions the same way.
 - `GET /settings/document-presets` → `{ data: [{ id, name, revision, updated_at }] }` summaries.
 - `GET /settings/document-presets/:id` → editable `{ data: { id, name, revision, config } }`.
 - `POST /settings/document-presets` → create with `name` and draft.

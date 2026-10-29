@@ -700,10 +700,16 @@ Images install with `yarn install --frozen-lockfile`. Their build contexts (`./b
 
 **Main Pipeline** (`.github/workflows/ci.yml`) -- triggers on push/PR to `main`:
 
-1. **test-backend** -- lint, test, build
-2. **test-frontend** -- lint, build
-3. **build-and-deploy** -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
-4. **deploy-production** (main branch only) -- SSH to app server, pull images, write `.env`, start containers, health check
+1. **test-backend** -- lockfile copies match, lint, unit tests with coverage, build
+2. **test-frontend** -- lint, OpenAPI types, build
+3. **contract-test** -- `backend/openapi.json` matches the code; frontend type-checks against it
+4. **e2e-backend** -- API e2e tests against PostgreSQL 15, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
+5. **browser-regression** -- `node frontend/e2e/run.mjs` (all browser specs, Playwright Chromium, local nginx/openssl for proxy-audit)
+6. **browser-documents** -- `frontend/e2e/template-features.cjs` against the synthetic `backend/test/serve-template-features.ts` fixture; evidence uploaded on failure
+7. **build-and-deploy** (push to `main` only, needs 1–6) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
+8. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate and deploy the immutable image pair
+
+Jobs 1–6 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
 
 **Database Deployment** (`.github/workflows/deploy-database.yml`) -- manual trigger:
 - SSH to DB server, pull images, optional force-recreate

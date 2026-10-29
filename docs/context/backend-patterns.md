@@ -332,6 +332,7 @@ export class CreateOrderDto {
 - Use `@Type()` from class-transformer to cast types (e.g., string ID to UUID)
 - Use `@ApiProperty()` to document request/response in Swagger
 - The global `ValidationPipe` runs automatically on all controller inputs
+- Zod-validated bodies (`@Body() body: unknown`) are invisible to Swagger: register the schema in `src/openapi/api-components.ts` and document the route with `src/openapi/api-docs.decorators.ts` (`ApiJsonBody`, `ApiDocumentDraftBody` for the JSON/multipart draft envelope, `ApiDataResponse`, `ApiFailureResponses` for the shared `{ error, errorCode }` body)
 
 ### 5. Entity — Database Schema
 
@@ -499,7 +500,9 @@ The application does not provision or change production roles. Run migrations wi
 privileged connection, then set `AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
 The switch parses the literal strings `true` and `false`; a typo fails startup validation.
 Tests use a disposable PostgreSQL cluster with a restricted non-owner role and a single pool
-connection; normal database defaults are never used by the opt-in audit suite.
+connection; normal database defaults are never used by the opt-in audit suite (parameters under
+*Tests* below). These suites use a synthetic role they create; they are not evidence about the
+roles and policies actually deployed in production, which need their own review.
 
 Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
 recipients. A token grants access to exactly its generated receipt and related graph, not the
@@ -923,9 +926,41 @@ async findAll(
    }
    ```
 
-4. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
+4. **Contract** — run `yarn openapi:export` in `backend/` and commit `backend/openapi.json`. CI (`contract-test`) runs `node dist/openapi/generate-openapi.js --check`, which fails when the code and the committed contract differ or when a routed handler is missing from the document, then regenerates the frontend types and type-checks them. The exporter boots Nest in preview mode with forced test env (`NODE_ENV=test`, no migrations, billing off, `.invalid` DB/Redis hosts): no provider, queue, cron, migration, webhook or storage client runs, so it needs no services.
+
+5. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
    - Unhappy path: test that the error is thrown with correct HTTP status
    - Happy path: test that the entity is saved & returned
+
+   **API e2e** (`yarn test:e2e`, `test/e2e/*`) truncates every table. `test/helpers/test-app.ts`
+   refuses to compile the app unless `NODE_ENV=test` and `DB_NAME` ends in `_test`.
+
+   **Isolated PostgreSQL suites** — `src/common/tenancy/tenant-data-source.pg.spec.ts` (tenant
+   RLS, connection-context reset, transactions, and — on a fully migrated database — delayed
+   explicit/repair regeneration that cannot restore a revoked share token or undo a concurrent
+   void), `test/orders-audit.e2e-spec.ts` and
+   `test/template-features-sql.e2e-spec.ts` — create and drop their own uniquely named databases
+   and a `NOSUPERUSER NOBYPASSRLS` login role. `test/helpers/isolated-postgres.ts` gates them:
+
+   | Variable | Meaning |
+   |---|---|
+   | `AUDIT_PG_PORT=55439` / `TEMPLATE_PG_PORT=55447` | Opt-in; must be exactly that port. The host is always `127.0.0.1` |
+   | `ISOLATED_PG_USER` (alias `TEMPLATE_PG_USER`) | Required admin user of the disposable cluster; there is no OS-username fallback |
+   | `ISOLATED_PG_PASSWORD` | Optional admin password |
+   | `REQUIRE_PG_SUITES=1` | A missing opt-in fails instead of skipping (CI `e2e-backend` sets it) |
+   | Sentinel database `receiptmaster_isolated_pg_sentinel` | Must exist in the cluster; it marks the cluster as disposable (CI creates it before the suites) |
+
+   Without an opt-in the suites skip; an incomplete or wrong opt-in fails with the reason. Each
+   suite connects to the `postgres` maintenance database first and, before creating anything,
+   refuses a cluster that lacks the sentinel database or contains `market_db` — so another
+   project's cluster on the same port is refused too. Locally, in a cluster started only for these
+   suites, for example:
+   `docker run -d --rm --name pg-isolated -p 127.0.0.1:55439:5432 -p 127.0.0.1:55447:5432 -e POSTGRES_PASSWORD=postgres postgres:15-alpine`
+   (check first that nothing else listens on those ports), then
+   `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
+   then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql`.
+   Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.
 
 ---
 

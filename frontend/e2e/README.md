@@ -13,7 +13,9 @@ yarn --cwd frontend e2e              # same thing via the package script
 
 `run.mjs` starts its own Vite dev server (with `VITE_WS_URL` pointed at the mock
 socket) unless one is already listening on `E2E_BASE_URL`, and stops it again
-afterwards. Exit code is non-zero when any check fails. Dev servers must run in tmux under the
+afterwards. Exit code is non-zero when any check fails, when the name filter matches no spec,
+or when a selected spec records no checks, so an empty run never reads as a pass. CI runs the
+whole suite as the `browser-regression` job. Dev servers must run in tmux under the
 workspace policy; start one on port 5231 before invoking this harness:
 
 ```bash
@@ -23,8 +25,8 @@ node frontend/e2e/run.mjs infra-audit
 node frontend/e2e/run.mjs proxy-audit
 ```
 
-`E2E_CHROME_PATH` is optional; by default the harness uses Playwright's installed
-browser. `proxy-audit` requires a local `nginx` and `openssl` (override the binary
+`E2E_CHROME_PATH` is optional; by default the harness uses Playwright's bundled
+Chromium (`npx playwright install chromium` once). `proxy-audit` requires a local `nginx` and `openssl` (override the binary
 with `E2E_NGINX_BINARY`), validates the actual proxy configuration, then sends
 synthetic signed webhook bytes and receipt events through polling and WebSocket.
 All generated proxy certificates/logs live under `frontend/e2e/.cache` and its
@@ -84,7 +86,8 @@ SETTINGS_ORIGIN=http://127.0.0.1:4318 node frontend/e2e/settings-regressions.cjs
 ```
 
 The fixture uses the existing `frontend/dist/assets/*.css`; run the frontend build first.
-`SETTINGS_EVIDENCE` changes its generated bundle/output directory. Optional `SETTINGS_BASELINE`
+`SETTINGS_EVIDENCE` changes its generated bundle/output directory (default
+`<os.tmpdir()>/receiptmaster-settings-regressions`). Optional `SETTINGS_BASELINE`
 points at a directory mirroring baseline source paths, allowing the same browser assertions to
 prove the original failures without changing the working tree. The Nest HTTP and real image
 format checks run separately with `cd backend && yarn test --runInBand settings logo-storage`.
@@ -92,8 +95,10 @@ format checks run separately with `cd backend && yarn test --runInBand settings 
 The 22 browser scenarios include delayed logo upload/delete conflicts, confirmed template and
 automatic en/ru/uk titles after a successful POST followed by a failed GET, custom title
 provenance, and title draft recovery through failed GET/Retry. Logo delays use Playwright route
-promises and synthetic responses. Chromium sandbox stays enabled. `E2E_CHROME_PATH` selects the
-local Chrome executable; `SETTINGS_REPORT` and `SETTINGS_SCREENSHOTS` select evidence paths.
+promises and synthetic responses. The browser is Playwright's bundled Chromium unless
+`E2E_CHROME_PATH` names another executable; `SETTINGS_REPORT` and `SETTINGS_SCREENSHOTS` select
+evidence paths. This suite encodes the superseded individual-save contract and is not run in CI:
+against the current unified-save SettingsPage it fails (0/22 on 2026-10-29).
 The fixture bundles source at startup: rebuild/restart only the current fixture after edits and
 after any active browser run finishes; preserve a baseline fixture needed for review.
 
@@ -107,17 +112,20 @@ connects to real application services. The older `settings-regressions.cjs` and 
 retain the earlier individual-save contract and historical evidence; use the new suite for
 current SettingsPage behavior.
 
-From the repository root, build CSS with `cd frontend && yarn build`. Start in a uniquely
-named tmux session, from `backend/`:
+CI runs it as the `browser-documents` job. From the repository root, build CSS with
+`cd frontend && yarn build`. Start the fixture in a uniquely named tmux session, from `backend/`:
 
 ```sh
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
-TEMPLATE_FIXTURE_PORT=4327 TEMPLATE_EVIDENCE=temp/template-features-20261015-225300 \
-./node_modules/.bin/ts-node --transpile-only test/serve-template-features.ts
+TEMPLATE_EVIDENCE=/tmp/template-features yarn ts-node --transpile-only test/serve-template-features.ts
 ```
 
-Run `node frontend/e2e/template-features.cjs` from the repository root against a fresh fixture.
-`TEMPLATE_FIXTURE_URL`, `TEMPLATE_EVIDENCE` and `E2E_CHROME_PATH` can override defaults.
+Run `TEMPLATE_EVIDENCE=/tmp/template-features node frontend/e2e/template-features.cjs` from the
+repository root against a fresh fixture; it exits non-zero on the first failed check.
+Both sides default `TEMPLATE_EVIDENCE` to `<os.tmpdir()>/receiptmaster-template-features`, never
+the repository. `TEMPLATE_FIXTURE_PORT`, `TEMPLATE_FIXTURE_URL` and `E2E_CHROME_PATH` (suite) or
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` (fixture renderer) override the port and browsers; by default
+both use Playwright's bundled Chromium with its sandbox disabled, like the production renderer —
+the browser only loads the local synthetic fixture.
 The fixture serves `http://127.0.0.1:4327`, `/fixture/state`, synthetic failure controls at
 `POST /fixture/control`, and explicit synthetic worker execution at `POST /fixture/run-jobs`.
 Its manifest records the served JavaScript hash and source entrypoints. Keep the fixture
@@ -129,7 +137,10 @@ PDF evidence: `test/verify-template-features-pdfs.ts` renders the current 53-sce
 `test/verify-template-features-pdfs.py` inspects its manifest/PDFs using pdfplumber/pypdf.
 Restricted-role PostgreSQL migration/concurrency tests are implemented in
 `backend/test/template-features-sql.e2e-spec.ts`. They require an explicitly isolated server
-on port 55447 and `TEMPLATE_PG_PORT=55447` (optional `TEMPLATE_PG_USER`). They create and
-clean only a uniquely named synthetic database/runtime role. They are skipped unless that
-opt-in is present. Synthetic tests are not
+on `127.0.0.1:55447`, `TEMPLATE_PG_PORT=55447` and `ISOLATED_PG_USER` (alias `TEMPLATE_PG_USER`,
+optional `ISOLATED_PG_PASSWORD`) plus a `receiptmaster_isolated_pg_sentinel` database marking
+that cluster as disposable; see *Tests* in `docs/context/backend-patterns.md`. They create and
+clean only a uniquely named synthetic database/runtime role, refuse a cluster without the
+sentinel or with `market_db`, and are skipped without the opt-in unless `REQUIRE_PG_SUITES=1`
+(CI), which turns the skip into a failure. Synthetic tests are not
 DB/S3 integration certification. Do not run real migrations for this workflow.

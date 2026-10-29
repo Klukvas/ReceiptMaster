@@ -2,7 +2,6 @@
 import "reflect-metadata";
 import { randomUUID } from "crypto";
 import { join } from "path";
-import { userInfo } from "os";
 import { Client } from "pg";
 import { ConfigService } from "@nestjs/config";
 import { DataSource, EntityManager } from "typeorm";
@@ -21,20 +20,21 @@ import { UserSubscription } from "../src/modules/subscription/entities/user-subs
 import { User } from "../src/modules/users/entities/user.entity";
 import { LogoStorageService } from "../src/common/services/logo-storage.service";
 import { CacheService } from "../src/common/services/cache.service";
+import {
+  TEMPLATE_CLUSTER,
+  connectIsolatedAdmin,
+  createRestrictedRole,
+  describeIsolatedPostgres,
+  typeormCredentials,
+} from "./helpers/isolated-postgres";
 
-const describeSql =
-  process.env.TEMPLATE_PG_PORT === "55447" ? describe : describe.skip;
-describeSql(
+describeIsolatedPostgres(
   "document config isolated PostgreSQL migration/RLS/concurrency",
-  () => {
+  TEMPLATE_CLUSTER,
+  (connection) => {
     const suffix = `${process.pid}_${Date.now()}`;
     const database = `template_features_${suffix}`,
       role = `template_runtime_${suffix}`;
-    const connection = {
-      host: "127.0.0.1",
-      port: 55447,
-      user: process.env.TEMPLATE_PG_USER || userInfo().username,
-    };
     const entities = [join(__dirname, "../src/**/*.entity.ts")];
     let admin: Client,
       owner: DataSource,
@@ -44,14 +44,11 @@ describeSql(
     let tenant: string, otherTenant: string;
     const objects = new Map<string, Buffer>();
     beforeAll(async () => {
-      admin = new Client({ ...connection, database: "postgres" });
-      await admin.connect();
+      admin = await connectIsolatedAdmin(connection);
       await admin.query(`CREATE DATABASE "${database}"`);
       owner = new DataSource({
         type: "postgres",
-        host: connection.host,
-        port: connection.port,
-        username: connection.user,
+        ...typeormCredentials(connection),
         database,
         entities,
         synchronize: true,
@@ -76,7 +73,7 @@ describeSql(
       await new DocumentUploadFencing1792100000002().up(runner);
       await runner.commitTransaction();
       await runner.release();
-      await admin.query(`CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS`);
+      const rolePassword = await createRestrictedRole(admin, role);
       await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
       await owner.query(
         `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`,
@@ -90,6 +87,7 @@ describeSql(
           host: connection.host,
           port: connection.port,
           username: role,
+          password: rolePassword,
           database,
           entities,
           extra: { max: 6, options: "-c statement_timeout=10000" },
@@ -202,6 +200,16 @@ describeSql(
       }
     });
     it("restricted role cannot select or insert another tenant's presets/assets", async () => {
+      expect(
+        await runtime.query(
+          "SELECT current_user AS name, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",
+        ),
+      ).toEqual([{ name: role, rolsuper: false, rolbypassrls: false }]);
+      expect(
+        await runtime.query(
+          "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user",
+        ),
+      ).toEqual([]);
       const version = await runWithTenant(otherTenant, () =>
         documents.read(otherTenant),
       );

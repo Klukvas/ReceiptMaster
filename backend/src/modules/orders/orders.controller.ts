@@ -55,12 +55,9 @@ export class OrdersController {
   @ApiOperation({ summary: "Create order" })
   @ApiResponse({
     status: 201,
-    description: "Order successfully created",
+    description:
+      "Order successfully created, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
     type: Order,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Order returned from idempotency cache",
   })
   @ApiResponse({ status: 404, description: "Recipient or product not found" })
   @ApiHeader({
@@ -91,7 +88,7 @@ export class OrdersController {
 
   @Post("batch-approve")
   @ApiOperation({ summary: "Batch approve orders" })
-  @ApiResponse({ status: 200, description: "Orders approved" })
+  @ApiResponse({ status: 201, description: "Orders approved" })
   @ApiResponse({ status: 400, description: "Some orders cannot be approved" })
   async batchApprove(
     @Body() dto: BatchOrderIdsDto,
@@ -102,7 +99,7 @@ export class OrdersController {
 
   @Post("batch-delete")
   @ApiOperation({ summary: "Batch delete orders" })
-  @ApiResponse({ status: 200, description: "Orders deleted" })
+  @ApiResponse({ status: 201, description: "Orders deleted" })
   @ApiResponse({ status: 400, description: "Some orders cannot be deleted" })
   async batchDelete(
     @Body() dto: BatchOrderIdsDto,
@@ -132,6 +129,11 @@ export class OrdersController {
     name: "maxAmount",
     required: false,
     description: "Maximum order total in cents",
+  })
+  @ApiQuery({
+    name: "productId",
+    required: false,
+    description: "Only orders containing this product",
   })
   findAll(
     @Query() paginationDto: PaginationDto,

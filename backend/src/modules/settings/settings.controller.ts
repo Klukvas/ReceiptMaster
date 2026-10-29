@@ -39,6 +39,12 @@ import {
   TEMPLATE_METADATA,
 } from "../receipts/templates/metadata";
 import { SubscriptionService } from "../subscription/subscription.service";
+import {
+  ApiDataResponse,
+  ApiFailureResponses,
+  ApiJsonBody,
+  ApiLogoUploadBody,
+} from "../../openapi/api-docs.decorators";
 
 @ApiTags("settings")
 @ApiBearerAuth("bearer")
@@ -85,6 +91,12 @@ export class SettingsController {
       },
     }),
   )
+  @ApiLogoUploadBody()
+  @ApiDataResponse(201, "LogoUploadResponse", "Logo stored")
+  @ApiFailureResponses({
+    400: "Missing logo file or unsupported image type",
+    413: "Logo above 5 MiB",
+  })
   async uploadLogo(
     @UploadedFile() file: Express.Multer.File,
     @Request() req: { user: User },
@@ -200,6 +212,7 @@ export class SettingsController {
 
   @Get("auto-receipt")
   @ApiOperation({ summary: "Get auto-generate receipt on confirm flag" })
+  @ApiDataResponse(200, "AutoReceiptResponse", "Current flag")
   async getAutoReceipt(@Request() req: { user: User }) {
     const enabled = await this.settingsService.getAutoGenerateReceipt(
       req.user.id,
@@ -209,6 +222,9 @@ export class SettingsController {
 
   @Post("auto-receipt")
   @ApiOperation({ summary: "Toggle auto-generate receipt on confirm" })
+  @ApiJsonBody("AutoReceiptRequest")
+  @ApiDataResponse(201, "AutoReceiptResponse", "Saved flag")
+  @ApiFailureResponses({ 400: "Invalid body" })
   async updateAutoReceipt(
     @Request() req: { user: User },
     @Body() body: { enabled: boolean },
@@ -346,6 +362,10 @@ export class SettingsController {
   }
 
   @Post("footer")
+  @ApiOperation({ summary: "Update footer title and subtitle together" })
+  @ApiJsonBody("FooterUpdateRequest")
+  @ApiDataResponse(201, "MessageResponse", "Footer updated")
+  @ApiFailureResponses({ 400: "Invalid body" })
   async updateFooter(
     @Request() req: { user: User },
     @Body() body: { footerTitle: string; footerSubtitle: string },

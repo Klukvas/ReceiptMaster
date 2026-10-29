@@ -36,7 +36,8 @@
     "docker:test:down": "docker-compose -f docker-compose.test.yml down",
     "docker:test:logs": "docker-compose -f docker-compose.test.yml logs -f",
     "dev": "yarn docker:up && yarn docker:init",
-    "openapi:export": "nest build && node dist/scripts/generate-openapi.js"
+    "openapi:export": "nest build && node dist/openapi/generate-openapi.js",
+    "openapi:check": "nest build && node dist/openapi/generate-openapi.js --check"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

@@ -16,19 +16,19 @@ import { UserSubscription } from "../src/modules/subscription/entities/user-subs
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
 import { CacheService } from "../src/common/services/cache.service";
 import { PLAN_LIMITS } from "../src/modules/subscription/config/plans.config";
+import {
+  AUDIT_CLUSTER,
+  connectIsolatedAdmin,
+  describeIsolatedPostgres,
+  typeormCredentials,
+} from "./helpers/isolated-postgres";
 
 // Explicit opt-in; no dotenv, production ORM config, or shared cleanup helper.
-const describePg =
-  process.env.AUDIT_PG_PORT === "55439" ? describe : describe.skip;
-describePg(
+describeIsolatedPostgres(
   "orders audit: isolated PostgreSQL persistence and concurrency",
-  () => {
+  AUDIT_CLUSTER,
+  (connection) => {
     const database = `audit_orders_${process.pid}_${Date.now()}`;
-    const connection = {
-      host: "127.0.0.1",
-      port: 55439,
-      user: "andreypavlenko",
-    };
     let admin: Client;
     let db: DataSource;
     let service: OrdersService;
@@ -37,14 +37,11 @@ describePg(
     const cache = new Map<string, unknown>();
 
     beforeAll(async () => {
-      admin = new Client({ ...connection, database: "postgres" });
-      await admin.connect();
+      admin = await connectIsolatedAdmin(connection);
       await admin.query(`CREATE DATABASE "${database}"`);
       db = new DataSource({
         type: "postgres",
-        host: connection.host,
-        port: connection.port,
-        username: connection.user,
+        ...typeormCredentials(connection),
         database,
         entities: [join(__dirname, "../src/**/*.entity.ts")],
         synchronize: true,

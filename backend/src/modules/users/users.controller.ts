@@ -51,7 +51,7 @@ export class UsersController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: "Login" })
   @ApiResponse({
-    status: 200,
+    status: 201,
     description: "Login successful",
     type: AuthResponseDto,
   })
@@ -64,7 +64,7 @@ export class UsersController {
   @Post("refresh")
   @ApiOperation({ summary: "Refresh access token using refresh token" })
   @ApiResponse({
-    status: 200,
+    status: 201,
     description: "Tokens refreshed successfully",
     type: AuthResponseDto,
   })
@@ -77,7 +77,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Logout and revoke refresh token" })
-  @ApiResponse({ status: 200, description: "Logged out successfully" })
+  @ApiResponse({ status: 201, description: "Logged out successfully" })
   async logout(@Body() body: RefreshTokenDto): Promise<{ message: string }> {
     await this.usersService.revokeRefreshToken(body.refresh_token);
     return { message: "Logged out successfully" };
@@ -111,7 +111,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Change current user password" })
-  @ApiResponse({ status: 200, description: "Password changed successfully" })
+  @ApiResponse({ status: 201, description: "Password changed successfully" })
   @ApiResponse({ status: 400, description: "Validation error" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   async changePassword(
