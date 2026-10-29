@@ -229,6 +229,35 @@ describe("ProductsService", () => {
       expect(productsRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ["name"],
+      ["purchase_price_cents"],
+      ["sale_price_cents"],
+      ["currency"],
+    ])(
+      "rejects null %s with VALIDATION_ERROR instead of a NOT NULL failure",
+      async (field) => {
+        await expect(
+          service.update("prod-1", { [field]: null } as any, mockUser),
+        ).rejects.toMatchObject({
+          statusCode: 400,
+          errorCode: "VALIDATION_ERROR",
+        });
+        expect(productsRepo.createQueryBuilder).not.toHaveBeenCalled();
+      },
+    );
+
+    it("rejects a null quantity even with expectedQuantity", async () => {
+      await expect(
+        service.update(
+          "prod-1",
+          { quantity: null, expectedQuantity: 8 } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({ errorCode: "VALIDATION_ERROR" });
+      expect(productsRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
     it("returns 409 when the row exists but the stock moved", async () => {
       updateQuery().execute.mockResolvedValue({ affected: 0 });
       productsRepo.findOne.mockResolvedValue({ ...mockProduct, quantity: 8 });

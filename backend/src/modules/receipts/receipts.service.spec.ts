@@ -66,6 +66,7 @@ describe("ReceiptsService", () => {
     validatePrepared: jest.Mock;
     candidate: jest.Mock;
     active: jest.Mock;
+    releaseLogo: jest.Mock;
   };
   let documents: { read: jest.Mock; assertTemplate: jest.Mock };
   let renders: { preview: jest.Mock };
@@ -127,6 +128,7 @@ describe("ReceiptsService", () => {
       validatePrepared: jest.fn(),
       candidate: jest.fn().mockReturnValue({ pending_id: "candidate" }),
       active: jest.fn(),
+      releaseLogo: jest.fn().mockResolvedValue(undefined),
     };
     documents = {
       read: jest
@@ -425,6 +427,100 @@ describe("ReceiptsService", () => {
       await expect(
         service.voidReceipt("receipt-1", mockUser, "reason"),
       ).rejects.toThrow(ApiErrorResponse);
+    });
+  });
+
+  describe("voidForCancellation", () => {
+    const cancellationManager = (rows: Partial<Receipt>[]) => ({
+      find: jest.fn().mockResolvedValue(rows),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    });
+
+    it("locks live documents in id order and voids them with the shared field list", async () => {
+      const manager = cancellationManager([
+        {
+          id: "receipt-1",
+          user_id: "user-1",
+          active_logo_asset_id: "logo-active",
+          pending_logo_asset_id: "logo-pending",
+        },
+      ]);
+
+      const voided = await service.voidForCancellation(
+        manager as never,
+        "order-1",
+        "user-1",
+      );
+
+      expect(voided).toBe(1);
+      expect(manager.find).toHaveBeenCalledWith(Receipt, {
+        where: {
+          order_id: "order-1",
+          user_id: "user-1",
+          status: expect.objectContaining({ _type: "not" }),
+        },
+        select: [
+          "id",
+          "user_id",
+          "active_logo_asset_id",
+          "pending_logo_asset_id",
+        ],
+        order: { id: "ASC" },
+        lock: { mode: "pessimistic_write" },
+      });
+      const [, where, values] = manager.update.mock.calls[0];
+      expect(where).toMatchObject({ id: "receipt-1", user_id: "user-1" });
+      expect(values).toEqual({
+        status: ReceiptStatus.VOID,
+        voided_at: expect.any(Date),
+        void_reason: "order_cancelled",
+        public_token: null,
+        replacement_status: null,
+        replacement_error: null,
+        pending_id: null,
+        pending_snapshot: null,
+        pending_html: null,
+        pending_logo_asset_id: null,
+        pending_expected_revision: null,
+      });
+      expect(values).not.toHaveProperty("pdf_path");
+      expect(snapshots.releaseLogo).toHaveBeenCalledWith(
+        "user-1",
+        "logo-pending",
+        manager,
+      );
+      // A cancelled order is never unlocked for editing.
+      expect(
+        manager.update.mock.calls.some(([entity]) => entity === Order),
+      ).toBe(false);
+    });
+
+    it("keeps a pending logo that is also the active logo", async () => {
+      const manager = cancellationManager([
+        {
+          id: "receipt-1",
+          user_id: "user-1",
+          active_logo_asset_id: "logo-1",
+          pending_logo_asset_id: "logo-1",
+        },
+      ]);
+
+      await service.voidForCancellation(manager as never, "order-1", "user-1");
+
+      expect(snapshots.releaseLogo).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when the order has no live document", async () => {
+      const manager = cancellationManager([]);
+
+      expect(
+        await service.voidForCancellation(
+          manager as never,
+          "order-1",
+          "user-1",
+        ),
+      ).toBe(0);
+      expect(manager.update).not.toHaveBeenCalled();
     });
   });
 

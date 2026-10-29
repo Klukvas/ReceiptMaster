@@ -4760,6 +4760,11 @@
           },
           "line_total_cents": {
             "type": "number"
+          },
+          "unit_cost_cents": {
+            "type": "number",
+            "nullable": true,
+            "description": "Purchase cost per unit captured when the draft line was written; null when unknown (lines created before cost snapshots)"
           }
         },
         "required": [
@@ -4769,7 +4774,8 @@
           "product_name",
           "unit_price_cents",
           "qty",
-          "line_total_cents"
+          "line_total_cents",
+          "unit_cost_cents"
         ]
       },
       "Order": {
@@ -5016,17 +5022,34 @@
       "DailyRevenueDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "date": {
             "type": "string"
           },
           "revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost. A day without confirmed orders is 0."
           },
           "turnover_cents": {
             "type": "number"
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "date",
           "revenue_cents",
           "turnover_cents"
@@ -5054,6 +5077,18 @@
       "RevenueByProductDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "product_id": {
             "type": "string"
           },
@@ -5061,7 +5096,9 @@
             "type": "string"
           },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_quantity": {
             "type": "number"
@@ -5071,6 +5108,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "product_id",
           "product_name",
           "total_revenue_cents",
@@ -5081,6 +5121,18 @@
       "RevenueByRecipientDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "recipient_id": {
             "type": "string"
           },
@@ -5088,7 +5140,9 @@
             "type": "string"
           },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_orders": {
             "type": "number"
@@ -5098,6 +5152,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "recipient_id",
           "recipient_name",
           "total_revenue_cents",
@@ -5108,8 +5165,22 @@
       "TotalRevenueDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_orders": {
             "type": "number"
@@ -5119,6 +5190,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "total_revenue_cents",
           "total_orders",
           "currency"

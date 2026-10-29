@@ -35,7 +35,23 @@ function assertStockPrecondition(
   }
 }
 
-/** Absent fields are left alone; an explicit null (e.g. supplier_id) is kept. */
+/** Every column except supplier_id is NOT NULL, so only it may be cleared. */
+const CLEARABLE_FIELDS: ReadonlySet<string> = new Set(["supplier_id"]);
+
+/** `@IsOptional` lets null through the DTO; reject it here instead of a 500. */
+function assertNoNullForRequiredFields(fields: ProductChanges): void {
+  const cleared = Object.entries(fields).find(
+    ([key, value]) => value === null && !CLEARABLE_FIELDS.has(key),
+  );
+  if (cleared) {
+    throw ApiErrors.VALIDATION_ERROR(
+      cleared[0],
+      `${cleared[0]} cannot be null`,
+    );
+  }
+}
+
+/** Absent fields are left alone; an explicit null (supplier_id only) is kept. */
 function presentFields(fields: ProductChanges): Partial<Product> {
   return Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
@@ -128,6 +144,7 @@ export class ProductsService {
     user: User,
   ): Promise<Product> {
     const { expectedQuantity, ...fields } = updateProductDto;
+    assertNoNullForRequiredFields(fields);
     assertStockPrecondition(fields.quantity, expectedQuantity);
     const changes = presentFields(fields);
     if (Object.keys(changes).length === 0) return this.findOne(id, user);

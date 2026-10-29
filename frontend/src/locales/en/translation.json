@@ -171,7 +171,8 @@
     "overridePrice": "Custom",
     "stock": "in stock",
     "nothingFound": "Nothing found",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "cancelConfirmedWarning": "This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it."
   },
   "products": {
     "title": "Products",
@@ -739,7 +740,13 @@
     "totalTurnover": "Total Turnover",
     "topCustomers": "Top Customers",
     "sortByRevenue": "By revenue",
-    "sortByOrders": "By orders"
+    "sortByOrders": "By orders",
+    "profitUnknown": "Cost unknown",
+    "profitPartial": "Partial",
+    "profitPartialTooltip": "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
+    "csvProfitComplete": "Profit complete",
+    "csvUnknownCostLines": "Lines with unknown cost",
+    "csvUnknownCostTurnover": "Turnover with unknown cost"
   },
   "notFound": {
     "title": "Page Not Found",

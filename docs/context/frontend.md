@@ -103,10 +103,13 @@ frontend/
     queued), store the new pair, retry the original request and release the queue
   - **Refresh failed:** `resolveRefreshFailure` decides from storage alone, comparing it with the
     session this tab sent. Storage holds a new pair → another tab won: adopt it and retry (the
-    queue too). Both tokens are written by separate `setItem` calls, so a half-changed read, and a
-    401/403 with unchanged storage (the winner's response may still be in flight), is re-read once
-    after 300 ms. Still unchanged (or emptied by a logout) and 401/403 → genuine rejection:
-    `clearAuthAndRedirect` clears storage and goes to `/`. Network/5xx → reject, keep storage
+    queue too). A 401/403 with storage unchanged may be an early loser whose winner has not answered
+    yet: it waits for a `storage` event on `refresh_token` (written after the access token) for at
+    most 3 s, then re-reads. A half-changed read (the two `setItem` calls are separate) or an emptied
+    storage is re-read once after 300 ms. Still unchanged (or emptied by a logout) and 401/403 →
+    genuine rejection: `clearAuthAndRedirect` clears storage and goes to `/`. Network/5xx → reject,
+    keep storage. A rotation that keeps the access token and only changes the refresh token is
+    adopted too
   - `clearAuthAndRedirect` is the only client code that ends a session on an API failure
 
 **API method groups** (lines 159–497):
@@ -218,6 +221,32 @@ export const useOrders = () => {
 - `['products']`, `['recipients']`, `['suppliers']` — entity lists
 
 Always invalidate after mutations (`onSuccess` callback) so UI refetches fresh data.
+Cancelling an order (`useOrders`) invalidates everything it changes on the server: `['orders']`,
+`['receipts']` (a confirmed order's document is voided) and every dashboard key — `['dashboard']`,
+`['totalRevenue']`, `['totalTurnover']`, `['dailyRevenue']`, `['orderStatusSummary']` (the default
+`staleTime` is 5 minutes, so without this the dashboards would keep pre-cancel figures).
+
+### Orders: cancel warning
+
+`OrdersPage` resolves the cancel target's status from the loaded list. Cancelling a confirmed order
+(or one not on the page) adds `orders.cancelConfirmedWarning` (en/ru/uk) to the confirmation: the
+receipt is voided, the public share link revoked, and stock is not returned — deleting the order
+returns it. A draft gets the plain question.
+
+### Dashboard: unknown and partial profit
+
+"Revenue" is profit from the cost frozen on each order line. Profit payloads carry
+`unknown_cost_lines`, `unknown_cost_turnover_cents` and `profit_complete`, and the profit may be null
+(`lib/profit.ts`: `formatProfit`, `profitChartValue`, `combineCompleteness`).
+`components/dashboard/ProfitStatus.tsx` renders nothing for complete figures, "Cost unknown"
+(`dashboard.profitUnknown`) next to "—" for a null profit, and a "Partial" badge
+(`dashboard.profitPartial`) whose tooltip (`dashboard.profitPartialTooltip`) names the excluded lines
+and turnover. It is used by the KPI card (`KPIPrimaryCard`/`StatCard` `footer`), the recipient list
+(`TopRecipientsList` accepts a null amount, sorted last, and a `status` node) and the sparkline
+header. `RevenueChart` accepts null values (no bar) with a tooltip note; the sparkline passes null
+days with `connectNulls={false}`, so an unknown day is a gap, not a zero. The analytics CSV leaves an
+unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
+`unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
 
 ### Server-Side Pagination: `useServerPagination`
 
@@ -294,7 +323,9 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `isAuthenticated: boolean` — derived (!!user && !!token)
 
 **Methods:**
-- `login(email, password)` — calls `authApi.login()`, stores tokens, redirects to `/dashboard`
+- `login(email, password)` — calls `authApi.login()`, stores tokens through `auth-session.ts`
+  `storeSession` (access token first, then refresh token — the key other tabs wait for), redirects
+  to `/dashboard`. AuthContext reads/clears storage only through `auth-session.ts` helpers
 - `register(email, password)` — same as login
 - `logout()` — calls `authApi.logout()`, clears localStorage, redirects to home
 - `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`. On failure it
@@ -551,7 +582,8 @@ baseline: the loaded stock, or the server's after a conflict. On 409 `PRODUCT_QU
 `GET /products/:id`, shows under the quantity field that stock is now N and the typed value was not
 saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and invalidates
 `["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
-`productsApi.update` takes the generated `UpdateProductRequest` (`UpdateProductDto`).
+`productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
+stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
 
 ### UI Primitives: `components/ui/`
 

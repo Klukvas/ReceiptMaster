@@ -80,15 +80,23 @@ export const DashboardPage = () => {
  exportToCsv(
  revenueByProducts.data.map((p) => ({
  product_name: p.product_name,
- total_revenue: (p.total_revenue_cents / 100).toFixed(2),
+ // Unknown profit stays an empty cell, never 0.00.
+ total_revenue:
+ p.total_revenue_cents === null ? '' : (p.total_revenue_cents / 100).toFixed(2),
  total_quantity: String(p.total_quantity),
  currency: p.currency,
+ profit_complete: String(p.profit_complete),
+ unknown_cost_lines: String(p.unknown_cost_lines),
+ unknown_cost_turnover: (p.unknown_cost_turnover_cents / 100).toFixed(2),
  })),
  [
  { key: 'product_name', header: t('products.productName', 'Product') },
  { key: 'total_revenue', header: t('dashboard.revenue', 'Revenue') },
  { key: 'total_quantity', header: t('products.quantity', 'Quantity') },
  { key: 'currency', header: t('products.currency', 'Currency') },
+ { key: 'profit_complete', header: t('dashboard.csvProfitComplete', 'Profit complete') },
+ { key: 'unknown_cost_lines', header: t('dashboard.csvUnknownCostLines', 'Lines with unknown cost') },
+ { key: 'unknown_cost_turnover', header: t('dashboard.csvUnknownCostTurnover', 'Turnover with unknown cost') },
  ],
  `revenue-${dateRange.startDate || 'all'}-${dateRange.endDate || 'time'}`,
  );

@@ -199,6 +199,56 @@ describe("Products (e2e)", () => {
     });
   });
 
+  describe("PATCH /api/v1/products/:id with null", () => {
+    it.each([
+      [{ name: null }],
+      [{ purchase_price_cents: null }],
+      [{ sale_price_cents: null }],
+      [{ currency: null }],
+      [{ quantity: null, expectedQuantity: 10 }],
+    ])("rejects %p with 400 and changes nothing", async (body) => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send(body)
+        .expect(400);
+
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      const current = await request(server)
+        .get(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+      expect(current.body).toMatchObject({
+        name: validProduct.name,
+        purchase_price_cents: validProduct.purchase_price_cents,
+        sale_price_cents: validProduct.sale_price_cents,
+        quantity: validProduct.quantity,
+      });
+    });
+
+    it("still clears supplier_id with null", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ supplier_id: null })
+        .expect(200);
+
+      expect(res.body.supplier_id).toBeNull();
+    });
+  });
+
   describe("DELETE /api/v1/products/:id", () => {
     it("should delete a product", async () => {
       const created = await request(server)

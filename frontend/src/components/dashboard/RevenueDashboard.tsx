@@ -7,7 +7,13 @@ import { TopProductsChart } from "./TopProductsChart";
 import { TopRecipientsList } from "./TopRecipientsList";
 import { KPIPrimaryCard } from "./KPIPrimaryCard";
 import { KPISecondaryCard } from "./KPISecondaryCard";
+import { ProfitStatus } from "./ProfitStatus";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  formatProfit,
+  profitChartValue,
+  type ProfitCompleteness,
+} from "../../lib/profit";
 
 interface RevenueDashboardProps {
   dateRange: {
@@ -55,15 +61,38 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
 
   const summaryLoading = totalRevenueLoading;
 
+  /** Tooltip text for a bar whose profit leaves some lines out. */
+  const profitNote = (
+    profit: number | null,
+    completeness: ProfitCompleteness & { currency: string },
+  ): string | undefined =>
+    completeness.profit_complete
+      ? undefined
+      : `${
+          profit === null
+            ? t("dashboard.profitUnknown", "Cost unknown")
+            : t("dashboard.profitPartial", "Partial")
+        }: ${t("dashboard.profitPartialTooltip", {
+          lines: completeness.unknown_cost_lines,
+          turnover: formatCurrency(
+            completeness.unknown_cost_turnover_cents,
+            completeness.currency,
+          ),
+          defaultValue:
+            "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
+        })}`;
+
   const productChartData = (revenueByProducts?.data || []).map((p) => ({
     name: p.product_name,
-    value: p.total_revenue_cents / 100,
+    value: profitChartValue(p.total_revenue_cents),
+    note: profitNote(p.total_revenue_cents, p),
     quantity: p.total_quantity,
   }));
 
   const recipientChartData = (revenueByRecipients?.data || []).map((r) => ({
     name: r.recipient_name,
-    value: r.total_revenue_cents / 100,
+    value: profitChartValue(r.total_revenue_cents),
+    note: profitNote(r.total_revenue_cents, r),
     quantity: r.total_orders,
   }));
 
@@ -73,7 +102,16 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
     total_cents: r.total_revenue_cents,
     total_orders: r.total_orders,
     currency: r.currency,
+    status: (
+      <ProfitStatus
+        profit={r.total_revenue_cents}
+        completeness={r}
+        currency={r.currency}
+      />
+    ),
   }));
+
+  const total = totalRevenue?.data;
 
   const periodText =
     dateRange.startDate && dateRange.endDate
@@ -96,17 +134,27 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
           <div className="sm:col-span-2">
             <KPIPrimaryCard
               label={t("dashboard.totalRevenue")}
-              value={formatCurrency(
-                totalRevenue?.data?.total_revenue_cents || 0,
-                totalRevenue?.data?.currency,
-              )}
+              value={
+                total
+                  ? formatProfit(total.total_revenue_cents, total.currency)
+                  : formatCurrency(0)
+              }
               icon={<DollarSign className="h-5 w-5" />}
               accentColor="green"
+              footer={
+                total && (
+                  <ProfitStatus
+                    profit={total.total_revenue_cents}
+                    completeness={total}
+                    currency={total.currency}
+                  />
+                )
+              }
             />
           </div>
           <KPISecondaryCard
             label={t("dashboard.totalOrders")}
-            value={String(totalRevenue?.data?.total_orders || 0)}
+            value={String(total?.total_orders || 0)}
             icon={<ShoppingCart className="h-4 w-4" />}
           />
           <KPISecondaryCard

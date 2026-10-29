@@ -10,7 +10,7 @@ import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { Injectable, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, EntityManager, IsNull } from "typeorm";
+import { Repository, DataSource, EntityManager, IsNull, Not } from "typeorm";
 import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import {
@@ -35,6 +35,30 @@ const execFileAsync = promisify(execFile);
 
 /** Only allow alphanumeric, hyphens, underscores, dots, and spaces in printer names */
 const SAFE_PRINTER_NAME = /^[a-zA-Z0-9_\-. ]+$/;
+
+/** Recorded on documents voided because their order was cancelled. */
+export const ORDER_CANCELLED_VOID_REASON = "order_cancelled";
+
+/**
+ * Column values that void a document: it stops being public (token revoked),
+ * and any pending candidate or replacement is dropped so no delayed worker can
+ * promote it. The active PDF and its frozen content stay as history.
+ */
+function voidedReceiptFields(reason: string, voidedAt: Date) {
+  return {
+    status: ReceiptStatus.VOID,
+    voided_at: voidedAt,
+    void_reason: reason,
+    public_token: null,
+    replacement_status: null,
+    replacement_error: null,
+    pending_id: null,
+    pending_snapshot: null,
+    pending_html: null,
+    pending_logo_asset_id: null,
+    pending_expected_revision: null,
+  };
+}
 
 @Injectable()
 export class ReceiptsService {
@@ -286,19 +310,7 @@ export class ReceiptsService {
       await manager.update(
         Receipt,
         { id: receipt.id, user_id: user.id },
-        {
-          status: ReceiptStatus.VOID,
-          voided_at: new Date(),
-          void_reason: reason,
-          public_token: null,
-          replacement_status: null,
-          replacement_error: null,
-          pending_id: null,
-          pending_snapshot: null,
-          pending_html: null,
-          pending_logo_asset_id: null,
-          pending_expected_revision: null,
-        },
+        voidedReceiptFields(reason, new Date()),
       );
       const savedReceipt = await manager.findOneOrFail(Receipt, {
         where: { id: receipt.id, user_id: user.id },
@@ -318,6 +330,60 @@ export class ReceiptsService {
 
       return savedReceipt;
     });
+  }
+
+  /**
+   * Voids every live document of an order being cancelled, inside the caller's
+   * transaction, which already holds the tenant lock and the order row lock.
+   * Receipts are locked in id order (tenant → order → receipt, as everywhere
+   * else). Already voided documents keep their original reason. Unlike a manual
+   * void, the order is not unlocked: a cancelled order is never edited again.
+   * Returns how many documents were voided.
+   */
+  async voidForCancellation(
+    manager: EntityManager,
+    orderId: string,
+    userId: string,
+  ): Promise<number> {
+    const live = await manager.find(Receipt, {
+      where: {
+        order_id: orderId,
+        user_id: userId,
+        status: Not(ReceiptStatus.VOID),
+      },
+      select: [
+        "id",
+        "user_id",
+        "active_logo_asset_id",
+        "pending_logo_asset_id",
+      ],
+      order: { id: "ASC" },
+      lock: { mode: "pessimistic_write" },
+    });
+    const voidedAt = new Date();
+    for (const receipt of live) {
+      await manager.update(
+        Receipt,
+        { id: receipt.id, user_id: userId, status: Not(ReceiptStatus.VOID) },
+        voidedReceiptFields(ORDER_CANCELLED_VOID_REASON, voidedAt),
+      );
+      // The dropped candidate's own logo starts its cleanup grace; the active
+      // logo stays referenced by the voided document's history.
+      if (
+        receipt.pending_logo_asset_id &&
+        receipt.pending_logo_asset_id !== receipt.active_logo_asset_id
+      )
+        await this.snapshots.releaseLogo(
+          userId,
+          receipt.pending_logo_asset_id,
+          manager,
+        );
+    }
+    if (live.length > 0)
+      this.logger.log(
+        `Order ${orderId} cancelled: voided ${live.length} document(s)`,
+      );
+    return live.length;
   }
 
   async findAll(

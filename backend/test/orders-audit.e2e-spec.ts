@@ -463,7 +463,14 @@ describeIsolatedPostgres(
         expect(after).toEqual([
           [],
           [],
-          { total_revenue_cents: 0, total_orders: 0, currency: "UAH" },
+          {
+            total_revenue_cents: 0,
+            total_orders: 0,
+            currency: "UAH",
+            unknown_cost_lines: 0,
+            unknown_cost_turnover_cents: 0,
+            profit_complete: true,
+          },
           [],
           [],
           { total_turnover_cents: 0, total_orders: 0, currency: "UAH" },

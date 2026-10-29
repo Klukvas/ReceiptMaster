@@ -71,6 +71,7 @@ describe("TelegramService", () => {
     cacheService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
+      delByPattern: jest.fn().mockResolvedValue(undefined),
     };
 
     // Reset the shared mock before each test
@@ -375,6 +376,7 @@ describe("TelegramService", () => {
     });
 
     it("should create order via transaction", async () => {
+      const createdItems: any[] = [];
       const savedOrder = {
         id: "order-1",
         total_cents: 2000,
@@ -401,6 +403,7 @@ describe("TelegramService", () => {
                   id: "p1",
                   name: "Widget",
                   sale_price_cents: 1000,
+                  purchase_price_cents: 400,
                   quantity: 10,
                   currency: "UAH",
                   user_id: "11111111-1111-4111-8111-111111111111",
@@ -419,7 +422,10 @@ describe("TelegramService", () => {
           }
           if (entity.name === "OrderItem" || entity === "OrderItem") {
             return {
-              create: jest.fn((data: any) => data),
+              create: jest.fn((data: any) => {
+                createdItems.push(data);
+                return data;
+              }),
               save: jest.fn((data: any) => Promise.resolve(data)),
             };
           }
@@ -439,6 +445,17 @@ describe("TelegramService", () => {
 
       expect(result).toBeDefined();
       expect(result.id).toBe("order-1");
+      // The line freezes the product's cost at creation time.
+      expect(createdItems).toEqual([
+        expect.objectContaining({
+          unit_price_cents: 1000,
+          unit_cost_cents: 400,
+        }),
+      ]);
+      // The order is created confirmed, so the owner's dashboard cache is dropped.
+      expect(cacheService.delByPattern).toHaveBeenCalledWith(
+        `dashboard:*:${(service as any).botOwnerUserId}:*`,
+      );
     });
 
     it("should throw if product not found", async () => {

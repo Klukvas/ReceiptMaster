@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, In } from "typeorm";
+import { Repository, DataSource, EntityManager, In } from "typeorm";
 import { Order, OrderStatus } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
 import { IdempotencyKey } from "./entities/idempotency-key.entity";
@@ -16,8 +16,25 @@ import { CacheService } from "../../common/services/cache.service";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { SettingsService } from "../settings/services/settings.service";
-
-const DASHBOARD_CACHE_TTL = 300; // 5 minutes
+import {
+  DASHBOARD_CACHE_TTL_SECONDS,
+  dashboardCacheKey,
+  dashboardCachePattern,
+} from "./dashboard-cache";
+import {
+  EMPTY_PROFIT_COMPLETENESS,
+  KNOWN_COST_PROFIT_SQL,
+  UNKNOWN_COST_COLUMNS_SQL,
+  nullableCents,
+  profitCompleteness,
+} from "./dashboard-profit";
+import { draftLineCost, snapshotCost } from "./order-item-cost";
+import {
+  DailyRevenueDto,
+  RevenueByProductDto,
+  RevenueByRecipientDto,
+  TotalRevenueDto,
+} from "./dto/dashboard-response.dto";
 
 const ORDER_SORTABLE_COLUMNS: Record<string, string> = {
   created_at: "order.created_at",
@@ -59,7 +76,36 @@ export class OrdersService {
   ) {}
 
   private async invalidateDashboardCache(userId: string): Promise<void> {
-    await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+    await this.cacheService.delByPattern(dashboardCachePattern(userId));
+  }
+
+  /** Row lock on a live order; every lifecycle transition starts here. */
+  private async lockOrder(
+    manager: EntityManager,
+    id: string,
+    userId: string,
+  ): Promise<Order> {
+    const order = await manager.findOne(Order, {
+      where: { id, user_id: userId },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
+    return order;
+  }
+
+  /** Status change fenced by the status observed under the row lock. */
+  private async transition(
+    manager: EntityManager,
+    order: Order,
+    status: OrderStatus,
+  ): Promise<void> {
+    const result = await manager.update(
+      Order,
+      { id: order.id, user_id: order.user_id, status: order.status },
+      { status },
+    );
+    if (result.affected !== 1)
+      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(order.id);
   }
 
   /**
@@ -94,14 +140,6 @@ export class OrdersService {
         );
       }
     }
-  }
-
-  private dashboardCacheKey(
-    method: string,
-    userId: string,
-    ...args: unknown[]
-  ): string {
-    return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
   }
 
   private validateItems(items: CreateOrderDto["items"]): void {
@@ -236,6 +274,7 @@ export class OrdersService {
           product_id: product.id,
           product_name: product.name,
           unit_price_cents: unitPriceCents,
+          unit_cost_cents: snapshotCost(product),
           qty: itemDto.qty,
           line_total_cents: lineTotalCents,
           user_id: user.id,
@@ -373,31 +412,53 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * DRAFT → CONFIRMED under the order row lock, so a cancel that committed first
+   * is seen and wins. Line costs are not touched: they were frozen when the draft
+   * lines were written. Auto-generation runs only after the commit.
+   */
   async confirm(id: string, user: User): Promise<Order> {
-    const order = await this.findOne(id, user);
-
-    if (order.status !== OrderStatus.DRAFT) {
-      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
-    }
-
-    order.status = OrderStatus.CONFIRMED;
-    const saved = await this.ordersRepository.save(order);
+    const confirmed = await this.dataSource.transaction(async (manager) => {
+      const order = await this.lockOrder(manager, id, user.id);
+      if (order.status !== OrderStatus.DRAFT) {
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
+      }
+      await this.transition(manager, order, OrderStatus.CONFIRMED);
+      return manager.findOneOrFail(Order, {
+        where: { id, user_id: user.id },
+        relations: ["recipient", "items", "receipts"],
+      });
+    });
     await this.invalidateDashboardCache(user.id);
-    await this.autoGenerateReceipts([saved.id], user);
-    return saved;
+    await this.autoGenerateReceipts([confirmed.id], user);
+    return confirmed;
   }
 
+  /**
+   * DRAFT or CONFIRMED → CANCELLED in one transaction, taking the tenant receipt
+   * lock first and then the order row (the same tenant → order → receipt order as
+   * generation and promotion). Cancelling a confirmed order voids its active
+   * document and pending candidate and revokes the share link; voided documents
+   * stay as history. Stock is not returned here — only deleting the order does
+   * that, exactly once.
+   */
   async cancel(id: string, user: User): Promise<Order> {
-    const order = await this.findOne(id, user);
-
-    if (order.status === OrderStatus.CANCELLED) {
-      throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
-    }
-
-    order.status = OrderStatus.CANCELLED;
-    const saved = await this.ordersRepository.save(order);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
+        [user.id],
+      );
+      const order = await this.lockOrder(manager, id, user.id);
+      if (order.status === OrderStatus.CANCELLED) {
+        throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
+      }
+      if (order.status === OrderStatus.CONFIRMED) {
+        await this.receiptsService.voidForCancellation(manager, id, user.id);
+      }
+      await this.transition(manager, order, OrderStatus.CANCELLED);
+    });
     await this.invalidateDashboardCache(user.id);
-    return saved;
+    return this.findOne(id, user);
   }
 
   async update(
@@ -510,6 +571,11 @@ export class OrdersService {
         order.total_cents = subtotalCents;
         order.currency = currency;
 
+        // Unchanged lines keep their frozen cost; see draftLineCost.
+        const previousLines = new Map(
+          existingOrderItems.map((item) => [item.product_id, item]),
+        );
+
         // First delete all existing order items
         await manager.delete(OrderItem, { order_id: id });
 
@@ -526,6 +592,11 @@ export class OrdersService {
             product_id: product.id,
             product_name: product.name,
             unit_price_cents: unitPriceCents,
+            unit_cost_cents: draftLineCost(
+              previousLines.get(product.id),
+              itemDto.qty,
+              product,
+            ),
             qty: itemDto.qty,
             line_total_cents: lineTotalCents,
             user_id: user.id,
@@ -615,12 +686,16 @@ export class OrdersService {
     orderIds: string[],
     user: User,
   ): Promise<{ approved: number }> {
-    // Deduplicate IDs
+    // Deduplicate IDs; keep request order for auto-generation, lock in id order.
     const uniqueIds = [...new Set(orderIds)];
+    const lockOrderIds = [...uniqueIds].sort();
 
     const result = await this.dataSource.transaction(async (manager) => {
+      // Same deterministic row-lock order as deleteBatch; DRAFT is checked under it.
       const orders = await manager.find(Order, {
-        where: { id: In(uniqueIds), user_id: user.id },
+        where: { id: In(lockOrderIds), user_id: user.id },
+        order: { id: "ASC" },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (orders.length !== uniqueIds.length) {
@@ -640,7 +715,7 @@ export class OrdersService {
 
       await manager.update(
         Order,
-        { id: In(uniqueIds), user_id: user.id },
+        { id: In(lockOrderIds), user_id: user.id, status: OrderStatus.DRAFT },
         { status: OrderStatus.CONFIRMED },
       );
 
@@ -713,7 +788,7 @@ export class OrdersService {
     const cached = await this.cacheService.get<T>(key);
     if (cached) return cached;
     const result = await fn();
-    await this.cacheService.set(key, result, DASHBOARD_CACHE_TTL);
+    await this.cacheService.set(key, result, DASHBOARD_CACHE_TTL_SECONDS);
     return result;
   }
 
@@ -722,16 +797,8 @@ export class OrdersService {
     user: User,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<
-    Array<{
-      product_id: string;
-      product_name: string;
-      total_revenue_cents: number;
-      total_quantity: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
+  ): Promise<RevenueByProductDto[]> {
+    const cacheKey = dashboardCacheKey(
       "revenueByProducts",
       user.id,
       startDate,
@@ -742,12 +809,11 @@ export class OrdersService {
       SELECT
         oi.product_id,
         oi.product_name,
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        ${KNOWN_COST_PROFIT_SQL} as total_revenue_cents,
         SUM(oi.qty) as total_quantity,
-        o.currency
+        o.currency,${UNKNOWN_COST_COLUMNS_SQL}
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
-      INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
@@ -768,7 +834,7 @@ export class OrdersService {
 
       query += `
       GROUP BY oi.product_id, oi.product_name, o.currency
-      ORDER BY total_revenue_cents DESC
+      ORDER BY total_revenue_cents DESC NULLS LAST
     `;
 
       const results = await this.dataSource.query(query, params);
@@ -776,9 +842,10 @@ export class OrdersService {
       return results.map((row) => ({
         product_id: row.product_id,
         product_name: row.product_name,
-        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+        total_revenue_cents: nullableCents(row.total_revenue_cents),
         total_quantity: parseInt(row.total_quantity) || 0,
         currency: row.currency,
+        ...profitCompleteness(row),
       }));
     });
   }
@@ -787,16 +854,8 @@ export class OrdersService {
     user: User,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<
-    Array<{
-      recipient_id: string;
-      recipient_name: string;
-      total_revenue_cents: number;
-      total_orders: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
+  ): Promise<RevenueByRecipientDto[]> {
+    const cacheKey = dashboardCacheKey(
       "revenueByRecipients",
       user.id,
       startDate,
@@ -807,13 +866,12 @@ export class OrdersService {
       SELECT
         o.recipient_id,
         r.name as recipient_name,
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        ${KNOWN_COST_PROFIT_SQL} as total_revenue_cents,
         COUNT(DISTINCT o.id) as total_orders,
-        o.currency
+        o.currency,${UNKNOWN_COST_COLUMNS_SQL}
       FROM orders o
       INNER JOIN recipients r ON r.id = o.recipient_id
       INNER JOIN order_items oi ON oi.order_id = o.id
-      INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
@@ -834,7 +892,7 @@ export class OrdersService {
 
       query += `
       GROUP BY o.recipient_id, r.name, o.currency
-      ORDER BY total_revenue_cents DESC
+      ORDER BY total_revenue_cents DESC NULLS LAST
     `;
 
       const results = await this.dataSource.query(query, params);
@@ -842,9 +900,10 @@ export class OrdersService {
       return results.map((row) => ({
         recipient_id: row.recipient_id,
         recipient_name: row.recipient_name,
-        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
+        total_revenue_cents: nullableCents(row.total_revenue_cents),
         total_orders: parseInt(row.total_orders) || 0,
         currency: row.currency,
+        ...profitCompleteness(row),
       }));
     });
   }
@@ -853,12 +912,8 @@ export class OrdersService {
     user: User,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<{
-    total_revenue_cents: number;
-    total_orders: number;
-    currency: string;
-  }> {
-    const cacheKey = this.dashboardCacheKey(
+  ): Promise<TotalRevenueDto> {
+    const cacheKey = dashboardCacheKey(
       "totalRevenue",
       user.id,
       startDate,
@@ -867,12 +922,11 @@ export class OrdersService {
     return this.cachedDashboard(cacheKey, async () => {
       let query = `
       SELECT
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
+        ${KNOWN_COST_PROFIT_SQL} as total_revenue_cents,
         COUNT(DISTINCT o.id) as total_orders,
-        o.currency
+        o.currency,${UNKNOWN_COST_COLUMNS_SQL}
       FROM orders o
       INNER JOIN order_items oi ON oi.order_id = o.id
-      INNER JOIN products p ON p.id = oi.product_id
       WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
     `;
 
@@ -895,13 +949,20 @@ export class OrdersService {
 
       const results = await this.dataSource.query(query, params);
       const result = results[0];
+      // No confirmed lines at all is a complete zero; otherwise NULL stays unknown.
+      if (!result)
+        return {
+          total_revenue_cents: 0,
+          total_orders: 0,
+          currency: "UAH",
+          ...EMPTY_PROFIT_COMPLETENESS,
+        };
 
       return {
-        total_revenue_cents: result
-          ? parseInt(result.total_revenue_cents) || 0
-          : 0,
-        total_orders: result ? parseInt(result.total_orders) || 0 : 0,
-        currency: result?.currency || "UAH",
+        total_revenue_cents: nullableCents(result.total_revenue_cents),
+        total_orders: parseInt(result.total_orders) || 0,
+        currency: result.currency || "UAH",
+        ...profitCompleteness(result),
       };
     });
   }
@@ -920,7 +981,7 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey(
+    const cacheKey = dashboardCacheKey(
       "turnoverByProducts",
       user.id,
       startDate,
@@ -984,7 +1045,7 @@ export class OrdersService {
       currency: string;
     }>
   > {
-    const cacheKey = this.dashboardCacheKey(
+    const cacheKey = dashboardCacheKey(
       "turnoverByRecipients",
       user.id,
       startDate,
@@ -1044,7 +1105,7 @@ export class OrdersService {
     total_orders: number;
     currency: string;
   }> {
-    const cacheKey = this.dashboardCacheKey(
+    const cacheKey = dashboardCacheKey(
       "totalTurnover",
       user.id,
       startDate,
@@ -1093,17 +1154,16 @@ export class OrdersService {
   async getDailyRevenue(
     user: User,
     days: number = 7,
-  ): Promise<
-    Array<{ date: string; revenue_cents: number; turnover_cents: number }>
-  > {
-    const cacheKey = this.dashboardCacheKey("dailyRevenue", user.id, days);
+  ): Promise<DailyRevenueDto[]> {
+    const cacheKey = dashboardCacheKey("dailyRevenue", user.id, days);
     return this.cachedDashboard(cacheKey, async () => {
       const results = await this.dataSource.query(
         `
       SELECT
         d.date::text as date,
-        COALESCE(SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty), 0)::integer as revenue_cents,
-        COALESCE(SUM(oi.line_total_cents), 0)::integer as turnover_cents
+        (CASE WHEN COUNT(oi.id) = 0 THEN 0
+          ELSE ${KNOWN_COST_PROFIT_SQL} END)::integer as revenue_cents,
+        COALESCE(SUM(oi.line_total_cents), 0)::integer as turnover_cents,${UNKNOWN_COST_COLUMNS_SQL}
       FROM generate_series(
         CURRENT_DATE - ($1 - 1) * INTERVAL '1 day',
         CURRENT_DATE,
@@ -1114,17 +1174,18 @@ export class OrdersService {
         AND o.user_id = $2
         AND o.deleted_at IS NULL
       LEFT JOIN order_items oi ON oi.order_id = o.id
-      LEFT JOIN products p ON p.id = oi.product_id
       GROUP BY d.date
       ORDER BY d.date ASC
       `,
         [days, user.id],
       );
 
+      // A day without orders is a complete 0; a day whose lines all lack a cost is null.
       return results.map((row) => ({
         date: row.date,
-        revenue_cents: parseInt(row.revenue_cents) || 0,
+        revenue_cents: nullableCents(row.revenue_cents),
         turnover_cents: parseInt(row.turnover_cents) || 0,
+        ...profitCompleteness(row),
       }));
     });
   }
@@ -1132,7 +1193,7 @@ export class OrdersService {
   async getOrderStatusSummary(
     user: User,
   ): Promise<{ draft: number; confirmed: number; cancelled: number }> {
-    const cacheKey = this.dashboardCacheKey("statusSummary", user.id);
+    const cacheKey = dashboardCacheKey("statusSummary", user.id);
     return this.cachedDashboard(cacheKey, async () => {
       const results = await this.dataSource.query(
         `

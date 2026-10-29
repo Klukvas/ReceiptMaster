@@ -295,16 +295,21 @@ Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
 | `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
 | `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
 | `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
-| `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes | receipts and document configuration |
+| `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel | receipts and document configuration |
 | `hashtextextended(userId, 2)` | document storage cleanup | storage sweeps |
 
 Migrations additionally hold a session-level `pg_advisory_lock` (`common/services/migration.service.ts`).
 
 **Ordering rule** (prevents lock-order deadlocks): a transaction takes at most one tenant advisory
 lock, and takes it first; row locks follow in ascending id order (`ORDER BY id … FOR UPDATE`). The
-only combination in use is order create with an idempotency key: key lock → order-quota lock → product
-rows, always in that order. Product create takes only `product-quota` (never
-`hashtextextended(userId, 1)`); a product update takes no advisory lock and at most its own row lock.
+only combination of advisory locks in use is order create with an idempotency key: key lock →
+order-quota lock → product rows, always in that order. Product create takes only `product-quota`
+(never `hashtextextended(userId, 1)`); a product update takes no advisory lock and at most its own row
+lock. Order cancel takes `hashtextextended(userId, 1)` → order row → the order's receipt rows (id
+order) → logo asset rows, the same tenant → order → receipt order as generation and promotion.
+Confirm, `approveBatch` (id order), edit and delete take order row locks without a tenant lock;
+manual void and repair start at the order row too — none of them takes the tenant lock after a row
+lock.
 
 ### 4. DTO — Input/Output Validation
 
@@ -706,6 +711,19 @@ Snapshot/HTML/pending-asset entity columns use `select: false`; internal service
 
 `DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded objects have a 24-hour grace. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving MAX_RECEIPTS = 10. Legacy local filesystem files are not processed by immutable object-storage cleanup.
 
+The additive `1792300000000-AddOrderItemUnitCost` migration adds nullable `order_items.unit_cost_cents`
+with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`), no default and no backfill (legacy
+lines stay unknown). `ADD COLUMN … NULL` is metadata-only; the inline CHECK costs one scan of
+`order_items` under the ACCESS EXCLUSIVE lock that `ADD COLUMN` already holds. `NOT VALID` + `VALIDATE`
+would not shorten that lock because `scripts/deploy-production.sh` runs every pending migration in one
+transaction (`transaction: 'all'`, `lock_timeout` 30 s); the table is small for this product. The
+row-level `tenant_isolation_order_items` policy and table-level grants cover the new column unchanged.
+Rollout: the deploy script applies it with the new image before swapping containers (it is listed in
+`KNOWN_MIGRATIONS`/`EXPECTED_MIGRATIONS`); the old image ignores the column and its inserts store
+NULL; rolling back the image is safe; `down` drops captured costs and must not run in production.
+`test/order-item-cost-migration.e2e-spec.ts` runs the chain up to the previous release, seeds legacy
+lines, then up → CHECK → restricted-role write under RLS → down → up on a fresh database.
+
 The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
 
 The additive `1792100000000-DocumentConfiguration` migration adds config/revision/logo columns, tenant assets/presets, one active snapshot and one pending replacement. New tables have FORCE RLS with explicit USING/WITH CHECK and tenant-qualified asset foreign keys. A trigger validates the legacy varchar settings tenant against the asset owner. It deliberately does not retrofit unrelated settings RLS.
@@ -955,12 +973,18 @@ async findAll(
    explicit/repair regeneration that cannot restore a revoked share token or undo a concurrent
    void), `test/orders-audit.e2e-spec.ts`, `test/template-features-sql.e2e-spec.ts`,
    `test/products-concurrency.e2e-spec.ts` (stock precondition writes, lock-parked conflicts,
-   product-quota races and rollback) and `test/refresh-rotation.e2e-spec.ts` (single-use rotation
-   under concurrency, successor-insert rollback, expiry) — create and drop their own uniquely named
-   databases and a `NOSUPERUSER NOBYPASSRLS` login role. The last two run services as that role
-   through the production tenant query context (`test/helpers/restricted-app-database.ts`, which
-   applies the RLS policy migration) and park concurrent calls on real row/table locks, polling
-   `pg_stat_activity` instead of sleeping. Teardown goes through `teardownIsolatedPostgres` /
+   product-quota races and rollback), `test/refresh-rotation.e2e-spec.ts` (single-use rotation
+   under concurrency, successor-insert rollback, expiry), `test/order-lifecycle.e2e-spec.ts`
+   (confirm/approve/cancel races, cancel voiding documents and links, delayed workers after a
+   cancel, rejected follow-ups), `test/order-profit-snapshot.e2e-spec.ts` (cost capture, profit from
+   snapshots, unknown vs zero cost, daily gaps, sort order, cache versions) and
+   `test/order-item-cost-migration.e2e-spec.ts` — create and drop their own uniquely named
+   databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
+   through the production tenant query context — `test/helpers/restricted-app-database.ts`
+   (entity-synchronized schema plus the RLS policy migration) or `test/helpers/migrated-app-database.ts`
+   (the full migration chain: functions, FORCE RLS policies, outbox and storage tables) — and park
+   concurrent calls on real row/table/advisory locks, polling `pg_stat_activity` instead of sleeping.
+   Teardown goes through `teardownIsolatedPostgres` /
    `destroyDataSources`: every data source is settled independently, each database is dropped
    `WITH (FORCE)`, each role is dropped and the maintenance client is closed even when an earlier
    step fails; all failures are rethrown together. `test/helpers/isolated-postgres.ts` gates them:
@@ -979,10 +1003,13 @@ async findAll(
    project's cluster on the same port is refused too. Locally, in a cluster started only for these
    suites, for example:
    `docker run -d --rm --name pg-isolated -p 127.0.0.1:55439:5432 -p 127.0.0.1:55447:5432 -e POSTGRES_PASSWORD=postgres postgres:15-alpine`
-   (check first that nothing else listens on those ports), then
+   (check first that nothing else listens on those ports; the cluster must be PostgreSQL 13 or newer
+   because teardown uses `DROP DATABASE … WITH (FORCE)`), then
    `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
    then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
-   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation`.
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration`.
+   `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
+   no database.
    Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.
 
 ---

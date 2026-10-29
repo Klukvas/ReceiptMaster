@@ -13,7 +13,10 @@ import { SkeletonChart } from "../ui/Skeleton";
 
 interface ChartItem {
   name: string;
-  value: number;
+  /** Null when the amount is unknown: no bar is drawn, the tooltip says why. */
+  value: number | null;
+  /** Extra tooltip line, e.g. which part of a profit is missing. */
+  note?: string;
 }
 
 interface RevenueChartProps {
@@ -30,18 +33,23 @@ const CustomTooltip = ({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number }>;
+  payload?: Array<{ value: number | null; payload?: ChartItem }>;
   label?: string;
 }) => {
   if (!active || !payload?.length) return null;
+  const { value } = payload[0];
+  const note = payload[0].payload?.note;
   return (
     <div className="rounded-lg bg-surface border border-[var(--color-border)] px-3 py-2 shadow-xl">
       <p className="text-xs text-content-tertiary mb-0.5 truncate max-w-[180px]">
         {label}
       </p>
       <p className="text-sm font-semibold text-content tabular-nums">
-        {formatCurrency(payload[0].value * 100)}
+        {typeof value === "number" ? formatCurrency(value * 100) : "—"}
       </p>
+      {note && (
+        <p className="text-xs text-warning-base mt-0.5 max-w-[220px]">{note}</p>
+      )}
     </div>
   );
 };

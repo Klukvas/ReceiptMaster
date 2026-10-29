@@ -90,18 +90,6 @@ export class SubscriptionService {
     };
   }
 
-  async assertCanCreateProduct(userId: string): Promise<void> {
-    const subscription = await this.getOrCreate(userId);
-    const limits = PLAN_LIMITS[subscription.plan];
-
-    if (limits.maxProducts === null) return;
-
-    const count = await this.countProducts(userId);
-    if (count >= limits.maxProducts) {
-      throw ApiErrors.PRODUCT_LIMIT_EXCEEDED(limits.maxProducts);
-    }
-  }
-
   /**
    * Quota check for a product insert in the caller's transaction. The per-user
    * advisory lock is held until commit, so concurrent creates count one after

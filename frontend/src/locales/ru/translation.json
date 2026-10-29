@@ -171,7 +171,8 @@
     "overridePrice": "Своя цена",
     "stock": "в наличии",
     "nothingFound": "Ничего не найдено",
-    "creating": "Создание..."
+    "creating": "Создание...",
+    "cancelConfirmedWarning": "Заказ подтверждён: отмена аннулирует его чек и отключит публичную ссылку. Товар на склад не вернётся — чтобы вернуть остатки, удалите заказ."
   },
   "products": {
     "title": "Товары",
@@ -739,7 +740,13 @@
     "totalTurnover": "Общий оборот",
     "topCustomers": "Топ клиентов",
     "sortByRevenue": "По выручке",
-    "sortByOrders": "По заказам"
+    "sortByOrders": "По заказам",
+    "profitUnknown": "Себестоимость неизвестна",
+    "profitPartial": "Неполная",
+    "profitPartialTooltip": "Без учёта строк заказов с неизвестной себестоимостью: {{lines}} (оборот {{turnover}})",
+    "csvProfitComplete": "Прибыль полная",
+    "csvUnknownCostLines": "Строк с неизвестной себестоимостью",
+    "csvUnknownCostTurnover": "Оборот с неизвестной себестоимостью"
   },
   "notFound": {
     "title": "Страница не найдена",

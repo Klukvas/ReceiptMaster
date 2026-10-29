@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowUpDown, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '../../lib/api';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -7,9 +7,12 @@ import { Skeleton } from '../ui/Skeleton';
 interface Recipient {
  recipient_id: string;
  recipient_name: string;
- total_cents: number;
+ /** Null when unknown (profit without any known cost): shown as a dash. */
+ total_cents: number | null;
  total_orders: number;
  currency: string;
+ /** Optional note under the amount, e.g. profit completeness. */
+ status?: ReactNode;
 }
 
 interface TopRecipientsListProps {
@@ -50,8 +53,11 @@ export const TopRecipientsList = ({
  const [sortBy, setSortBy] = useState<'revenue' | 'orders'>('revenue');
  const [showAll, setShowAll] = useState(false);
 
+ // Unknown amounts sort after every known one, like the API's NULLS LAST.
+ const byAmount = (a: Recipient, b: Recipient) =>
+ (b.total_cents ?? Number.NEGATIVE_INFINITY) - (a.total_cents ?? Number.NEGATIVE_INFINITY) || 0;
  const sorted = [...recipients].sort((a, b) =>
- sortBy === 'revenue' ? b.total_cents - a.total_cents : b.total_orders - a.total_orders,
+ sortBy === 'revenue' ? byAmount(a, b) : b.total_orders - a.total_orders,
  );
 
  const visible = showAll ? sorted : sorted.slice(0, INITIAL_LIMIT);
@@ -124,9 +130,14 @@ export const TopRecipientsList = ({
  </div>
 
  {/* Revenue */}
- <p className="text-sm font-semibold text-content tabular-nums text-right shrink-0">
- {formatCurrency(recipient.total_cents, recipient.currency)}
+ <div className="text-right shrink-0">
+ <p className="text-sm font-semibold text-content tabular-nums">
+ {recipient.total_cents === null
+ ? '—'
+ : formatCurrency(recipient.total_cents, recipient.currency)}
  </p>
+ {recipient.status}
+ </div>
  </div>
  ))}
  </div>

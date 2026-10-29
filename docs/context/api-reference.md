@@ -592,6 +592,10 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 }
 ```
 
+`OrderItem` carries `unit_cost_cents: number | null` — the product's purchase cost frozen when the
+draft line was written (null = unknown, e.g. lines created before cost snapshots). It appears only in
+the owner's order/receipt JSON; frozen documents, PDFs and the public share page never include it.
+
 **Special Response Header:**
 - `X-Idempotency-Replayed: true` — Returned from cache (original response status is reused)
 
@@ -667,7 +671,9 @@ Modifies draft order. Cannot update once confirmed.
 
 **Response** (200): `Order`
 
-Replaced items restore removed products' stock and reserve the new items atomically.
+Replaced items restore removed products' stock and reserve the new items atomically. A line with the
+same product and quantity as before keeps its `unit_cost_cents` (including null); any other line
+captures the product's current purchase cost.
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — Duplicate product IDs or mixed currencies
@@ -679,15 +685,16 @@ Replaced items restore removed products' stock and reserve the new items atomica
 
 **PATCH** `/orders/:id/confirm`
 
-Locks order, prevents further edits. Required before generating receipt.
+DRAFT → CONFIRMED under the order row lock; prevents further edits. Required before generating a
+receipt. A cancel that committed first wins (the confirm then gets 400). Line costs are not re-read.
 
 If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt on confirm](#auto-generate-receipt-on-confirm)), the default receipt is queued right after the status change, exactly as an empty-body `POST /receipts/orders/:orderId/receipt`. A generation failure is logged and never fails the confirm; the order stays confirmed and can be generated manually.
 
 **Response** (200): `Order` (status updated to `confirmed`)
 
 **Errors:**
-- 400 `ORDER_ALREADY_CONFIRMED` — Already confirmed
-- 400 `ORDER_CANNOT_BE_MODIFIED` — In cancelled state
+- 404 `ORDER_NOT_FOUND`
+- 400 `ORDER_CANNOT_BE_MODIFIED` — Not DRAFT (already confirmed or cancelled)
 
 ---
 
@@ -695,11 +702,20 @@ If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt
 
 **PATCH** `/orders/:id/cancel`
 
-Soft-deletes order (marks as cancelled).
+Marks a DRAFT or CONFIRMED order `cancelled`. It is **not** a deletion: the order stays listed and
+keeps its stock reservation — only `DELETE /orders/:id` returns stock (exactly once).
 
-**Response** (200): `Order` (status updated to `cancelled`)
+Cancelling a CONFIRMED order, in the same transaction, voids every non-void receipt of the order
+(`status: void`, `void_reason: "order_cancelled"`, `voided_at`), revokes its public share link and
+drops any pending candidate/replacement, so a delayed worker can no longer promote it. The voided PDF
+stays downloadable by the owner as history; a receipt already voided by hand keeps its own reason.
+Afterwards generate/regenerate/share/void/repair on that receipt are rejected and the order can be
+neither confirmed nor edited.
+
+**Response** (200): `Order` (status `cancelled`, its receipts `void`)
 
 **Errors:**
+- 404 `ORDER_NOT_FOUND`
 - 400 `ORDER_ALREADY_CANCELLED` — Already cancelled
 
 ---
@@ -728,7 +744,8 @@ Deletes an order.
 
 **POST** `/orders/batch-approve`
 
-Confirms multiple draft orders in one call. With `autoGenerateReceipt` on, a default receipt is queued for each approved order after the transaction commits (sequentially, failures logged per order and never fail the response).
+Confirms multiple draft orders in one call. The orders are row-locked in id order and must all still
+be DRAFT under the lock (a concurrent cancel wins). With `autoGenerateReceipt` on, a default receipt is queued for each approved order after the transaction commits (sequentially, failures logged per order and never fail the response).
 
 **Request Body:**
 ```typescript
@@ -771,21 +788,39 @@ Soft-deletes multiple orders.
 
 File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (7 of 17 total)
 
+"Revenue" in these routes is **profit**: Σ (unit price − `order_items.unit_cost_cents`) × qty over
+confirmed, non-deleted orders. It never reads the product's current purchase price, so changing a
+product's cost does not rewrite history. Lines whose cost is unknown (NULL) are left out of the sum
+and reported instead — an unknown cost is never counted as zero. Every profit payload carries:
+
+```typescript
+type ProfitCompleteness = {
+  unknown_cost_lines: number,          // lines excluded for unknown cost
+  unknown_cost_turnover_cents: number, // their line totals
+  profit_complete: boolean,            // unknown_cost_lines === 0
+}
+```
+
+The profit field is `number | null`: null when no line of the group has a known cost. Groups are
+sorted by profit `DESC NULLS LAST`. Turnover routes are unchanged and count every line.
+
 #### Daily Revenue (Sparkline Data)
 
 **GET** `/orders/dashboard/daily-revenue`
 
-Time-series revenue data for sparkline/chart (last N days).
+Time-series profit and turnover for sparkline/chart (last N days).
 
 **Query Params:**
-- `days` (number, optional) — Number of days to retrieve. Default: 7. Max: 365.
+- `days` (number, optional) — Number of days to retrieve. Default: 7.
 
 **Response** (200):
 ```typescript
 [
   {
-    date: string,          // ISO date, e.g., "2026-08-20"
-    revenue_cents: number
+    date: string,                // "2026-08-20"
+    revenue_cents: number | null, // 0 for a day without orders; null when every line that day has an unknown cost
+    turnover_cents: number,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -825,8 +860,10 @@ Revenue breakdown by product across all orders.
   {
     product_id: string,
     product_name: string,
-    revenue_cents: number,
-    order_count: number
+    total_revenue_cents: number | null,
+    total_quantity: number,
+    currency: string,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -849,8 +886,10 @@ Revenue breakdown by customer (recipient).
   {
     recipient_id: string,
     recipient_name: string,
-    revenue_cents: number,
-    order_count: number
+    total_revenue_cents: number | null,
+    total_orders: number,
+    currency: string,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -870,8 +909,10 @@ All-time or date-range total revenue.
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TotalRevenueDto
 ```typescript
 {
-  total_cents: number,
-  currency: string
+  total_revenue_cents: number | null, // 0 (complete) when there are no confirmed lines
+  total_orders: number,
+  currency: string,
+  ...ProfitCompleteness
 }
 ```
 

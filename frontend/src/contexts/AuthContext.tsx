@@ -1,5 +1,10 @@
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { authApi, type User } from '../lib/api';
+import {
+ clearStoredSession,
+ readStoredSession,
+ storeSession,
+} from '../lib/auth-session';
 import { AuthContext, type AuthContextType } from './AuthContext.types';
 
 interface AuthProviderProps {
@@ -13,7 +18,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
  // Check for existing token on mount
  useEffect(() => {
- const storedToken = localStorage.getItem('auth_token');
+ const storedToken = readStoredSession().accessToken;
  if (storedToken) {
  setToken(storedToken);
  // Try to get user profile
@@ -41,8 +46,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  const response = await authApi.login({ email, password });
  const { access_token, refresh_token, user: userData } = response.data;
 
- localStorage.setItem('auth_token', access_token);
- localStorage.setItem('refresh_token', refresh_token);
+ // Access token first, then refresh token (other tabs wait for the latter).
+ storeSession({ accessToken: access_token, refreshToken: refresh_token });
  setToken(access_token);
  setUser(userData);
 
@@ -53,8 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  const response = await authApi.register({ email, password });
  const { access_token, refresh_token, user: userData } = response.data;
 
- localStorage.setItem('auth_token', access_token);
- localStorage.setItem('refresh_token', refresh_token);
+ storeSession({ accessToken: access_token, refreshToken: refresh_token });
  setToken(access_token);
  setUser(userData);
 
@@ -62,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  };
 
  const logout = async () => {
- const refreshToken = localStorage.getItem('refresh_token');
+ const { refreshToken } = readStoredSession();
  if (refreshToken) {
  try {
  await authApi.logout(refreshToken);
@@ -70,8 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  // Ignore errors during logout
  }
  }
- localStorage.removeItem('auth_token');
- localStorage.removeItem('refresh_token');
+ clearStoredSession();
  setToken(null);
  setUser(null);
  window.location.href = '/';

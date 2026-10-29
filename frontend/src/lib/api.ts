@@ -56,7 +56,20 @@ import type {
   User,
 } from "./api-types";
 
-export type UpdateProductRequest = components["schemas"]["UpdateProductDto"];
+type UpdateProductFields = Omit<
+  components["schemas"]["UpdateProductDto"],
+  "quantity" | "expectedQuantity"
+>;
+
+/**
+ * A partial product update. Stock is never sent alone: `quantity` travels with
+ * the `expectedQuantity` it replaces (409 when the stored stock moved).
+ */
+export type UpdateProductRequest = UpdateProductFields &
+  (
+    | { quantity?: never; expectedQuantity?: never }
+    | { quantity: number; expectedQuantity: number }
+  );
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";

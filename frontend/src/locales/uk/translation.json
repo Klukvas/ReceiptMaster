@@ -171,7 +171,8 @@
     "overridePrice": "Своя ціна",
     "stock": "в наявності",
     "nothingFound": "Нічого не знайдено",
-    "creating": "Створення..."
+    "creating": "Створення...",
+    "cancelConfirmedWarning": "Замовлення підтверджене: скасування анулює його чек і вимкне публічне посилання. Товар на склад не повернеться — щоб повернути залишки, видаліть замовлення."
   },
   "products": {
     "title": "Товари",
@@ -739,7 +740,13 @@
     "totalTurnover": "Загальний оборот",
     "topCustomers": "Топ клієнтів",
     "sortByRevenue": "За доходом",
-    "sortByOrders": "За замовленнями"
+    "sortByOrders": "За замовленнями",
+    "profitUnknown": "Собівартість невідома",
+    "profitPartial": "Неповний",
+    "profitPartialTooltip": "Без урахування рядків замовлень з невідомою собівартістю: {{lines}} (оборот {{turnover}})",
+    "csvProfitComplete": "Прибуток повний",
+    "csvUnknownCostLines": "Рядків з невідомою собівартістю",
+    "csvUnknownCostTurnover": "Оборот з невідомою собівартістю"
   },
   "notFound": {
     "title": "Сторінка не знайдена",

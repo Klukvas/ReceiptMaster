@@ -23,6 +23,7 @@ const SPECS = [
   { name: "receipt-progress", load: () => import("./receipt-progress.spec.mjs") },
   { name: "auth-multitab", load: () => import("./auth-multitab.spec.mjs") },
   { name: "product-form-conflict", load: () => import("./product-form-conflict.spec.mjs") },
+  { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
