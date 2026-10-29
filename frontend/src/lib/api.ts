@@ -231,12 +231,8 @@ type CreateOptions = { readonly idempotencyKey?: string };
 const idempotencyConfig = ({ idempotencyKey }: CreateOptions) =>
   idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {};
 
-type RecipientFields = Omit<Recipient, "id" | "created_at" | "updated_at">;
-
-/** Changed fields only; `null` clears an optional field. */
-export type UpdateRecipientRequest = {
-  readonly [K in keyof RecipientFields]?: RecipientFields[K] | null;
-};
+/** Changed fields only; `null` clears email, phone or address (UpdateRecipientDto). */
+export type UpdateRecipientRequest = components["schemas"]["UpdateRecipientDto"];
 
 // API methods
 export const authApi = {

@@ -4710,18 +4710,21 @@
           },
           "email": {
             "type": "string",
-            "description": "Email получателя",
-            "example": "ivan@example.com"
+            "description": "Email получателя; null очищает",
+            "example": "ivan@example.com",
+            "nullable": true
           },
           "phone": {
             "type": "string",
-            "description": "Телефон получателя",
-            "example": "+7 (999) 123-45-67"
+            "description": "Телефон получателя; null очищает",
+            "example": "+7 (999) 123-45-67",
+            "nullable": true
           },
           "address": {
             "type": "string",
-            "description": "Адрес получателя",
-            "example": "г. Москва, ул. Тверская, д. 1"
+            "description": "Адрес получателя; null очищает",
+            "example": "г. Москва, ул. Тверская, д. 1",
+            "nullable": true
           }
         }
       },
