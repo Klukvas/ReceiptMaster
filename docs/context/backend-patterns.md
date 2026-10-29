@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-29
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -13,7 +13,7 @@ This document describes how the ReceiptMaster backend is structured, the pattern
 - **Validation:** class-validator, class-transformer, Zod (env)
 - **API Docs:** Swagger/OpenAPI on `/api/v1/docs`
 - **Node:** 20 LTS
-- **Package Manager:** Yarn (monorepo workspaces)
+- **Package Manager:** Yarn (monorepo workspaces). The root `yarn.lock` is authoritative; `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it so each package's Docker build can run `yarn install --frozen-lockfile` — after any dependency change copy the root lock over both (CI fails on drift). `yarn lint` only checks; `yarn lint:fix` applies fixes.
 
 Entry points:
 - `backend/src/main.ts` — bootstraps NestJS, configures global pipes/CORS/Swagger

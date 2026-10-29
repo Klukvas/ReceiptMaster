@@ -26,6 +26,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Docker images build from ./backend and ./frontend, which cannot see the
+      # root lock, so each package carries a byte-for-byte copy of it.
+      - name: Verify package lockfiles match the root yarn.lock
+        run: |
+          status=0
+          for lock in backend/yarn.lock frontend/yarn.lock; do
+            if ! cmp -s ../yarn.lock "../$lock"; then
+              echo "::error file=$lock::$lock differs from the root yarn.lock. From the repository root run: cp yarn.lock $lock"
+              status=1
+            fi
+          done
+          exit "$status"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:

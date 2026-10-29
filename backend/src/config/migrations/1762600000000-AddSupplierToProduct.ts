@@ -20,7 +20,9 @@ export class AddSupplierToProduct1762600000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "products" DROP CONSTRAINT "FK_products_supplier"`);
+    await queryRunner.query(
+      `ALTER TABLE "products" DROP CONSTRAINT "FK_products_supplier"`,
+    );
     await queryRunner.query(`DROP INDEX "IDX_products_supplier_id"`);
     await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "supplier_id"`);
   }

@@ -690,9 +690,11 @@ The backend is designed for horizontal scaling:
 
 | File | Base Image | Purpose |
 |---|---|---|
-| `backend/Dockerfile` | `node:20-alpine` + Chromium | Production backend |
-| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Dev/CI backend |
+| `backend/Dockerfile` | `node:20-alpine` + Chromium | Legacy; not used by CI or any compose file |
+| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Production backend image (CI `build-and-deploy`) and local `docker-compose.yml` backend |
 | `frontend/Dockerfile` | `node:20-alpine` (build) -> `nginx:alpine` (serve) | Multi-stage frontend build with self-signed SSL |
+
+Images install with `yarn install --frozen-lockfile`. Their build contexts (`./backend`, `./frontend`) cannot see the root `yarn.lock`, so `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it; after any dependency change, copy the root lock over both (CI `test-backend` fails when they differ).
 
 ### CI/CD (GitHub Actions)
 
