@@ -16,7 +16,17 @@
       "post": {
         "operationId": "ProductsController_create",
         "summary": "Создать товар",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -29,11 +39,21 @@
         },
         "responses": {
           "201": {
-            "description": "Товар успешно создан",
+            "description": "Товар успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -479,7 +499,17 @@
       "post": {
         "operationId": "RecipientsController_create",
         "summary": "Создать получателя",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -492,11 +522,21 @@
         },
         "responses": {
           "201": {
-            "description": "Получатель успешно создан",
+            "description": "Получатель успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }

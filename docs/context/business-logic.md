@@ -483,6 +483,10 @@ File: `backend/src/modules/products/products.service.ts::create()`
   a create that rolls back after its insert releases the slot
 - The audit log entry is written by `AuditLogInterceptor` only after the handler succeeds, so a
   rolled-back or rejected create is never logged
+- With an `Idempotency-Key` (the onboarding wizard sends one) the transaction first takes the key's
+  advisory lock and replays a stored response from the last 24 hours, so a retried or concurrent
+  repeat creates nothing — even at the plan limit, because the quota lock comes after the key. Only
+  a successful create stores its response (`common/idempotency/idempotent-create.ts`)
 - Duplicate live names are rejected only by the partial unique index `IDX_products_user_name`
   `(user_id, name) WHERE deleted_at IS NULL`; there is no explicit check, so the violation currently
   surfaces as a 500 rather than the documented 409 `PRODUCT_ALREADY_EXISTS` (known drift, not fixed here)
@@ -510,8 +514,8 @@ File: `backend/src/modules/recipients/entities/recipient.entity.ts`
 
 File: `backend/src/modules/recipients/recipients.service.ts::create()`
 
-- Validate no duplicate email for this user
-- Save and return
+- Save and return (nothing checks e-mail uniqueness today)
+- With an `Idempotency-Key`: same replay rules as products, in one transaction with the key lock
 
 ---
 
@@ -697,8 +701,10 @@ Files:
    - No cross-tenant data leakage
 
 6. **Idempotency:**
-   - Same `Idempotency-Key` within 24 hours returns same response
-   - Prevents duplicate orders if client retries
+   - Same `Idempotency-Key` within 24 hours returns same response (orders, products, recipients)
+   - Prevents duplicate orders, products and recipients if the client retries, also concurrently
+   - Keys are per user and per kind: an order, a product and a recipient key of the same value are
+     independent
 
 7. **Soft Deletes:**
    - Orders are deleted via the `deleted_at` timestamp; cancellation is a separate status change

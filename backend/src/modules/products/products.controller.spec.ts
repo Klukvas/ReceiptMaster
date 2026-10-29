@@ -37,12 +37,52 @@ describe("ProductsController", () => {
   });
 
   describe("create", () => {
+    const response = () => ({ setHeader: jest.fn() }) as any;
+    const withKey = (key: string | undefined) => ({
+      user: mockUser,
+      headers: key === undefined ? {} : { "idempotency-key": key },
+    });
+
     it("should create a product", () => {
       const dto = { name: "Widget", sale_price_cents: 1000 } as any;
 
-      controller.create(dto, mockReq);
+      controller.create(dto, withKey(undefined), response());
 
       expect(productsService.create).toHaveBeenCalledWith(dto, mockUser);
+    });
+
+    it("passes an Idempotency-Key through and marks a replay", async () => {
+      const dto = { name: "Widget" } as any;
+      const res = response();
+      const stored = { id: "prod-1", name: "Widget" };
+      productsService.createWithIdempotencyKey = jest
+        .fn()
+        .mockResolvedValue({ replayed: true, data: stored });
+
+      const body = await controller.create(dto, withKey("key-1"), res);
+
+      expect(productsService.createWithIdempotencyKey).toHaveBeenCalledWith(
+        dto,
+        mockUser,
+        "key-1",
+      );
+      expect(productsService.create).not.toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "X-Idempotency-Replayed",
+        "true",
+      );
+      expect(body).toEqual(stored);
+    });
+
+    it("does not mark a first create with a key as replayed", async () => {
+      const res = response();
+      productsService.createWithIdempotencyKey = jest
+        .fn()
+        .mockResolvedValue({ replayed: false, data: { id: "prod-1" } });
+
+      await controller.create({ name: "W" } as any, withKey("key-1"), res);
+
+      expect(res.setHeader).not.toHaveBeenCalled();
     });
   });
 

@@ -525,8 +525,8 @@
       },
       "receipts": {
         "title": "PDF Receipt Generation",
-        "description": "Background PDF generation via BullMQ queue. 10 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
-        "tag1": "10 templates",
+        "description": "Background PDF generation via BullMQ queue. 15 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
+        "tag1": "15 templates",
         "tag2": "SHA256 hash",
         "tag3": "S3 storage"
       },
@@ -763,6 +763,9 @@
     "next": "Continue",
     "back": "Back",
     "stepOf": "Step {{current}} of {{total}}",
+    "saveUnconfirmed": "We couldn't confirm the save. Retry is safe.",
+    "finishFailed": "Couldn't finish setup. Retry.",
+    "skipFailed": "Couldn't save that you skipped setup. It will be offered again next time.",
     "step1": {
       "title": "Company Information",
       "subtitle": "Tell us about your business"

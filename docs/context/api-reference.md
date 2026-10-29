@@ -197,9 +197,25 @@ File: `backend/src/modules/products/products.controller.ts` (8 endpoints)
 
 **POST** `/products` (requires auth)
 
-Creates a new product in user's catalog.
+Creates a new product in user's catalog. Supports idempotency via `Idempotency-Key`.
+
+**Headers:**
+
+| Header | Type | Optional | Notes |
+|--------|------|----------|-------|
+| Idempotency-Key | string | yes | 1–255 visible ASCII characters (400 `VALIDATION_ERROR` otherwise); valid for 24 hours |
+
+**Idempotency (since 2026-10-29):** within 24 hours a repeated key from the same user creates
+nothing and answers 201 with the first response's body plus `X-Idempotency-Replayed: true`, also
+when two requests with the key arrive at once (they are serialized on the key) and also once the
+plan's product limit has been reached (the key is checked before the quota). Only successful creates
+are stored: a refused or failed create is run again on retry. A repeated key with a *different* body
+still replays the first response — the client then PATCHes the difference. Without the header the
+route behaves as before. The key is stored as `product:` + SHA-256 of the key in `idempotency_keys`,
+so it never collides with an order or recipient key of the same value.
 
 **Errors:**
+- 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 402 `PRODUCT_LIMIT_EXCEEDED` — Plan product limit reached (free: 10, pro: 100). The count excludes
   soft-deleted products and is taken in the insert's transaction under a per-tenant lock, so two
   creates racing for the last slot get one 201 and one 402; a rolled-back create frees its slot.
@@ -472,7 +488,17 @@ File: `backend/src/modules/recipients/recipients.controller.ts` (5 endpoints)
 
 **POST** `/recipients`
 
-Adds new customer to user's recipient list.
+Adds new customer to user's recipient list. Supports idempotency via `Idempotency-Key`.
+
+**Headers:**
+
+| Header | Type | Optional | Notes |
+|--------|------|----------|-------|
+| Idempotency-Key | string | yes | 1–255 visible ASCII characters (400 `VALIDATION_ERROR` otherwise); valid for 24 hours |
+
+Same replay semantics as **Create Product** (24 hours, 201 + `X-Idempotency-Replayed: true`,
+concurrent repeats create one recipient, only successful creates are stored; stored key
+`recipient:` + SHA-256). Without the header the route behaves as before.
 
 **Request Body:**
 ```typescript
@@ -489,6 +515,7 @@ Adds new customer to user's recipient list.
 **Response** (201): `Recipient`
 
 **Errors:**
+- 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
 
 ---
@@ -528,7 +555,8 @@ Paginated list of user's recipients.
 
 Updates recipient details.
 
-**Request Body:** Same fields as Create (all optional)
+**Request Body:** Same fields as Create (all optional); `null` clears `email`, `phone` or `address`
+(the onboarding wizard sends only changed fields this way)
 
 **Response** (200): `Recipient`
 

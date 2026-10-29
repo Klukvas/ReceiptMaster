@@ -106,7 +106,7 @@
 - PDF generation using Playwright (headless Chromium) + Handlebars templates
 - HTML snapshot stored alongside PDF for audit
 - Template ID and version tracked per receipt
-- 10 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate
+- 15 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate, Thermal, Dark, Branded, Delivery, Proforma
 - Multi-language receipt rendering (EN, UK, RU)
 - Upload to Hetzner Object Storage (S3-compatible)
 - SHA256 hash for receipt integrity
@@ -274,7 +274,7 @@ All branding and configuration options organized into tabs.
 
 - **Tab 2 — Receipt Design**:
   - Receipt title customizer (main title text)
-  - Template selector — visual grid of 10 templates with preview
+  - Template selector — visual grid of 15 templates with preview
   - Footer customizer (footer title + subtitle)
   - Test receipt button — generates a sample PDF with current settings to preview
 

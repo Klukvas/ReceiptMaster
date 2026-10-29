@@ -9,7 +9,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { dashboardApi, formatCurrency } from "../../lib/api";
-import { combineCompleteness, profitChartValue } from "../../lib/profit";
+import {
+  combineCompleteness,
+  combineProfit,
+  profitChartValue,
+} from "../../lib/profit";
 import { Card } from "../ui/Card";
 import { ProfitStatus } from "./ProfitStatus";
 import { SkeletonChart } from "../ui/Skeleton";
@@ -49,6 +53,8 @@ export const RevenueSparkline = () => {
       turnover: d.turnover_cents / 100,
     })) || [];
   const completeness = combineCompleteness(data?.data ?? []);
+  // Null when every charted line lacks a cost: "Cost unknown", not "Partial".
+  const chartProfit = combineProfit(data?.data ?? []);
 
   return (
     <Card>
@@ -58,7 +64,7 @@ export const RevenueSparkline = () => {
             {t("dashboard.revenueOverTime", "Revenue Over Time")}
           </h3>
           {/* Gaps in the line mark unknown days; this flags any excluded line. */}
-          <ProfitStatus profit={0} completeness={completeness} />
+          <ProfitStatus profit={chartProfit} completeness={completeness} />
         </div>
         <div className="flex gap-1">
           {[7, 30].map((d) => (

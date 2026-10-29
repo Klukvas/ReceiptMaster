@@ -55,7 +55,8 @@ market/
 │       ├── modules/         # orders, products, receipts, recipients, settings,
 │       │                    #   subscription, suppliers, users, paddle, telegram
 │       ├── common/          # guards, interceptors, filters, pipes, subscribers,
-│       │                    #   tenancy (ALS/interceptor/query runners), middleware, services, utils, entities, dto
+│       │                    #   tenancy (ALS/interceptor/query runners), idempotency (keyed creates),
+│       │                    #   middleware, services, utils, entities, dto
 │       ├── config/          # env schema (Zod), TypeORM config, migrations
 │       └── openapi/         # contract exporter/--check, shared Zod-derived schemas, doc decorators
 ├── frontend/                # React app

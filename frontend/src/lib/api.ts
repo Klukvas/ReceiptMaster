@@ -226,6 +226,18 @@ api.interceptors.response.use(
   },
 );
 
+type CreateOptions = { readonly idempotencyKey?: string };
+
+const idempotencyConfig = ({ idempotencyKey }: CreateOptions) =>
+  idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {};
+
+type RecipientFields = Omit<Recipient, "id" | "created_at" | "updated_at">;
+
+/** Changed fields only; `null` clears an optional field. */
+export type UpdateRecipientRequest = {
+  readonly [K in keyof RecipientFields]?: RecipientFields[K] | null;
+};
+
 // API methods
 export const authApi = {
   login: (data: LoginRequest) => api.post<AuthResponse>("/auth/login", data),
@@ -257,8 +269,11 @@ export const productsApi = {
 
   getById: (id: string) => api.get<Product>(`/products/${id}`),
 
-  create: (data: Omit<Product, "id" | "created_at" | "updated_at">) =>
-    api.post<Product>("/products", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: Omit<Product, "id" | "created_at" | "updated_at">,
+    options: CreateOptions = {},
+  ) => api.post<Product>("/products", data, idempotencyConfig(options)),
 
   /** Send only changed fields; a quantity needs the expectedQuantity it replaces. */
   update: (id: string, data: UpdateProductRequest) =>
@@ -283,13 +298,14 @@ export const recipientsApi = {
 
   getById: (id: string) => api.get<Recipient>(`/recipients/${id}`),
 
-  create: (data: Omit<Recipient, "id" | "created_at" | "updated_at">) =>
-    api.post<Recipient>("/recipients", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: Omit<Recipient, "id" | "created_at" | "updated_at">,
+    options: CreateOptions = {},
+  ) => api.post<Recipient>("/recipients", data, idempotencyConfig(options)),
 
-  update: (
-    id: string,
-    data: Partial<Omit<Recipient, "id" | "created_at" | "updated_at">>,
-  ) => api.patch<Recipient>(`/recipients/${id}`, data),
+  update: (id: string, data: UpdateRecipientRequest) =>
+    api.patch<Recipient>(`/recipients/${id}`, data),
 
   delete: (id: string) => api.delete(`/recipients/${id}`),
 };

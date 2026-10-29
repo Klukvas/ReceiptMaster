@@ -115,7 +115,10 @@ frontend/
 **API method groups** (lines 159–497):
 - `authApi.login()`, `register()`, `refresh()`, `logout()`, `getProfile()`, `updateProfile()`, `changePassword()`
 - `productsApi.getAll()`, `getById()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getLowStock()`
-- `recipientsApi.*` — same CRUD pattern
+- `recipientsApi.*` — same CRUD pattern; `recipientsApi.update` takes `UpdateRecipientRequest` (changed
+  fields only, `null` clears an optional field)
+- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` send
+  the optional `Idempotency-Key` header (see *Onboarding wizard*)
 - `suppliersApi.*` — same CRUD pattern
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`
 - `dashboardApi.*` — revenue & turnover analytics
@@ -243,7 +246,8 @@ returns it. A draft gets the plain question.
 (`dashboard.profitPartial`) whose tooltip (`dashboard.profitPartialTooltip`) names the excluded lines
 and turnover. It is used by the KPI card (`KPIPrimaryCard`/`StatCard` `footer`), the recipient list
 (`TopRecipientsList` accepts a null amount, sorted last, and a `status` node) and the sparkline
-header. `RevenueChart` accepts null values (no bar) with a tooltip note; the sparkline passes null
+header, which passes `combineProfit` of the charted days (`lib/profit.ts`: null when no day has a
+known-cost line, so all-unknown reads "Cost unknown" rather than "Partial"; empty days do not count). `RevenueChart` accepts null values (no bar) with a tooltip note; the sparkline passes null
 days with `connectNulls={false}`, so an unknown day is a gap, not a zero. The analytics CSV leaves an
 unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
 `unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
@@ -584,6 +588,31 @@ saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and inval
 `["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
 `productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
 stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
+
+### Onboarding wizard (`components/onboarding/OnboardingModal.tsx`)
+
+Four steps (company, template, first product, first customer); the parent keeps every step's input,
+so Back/Next never lose it. Company and template call idempotent settings endpoints on each Next.
+Product and customer steps keep an entity record in a ref (`onboarding-entities.ts`
+`saveEntityStep`): `id` and the server's copy (`saved`) after a create, or `pending` — the exact body
+and its `Idempotency-Key` (`crypto.randomUUID()`, one per create attempt) — while a create's outcome
+is unknown. Revisiting a saved step sends nothing when the form still matches `saved`, otherwise a
+PATCH with only the changed fields (products via `buildProductUpdate`: a changed quantity carries
+`expectedQuantity`; a 409 reloads the product, keeps the input and shows `products.quantityConflict`).
+A blank name never creates and never changes an existing entity.
+
+- **Single flight:** one `inFlight` ref covers Next, Back, Skip, Finish, Retry and closing (Escape/X);
+  Skip and Back are also disabled while saving, so a double click sends one request.
+- **Errors** keep the step and every value and show an inline alert: `parseApiError` text for a refused
+  request (the next attempt sends the current form with a new key); for no response or a 502/503/504,
+  `onboarding.saveUnconfirmed` with Retry, which resends the same body with the **same** key (the
+  server replays the create if it happened) and then PATCHes any edits made meanwhile.
+- **Completion:** Finish calls `onComplete()` only after `POST /settings/onboarding-complete`
+  succeeds; on failure the modal stays open with `onboarding.finishFailed` and Retry (saved steps are
+  not re-sent). A failed Skip closes the wizard for this visit with the `onboarding.skipFailed` toast
+  (offered again next time). The Finish button stays "Get started"; nothing here mentions a PDF.
+- **Limits:** the key lives only in memory — a reload or another tab during an unconfirmed save can
+  still create a duplicate.
 
 ### UI Primitives: `components/ui/`
 

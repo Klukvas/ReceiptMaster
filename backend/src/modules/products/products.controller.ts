@@ -9,13 +9,16 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
 } from "@nestjs/common";
+import { Request as HttpRequest, Response } from "express";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiQuery,
   ApiBearerAuth,
+  ApiHeader,
 } from "@nestjs/swagger";
 import { ProductsService } from "./products.service";
 import { CreateProductDto } from "./dto/create-product.dto";
@@ -27,6 +30,11 @@ import { User } from "../users/entities/user.entity";
 import { Product } from "./entities/product.entity";
 import { InventoryValueDto } from "./dto/inventory-value.dto";
 import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IDEMPOTENCY_REPLAYED_HEADER,
+  idempotencyKeyOf,
+} from "../../common/idempotency/idempotent-create";
 
 @ApiTags("products")
 @ApiBearerAuth("bearer")
@@ -39,17 +47,31 @@ export class ProductsController {
   @ApiOperation({ summary: "Создать товар" })
   @ApiResponse({
     status: 201,
-    description: "Товар успешно создан",
+    description:
+      "Товар успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
     type: Product,
   })
   @ApiFailureResponses({
+    400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
     402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
   })
-  create(
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
+  async create(
     @Body() createProductDto: CreateProductDto,
-    @Request() req: { user: User },
-  ) {
-    return this.productsService.create(createProductDto, req.user);
+    @Request() req: Pick<HttpRequest, "headers"> & { user: User },
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Product | Readonly<Record<string, unknown>>> {
+    const idempotencyKey = idempotencyKeyOf(req.headers);
+    if (idempotencyKey === undefined) {
+      return this.productsService.create(createProductDto, req.user);
+    }
+    const result = await this.productsService.createWithIdempotencyKey(
+      createProductDto,
+      req.user,
+      idempotencyKey,
+    );
+    if (result.replayed) res.setHeader(IDEMPOTENCY_REPLAYED_HEADER, "true");
+    return result.data;
   }
 
   @Get()

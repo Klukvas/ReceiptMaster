@@ -9,12 +9,15 @@ import {
   Delete,
   UseGuards,
   Request,
+  Res,
 } from "@nestjs/common";
+import { Request as HttpRequest, Response } from "express";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiHeader,
 } from "@nestjs/swagger";
 import { RecipientsService } from "./recipients.service";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
@@ -24,6 +27,12 @@ import { PaginatedRecipientResponse } from "../../common/dto/paginated-response.
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { Recipient } from "./entities/recipient.entity";
+import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IDEMPOTENCY_REPLAYED_HEADER,
+  idempotencyKeyOf,
+} from "../../common/idempotency/idempotent-create";
 
 @ApiTags("recipients")
 @ApiBearerAuth("bearer")
@@ -36,14 +45,30 @@ export class RecipientsController {
   @ApiOperation({ summary: "Создать получателя" })
   @ApiResponse({
     status: 201,
-    description: "Получатель успешно создан",
+    description:
+      "Получатель успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
     type: Recipient,
   })
-  create(
+  @ApiFailureResponses({
+    400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+  })
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
+  async create(
     @Body() createRecipientDto: CreateRecipientDto,
-    @Request() req: { user: User },
-  ) {
-    return this.recipientsService.create(createRecipientDto, req.user);
+    @Request() req: Pick<HttpRequest, "headers"> & { user: User },
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Recipient | Readonly<Record<string, unknown>>> {
+    const idempotencyKey = idempotencyKeyOf(req.headers);
+    if (idempotencyKey === undefined) {
+      return this.recipientsService.create(createRecipientDto, req.user);
+    }
+    const result = await this.recipientsService.createWithIdempotencyKey(
+      createRecipientDto,
+      req.user,
+      idempotencyKey,
+    );
+    if (result.replayed) res.setHeader(IDEMPOTENCY_REPLAYED_HEADER, "true");
+    return result.data;
   }
 
   @Get()

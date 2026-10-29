@@ -121,6 +121,67 @@ describe("ProductsService", () => {
     });
   });
 
+  describe("createWithIdempotencyKey", () => {
+    const useTransaction = (stored: unknown) => {
+      const calls: string[] = [];
+      Object.assign(txManager, {
+        queryRunner: { isTransactionActive: true },
+        query: jest.fn(async (sql: string) => {
+          calls.push(sql.includes("hashtext($1))") ? "key-lock" : sql);
+          return [];
+        }),
+        findOne: jest.fn().mockResolvedValue(stored),
+        delete: jest.fn(),
+        insert: jest.fn().mockResolvedValue({}),
+      });
+      subscriptionService.assertCanCreateProductInTx.mockImplementation(
+        async () => {
+          calls.push("quota");
+        },
+      );
+      return calls;
+    };
+
+    it("takes the key lock before the quota lock and stores the response", async () => {
+      const calls = useTransaction(null);
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Widget" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(calls).toEqual(["key-lock", "quota"]);
+      expect(txManager.query.mock.calls[0][1][0]).toMatch(/^product:/);
+      expect(result).toEqual({
+        replayed: false,
+        data: { id: "prod-1", name: "Widget", user_id: "user-1" },
+      });
+      expect(txManager.insert).toHaveBeenCalledTimes(1);
+    });
+
+    it("replays without checking the quota or inserting", async () => {
+      const calls = useTransaction({
+        id: "row-1",
+        response: { id: "prod-1", name: "Widget" },
+        expires_at: new Date(Date.now() + 60_000),
+      });
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Widget" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: true,
+        data: { id: "prod-1", name: "Widget" },
+      });
+      expect(calls).toEqual(["key-lock"]);
+      expect(txManager.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findAll", () => {
     it("should return paginated products", async () => {
       const result = await service.findAll({ limit: 10, offset: 0 }, mockUser);

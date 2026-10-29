@@ -35,12 +35,51 @@ describe("RecipientsController", () => {
   });
 
   describe("create", () => {
+    const response = () => ({ setHeader: jest.fn() }) as any;
+    const withKey = (key: string | undefined) => ({
+      user: mockUser,
+      headers: key === undefined ? {} : { "idempotency-key": key },
+    });
+
     it("should create a recipient", () => {
       const dto = { name: "John", email: "john@test.com" } as any;
 
-      controller.create(dto, mockReq);
+      controller.create(dto, withKey(undefined), response());
 
       expect(recipientsService.create).toHaveBeenCalledWith(dto, mockUser);
+    });
+
+    it("passes an Idempotency-Key through and marks a replay", async () => {
+      const dto = { name: "John" } as any;
+      const res = response();
+      recipientsService.createWithIdempotencyKey = jest
+        .fn()
+        .mockResolvedValue({ replayed: true, data: mockRecipient });
+
+      const body = await controller.create(dto, withKey("key-1"), res);
+
+      expect(recipientsService.createWithIdempotencyKey).toHaveBeenCalledWith(
+        dto,
+        mockUser,
+        "key-1",
+      );
+      expect(recipientsService.create).not.toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "X-Idempotency-Replayed",
+        "true",
+      );
+      expect(body).toEqual(mockRecipient);
+    });
+
+    it("does not mark a first create with a key as replayed", async () => {
+      const res = response();
+      recipientsService.createWithIdempotencyKey = jest
+        .fn()
+        .mockResolvedValue({ replayed: false, data: mockRecipient });
+
+      await controller.create({ name: "John" } as any, withKey("key-1"), res);
+
+      expect(res.setHeader).not.toHaveBeenCalled();
     });
   });
 

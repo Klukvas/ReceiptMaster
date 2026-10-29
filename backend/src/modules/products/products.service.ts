@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { Product, Currency } from "./entities/product.entity";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
@@ -10,6 +10,10 @@ import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import {
+  IdempotentCreateResult,
+  createIdempotently,
+} from "../../common/idempotency/idempotent-create";
 
 const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "product.name",
@@ -75,17 +79,41 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
-    return this.productsRepository.manager.transaction(async (manager) => {
-      await this.subscriptionService.assertCanCreateProductInTx(
+    return this.productsRepository.manager.transaction((manager) =>
+      this.insertWithinQuota(manager, createProductDto, user),
+    );
+  }
+
+  /**
+   * A repeated Idempotency-Key replays the first create instead of adding a
+   * duplicate. The key lock comes before the product-quota lock (as for order
+   * create), so a replay still succeeds once the plan limit is reached.
+   */
+  async createWithIdempotencyKey(
+    createProductDto: CreateProductDto,
+    user: User,
+    idempotencyKey: string,
+  ): Promise<IdempotentCreateResult<Product>> {
+    return this.productsRepository.manager.transaction((manager) =>
+      createIdempotently(
         manager,
-        user.id,
-      );
-      const product = manager.create(Product, {
-        ...createProductDto,
-        user_id: user.id,
-      });
-      return manager.save(product);
+        { scope: "product", key: idempotencyKey, userId: user.id },
+        () => this.insertWithinQuota(manager, createProductDto, user),
+      ),
+    );
+  }
+
+  private async insertWithinQuota(
+    manager: EntityManager,
+    createProductDto: CreateProductDto,
+    user: User,
+  ): Promise<Product> {
+    await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
+    const product = manager.create(Product, {
+      ...createProductDto,
+      user_id: user.id,
     });
+    return manager.save(product);
   }
 
   async findAll(

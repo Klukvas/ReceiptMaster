@@ -285,6 +285,20 @@ export class OrdersService {
   conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
   precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
 - Check a quota and insert in **one** transaction, after taking the tenant's quota lock
+- Idempotent creates go through `common/idempotency/idempotent-create.ts` (`createIdempotently`,
+  used by `POST /products` and `POST /recipients`; orders keep their own older implementation).
+  Inside the caller's transaction and before any other lock it validates the key (1–255 visible
+  ASCII, else 400 `VALIDATION_ERROR`), takes `pg_advisory_xact_lock(hashtext(scopedKey))`, replays an
+  unexpired `idempotency_keys` row for (scoped key, user) or deletes an expired one, runs the create
+  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (no migration: the
+  existing table, `order_id` NULL). `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
+  fits `varchar(255)` for every accepted key and never equals an order key, which is stored raw in
+  the same `(key, user_id)`-unique column. The controller sets `X-Idempotency-Replayed: true` on a
+  replay (`@Res({ passthrough: true })`, so interceptors still see the body); without the header the
+  original create path runs unchanged. Guarantee: within 24 h, retries with one key — concurrent
+  ones too — create at most one entity and get the first response. Not covered: a failed create
+  stores nothing (a retry runs it again), a repeated key with a different body replays the first
+  response, and the client must keep its key (the onboarding keeps it only in memory)
 
 #### Tenant advisory locks and lock ordering
 
@@ -293,6 +307,7 @@ Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
 | Key | Taken by | Serializes |
 |---|---|---|
 | `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
+| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
 | `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
 | `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
 | `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel | receipts and document configuration |
@@ -302,10 +317,11 @@ Migrations additionally hold a session-level `pg_advisory_lock` (`common/service
 
 **Ordering rule** (prevents lock-order deadlocks): a transaction takes at most one tenant advisory
 lock, and takes it first; row locks follow in ascending id order (`ORDER BY id … FOR UPDATE`). The
-only combination of advisory locks in use is order create with an idempotency key: key lock →
-order-quota lock → product rows, always in that order. Product create takes only `product-quota`
-(never `hashtextextended(userId, 1)`); a product update takes no advisory lock and at most its own row
-lock. Order cancel takes `hashtextextended(userId, 1)` → order row → the order's receipt rows (id
+only combinations of advisory locks in use start with an idempotency key lock, which is not a tenant
+lock and is always taken first: order create with a key takes key lock → order-quota lock → product
+rows; product create with a key takes key lock → `product-quota`; recipient create with a key takes
+only its key lock. Product create takes `product-quota` (never `hashtextextended(userId, 1)`); a
+product update takes no advisory lock and at most its own row lock. Order cancel takes `hashtextextended(userId, 1)` → order row → the order's receipt rows (id
 order) → logo asset rows, the same tenant → order → receipt order as generation and promotion.
 Confirm, `approveBatch` (id order), edit and delete take order row locks without a tenant lock;
 manual void and repair start at the order row too — none of them takes the tenant lock after a row
@@ -977,7 +993,10 @@ async findAll(
    under concurrency, successor-insert rollback, expiry), `test/order-lifecycle.e2e-spec.ts`
    (confirm/approve/cancel races, cancel voiding documents and links, delayed workers after a
    cancel, rejected follow-ups), `test/order-profit-snapshot.e2e-spec.ts` (cost capture, profit from
-   snapshots, unknown vs zero cost, daily gaps, sort order, cache versions) and
+   snapshots, unknown vs zero cost, daily gaps, sort order, cache versions),
+   `test/idempotent-create.e2e-spec.ts` (product/recipient replay, concurrent same-key requests parked
+   on the key lock, order/product/recipient keys of one value kept apart, replay at the product quota,
+   refused creates not stored, expiry, other tenants, unchanged keyless create) and
    `test/order-item-cost-migration.e2e-spec.ts` — create and drop their own uniquely named
    databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
    through the production tenant query context — `test/helpers/restricted-app-database.ts`
@@ -1007,7 +1026,7 @@ async findAll(
    because teardown uses `DROP DATABASE … WITH (FORCE)`), then
    `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
    then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
-   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration`.
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration idempotent-create`.
    `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
    no database.
    Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.

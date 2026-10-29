@@ -4,9 +4,13 @@ import { ProductsService } from "./products.service";
 import { ProductsController } from "./products.controller";
 import { Product } from "./entities/product.entity";
 import { SubscriptionModule } from "../subscription/subscription.module";
+import { IdempotencyKey } from "../orders/entities/idempotency-key.entity";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product]), SubscriptionModule],
+  imports: [
+    TypeOrmModule.forFeature([Product, IdempotencyKey]),
+    SubscriptionModule,
+  ],
   controllers: [ProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

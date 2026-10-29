@@ -66,6 +66,44 @@ describe("Products (e2e)", () => {
     });
   });
 
+  describe("POST /api/v1/products with Idempotency-Key", () => {
+    const post = (key: string) =>
+      request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .set("Idempotency-Key", key)
+        .send(validProduct);
+
+    it("a repeated key creates one product and replays the first 201", async () => {
+      const first = await post("onboarding-key-1").expect(201);
+      const second = await post("onboarding-key-1").expect(201);
+
+      expect(first.headers["x-idempotency-replayed"]).toBeUndefined();
+      expect(second.headers["x-idempotency-replayed"]).toBe("true");
+      expect(second.body).toEqual(first.body);
+
+      const list = await request(server)
+        .get("/api/v1/products")
+        .set(authHeader(token))
+        .expect(200);
+      expect(list.body.data.map((row: { id: string }) => row.id)).toEqual([
+        first.body.id,
+      ]);
+    });
+
+    it("rejects an invalid key with 400 and creates nothing", async () => {
+      const res = await post("two words").expect(400);
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      await post("k".repeat(256)).expect(400);
+
+      const list = await request(server)
+        .get("/api/v1/products")
+        .set(authHeader(token))
+        .expect(200);
+      expect(list.body.data).toHaveLength(0);
+    });
+  });
+
   describe("GET /api/v1/products", () => {
     it("should return paginated products", async () => {
       // Create 3 products
