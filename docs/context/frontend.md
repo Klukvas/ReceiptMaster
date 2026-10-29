@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -456,10 +456,11 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   frontend builds require the public client token and production environment; backend
   production validation requires complete Paddle settings and frontend URL. Example env
   files contain only empty values. Deployment preserves the existing secret environment.
-- `.dockerignore` excludes local `.env*` files from the frontend build context. Private
-  package authentication uses a BuildKit secret during the Yarn install; the token is
-  not persisted in a Docker layer. PR verification uses only the standard read-only
-  GitHub token; publish/deploy credentials are confined to main-push jobs.
+- `.dockerignore` excludes local `.env*` files from the frontend build context. Every
+  dependency comes from the public npm registry, so the image's `yarn install
+  --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
+  PR verification runs with a `contents: read` workflow token and no secrets;
+  publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
 - Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
   `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
@@ -616,7 +617,7 @@ A blank name never creates and never changes an existing entity.
 
 ### UI Primitives: `components/ui/`
 
-Reusable, framework-agnostic components:
+Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
 - `Modal.tsx` — centered overlay modal
 - `ConfirmModal.tsx` — yes/no dialog

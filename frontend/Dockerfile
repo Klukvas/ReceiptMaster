@@ -4,11 +4,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Копируем package.json, yarn.lock и .npmrc
-COPY package.json yarn.lock .npmrc ./
-# Private package auth is mounted for installation only and never saved in a layer.
-RUN --mount=type=secret,id=github_token,required=true \
-    GITHUB_TOKEN="$(cat /run/secrets/github_token)" yarn install --frozen-lockfile
+# Копируем package.json и yarn.lock
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
 
 # Копируем исходный код
 COPY . .

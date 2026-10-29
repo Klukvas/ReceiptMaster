@@ -4,7 +4,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from "@klukvas/flux-b2c-ui";
+} from "./primitives/tabs";
 
 interface Tab {
   id: string;

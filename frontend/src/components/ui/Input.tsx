@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import {
   Input as BaseInput,
   type InputProps as BaseInputProps,
-} from "@klukvas/flux-b2c-ui";
+} from "./primitives/input";
 
 export type InputProps = BaseInputProps;
 

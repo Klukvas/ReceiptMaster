@@ -1,5 +1,6 @@
 import React, { forwardRef, type ReactNode } from "react";
-import { Card as BaseCard, cn } from "@klukvas/flux-b2c-ui";
+import { Card as BaseCard } from "./primitives/card";
+import { cn } from "./primitives/cn";
 
 interface CardProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {

@@ -4,8 +4,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  cn,
-} from "@klukvas/flux-b2c-ui";
+} from "./primitives/dialog";
+import { cn } from "./primitives/cn";
 import { X } from "lucide-react";
 
 interface ModalProps {

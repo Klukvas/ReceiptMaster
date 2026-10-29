@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,8 +15,6 @@ concurrency:
 
 jobs:
   test-backend:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,8 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             backend/yarn.lock
@@ -52,8 +47,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting
         run: yarn lint
@@ -91,8 +84,6 @@ jobs:
         run: yarn build
 
   test-frontend:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -105,8 +96,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             frontend/yarn.lock
@@ -114,8 +103,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting
         run: yarn lint
@@ -127,8 +114,6 @@ jobs:
         run: yarn build
 
   contract-test:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     name: "Contract: Frontend ↔ Backend"
     runs-on: ubuntu-latest
     steps:
@@ -139,8 +124,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             frontend/yarn.lock
@@ -149,8 +132,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # The Yarn workspace install above also installs the backend. The exporter
       # boots Nest in preview mode, so no database, Redis or other service is needed.
@@ -182,7 +163,6 @@ jobs:
 
   e2e-backend:
     env:
-      GITHUB_TOKEN: ${{ github.token }}
       # The PostgreSQL integration suites create and drop their own databases and a
       # restricted NOSUPERUSER/NOBYPASSRLS role. They only dial their fixed loopback
       # ports, require the sentinel database created below, refuse a cluster holding
@@ -230,8 +210,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             backend/yarn.lock
@@ -239,8 +217,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # The suites refuse any cluster without this sentinel database. Both mapped
       # ports reach the same service container, so marking it once covers both.
@@ -280,8 +256,6 @@ jobs:
           echo "PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) ran under a restricted non-owner role." >> $GITHUB_STEP_SUMMARY
 
   browser-regression:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     name: "Browser: regression suite"
     runs-on: ubuntu-latest
     steps:
@@ -292,15 +266,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: yarn.lock
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -320,8 +290,6 @@ jobs:
         run: node frontend/e2e/run.mjs
 
   browser-documents:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     name: "Browser: document features"
     runs-on: ubuntu-latest
     steps:
@@ -332,15 +300,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: yarn.lock
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Playwright's bundled Chromium with its default (disabled) sandbox, like the
       # production PDF renderer, so Ubuntu's user-namespace restriction does not apply.
@@ -409,7 +373,6 @@ jobs:
       - browser-documents
     permissions:
       contents: read
-      packages: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -436,8 +399,6 @@ jobs:
             VITE_BILLING_ENABLED=false
             VITE_PADDLE_CLIENT_TOKEN=
             VITE_PADDLE_ENVIRONMENT=production
-          secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
           labels: |

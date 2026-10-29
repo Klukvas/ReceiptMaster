@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react";
-import { Button as BaseButton } from "@klukvas/flux-b2c-ui";
+import { Button as BaseButton } from "./primitives/button";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?:
