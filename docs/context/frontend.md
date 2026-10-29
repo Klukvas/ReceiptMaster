@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-29
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -534,7 +534,7 @@ components/
 
 ### UI Primitives: `components/ui/`
 
-Reusable, framework-agnostic components:
+Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
 - `Modal.tsx` — centered overlay modal
 - `ConfirmModal.tsx` — yes/no dialog

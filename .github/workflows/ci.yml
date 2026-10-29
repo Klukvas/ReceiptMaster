@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,8 +15,6 @@ concurrency:
 
 jobs:
   test-backend:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,8 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             backend/yarn.lock
@@ -39,8 +34,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting
         run: yarn lint
@@ -78,8 +71,6 @@ jobs:
         run: yarn build
 
   test-frontend:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -92,8 +83,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             frontend/yarn.lock
@@ -101,8 +90,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run linting
         run: yarn lint
@@ -114,8 +101,6 @@ jobs:
         run: yarn build
 
   contract-test:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     name: "Contract: Frontend ↔ Backend"
     runs-on: ubuntu-latest
     steps:
@@ -126,8 +111,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             frontend/yarn.lock
@@ -136,8 +119,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate types from OpenAPI spec
         working-directory: ./frontend
@@ -158,8 +139,6 @@ jobs:
           echo "Fix: update \`openapi.json\` (\`yarn openapi:export\`) and regenerate types." >> $GITHUB_STEP_SUMMARY
 
   e2e-backend:
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     name: "E2E: Backend API"
     runs-on: ubuntu-latest
     services:
@@ -196,8 +175,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@klukvas"
           cache: "yarn"
           cache-dependency-path: |
             backend/yarn.lock
@@ -205,8 +182,6 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run E2E tests
         run: yarn test:e2e
@@ -239,7 +214,6 @@ jobs:
     needs: [test-backend, test-frontend, contract-test, e2e-backend]
     permissions:
       contents: read
-      packages: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -266,8 +240,6 @@ jobs:
             VITE_BILLING_ENABLED=false
             VITE_PADDLE_CLIENT_TOKEN=
             VITE_PADDLE_ENVIRONMENT=production
-          secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
           labels: |

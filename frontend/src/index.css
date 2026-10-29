@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@source "../../node_modules/@klukvas/flux-b2c-ui/dist";
 
 /* ============================================
    UNIFIED DESIGN TOKENS

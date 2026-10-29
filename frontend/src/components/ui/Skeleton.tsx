@@ -1,4 +1,5 @@
-import { Skeleton as BaseSkeleton, cn } from "@klukvas/flux-b2c-ui";
+import { Skeleton as BaseSkeleton } from "./primitives/skeleton";
+import { cn } from "./primitives/cn";
 
 interface SkeletonProps {
   className?: string;

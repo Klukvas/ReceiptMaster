@@ -1048,15 +1048,6 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@klukvas/flux-b2c-ui@^0.1.0":
-  version "0.1.0"
-  resolved "https://npm.pkg.github.com/download/@klukvas/flux-b2c-ui/0.1.0/3703feceb23ef0f0a165b5e3a5ce9d55b085ae5f#3703feceb23ef0f0a165b5e3a5ce9d55b085ae5f"
-  integrity sha512-gDJSBa91G3Jv7sEjc1M48JZaIFPkhSqefDhUxwrBAdJ2QgyH/GxcugLl1xPjy4+GT/dx9XrAb9kyHqsZ7CqRKQ==
-  dependencies:
-    class-variance-authority "^0.7.1"
-    clsx "^2.1.1"
-    tailwind-merge "^3.3.1"
-
 "@ljharb/through@^2.3.12":
   version "2.3.14"
   resolved "https://registry.npmjs.org/@ljharb/through/-/through-2.3.14.tgz"
@@ -7918,6 +7909,11 @@ react-i18next@^16.1.6:
     "@babel/runtime" "^7.27.6"
     html-parse-stringify "^3.0.1"
 
+react-is@19.1.1:
+  version "19.1.1"
+  resolved "https://registry.npmjs.org/react-is/-/react-is-19.1.1.tgz#038ebe313cf18e1fd1235d51c87360eb87f7c36a"
+  integrity sha512-tr41fA15Vn8p4X9ntI+yCyeGSf1TlYaY5vlTZfQmeLBrFo3psOPX6HhTDnFNL9uj3EhP0KAQ80cugCl4b4BERA==
+
 react-is@^16.13.1:
   version "16.13.1"
   resolved "https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz"
@@ -7927,11 +7923,6 @@ react-is@^18.0.0:
   version "18.3.1"
   resolved "https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz"
   integrity sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==
-
-react-is@19.1.1:
-  version "19.1.1"
-  resolved "https://registry.npmjs.org/react-is/-/react-is-19.1.1.tgz#038ebe313cf18e1fd1235d51c87360eb87f7c36a"
-  integrity sha512-tr41fA15Vn8p4X9ntI+yCyeGSf1TlYaY5vlTZfQmeLBrFo3psOPX6HhTDnFNL9uj3EhP0KAQ80cugCl4b4BERA==
 
 react-markdown@9:
   version "9.1.0"
