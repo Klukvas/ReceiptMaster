@@ -145,6 +145,57 @@ describe("Products (e2e)", () => {
         .expect(200);
 
       expect(res.body.name).toBe("Updated Product");
+      expect(res.body.quantity).toBe(validProduct.quantity);
+    });
+
+    it("rejects a quantity without expectedQuantity and leaves stock alone", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ name: "Stale form", quantity: 7 })
+        .expect(400);
+
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      const current = await request(server)
+        .get(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+      expect(current.body).toMatchObject({
+        name: validProduct.name,
+        quantity: validProduct.quantity,
+      });
+    });
+
+    it("applies a quantity only against the expected stock", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+      const url = `/api/v1/products/${created.body.id}`;
+
+      const conflict = await request(server)
+        .patch(url)
+        .set(authHeader(token))
+        .send({ quantity: 7, expectedQuantity: validProduct.quantity + 1 })
+        .expect(409);
+      expect(conflict.body).toEqual({
+        error: expect.any(String),
+        errorCode: "PRODUCT_QUANTITY_CONFLICT",
+      });
+
+      const applied = await request(server)
+        .patch(url)
+        .set(authHeader(token))
+        .send({ quantity: 7, expectedQuantity: validProduct.quantity })
+        .expect(200);
+      expect(applied.body.quantity).toBe(7);
     });
   });
 

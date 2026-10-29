@@ -25,6 +25,7 @@ import {
   connectIsolatedAdmin,
   createRestrictedRole,
   describeIsolatedPostgres,
+  teardownIsolatedPostgres,
   typeormCredentials,
 } from "./helpers/isolated-postgres";
 
@@ -128,15 +129,14 @@ describeIsolatedPostgres(
           .save({ user_id: id, plan: "business" });
       }
     });
-    afterAll(async () => {
-      if (runtime?.isInitialized) await runtime.destroy();
-      if (owner?.isInitialized) await owner.destroy();
-      if (admin) {
-        await admin.query(`DROP DATABASE IF EXISTS "${database}"`);
-        await admin.query(`DROP ROLE IF EXISTS "${role}"`);
-        await admin.end();
-      }
-    });
+    afterAll(() =>
+      teardownIsolatedPostgres({
+        dataSources: [runtime, owner],
+        admin,
+        databases: [database],
+        roles: [role],
+      }),
+    );
     const inTenant = <T>(operation: () => Promise<T>) =>
       runWithTenant(tenant, operation);
     it("migration applies both RLS clauses and rollback restores the old schema", async () => {

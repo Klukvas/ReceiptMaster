@@ -281,6 +281,30 @@ export class OrdersService {
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
+- Never `save()` a whole entity loaded without a lock: write only the changed columns with a
+  conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
+  precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
+- Check a quota and insert in **one** transaction, after taking the tenant's quota lock
+
+#### Tenant advisory locks and lock ordering
+
+Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
+
+| Key | Taken by | Serializes |
+|---|---|---|
+| `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
+| `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
+| `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
+| `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes | receipts and document configuration |
+| `hashtextextended(userId, 2)` | document storage cleanup | storage sweeps |
+
+Migrations additionally hold a session-level `pg_advisory_lock` (`common/services/migration.service.ts`).
+
+**Ordering rule** (prevents lock-order deadlocks): a transaction takes at most one tenant advisory
+lock, and takes it first; row locks follow in ascending id order (`ORDER BY id … FOR UPDATE`). The
+only combination in use is order create with an idempotency key: key lock → order-quota lock → product
+rows, always in that order. Product create takes only `product-quota` (never
+`hashtextextended(userId, 1)`); a product update takes no advisory lock and at most its own row lock.
 
 ### 4. DTO — Input/Output Validation
 
@@ -458,7 +482,12 @@ export class OrdersController { ... }
 File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but standard Passport pattern)
 
 **Related files:**
-- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`
+- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`.
+  Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` a QueryBuilder
+  `UPDATE … SET revoked = true WHERE token AND revoked = false AND expires_at > now RETURNING user_id`
+  redeems the token (read the rows from `UpdateResult.raw`; `manager.query` would return the driver's
+  `[rows, count]` tuple), then `createRefreshToken(userId, manager)` inserts the successor in the same
+  transaction. No row → 401 `UNAUTHORIZED`. `refresh_tokens` has no RLS and refresh runs without tenant context
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
 
 ### Middleware (Request Context)
@@ -903,26 +932,12 @@ async findAll(
 3. **Implement service method** (`backend/src/modules/[feature]/[feature].service.ts`)
    ```typescript
    async create(dto: CreateProductDto, user: User): Promise<Product> {
-     // Validate subscription limits
-     await this.subscriptionService.assertCanCreateProduct(user.id);
-
-     // Check for duplicates if needed
-     const existing = await this.productsRepository.findOne({
-       where: { user_id: user.id, name: dto.name },
+     // Quota check and insert commit together under the tenant's quota lock
+     return this.productsRepository.manager.transaction(async (manager) => {
+       await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
+       const product = manager.create(Product, { ...dto, user_id: user.id });
+       return manager.save(product);
      });
-     if (existing) throw ApiErrors.PRODUCT_ALREADY_EXISTS(dto.name);
-
-     // Create & save
-     const product = this.productsRepository.create({
-       user_id: user.id,
-       ...dto,
-     });
-     await this.productsRepository.save(product);
-
-     // Invalidate cache
-     await this.cacheService.invalidateUserCache(user.id);
-
-     return product;
    }
    ```
 
@@ -938,9 +953,17 @@ async findAll(
    **Isolated PostgreSQL suites** — `src/common/tenancy/tenant-data-source.pg.spec.ts` (tenant
    RLS, connection-context reset, transactions, and — on a fully migrated database — delayed
    explicit/repair regeneration that cannot restore a revoked share token or undo a concurrent
-   void), `test/orders-audit.e2e-spec.ts` and
-   `test/template-features-sql.e2e-spec.ts` — create and drop their own uniquely named databases
-   and a `NOSUPERUSER NOBYPASSRLS` login role. `test/helpers/isolated-postgres.ts` gates them:
+   void), `test/orders-audit.e2e-spec.ts`, `test/template-features-sql.e2e-spec.ts`,
+   `test/products-concurrency.e2e-spec.ts` (stock precondition writes, lock-parked conflicts,
+   product-quota races and rollback) and `test/refresh-rotation.e2e-spec.ts` (single-use rotation
+   under concurrency, successor-insert rollback, expiry) — create and drop their own uniquely named
+   databases and a `NOSUPERUSER NOBYPASSRLS` login role. The last two run services as that role
+   through the production tenant query context (`test/helpers/restricted-app-database.ts`, which
+   applies the RLS policy migration) and park concurrent calls on real row/table locks, polling
+   `pg_stat_activity` instead of sleeping. Teardown goes through `teardownIsolatedPostgres` /
+   `destroyDataSources`: every data source is settled independently, each database is dropped
+   `WITH (FORCE)`, each role is dropped and the maintenance client is closed even when an earlier
+   step fails; all failures are rethrown together. `test/helpers/isolated-postgres.ts` gates them:
 
    | Variable | Meaning |
    |---|---|
@@ -959,7 +982,7 @@ async findAll(
    (check first that nothing else listens on those ports), then
    `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
    then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
-   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql`.
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation`.
    Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.
 
 ---

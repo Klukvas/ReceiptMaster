@@ -28,8 +28,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  const response = await authApi.getProfile();
  setUser(response.data);
  } catch {
- localStorage.removeItem('auth_token');
- localStorage.removeItem('refresh_token');
+ // Signed out for this render only. Storage is the API client's to clear: it
+ // ends the session after a genuine rejection, but keeps it on network errors
+ // and when another tab already rotated the tokens.
  setToken(null);
  } finally {
  setIsLoading(false);

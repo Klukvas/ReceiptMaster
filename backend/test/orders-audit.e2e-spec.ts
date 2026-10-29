@@ -20,6 +20,7 @@ import {
   AUDIT_CLUSTER,
   connectIsolatedAdmin,
   describeIsolatedPostgres,
+  teardownIsolatedPostgres,
   typeormCredentials,
 } from "./helpers/isolated-postgres";
 
@@ -88,14 +89,13 @@ describeIsolatedPostgres(
       );
     });
 
-    afterAll(async () => {
-      if (db?.isInitialized) await db.destroy();
-      if (admin) {
-        // Only the fresh database created by this suite; never stop the shared server.
-        await admin.query(`DROP DATABASE IF EXISTS "${database}"`);
-        await admin.end();
-      }
-    });
+    afterAll(() =>
+      teardownIsolatedPostgres({
+        dataSources: [db],
+        admin,
+        databases: [database],
+      }),
+    );
 
     beforeEach(async () => {
       cache.clear();

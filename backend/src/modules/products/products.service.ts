@@ -19,6 +19,29 @@ const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   created_at: "product.created_at",
 };
 
+type ProductChanges = Omit<UpdateProductDto, "expectedQuantity">;
+
+/** Stock is never written blind: quantity and expectedQuantity travel together. */
+function assertStockPrecondition(
+  quantity: number | undefined,
+  expectedQuantity: number | undefined,
+): void {
+  if (quantity === undefined && expectedQuantity === undefined) return;
+  if (typeof quantity !== "number" || typeof expectedQuantity !== "number") {
+    throw ApiErrors.VALIDATION_ERROR(
+      "expectedQuantity",
+      "quantity and expectedQuantity must be sent together",
+    );
+  }
+}
+
+/** Absent fields are left alone; an explicit null (e.g. supplier_id) is kept. */
+function presentFields(fields: ProductChanges): Partial<Product> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  ) as Partial<Product>;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -27,17 +50,26 @@ export class ProductsService {
     private subscriptionService: SubscriptionService,
   ) {}
 
+  /**
+   * The quota check and the insert commit together. The transaction takes only
+   * the tenant's product-quota advisory lock, so it cannot deadlock with order
+   * or receipt transactions that hold other tenant locks.
+   */
   async create(
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
-    await this.subscriptionService.assertCanCreateProduct(user.id);
-
-    const product = this.productsRepository.create({
-      ...createProductDto,
-      user_id: user.id,
+    return this.productsRepository.manager.transaction(async (manager) => {
+      await this.subscriptionService.assertCanCreateProductInTx(
+        manager,
+        user.id,
+      );
+      const product = manager.create(Product, {
+        ...createProductDto,
+        user_id: user.id,
+      });
+      return manager.save(product);
     });
-    return this.productsRepository.save(product);
   }
 
   async findAll(
@@ -84,14 +116,39 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * Writes only the columns present in the body in one conditional UPDATE, so a
+   * stale form cannot replay a full entity over stock changed by orders. A sent
+   * quantity applies only while the stored stock still equals expectedQuantity;
+   * an UPDATE parked behind an order's row lock re-checks after that commit.
+   */
   async update(
     id: string,
     updateProductDto: UpdateProductDto,
     user: User,
   ): Promise<Product> {
-    const product = await this.findOne(id, user);
-    Object.assign(product, updateProductDto);
-    return this.productsRepository.save(product);
+    const { expectedQuantity, ...fields } = updateProductDto;
+    assertStockPrecondition(fields.quantity, expectedQuantity);
+    const changes = presentFields(fields);
+    if (Object.keys(changes).length === 0) return this.findOne(id, user);
+
+    const query = this.productsRepository
+      .createQueryBuilder()
+      .update(Product)
+      .set(changes)
+      .where("id = :id", { id })
+      .andWhere("user_id = :userId", { userId: user.id })
+      .andWhere("deleted_at IS NULL");
+    if (expectedQuantity !== undefined) {
+      query.andWhere("quantity = :expectedQuantity", { expectedQuantity });
+    }
+    const { affected } = await query.execute();
+    if (!affected) {
+      // A missing or soft-deleted row is a 404; an existing one lost the race.
+      await this.findOne(id, user);
+      throw ApiErrors.PRODUCT_QUANTITY_CONFLICT(id);
+    }
+    return this.findOne(id, user);
   }
 
   async remove(id: string, user: User): Promise<void> {

@@ -63,7 +63,8 @@ market/
 │   │   ├── main.tsx, App.tsx (routing + providers)
 │   │   ├── pages/           # 18 route pages (public + dashboard)
 │   │   ├── services/        # OrderService, ReceiptService, NotificationService
-│   │   ├── lib/             # api.ts (Axios client + interceptors), api-errors.ts
+│   │   ├── lib/             # api.ts (Axios client + interceptors), auth-session.ts
+│   │   │                    #   (cross-tab refresh outcome), api-errors.ts
 │   │   ├── hooks/           # useOrders, useCheckout, useReceiptSocket, useServerPagination, …
 │   │   ├── contexts/        # AuthContext, ThemeContext
 │   │   └── providers/       # PaddleProvider

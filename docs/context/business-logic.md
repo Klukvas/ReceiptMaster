@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-29
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -251,6 +251,9 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
 4. **Entitlement Check on Action**
    - On every `createOrder()`, `createProduct()`, or template selection, assert limits
    - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreate*()`
+   - Order and product quotas are checked inside the creating transaction
+     (`assertCanCreateOrderInTx`, `assertCanCreateProductInTx`) under a per-user advisory lock,
+     reading the plan without creating a subscription row (no row = free)
    - Throws 402 (Payment Required) if limit exceeded or template restricted
 
 **Paddle Configuration:**
@@ -390,8 +393,14 @@ File: `backend/src/modules/users/users.service.ts::refreshToken()`
 Refresh/logout bodies use a real `RefreshTokenDto`: `refresh_token` must be a string of
 exactly 128 lowercase hexadecimal characters (the format produced by `randomBytes(64)`).
 The service independently rejects malformed input before any token repository lookup/update.
-Refresh looks up an unrevoked stored opaque token, rejects expired tokens, revokes the old token
-and issues a new access/refresh pair. It does not decode refresh tokens as JWTs.
+Refresh is single-use and atomic: in one transaction a conditional
+`UPDATE refresh_tokens SET revoked = true WHERE token = $1 AND revoked = false AND expires_at > now
+RETURNING user_id` redeems the token, then the successor is inserted with the same transaction
+manager. Concurrent refreshes with one token serialize on that row: the first commits, the rest
+re-check, match nothing and get 401 `UNAUTHORIZED`. A failed successor insert rolls the redemption
+back, so the token still works; expired tokens are rejected and stay unrevoked. It does not decode
+refresh tokens as JWTs. Known gaps (separate task): tokens are stored in plaintext, refresh does not
+check `isActive`, there is no reuse detection and no `/auth/refresh` throttle.
 
 **JWT Strategy:**
 
@@ -432,9 +441,26 @@ File: `backend/src/modules/products/entities/product.entity.ts`
 
 File: `backend/src/modules/products/products.service.ts::create()`
 
-- Validate subscription: check product count limit
-- Check no duplicate name for this user
-- Save and return
+- One transaction: `assertCanCreateProductInTx` takes `pg_advisory_xact_lock(hashtext('product-quota'),
+  hashtext(userId))`, reads the plan (no subscription row = free), counts the tenant's products with
+  the ORM (soft-deleted ones excluded), then the product is inserted
+- Two creates for the last free slot: one succeeds, the other gets 402 `PRODUCT_LIMIT_EXCEEDED`;
+  a create that rolls back after its insert releases the slot
+- The audit log entry is written by `AuditLogInterceptor` only after the handler succeeds, so a
+  rolled-back or rejected create is never logged
+- Duplicate live names are rejected only by the partial unique index `IDX_products_user_name`
+  `(user_id, name) WHERE deleted_at IS NULL`; there is no explicit check, so the violation currently
+  surfaces as a 500 rather than the documented 409 `PRODUCT_ALREADY_EXISTS` (known drift, not fixed here)
+
+**Stock edits (`update()`):**
+
+- Only fields present in the body are written, in one conditional `UPDATE … WHERE id AND user_id
+  AND deleted_at IS NULL`; the product form sends only fields that differ from what it loaded
+- `quantity` is a precondition write and requires `expectedQuantity`: the UPDATE adds
+  `AND quantity = expectedQuantity`, so an edit based on a stale form cannot overwrite stock that an
+  order changed (409 `PRODUCT_QUANTITY_CONFLICT`, nothing saved). A rename keeps the current stock
+- Orders, order edits/deletes and Telegram orders keep changing stock under row locks or atomic
+  increments; a stock edit parked behind such a lock re-checks after it commits
 
 **Recipients:**
 

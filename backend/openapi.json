@@ -37,6 +37,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -279,8 +289,35 @@
               }
             }
           },
+          "400": {
+            "description": "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Товар не найден"
+            "description": "Товар не найден (PRODUCT_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3882,8 +3919,25 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed or missing refresh_token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Invalid or expired refresh token"
+            "description": "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4336,8 +4390,9 @@
           },
           "supplier_id": {
             "type": "string",
-            "description": "ID поставщика",
-            "example": "uuid"
+            "description": "ID поставщика (null снимает поставщика)",
+            "example": "uuid",
+            "nullable": true
           }
         },
         "required": [
@@ -4489,8 +4544,15 @@
           },
           "supplier_id": {
             "type": "string",
-            "description": "ID поставщика",
-            "example": "uuid"
+            "description": "ID поставщика (null снимает поставщика)",
+            "example": "uuid",
+            "nullable": true
+          },
+          "expectedQuantity": {
+            "type": "integer",
+            "description": "Stock the client last saw. Required with quantity (and only with it); a mismatch returns 409 PRODUCT_QUANTITY_CONFLICT",
+            "example": 50,
+            "minimum": 0
           }
         }
       },

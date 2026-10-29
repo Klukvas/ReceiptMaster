@@ -192,6 +192,63 @@ describe("SubscriptionService", () => {
     });
   });
 
+  // ─── assertCanCreateProductInTx ───
+
+  describe("assertCanCreateProductInTx", () => {
+    const txManager = (plan: PlanName | null, count: number) =>
+      ({
+        query: jest.fn().mockResolvedValue([]),
+        findOne: jest
+          .fn()
+          .mockResolvedValue(plan ? makeSubscription(plan) : null),
+        count: jest.fn().mockResolvedValue(count),
+      }) as any;
+
+    it("takes the per-user product-quota lock before reading the plan", async () => {
+      const manager = txManager("free", 5);
+
+      await expect(
+        service.assertCanCreateProductInTx(manager, userId),
+      ).resolves.toBeUndefined();
+
+      expect(manager.query).toHaveBeenCalledWith(
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+        ["product-quota", userId],
+      );
+      expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(
+        manager.findOne.mock.invocationCallOrder[0],
+      );
+      expect(manager.count).toHaveBeenCalledWith(Product, {
+        where: { user_id: userId },
+      });
+    });
+
+    it("throws PRODUCT_LIMIT_EXCEEDED at the free limit", async () => {
+      await expect(
+        service.assertCanCreateProductInTx(txManager("free", 10), userId),
+      ).rejects.toMatchObject({
+        statusCode: 402,
+        errorCode: "PRODUCT_LIMIT_EXCEEDED",
+      });
+    });
+
+    it("treats a missing subscription row as free without creating one", async () => {
+      await expect(
+        service.assertCanCreateProductInTx(txManager(null, 10), userId),
+      ).rejects.toMatchObject({ errorCode: "PRODUCT_LIMIT_EXCEEDED" });
+      expect(subscriptionRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it("skips counting for the unlimited business plan", async () => {
+      const manager = txManager("business", 99999);
+
+      await expect(
+        service.assertCanCreateProductInTx(manager, userId),
+      ).resolves.toBeUndefined();
+      expect(manager.count).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── assertCanCreateOrder ───
 
   describe("assertCanCreateOrder", () => {

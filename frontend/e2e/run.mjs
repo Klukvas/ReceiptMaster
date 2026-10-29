@@ -21,6 +21,8 @@ const SPECS = [
   { name: "mobile-product-dropdown", load: () => import("./mobile-product-dropdown.spec.mjs") },
   { name: "receipt-socket-url", load: () => import("./receipt-socket-url.spec.mjs") },
   { name: "receipt-progress", load: () => import("./receipt-progress.spec.mjs") },
+  { name: "auth-multitab", load: () => import("./auth-multitab.spec.mjs") },
+  { name: "product-form-conflict", load: () => import("./product-form-conflict.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

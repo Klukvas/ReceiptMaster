@@ -5,6 +5,8 @@ import * as request from "supertest";
 import { UsersController } from "./users.controller";
 import { UsersService } from "./users.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
+import { GlobalExceptionFilter } from "../../common/filters/GlobalExceptionFilter";
+import { ApiErrors } from "../../common/errors/ApiError";
 
 describe("refresh token HTTP validation", () => {
   let app: INestApplication;
@@ -23,6 +25,7 @@ describe("refresh token HTTP validation", () => {
     app.useGlobalPipes(
       new ValidationPipe({ transform: true, whitelist: true }),
     );
+    app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });
   beforeEach(() => jest.clearAllMocks());
@@ -63,5 +66,16 @@ describe("refresh token HTTP validation", () => {
       ).status,
     ).toBe(201);
     expect(service.refreshToken).toHaveBeenCalledWith("a".repeat(128));
+  });
+  it("keeps the 401 body for a token that can no longer be redeemed", async () => {
+    service.refreshToken.mockRejectedValueOnce(ApiErrors.UNAUTHORIZED());
+    const response = await request(app.getHttpServer())
+      .post("/auth/refresh")
+      .send({ refresh_token: "a".repeat(128) });
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "Unauthorized access",
+      errorCode: "UNAUTHORIZED",
+    });
   });
 });

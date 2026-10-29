@@ -56,6 +56,8 @@ so they only run against `vite dev`.)
 | `mobile-product-dropdown` | At 320px and 375px — and with the on-screen keyboard shrinking the viewport — opening the product selector causes no horizontal overflow and leaves every option reachable and selectable |
 | `receipt-socket-url` | The receipt socket follows `VITE_API_URL` / the page origin instead of a hard-coded `localhost` |
 | `receipt-progress` | The generating chip and progress card leave the loading state when the receipt finishes — including when no socket event is delivered — without clearing an order that is still generating, and without a finished attempt's timers or lookup tally taking down the card a retry puts back under the same receipt id |
+| `auth-multitab` | Two pages of one browser context (shared `localStorage`) against a stateful refresh mock: a late losing refresh adopts the winner's tokens instead of clearing them (no redirect, request retried with the new token); a genuine rejection with unchanged storage clears it and redirects; a tab whose old token fails after another tab refreshed retries with the stored token without calling `/auth/refresh`. The session is seeded once by a guarded init script — `installApiMocks` is not used because it re-seeds on every navigation |
+| `product-form-conflict` | A rename sends only `{ name }`; a stale quantity edit sends `expectedQuantity`, and on 409 the form stays open with the typed values, shows the server's stock and resends against it |
 
 `receipt-progress` waits out the panel's real 8s/20s deadlines, so it takes a
 couple of minutes; the other specs are quick.

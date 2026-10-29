@@ -26,6 +26,7 @@ import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { Product } from "./entities/product.entity";
 import { InventoryValueDto } from "./dto/inventory-value.dto";
+import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
 
 @ApiTags("products")
 @ApiBearerAuth("bearer")
@@ -40,6 +41,9 @@ export class ProductsController {
     status: 201,
     description: "Товар успешно создан",
     type: Product,
+  })
+  @ApiFailureResponses({
+    402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
   })
   create(
     @Body() createProductDto: CreateProductDto,
@@ -118,7 +122,11 @@ export class ProductsController {
     description: "Товар успешно обновлен",
     type: Product,
   })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiFailureResponses({
+    400: "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
+    404: "Товар не найден (PRODUCT_NOT_FOUND)",
+    409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT)",
+  })
   update(
     @Param("id") id: string,
     @Body() updateProductDto: UpdateProductDto,

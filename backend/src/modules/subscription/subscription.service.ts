@@ -102,6 +102,34 @@ export class SubscriptionService {
     }
   }
 
+  /**
+   * Quota check for a product insert in the caller's transaction. The per-user
+   * advisory lock is held until commit, so concurrent creates count one after
+   * another; a rolled-back insert releases its slot with the lock. It reads the
+   * plan without creating a subscription row (a missing row is the free plan).
+   */
+  async assertCanCreateProductInTx(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<void> {
+    await manager.query(
+      "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+      ["product-quota", userId],
+    );
+    const subscription = await manager.findOne(UserSubscription, {
+      where: { user_id: userId },
+    });
+    const limits = PLAN_LIMITS[subscription?.plan ?? "free"];
+
+    if (limits.maxProducts === null) return;
+
+    // The ORM count skips soft-deleted products, matching the plan's policy.
+    const count = await manager.count(Product, { where: { user_id: userId } });
+    if (count >= limits.maxProducts) {
+      throw ApiErrors.PRODUCT_LIMIT_EXCEEDED(limits.maxProducts);
+    }
+  }
+
   async assertCanCreateOrder(userId: string): Promise<void> {
     const subscription = await this.getOrCreate(userId);
     const limits = PLAN_LIMITS[subscription.plan];

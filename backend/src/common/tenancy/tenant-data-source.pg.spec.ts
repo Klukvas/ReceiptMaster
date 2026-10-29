@@ -34,6 +34,8 @@ import {
   connectIsolatedAdmin,
   createRestrictedRole,
   describeIsolatedPostgres,
+  destroyDataSources,
+  teardownIsolatedPostgres,
   typeormCredentials,
 } from "../../../test/helpers/isolated-postgres";
 
@@ -168,18 +170,14 @@ describeIsolatedPostgres(
         }).initialize(),
       );
     }, 20000);
-    afterAll(async () => {
-      if (source?.isInitialized) await source.destroy();
-      if (admin?.isInitialized) await admin.destroy();
-      if (root) {
-        // Only what this suite created; the cluster itself is left running.
-        await root.query(`DROP DATABASE IF EXISTS "${freshDatabase}"`);
-        await root.query(`DROP DATABASE IF EXISTS "${regenerationDatabase}"`);
-        await root.query(`DROP DATABASE IF EXISTS "${database}"`);
-        await root.query(`DROP ROLE IF EXISTS "${role}"`);
-        await root.end();
-      }
-    });
+    afterAll(() =>
+      teardownIsolatedPostgres({
+        dataSources: [source, admin],
+        admin: root,
+        databases: [freshDatabase, regenerationDatabase, database],
+        roles: [role],
+      }),
+    );
 
     it("applies the outbox migration in the same transaction that adds processing", async () => {
       const runner = admin.createQueryRunner();
@@ -493,10 +491,7 @@ describeIsolatedPostgres(
           }).initialize(),
         );
       }, 30000);
-      afterAll(async () => {
-        if (runtime?.isInitialized) await runtime.destroy();
-        if (owner?.isInitialized) await owner.destroy();
-      });
+      afterAll(() => destroyDataSources([runtime, owner]));
 
       /** A confirmed, locked order with a generated, shared receipt and frozen content. */
       async function sharedGeneratedReceipt() {

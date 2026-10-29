@@ -93,14 +93,21 @@ frontend/
 **Request interceptor** (lines 62–73):
 - Adds `Authorization: Bearer {auth_token}` from `localStorage.getItem('auth_token')`
 
-**Response interceptor** (lines 101–156):
-- Handles 401 (Unauthorized) with refresh-token flow:
-  - Gets `refresh_token` from localStorage
-  - Calls `POST /auth/refresh` with refresh token
-  - Retries original request with new access token
-  - Queues failed requests while refreshing to avoid race conditions
-  - Clears auth + redirects to home on refresh failure
-- Non-auth endpoints skip retry
+**Response interceptor** (`api.ts` + `lib/auth-session.ts`):
+- Handles 401 (Unauthorized) on non-auth endpoints. Tokens live in `localStorage`, shared by all
+  tabs; there is no cross-tab lock (no Web Locks), so tabs coordinate only through storage. The
+  server redeems a refresh token once, so of two tabs refreshing with the same token one loses.
+  - **Pre-check:** if storage already holds a different access token than the request carried
+    (another tab or an earlier refresh rotated it), retry once with the stored token — no refresh
+  - Otherwise send the stored `refresh_token` once per tab (requests arriving meanwhile are
+    queued), store the new pair, retry the original request and release the queue
+  - **Refresh failed:** `resolveRefreshFailure` decides from storage alone, comparing it with the
+    session this tab sent. Storage holds a new pair → another tab won: adopt it and retry (the
+    queue too). Both tokens are written by separate `setItem` calls, so a half-changed read, and a
+    401/403 with unchanged storage (the winner's response may still be in flight), is re-read once
+    after 300 ms. Still unchanged (or emptied by a logout) and 401/403 → genuine rejection:
+    `clearAuthAndRedirect` clears storage and goes to `/`. Network/5xx → reject, keep storage
+  - `clearAuthAndRedirect` is the only client code that ends a session on an API failure
 
 **API method groups** (lines 159–497):
 - `authApi.login()`, `register()`, `refresh()`, `logout()`, `getProfile()`, `updateProfile()`, `changePassword()`
@@ -290,7 +297,9 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `login(email, password)` — calls `authApi.login()`, stores tokens, redirects to `/dashboard`
 - `register(email, password)` — same as login
 - `logout()` — calls `authApi.logout()`, clears localStorage, redirects to home
-- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`
+- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`. On failure it
+  only marks this render signed out; it never touches storage (the interceptor decides, so a tab
+  that lost a refresh race cannot wipe the session another tab just stored)
 
 **Token storage:**
 - Access token → `localStorage.auth_token` (short-lived, 15 min typical)
@@ -532,6 +541,18 @@ components/
 └── ui/                # Primitives (Button, Modal, DataTable, Tabs, etc.)
 ```
 
+### Product form: stock edits (`components/products/ProductForm.tsx`)
+
+Editing sends only the fields that differ from the product as loaded (`product-update.ts`
+`buildProductUpdate`), so a rename is `PATCH { name }` and never carries a stale stock value. A
+changed quantity is sent as `{ quantity, expectedQuantity }`, where `expectedQuantity` is the
+baseline: the loaded stock, or the server's after a conflict. On 409 `PRODUCT_QUANTITY_CONFLICT`
+(parsed with `lib/api-errors.ts`) the form stays open with every typed value, reloads
+`GET /products/:id`, shows under the quantity field that stock is now N and the typed value was not
+saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and invalidates
+`["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
+`productsApi.update` takes the generated `UpdateProductRequest` (`UpdateProductDto`).
+
 ### UI Primitives: `components/ui/`
 
 Reusable, framework-agnostic components:
@@ -706,7 +727,7 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 
 ## Common Gotchas
 
-1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic.
+1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic, and don't clear `auth_token`/`refresh_token` on an API error elsewhere — another tab may have just rotated them.
 2. **Query key consistency** — always invalidate the same key after mutations (e.g., `['orders']` after `deleteOrder`).
 3. **Image/asset paths** — public assets in `frontend/public/` (referenced as `/logo-icon.svg`).
 4. **Env vars** — prefix public client settings with `VITE_` for Vite to expose them. Check `frontend/env.example`; never put backend secrets in Vite settings.

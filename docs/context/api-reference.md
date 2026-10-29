@@ -78,6 +78,11 @@ Issues a new access token using a valid stored opaque refresh token. `refresh_to
 string of exactly 128 lowercase hexadecimal characters; malformed bodies return 400 before token
 lookup, and invalid/expired tokens return 401. Logout uses the same validated request body.
 
+A refresh token is **single use**. Redeeming it and storing its successor commit together: of
+concurrent requests with the same token exactly one gets 201 and the others get the same 401
+`UNAUTHORIZED` body as an unknown token; if storing the successor fails, nothing is redeemed and
+the old token still works. An expired token is rejected and left as it is.
+
 **Request Body:**
 ```typescript
 { refresh_token: string }
@@ -94,7 +99,7 @@ lookup, and invalid/expired tokens return 401. Logout uses the same validated re
 
 **Errors:**
 - 400 — Malformed/missing refresh token
-- 401 `UNAUTHORIZED` — Invalid or expired refresh token
+- 401 `UNAUTHORIZED` — Unknown, expired or already redeemed refresh token
 
 ---
 
@@ -195,8 +200,11 @@ File: `backend/src/modules/products/products.controller.ts` (8 endpoints)
 Creates a new product in user's catalog.
 
 **Errors:**
-- 402 `PRODUCT_LIMIT_EXCEEDED` — Free plan limit (10 products)
-- 409 `PRODUCT_ALREADY_EXISTS` — Duplicate name
+- 402 `PRODUCT_LIMIT_EXCEEDED` — Plan product limit reached (free: 10, pro: 100). The count excludes
+  soft-deleted products and is taken in the insert's transaction under a per-tenant lock, so two
+  creates racing for the last slot get one 201 and one 402; a rolled-back create frees its slot.
+- 409 `PRODUCT_ALREADY_EXISTS` — Duplicate name (drift: nothing throws this today; the unique index
+  violation surfaces as 500 — see business-logic.md *Products*)
 
 **Request Body:**
 ```typescript
@@ -268,11 +276,29 @@ Returns single product.
 
 **PATCH** `/products/:id`
 
-Updates product details.
+Updates only the fields present in the body (`UpdateProductDto`): `name`, `purchase_price_cents`,
+`sale_price_cents`, `currency`, `supplier_id` (`null` clears it), and stock as a precondition write.
+Absent fields are left untouched, so a rename never overwrites stock that orders changed meanwhile.
 
-**Request Body:** Same fields as Create (all optional)
+**Stock contract:** `quantity` must be sent together with `expectedQuantity` (integer ≥ 0, the stock
+the client last saw) and vice versa. The update is one conditional statement that applies only while
+the stored quantity still equals `expectedQuantity`; a request parked behind an order's row lock
+re-checks after that order commits. Nothing in the body is saved on a mismatch.
 
-**Response** (200): `Product`
+```typescript
+{ name: "Renamed" }                          // rename only, stock untouched
+{ quantity: 15, expectedQuantity: 8 }        // set stock to 15 if it is still 8
+```
+
+**Response** (200): the re-read `Product`; an empty body changes nothing and returns it.
+
+**Errors:**
+- 400 `VALIDATION_ERROR` — `quantity` without `expectedQuantity` or vice versa (class-validator
+  errors such as a negative or fractional `expectedQuantity` return 400 `HTTP_EXCEPTION`)
+- 404 `PRODUCT_NOT_FOUND` — Missing, soft-deleted or another tenant's product
+- 409 `PRODUCT_QUANTITY_CONFLICT` — Stock no longer equals `expectedQuantity`; reload with
+  `GET /products/:id` and resend against the current value. **Compatibility change (2026-10-29):**
+  a client sending `quantity` alone now gets 400 instead of a blind overwrite.
 
 ---
 

@@ -14,6 +14,9 @@ describe("UsersService", () => {
   let service: UsersService;
   let userRepo: any;
   let refreshTokenRepo: any;
+  let redeemQuery: any;
+  let txTokenRepo: any;
+  let txManager: any;
   let _jwtService: jest.Mocked<JwtService>;
 
   const mockUser: Partial<User> = {
@@ -31,11 +34,29 @@ describe("UsersService", () => {
       update: jest.fn(),
     };
 
+    redeemQuery = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ raw: [{ user_id: "user-1" }] }),
+    };
+    txTokenRepo = {
+      create: jest.fn((data) => ({ ...data })),
+      save: jest.fn((data) => Promise.resolve(data)),
+    };
+    txManager = {
+      createQueryBuilder: jest.fn().mockReturnValue(redeemQuery),
+      findOne: jest.fn().mockResolvedValue(mockUser),
+      getRepository: jest.fn().mockReturnValue(txTokenRepo),
+    };
     refreshTokenRepo = {
       create: jest.fn((data) => ({ ...data })),
       save: jest.fn((data) => Promise.resolve(data)),
       findOne: jest.fn(),
       update: jest.fn(),
+      manager: { transaction: jest.fn((work) => work(txManager)) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -128,51 +149,72 @@ describe("UsersService", () => {
   });
 
   describe("refreshToken", () => {
+    const token = "a".repeat(128);
+
     it.each([undefined, null, "", 1, {}, [], "x".repeat(128), "a".repeat(127)])(
       "rejects malformed token %p before querying",
-      async (token) => {
-        await expect(service.refreshToken(token as string)).rejects.toThrow(
+      async (malformed) => {
+        await expect(service.refreshToken(malformed as string)).rejects.toThrow(
           ApiErrorResponse,
         );
+        expect(refreshTokenRepo.manager.transaction).not.toHaveBeenCalled();
         expect(refreshTokenRepo.findOne).not.toHaveBeenCalled();
-        expect(refreshTokenRepo.save).not.toHaveBeenCalled();
       },
     );
-    it("should rotate refresh token and return new tokens", async () => {
-      const existingToken = {
-        token: "a".repeat(128),
-        revoked: false,
-        expires_at: new Date(Date.now() + 86400000),
-        user: mockUser,
-      };
-      refreshTokenRepo.findOne.mockResolvedValue(existingToken);
 
-      const result = await service.refreshToken("a".repeat(128));
+    it("redeems the token with one conditional UPDATE and issues a successor in the same transaction", async () => {
+      const result = await service.refreshToken(token);
 
-      expect(result.access_token).toBe("jwt-token");
-      expect(existingToken.revoked).toBe(true);
-      expect(refreshTokenRepo.save).toHaveBeenCalled();
-    });
-
-    it("should throw if refresh token not found", async () => {
-      refreshTokenRepo.findOne.mockResolvedValue(null);
-
-      await expect(service.refreshToken("invalid")).rejects.toThrow(
-        ApiErrorResponse,
-      );
-    });
-
-    it("should throw if refresh token is expired", async () => {
-      refreshTokenRepo.findOne.mockResolvedValue({
-        token: "b".repeat(128),
-        revoked: false,
-        expires_at: new Date(Date.now() - 86400000),
-        user: mockUser,
+      expect(redeemQuery.set).toHaveBeenCalledWith({ revoked: true });
+      expect(redeemQuery.where).toHaveBeenCalledWith("token = :token", {
+        token,
       });
-
-      await expect(service.refreshToken("b".repeat(128))).rejects.toThrow(
-        ApiErrorResponse,
+      expect(redeemQuery.andWhere).toHaveBeenCalledWith("revoked = false");
+      expect(redeemQuery.andWhere).toHaveBeenCalledWith("expires_at > :now", {
+        now: expect.any(Date),
+      });
+      expect(redeemQuery.returning).toHaveBeenCalledWith(["user_id"]);
+      expect(txManager.getRepository).toHaveBeenCalledWith(RefreshToken);
+      expect(txTokenRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          token: expect.stringMatching(/^[a-f0-9]{128}$/),
+        }),
       );
+      expect(refreshTokenRepo.save).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        access_token: "jwt-token",
+        refresh_token: expect.stringMatching(/^[a-f0-9]{128}$/),
+        user: { id: "user-1", email: "test@test.com" },
+      });
+    });
+
+    it("answers 401 UNAUTHORIZED without a successor when no live token matched", async () => {
+      redeemQuery.execute.mockResolvedValue({ raw: [] });
+
+      await expect(service.refreshToken(token)).rejects.toMatchObject({
+        statusCode: 401,
+        error: "Unauthorized access",
+        errorCode: "UNAUTHORIZED",
+      });
+      expect(txTokenRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("propagates a successor insert failure out of the transaction", async () => {
+      txTokenRepo.save.mockRejectedValue(new Error("insert failed"));
+
+      await expect(service.refreshToken(token)).rejects.toThrow(
+        "insert failed",
+      );
+    });
+
+    it("answers 401 when the token owner no longer exists", async () => {
+      txManager.findOne.mockResolvedValue(null);
+
+      await expect(service.refreshToken(token)).rejects.toMatchObject({
+        errorCode: "UNAUTHORIZED",
+      });
+      expect(txTokenRepo.save).not.toHaveBeenCalled();
     });
   });
 

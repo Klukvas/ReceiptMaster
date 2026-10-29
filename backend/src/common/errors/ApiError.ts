@@ -118,6 +118,12 @@ export const ApiErrors = {
       "PRODUCT_ALREADY_EXISTS",
       409,
     ),
+  PRODUCT_QUANTITY_CONFLICT: (id: string) =>
+    new ApiErrorResponse(
+      `Stock of product ${id} changed since it was loaded; nothing was saved`,
+      "PRODUCT_QUANTITY_CONFLICT",
+      409,
+    ),
 
   // Recipient errors
   RECIPIENT_NOT_FOUND: (id: string) =>

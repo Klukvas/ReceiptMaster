@@ -200,6 +200,7 @@
     "purchasePriceMustBePositive": "Purchase price must be a positive number",
     "salePriceMustBePositive": "Sale price must be a positive number",
     "quantityMustBeNonNegative": "Quantity must be a non-negative number",
+    "quantityConflict": "Nothing was saved: stock changed to {{server}} while you were editing. Your quantity {{mine}} is still in the form — save again to apply it.",
     "deleteProduct": "Delete Product",
     "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone.",
     "searchPlaceholder": "Search products by name, price, quantity, or currency...",

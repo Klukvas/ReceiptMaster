@@ -23,6 +23,7 @@ import { AuthResponseDto } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { User } from "./entities/user.entity";
+import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -68,7 +69,10 @@ export class UsersController {
     description: "Tokens refreshed successfully",
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: "Invalid or expired refresh token" })
+  @ApiFailureResponses({
+    400: "Malformed or missing refresh_token",
+    401: "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+  })
   async refresh(@Body() body: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.usersService.refreshToken(body.refresh_token);
   }

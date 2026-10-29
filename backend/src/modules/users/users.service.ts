@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
@@ -29,18 +29,24 @@ export class UsersService {
     private configService: ConfigService,
   ) {}
 
-  private async createRefreshToken(userId: string): Promise<string> {
+  /** Pass the rotation's transaction manager so the successor commits with it. */
+  private async createRefreshToken(
+    userId: string,
+    manager?: EntityManager,
+  ): Promise<string> {
+    const repository =
+      manager?.getRepository(RefreshToken) ?? this.refreshTokenRepository;
     const token = crypto.randomBytes(64).toString("hex");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRATION_DAYS);
 
-    const refreshToken = this.refreshTokenRepository.create({
+    const refreshToken = repository.create({
       token,
       user_id: userId,
       expires_at: expiresAt,
     });
 
-    await this.refreshTokenRepository.save(refreshToken);
+    await repository.save(refreshToken);
     return token;
   }
 
@@ -109,35 +115,56 @@ export class UsersService {
     };
   }
 
+  /**
+   * Single-use rotation: redeeming the old token and inserting its successor
+   * commit together. Of concurrent refreshes with one token only the first
+   * conditional UPDATE matches; the rest re-check after it commits and get 401.
+   * A failed successor insert rolls the redemption back, so the token still works.
+   */
   async refreshToken(token: string): Promise<AuthResponseDto> {
     this.assertRefreshToken(token);
-    const existing = await this.refreshTokenRepository.findOne({
-      where: { token, revoked: false },
-      relations: ["user"],
-    });
+    return this.refreshTokenRepository.manager.transaction(async (manager) => {
+      const userId = await this.redeemRefreshToken(manager, token);
+      const user = await manager.findOne(User, { where: { id: userId } });
+      if (!user) {
+        throw ApiErrors.UNAUTHORIZED();
+      }
 
-    if (!existing || existing.expires_at < new Date()) {
+      const payload = { sub: user.id, email: user.email };
+      const access_token = this.jwtService.sign(payload);
+      const refresh_token = await this.createRefreshToken(user.id, manager);
+
+      return {
+        access_token,
+        refresh_token,
+        user: {
+          id: user.id,
+          email: user.email,
+        },
+      };
+    });
+  }
+
+  /** Revokes a live, unexpired token and returns its owner, or throws 401. */
+  private async redeemRefreshToken(
+    manager: EntityManager,
+    token: string,
+  ): Promise<string> {
+    const result = await manager
+      .createQueryBuilder()
+      .update(RefreshToken)
+      .set({ revoked: true })
+      .where("token = :token", { token })
+      .andWhere("revoked = false")
+      .andWhere("expires_at > :now", { now: new Date() })
+      .returning(["user_id"])
+      .execute();
+    // UpdateResult.raw holds the RETURNING rows (not the driver's [rows, count]).
+    const [redeemed] = (result.raw ?? []) as Array<{ user_id: string }>;
+    if (!redeemed) {
       throw ApiErrors.UNAUTHORIZED();
     }
-
-    // Revoke old token (rotation)
-    existing.revoked = true;
-    await this.refreshTokenRepository.save(existing);
-
-    // Issue new tokens
-    const user = existing.user;
-    const payload = { sub: user.id, email: user.email };
-    const access_token = this.jwtService.sign(payload);
-    const refresh_token = await this.createRefreshToken(user.id);
-
-    return {
-      access_token,
-      refresh_token,
-      user: {
-        id: user.id,
-        email: user.email,
-      },
-    };
+    return redeemed.user_id;
   }
 
   async revokeRefreshToken(token: string): Promise<void> {
