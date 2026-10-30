@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -50,6 +50,7 @@ Common combinations: a **full-stack feature** → `backend-patterns` + `frontend
 ```
 market/
 ├── backend/                 # NestJS API
+│   ├── db/roles/            # production role scripts + rollout runbook (README.md)
 │   └── src/
 │       ├── main.ts, app.module.ts
 │       ├── modules/         # orders, products, receipts, recipients, settings,

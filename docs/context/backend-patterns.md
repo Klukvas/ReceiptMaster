@@ -546,13 +546,23 @@ The earlier pre-auth TenantMiddleware and write-only TenantContextSubscriber are
 Service predicates still filter by `user_id`; PostgreSQL RLS supplies a second boundary.
 
 RLS requires a runtime database role that is neither a table owner, superuser nor BYPASSRLS.
-The application does not provision or change production roles. Run migrations with a separate
-privileged connection, then set `AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
+The application does not provision or change production roles. `backend/db/roles/` holds the
+operator scripts and rollout runbook for `rm_owner` (migrations), `rm_app` (runtime) and `rm_backup`
+(S3 dumps). Run the release migrations through the gate's `migrate` service, and set
+`AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
 The switch parses the literal strings `true` and `false`; a typo fails startup validation.
 Tests use a disposable PostgreSQL cluster with a restricted non-owner role and a single pool
 connection; normal database defaults are never used by the opt-in audit suite (parameters under
-*Tests* below). These suites use a synthetic role they create; they are not evidence about the
-roles and policies actually deployed in production, which need their own review.
+*Tests* below). `test/db-roles.e2e-spec.ts` runs the production role scripts, with suite-owned role
+names, and CI repeats `test/e2e` as `rm_app` on a database converted with them. Neither is
+evidence of what is deployed; `scripts/deploy-production.sh` reports that from the backend's own
+connection on every release.
+
+Cross-tenant background work needs no role of its own. The outbox, storage sweep schedule,
+idempotency keys, Telegram update ids and subscriptions have no RLS and hold identifiers or billing
+state; anything touching tenant rows after them enters `runWithTenant`. `suppliers`,
+`supplier_products`, `user_settings`, `user_subscriptions`, `audit_logs`, `idempotency_keys` and
+`refresh_tokens` are tenant-owned but rely on application scoping only.
 
 Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
 recipients. A token grants access to exactly its generated receipt and related graph, not the
@@ -1021,12 +1031,16 @@ async findAll(
    `test/idempotent-create.e2e-spec.ts` (product/recipient replay, concurrent same-key requests parked
    on the key lock, order/product/recipient keys of one value kept apart, replay at the product quota,
    refused creates not stored, expiry, other tenants, unchanged keyless create),
-   `test/order-item-cost-migration.e2e-spec.ts` and `test/order-item-cost-backfill.e2e-spec.ts` — create and drop their own uniquely named
+   `test/order-item-cost-migration.e2e-spec.ts`, `test/order-item-cost-backfill.e2e-spec.ts` and
+   `test/db-roles.e2e-spec.ts` (the production role scripts: idempotency, drift detection, escalation
+   denial, `pg_dump` per role, restore, the migration chain as the owner, and the gate's own SQL) —
+   create and drop their own uniquely named
    databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
    through the production tenant query context — `test/helpers/restricted-app-database.ts`
    (entity-synchronized schema plus the RLS policy migration) or `test/helpers/migrated-app-database.ts`
-   (the full migration chain: functions, FORCE RLS policies, outbox and storage tables) — and park
-   concurrent calls on real row/table/advisory locks, polling `pg_stat_activity` instead of sleeping.
+   (the full migration chain: functions, FORCE RLS policies, outbox and storage tables), both granted
+   through the production `03-grants.sql` — and park concurrent calls on real row/table/advisory
+   locks, polling `pg_stat_activity` instead of sleeping.
    Teardown goes through `teardownIsolatedPostgres` /
    `destroyDataSources`: every data source is settled independently, each database is dropped
    `WITH (FORCE)`, each role is dropped and the maintenance client is closed even when an earlier

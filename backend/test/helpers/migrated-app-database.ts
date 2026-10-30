@@ -1,6 +1,7 @@
 import { join } from "path";
 import { DataSource } from "typeorm";
 import { installTenantContext } from "../../src/common/tenancy/tenant-data-source";
+import { applyRuntimeGrants } from "./db-roles";
 import {
   IsolatedPostgresConnection,
   connectIsolatedAdmin,
@@ -56,13 +57,7 @@ export async function openMigratedAppDatabase(
       extra: { options: STATEMENT_TIMEOUT },
     }).initialize();
     await admin.runMigrations({ transaction: "all" });
-    await admin.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
-    await admin.query(
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`,
-    );
-    await admin.query(
-      `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`,
-    );
+    await applyRuntimeGrants(admin, connection.user, role);
     app = installTenantContext(
       await new DataSource({
         type: "postgres",

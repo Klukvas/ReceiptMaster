@@ -703,11 +703,11 @@ Images install with `yarn install --frozen-lockfile`. Their build contexts (`./b
 1. **test-backend** -- lockfile copies match, lint, unit tests with coverage, build
 2. **test-frontend** -- lint, OpenAPI types, build
 3. **contract-test** -- `backend/openapi.json` matches the code; frontend type-checks against it
-4. **e2e-backend** -- API e2e tests against PostgreSQL 15, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
+4. **e2e-backend** -- API e2e tests against PostgreSQL 15, with `test/e2e` run once as the superuser and once as `rm_app` on a database converted with `backend/db/roles`, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
 5. **browser-regression** -- `node frontend/e2e/run.mjs` (all browser specs, Playwright Chromium, local nginx/openssl for proxy-audit)
 6. **browser-documents** -- `frontend/e2e/template-features.cjs` against the synthetic `backend/test/serve-template-features.ts` fixture; evidence uploaded on failure
 7. **build-and-deploy** (push to `main` only, needs 1–6) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
-8. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate and deploy the immutable image pair
+8. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate (through a one-shot `migrate` service that uses `DB_OWNER_*` when set) and deploy the immutable image pair
 
 Jobs 1–6 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
 
@@ -756,7 +756,10 @@ Jobs 1–6 gate publication through `needs`. Making them required checks for pul
 |---|---|
 | `NODE_ENV` | development / production / test |
 | `PORT` | Backend port (default: 3000) |
-| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection (runtime role) |
+| `DB_OWNER_USERNAME`, `DB_OWNER_PASSWORD` | Migration role for production releases; falls back to the runtime role (`backend/db/roles/README.md`) |
+| `DB_BACKUP_USERNAME`, `DB_BACKUP_PASSWORD` | S3 backup role; falls back to the runtime role, which cannot dump RLS tables once it is `rm_app` |
+| `POSTGRES_BOOTSTRAP_USER`, `POSTGRES_BOOTSTRAP_PASSWORD` | Cluster superuser (default `postgres`); initializes a new volume and is the identity the release gate's socket `psql`/`pg_dump` use |
 | `REDIS_HOST`, `REDIS_PORT` | Redis connection (default: localhost:6379) |
 | `AUTO_RUN_MIGRATIONS` | Run migrations on startup with advisory lock (default: true) |
 | `API_PREFIX` | API route prefix (default: `api/v1`) |

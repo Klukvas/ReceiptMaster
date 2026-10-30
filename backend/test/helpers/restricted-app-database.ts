@@ -2,6 +2,7 @@ import { join } from "path";
 import { DataSource } from "typeorm";
 import { installTenantContext } from "../../src/common/tenancy/tenant-data-source";
 import { AddRLSPolicies1761500000006 } from "../../src/config/migrations/1761500000006-AddRLSPolicies";
+import { applyRuntimeGrants } from "./db-roles";
 import {
   IsolatedPostgresConnection,
   connectIsolatedAdmin,
@@ -67,13 +68,7 @@ export async function openRestrictedAppDatabase(
     } finally {
       await runner.release();
     }
-    await admin.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
-    await admin.query(
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`,
-    );
-    await admin.query(
-      `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`,
-    );
+    await applyRuntimeGrants(admin, connection.user, role);
     app = installTenantContext(
       await new DataSource({
         type: "postgres",
