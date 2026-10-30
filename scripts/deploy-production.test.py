@@ -19,6 +19,9 @@ class ReleasePrecheckTests(unittest.TestCase):
         self.history = [name for name in self.ns['KNOWN_MIGRATIONS'] if name not in self.ns['EXPECTED_MIGRATIONS']]
         self.calls = []
         self.image_env = {'backend': [], 'frontend': []}
+        self.runtime_identity = 'a' * 32
+        self.backup_role_can_dump = 't'
+        self.app_role = {'rolname': 'fixture', 'rolsuper': False, 'rolbypassrls': False, 'rolcreaterole': False, 'rolcreatedb': False, 'owned': 0}
         def run(args, **kwargs):
             import json
             self.calls.append(args)
@@ -27,16 +30,14 @@ class ReleasePrecheckTests(unittest.TestCase):
             if args[1:3] == ['image','inspect']:
                 service = next(key for key in self.image_env if args[3] == self.containers[key]['Image'])
                 return json.dumps([{'Config': {'Env': self.image_env[service]}}]).encode()
-            return json.dumps({'services': {service: {'environment': dict(item.split('=',1) for item in self.containers[service]['Config']['Env'])} for service in ('backend','frontend')}}).encode() if args[1] == 'compose' else b'a' * 32 if args[1:3] == ['exec','backend'] else b'[]'
+            return json.dumps({'services': {service: {'environment': dict(item.split('=',1) for item in self.containers[service]['Config']['Env'])} for service in ('backend','frontend')}}).encode() if args[1] == 'compose' else json.dumps(self.app_role if 'rolsuper' in args[-1] else {'identity': self.runtime_identity}).encode() if args[1:3] == ['exec','backend'] else b'[]'
         def sql(pg, statement):
             if 'AS identity' in statement: return 'a' * 32
-            if 'has_schema_privilege' in statement: return 't'
-            if 'current_user' in statement: return 'fixture|f|f'
+            if 'rolsuper OR rolbypassrls' in statement: return self.backup_role_can_dump
             if 'to_regclass' in statement: return 't'
             if 'SELECT name' in statement: return '\n'.join(self.history)
             if 'pg_policies' in statement: return '0'
             if 'pg_database_size' in statement: return '1024'
-            if 'has_schema_privilege' in statement: return 't'
             raise AssertionError(statement)
         self.ns.update(discover=lambda service: self.containers[service], run=run, sql=sql, health=lambda url: None)
     def tearDown(self): self.space.cleanup()
@@ -71,8 +72,7 @@ class ReleasePrecheckTests(unittest.TestCase):
         self.ns['health'] = lambda url: (_ for _ in ()).throw(RuntimeError('baseline down'))
         with self.assertRaisesRegex(RuntimeError, 'baseline down'): self.check()
     def test_wrong_runtime_instance_blocks_before_mutation(self):
-        original_run = self.ns['run']
-        self.ns['run'] = lambda args, **kwargs: b'b' * 32 if args[1:3] == ['exec','backend'] else original_run(args, **kwargs)
+        self.runtime_identity = 'b' * 32
         with self.assertRaisesRegex(RuntimeError, 'backed-up database instance'): self.check()
         self.assertFalse(any('stop' in args or 'pull' in args or 'run' in args for args in self.calls))
     def test_invalid_runtime_password_connection_blocks(self):
@@ -82,6 +82,42 @@ class ReleasePrecheckTests(unittest.TestCase):
             return original_run(args, **kwargs)
         self.ns['run'] = run
         with self.assertRaisesRegex(RuntimeError, 'Connection failed'): self.check()
+    def checked_output(self):
+        import contextlib, io
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output): self.check()
+        return output.getvalue()
+    def test_split_application_and_bootstrap_roles_are_accepted(self):
+        self.containers['backend']['Config']['Env'] = ['DB_NAME=fixture','DB_USERNAME=rm_app']
+        self.containers['postgres']['Config']['Env'] = ['POSTGRES_DB=fixture','POSTGRES_USER=postgres']
+        self.app_role['rolname'] = 'rm_app'
+        self.assertIn('rm_app|f|f|0', self.checked_output())
+    def test_role_flags_come_from_the_backend_connection(self):
+        recorded = []
+        original_sql = self.ns['sql']
+        self.ns['sql'] = lambda pg, statement: recorded.append(statement) or original_sql(pg, statement)
+        self.check()
+        self.assertNotIn(self.ns['APP_ROLE_SQL'], recorded)
+        self.assertTrue(any(args[1:3] == ['exec','backend'] and 'rolsuper' in args[-1] for args in self.calls))
+    def test_unrestricted_app_role_warns_until_required(self):
+        for flag, value in (('rolsuper',True),('rolbypassrls',True),('rolcreaterole',True),('rolcreatedb',True),('owned',3)):
+            with self.subTest(flag=flag):
+                self.app_role[flag] = value
+                self.ns['REQUIRE_RESTRICTED_APP_ROLE'] = False
+                self.assertIn('WARNING', self.checked_output())
+                self.ns['REQUIRE_RESTRICTED_APP_ROLE'] = True
+                with self.assertRaisesRegex(RuntimeError, 'not restricted'): self.check()
+                self.app_role[flag] = 0 if flag == 'owned' else False
+    def test_restricted_app_role_passes_when_required(self):
+        self.ns['REQUIRE_RESTRICTED_APP_ROLE'] = True
+        self.assertNotIn('WARNING', self.checked_output())
+    def test_malformed_application_role_name_blocks(self):
+        self.containers['backend']['Config']['Env'] = ['DB_NAME=fixture','DB_USERNAME=bad-role"name']
+        with self.assertRaisesRegex(RuntimeError, 'role name unavailable'): self.check()
+    def test_backup_role_without_rls_bypass_blocks_before_mutation(self):
+        self.backup_role_can_dump = 'f'
+        with self.assertRaisesRegex(RuntimeError, 'cannot dump RLS tables'): self.check()
+        self.assertFalse(any('stop' in args or 'pull' in args or 'run' in args for args in self.calls))
     def test_recorded_alternate_env_file_is_preserved(self):
         alternate = self.work / 'alternate.env'; alternate.write_text('SYNTHETIC_TEST_ONLY=2\n')
         for service in ('backend','frontend'):
@@ -184,7 +220,9 @@ class ReleasePrecheckTests(unittest.TestCase):
         config.write_text(json.dumps({'services': {
             'backend': {'image':'${DOCKERHUB_USERNAME}/backend:${IMAGE_TAG}', 'environment':{'CUSTOM_RELEASE_CONTEXT':'${IMAGE_TAG}'}, 'volumes':['./receipts-${IMAGE_TAG}:/app/receipts']},
             'frontend': {'image':'${DOCKERHUB_USERNAME}/frontend:${IMAGE_TAG}'},
-        }}))
+            'postgres': {'image':'postgres:15-alpine'},
+            'db-backup': {'image':'market-db-backup'},
+        }, 'networks': {'marketflow-network': {}}}))
         envfile = self.work / 'original-synthetic.env'; envfile.write_text('IMAGE_TAG=file-default\nDOCKERHUB_USERNAME=file-registry\n')
         def resolve(command):
             return json.loads(subprocess.run(command + ['config','--format','json'],capture_output=True,check=True).stdout)
@@ -203,7 +241,7 @@ class ReleasePrecheckTests(unittest.TestCase):
         with patch.dict(os.environ,{'IMAGE_TAG':'checked-original','DOCKERHUB_USERNAME':'checked-registry'}):
             command = ['docker','compose','--project-name','context-fixture','--project-directory',str(self.work),'--env-file',str(envfile),'-f',str(config)]
             before = resolve(command)
-            scope = {'os':os,'json':json,'project':'context-fixture','work':self.work,'envfiles':[envfile],'configs':[str(config)],'release':self.work,'sha':'b'*40,'registry':'new-registry','old_images':{'backend':'old-backend','frontend':'old-frontend'}}
+            scope = {'os':os,'json':json,'project':'context-fixture','work':self.work,'envfiles':[envfile],'configs':[str(config)],'release':self.work,'sha':'b'*40,'registry':'new-registry','old_images':{'backend':'old-backend','frontend':'old-frontend'},'release_override':self.ns['release_override']}
             exec(compile(ast.Module(body=selected,type_ignores=[]),'<actual-release-command-construction>','exec'),scope)
             after = resolve(scope['original'])
             deployed = resolve(scope['new'])
@@ -212,15 +250,53 @@ class ReleasePrecheckTests(unittest.TestCase):
             self.assertEqual(deployed['services']['backend']['environment']['CUSTOM_RELEASE_CONTEXT'],'checked-original')
             self.assertEqual(deployed['services']['backend']['image'],'new-registry/receiptmaster-backend:'+'b'*40)
             self.assertEqual(deployed['services']['frontend']['image'],'new-registry/receiptmaster-frontend:'+'b'*40)
+            self.assertNotIn('migrate',deployed['services'])
+    def test_real_compose_resolves_role_separation_from_the_override_alone(self):
+        import json, shutil, subprocess
+        if not shutil.which('docker'): self.skipTest('Docker Compose CLI is unavailable')
+        base = self.work / 'frozen-compose.json'
+        base.write_text(json.dumps({'services': {
+            'backend': {'image':'old-backend','environment':['DB_USERNAME=${DB_USERNAME}','DB_PASSWORD=${DB_PASSWORD}']},
+            'frontend': {'image':'old-frontend'},
+            'postgres': {'image':'postgres:15-alpine','environment':['POSTGRES_USER=${DB_USERNAME}','POSTGRES_PASSWORD=${DB_PASSWORD}']},
+            'db-backup': {'image':'market-db-backup','environment':['DB_USERNAME=${DB_USERNAME}','PGPASSWORD=${DB_PASSWORD}']},
+        }, 'networks': {'marketflow-network': {}}}))
+        override = self.work / 'release.override.json'
+        override.write_text(json.dumps(self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'})))
+        def services(env):
+            envfile = self.work / 'resolved.env'; envfile.write_text(env)
+            command = ['docker','compose','--project-name','roles-fixture','--project-directory',str(self.work),'--env-file',str(envfile),'-f',str(base),'-f',str(override),'--profile','release-migrate','config','--format','json']
+            return json.loads(subprocess.run(command,capture_output=True,check=True).stdout)['services']
+        legacy = services('DB_NAME=market\nDB_USERNAME=legacy-user\nDB_PASSWORD=legacy-secret\n')
+        self.assertEqual(legacy['migrate']['environment']['DB_USERNAME'],'legacy-user')
+        self.assertEqual(legacy['migrate']['environment']['DB_PASSWORD'],'legacy-secret')
+        self.assertEqual(legacy['db-backup']['environment']['DB_USERNAME'],'legacy-user')
+        split = services('DB_NAME=market\nDB_USERNAME=rm_app\nDB_PASSWORD=app-secret\nDB_OWNER_USERNAME=rm_owner\nDB_OWNER_PASSWORD=owner-secret\nDB_BACKUP_USERNAME=rm_backup\nDB_BACKUP_PASSWORD=backup-secret\nPOSTGRES_BOOTSTRAP_PASSWORD=bootstrap-secret\n')
+        self.assertEqual(split['migrate']['environment']['DB_USERNAME'],'rm_owner')
+        self.assertEqual(split['migrate']['environment']['DB_PASSWORD'],'owner-secret')
+        self.assertEqual(split['migrate']['image'],'new-backend')
+        self.assertEqual(split['migrate']['profiles'],['release-migrate'])
+        self.assertEqual(split['db-backup']['environment']['DB_USERNAME'],'rm_backup')
+        self.assertEqual(split['db-backup']['environment']['PGPASSWORD'],'backup-secret')
+        self.assertEqual(split['postgres']['environment']['POSTGRES_USER'],'postgres')
+        self.assertEqual(split['postgres']['environment']['POSTGRES_PASSWORD'],'bootstrap-secret')
+        self.assertEqual(split['backend']['environment']['DB_USERNAME'],'rm_app')
+        self.assertNotIn('owner-secret',json.dumps(split['backend']))
+    def test_override_on_disk_holds_placeholders_never_values(self):
+        import json
+        text = json.dumps(self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'}))
+        self.assertIn('${DB_OWNER_PASSWORD:-${DB_PASSWORD}}',text)
+        self.assertIn('${DB_BACKUP_PASSWORD:-${DB_PASSWORD}}',text)
     def test_migration_command_uses_validated_compose_without_raw_env_source(self):
         compose = ['docker','compose','--env-file','recorded-custom.env','-f','original.yml','-f','release.override.json']
-        command = self.ns['migration_command'](compose, 'NODE_CODE', 'a' * 32, check_only=True)
+        command = self.ns['migration_command'](compose, 'NODE_CODE', 'a' * 32, 'rm_app', check_only=True)
         self.assertEqual(command[:len(compose)], compose)
-        self.assertEqual(command[-3:], ['backend','-e','NODE_CODE'])
+        self.assertEqual(command[-3:], ['migrate','-e','NODE_CODE'])
         self.assertIn('RELEASE_CHECK_ONLY=true', command)
+        self.assertIn('RELEASE_APP_ROLE=rm_app', command)
         self.assertIn('RELEASE_EXPECTED_DATABASE_IDENTITY=' + 'a' * 32, command)
         self.assertEqual(command.count('--env-file'), 1)
-        self.assertFalse(any('DB_HOST=' in value or 'DB_PORT=' in value for value in command))
+        self.assertFalse(any(key in value for value in command for key in ('DB_HOST=','DB_PORT=','DB_USERNAME=','DB_PASSWORD=')))
     def test_migration_actual_node_seam_rejects_wrong_database_before_apply(self):
         import json, subprocess
         code = SCRIPT.split('migration_code = r"""',1)[1].split('"""',1)[0]
@@ -230,6 +306,35 @@ let options;const ds={options:{extra:{}},setOptions:value=>{options=value},initi
 (async()=>{await vm.runInNewContext(CODE,{require:()=>({default:ds}),process:state,console:{error:()=>{}}}); console.log(JSON.stringify({applied,exitCode:state.exitCode,options}))})()""".replace('CODE',json.dumps(code))
         result = subprocess.run(['node','-e',harness], capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(result.stdout), {'applied':False,'exitCode':1,'options':{'extra':{'options':'-c lock_timeout=30000 -c statement_timeout=180000'}}})
+    def migration_seam(self, *, pending, missing, can_create=True, unowned=0, check_only=True):
+        import json, subprocess
+        code = SCRIPT.split('migration_code = r\"\"\"',1)[1].split('\"\"\"',1)[0].replace('__EXPECTED_MIGRATIONS__',json.dumps(['PendingMigration']))
+        harness = """const vm=require('node:vm');let applied=false;const log=[];const state={env:{RELEASE_EXPECTED_DATABASE_IDENTITY:'expected',RELEASE_APP_ROLE:'rm_app',...(CHECK?{RELEASE_CHECK_ONLY:'true'}:{})}};
+const runner={connect:async()=>{},query:async(sql,params)=>{if(sql.includes('AS identity'))return [{identity:'expected'}];if(sql.startsWith('SELECT name'))return [];if(sql.includes('has_schema_privilege'))return [{ok:CREATE}];if(sql.includes('AS unowned'))return [{unowned:UNOWNED}];if(sql.includes('AS missing')){log.push(params);return [{missing:MISSING}]}return []},release:async()=>{}};
+const ds={options:{extra:{}},setOptions:()=>{},initialize:async()=>{},createQueryRunner:()=>runner,destroy:async()=>{},migrations:PENDING,runMigrations:async()=>{applied=true}};
+(async()=>{await vm.runInNewContext(CODE,{require:()=>({default:ds}),process:state,console:{error:()=>{}}});console.log(JSON.stringify({applied,exitCode:state.exitCode||0,log}))})()"""
+        harness = harness.replace('CODE',json.dumps(code)).replace('CHECK','true' if check_only else 'false').replace('CREATE','true' if can_create else 'false').replace('MISSING',str(missing)).replace('UNOWNED',str(unowned)).replace('PENDING',json.dumps([{'name':'PendingMigration'}] if pending else []))
+        return json.loads(subprocess.run(['node','-e',harness],capture_output=True,text=True,check=True).stdout)
+    def test_missing_runtime_grant_blocks_before_backup_or_apply(self):
+        result = self.migration_seam(pending=False, missing=1)
+        self.assertEqual((result['applied'],result['exitCode']),(False,1))
+        self.assertEqual(result['log'],[['rm_app']])
+    def test_clean_check_only_run_leaves_the_database_alone(self):
+        result = self.migration_seam(pending=True, missing=0)
+        self.assertEqual((result['applied'],result['exitCode']),(False,0))
+    def test_migration_role_without_create_blocks_pending_migrations(self):
+        result = self.migration_seam(pending=True, missing=0, can_create=False, check_only=False)
+        self.assertEqual((result['applied'],result['exitCode']),(False,1))
+    def test_migration_role_without_ownership_blocks_pending_migrations_before_backup(self):
+        result = self.migration_seam(pending=True, missing=0, unowned=2)
+        self.assertEqual((result['applied'],result['exitCode']),(False,1))
+    def test_ownership_is_not_required_when_nothing_is_pending(self):
+        result = self.migration_seam(pending=False, missing=0, unowned=2)
+        self.assertEqual((result['applied'],result['exitCode']),(False,0))
+    def test_runtime_grants_are_rechecked_after_apply(self):
+        result = self.migration_seam(pending=True, missing=0, check_only=False)
+        self.assertEqual((result['applied'],result['exitCode']),(True,0))
+        self.assertEqual(len(result['log']),2)
     def test_schema_gate_and_backup_precede_migration(self):
         self.assertLess(SCRIPT.index('run_migration(check)'), SCRIPT.index("run(['docker', 'stop'"))
         self.assertLess(SCRIPT.index("backup.with_suffix('.sha256')"), SCRIPT.index('run_migration(migration)'))
@@ -244,7 +349,7 @@ let options;const ds={options:{extra:{}},setOptions:value=>{options=value},initi
 class MigrationTerminationTests(unittest.TestCase):
     def setUp(self):
         self.ns = {}; exec(compile(PREFIX, '<release>', 'exec'), self.ns)
-        self.command = self.ns['migration_command'](['docker','compose'], 'CODE', 'a' * 32, run_id='123-1')
+        self.command = self.ns['migration_command'](['docker','compose'], 'CODE', 'a' * 32, 'rm_app', run_id='123-1')
     def test_failed_command_is_stopped_and_confirmed_before_original_error_returns(self):
         error = TimeoutError('original migration timeout'); calls = []; probes = [b'owned-container',b'']
         def run(args):
