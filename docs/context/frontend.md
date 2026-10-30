@@ -273,6 +273,13 @@ default drops null entries, and with them the whole bar tooltip. The analytics C
 unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
 `unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
 
+### Dashboard: period presets
+
+`DashboardPage` presets and the date inputs send date-only `startDate`/`endDate`, and the API reads
+them as whole UTC days, both ends included. Preset dates come from `toISOString`, so they are UTC
+calendar dates on purpose: that day always contains "now", so a fresh order is in every preset. A
+local date would trail the UTC day west of UTC and drop it. The orders list filters the same way.
+
 ### Server-Side Pagination: `useServerPagination`
 
 **Built-in hook** for tables with sorting, filtering, pagination:

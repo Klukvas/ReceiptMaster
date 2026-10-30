@@ -14,6 +14,7 @@ function daysAgo(days: number): string {
  return d.toISOString().split('T')[0];
 }
 
+// UTC on purpose: the API reads a date-only bound as a UTC day, which then always contains "now".
 function today(): string {
  return new Date().toISOString().split('T')[0];
 }

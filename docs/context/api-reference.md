@@ -660,8 +660,8 @@ Paginated list of user's orders.
 | minAmount | number | - | Min total in cents |
 | maxAmount | number | - | Max total in cents |
 | productId | string | - | Filter by product UUID |
-| startDate | string | - | ISO date (e.g., 2026-01-01) |
-| endDate | string | - | ISO date |
+| startDate | string | - | ISO date (e.g., 2026-01-01): from the start of that UTC day |
+| endDate | string | - | ISO date (e.g., 2026-01-31): includes that whole UTC day. A full timestamp is an exact upper bound |
 
 **Response** (200):
 ```typescript
@@ -886,7 +886,7 @@ Revenue breakdown by product across all orders.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200):
 ```typescript
@@ -912,7 +912,7 @@ Revenue breakdown by customer (recipient).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200):
 ```typescript
@@ -938,7 +938,7 @@ All-time or date-range total revenue.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TotalRevenueDto
 ```typescript
@@ -960,7 +960,7 @@ Product quantity/count breakdown (complement to revenue).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TurnoverByProductDto[]
 
@@ -974,7 +974,7 @@ Order count breakdown by customer.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TurnoverByRecipientDto[]
 
@@ -988,7 +988,7 @@ Total order count (optionally date-filtered).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TotalTurnoverDto
 

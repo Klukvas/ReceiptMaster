@@ -259,6 +259,22 @@ const allUnknownChartSaysSo = async (results) => {
   });
 };
 
+const presetEndsOnTheUtcDate = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    await analytics(page, PARTIAL_TOTAL);
+    const [request] = await Promise.all([
+      page.waitForRequest(/dashboard\/total-revenue\?.*endDate=/),
+      page.getByRole("button", { name: "7d" }).click(),
+    ]);
+    const endDate = new URL(request.url()).searchParams.get("endDate");
+    results.check(
+      "a period preset ends on today's UTC date, which the API reads as the whole day",
+      endDate === new Date().toISOString().split("T")[0],
+      String(endDate),
+    );
+  });
+};
+
 const csvKeepsUnknownEmpty = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, PARTIAL_TOTAL);
@@ -491,6 +507,7 @@ export const run = async () => {
   await partialTotalHasABadge(results);
   await unknownBarHasATooltip(results);
   await allUnknownChartSaysSo(results);
+  await presetEndsOnTheUtcDate(results);
   await csvKeepsUnknownEmpty(results);
   await homeShowsPartialAndGaps(results);
   await homeAllUnknownSaysCostUnknown(results);

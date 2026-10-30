@@ -884,7 +884,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1307,7 +1307,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1358,7 +1358,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1409,7 +1409,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1457,7 +1457,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1508,7 +1508,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"
@@ -1559,7 +1559,7 @@
             "name": "endDate",
             "required": false,
             "in": "query",
-            "description": "End date for filtering (ISO 8601 string)",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
             "schema": {
               "example": "2025-12-31",
               "type": "string"

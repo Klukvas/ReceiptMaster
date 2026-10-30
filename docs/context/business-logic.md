@@ -594,7 +594,8 @@ Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order'
 
 **Metrics Provided:**
 
-- Total Revenue (all-time, selected period)
+- Total Revenue (all-time, selected period). A selected period is a range of UTC days with both ends
+  included (`DateRangeDto`), the same days `daily-revenue` groups by
 - Daily Revenue (time series)
 - Revenue by Product (breakdown)
 - Revenue by Recipient (breakdown)
