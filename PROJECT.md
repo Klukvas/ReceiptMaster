@@ -528,10 +528,13 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID | Primary key |
-| token | VARCHAR(500) | Indexed |
+| token | VARCHAR(500) | Nullable, indexed. Plaintext only on rows issued before hashing (they expire within 30 days) |
+| token_hash | VARCHAR(64) | Nullable, unique. Hex SHA-256 of the token; the only form stored for new tokens |
+| family_id | UUID | Nullable. Rotation chain of one login; partial index on live rows |
 | user_id | UUID | FK -> Users (cascade delete) |
-| expires_at | TIMESTAMP | 7-day expiry |
+| expires_at | TIMESTAMP | 30-day expiry |
 | revoked | BOOLEAN | Default: false |
+| redeemed_at | TIMESTAMPTZ | Nullable. Set only when a refresh rotated the token (replay detection) |
 | created_at | TIMESTAMP | |
 
 ### Idempotency Keys (`idempotency_keys`)

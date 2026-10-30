@@ -3,12 +3,17 @@ import { ValidationPipe } from "@nestjs/common";
 import { SwaggerModule } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import { IoAdapter } from "@nestjs/platform-socket.io";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { EnvConfig } from "./config/env.schema";
+import { trustReverseProxy } from "./config/trusted-proxy";
 import { createOpenApiDocument } from "./openapi/openapi-document";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
+  trustReverseProxy(app);
 
   // WebSocket adapter (Socket.IO)
   app.useWebSocketAdapter(new IoAdapter(app));
