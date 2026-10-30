@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -814,7 +814,8 @@ Soft-deletes multiple orders.
 
 ### Dashboard Metrics
 
-File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (7 of 17 total)
+File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (8 of 17 total), served by
+`OrdersDashboardService` (`orders-dashboard.service.ts`)
 
 "Revenue" in these routes is **profit**: Σ (unit price − `order_items.unit_cost_cents`) × qty over
 confirmed, non-deleted orders. It never reads the product's current purchase price, so changing a

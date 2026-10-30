@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -537,7 +537,8 @@ Public metadata uses the active frozen visible projection. Internal snapshots/co
 
 **Cached Queries:**
 
-File: `backend/src/modules/orders/orders.service.ts`
+File: `backend/src/modules/orders/orders-dashboard.service.ts` (`OrdersDashboardService`, read side
+only; the writers in `OrdersService` and `TelegramService` invalidate)
 
 Dashboard metrics exclude soft-deleted orders in all six raw revenue/turnover methods.
 Dashboard metrics are expensive (aggregations, date grouping). Solutions:
@@ -550,7 +551,7 @@ Dashboard metrics are expensive (aggregations, date grouping). Solutions:
 2. **Cache Keys** (`backend/src/modules/orders/dashboard-cache.ts`):
    - `dashboard:v2:{method}:{userId}:{JSON args}`. The version segment changes with the payload
      shape, so entries cached by an older release are never served (they expire)
-   - `invalidateDashboardCache(userId)` deletes `dashboard:*:{userId}:*` — every version — on order
+   - `OrdersService.invalidateDashboardCache(userId)` deletes `dashboard:*:{userId}:*` — every version — on order
      create/update/confirm/cancel/delete/batch and on Telegram order creation
    - Product price changes need no invalidation: profit no longer reads the current price
 
@@ -588,7 +589,7 @@ Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order'
 
 Files:
 - `backend/src/modules/orders/dto/dashboard-response.dto.ts` — Response shapes
-- `backend/src/modules/orders/orders.service.ts::*Dashboard*()` — Implementations
+- `backend/src/modules/orders/orders-dashboard.service.ts` — Implementations (the eight cached `get*` methods)
 
 ---
 

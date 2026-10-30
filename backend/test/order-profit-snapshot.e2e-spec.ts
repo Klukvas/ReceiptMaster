@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { CacheService } from "../src/common/services/cache.service";
 import { OrdersService } from "../src/modules/orders/orders.service";
+import { OrdersDashboardService } from "../src/modules/orders/orders-dashboard.service";
 import {
   Order,
   OrderStatus,
@@ -38,6 +39,7 @@ describeIsolatedPostgres(
   (connection) => {
     let db: RestrictedAppDatabase;
     let orders: OrdersService;
+    let dashboard: OrdersDashboardService;
     let products: ProductsService;
     let subscription: SubscriptionService;
     let user: User;
@@ -84,6 +86,7 @@ describeIsolatedPostgres(
           getAutoGenerateReceipt: async () => false,
         } as unknown as SettingsService,
       );
+      dashboard = new OrdersDashboardService(app, memoryCache);
     }, 60000);
 
     afterAll(async () => {
@@ -169,13 +172,13 @@ describeIsolatedPostgres(
     const everything = () =>
       asTenant(() =>
         Promise.all([
-          orders.getTotalRevenue(user),
-          orders.getRevenueByProducts(user),
-          orders.getRevenueByRecipients(user),
-          orders.getDailyRevenue(user, 2),
-          orders.getTotalTurnover(user),
-          orders.getTurnoverByProducts(user),
-          orders.getTurnoverByRecipients(user),
+          dashboard.getTotalRevenue(user),
+          dashboard.getRevenueByProducts(user),
+          dashboard.getRevenueByRecipients(user),
+          dashboard.getDailyRevenue(user, 2),
+          dashboard.getTotalTurnover(user),
+          dashboard.getTurnoverByProducts(user),
+          dashboard.getTurnoverByRecipients(user),
         ]),
       );
 
@@ -268,7 +271,7 @@ describeIsolatedPostgres(
         } finally {
           process.env = saved;
         }
-        const before = await asTenant(() => orders.getTotalRevenue(user));
+        const before = await asTenant(() => dashboard.getTotalRevenue(user));
         expect(before.total_revenue_cents).toBe(0);
         expect(cache.size).toBeGreaterThan(0);
 
@@ -279,7 +282,7 @@ describeIsolatedPostgres(
 
         expect(await lineCosts(order.id)).toEqual([["beans", 120]]);
         expect([...cache.keys()]).toEqual([]);
-        expect(await asTenant(() => orders.getTotalRevenue(user))).toEqual({
+        expect(await asTenant(() => dashboard.getTotalRevenue(user))).toEqual({
           total_revenue_cents: 760,
           total_orders: 1,
           currency: "UAH",
@@ -436,7 +439,7 @@ describeIsolatedPostgres(
         const today = await confirmed([{ product: beans, qty: 2 }]);
         await forgetCost(today.id);
 
-        const daily = await asTenant(() => orders.getDailyRevenue(user, 3));
+        const daily = await asTenant(() => dashboard.getDailyRevenue(user, 3));
 
         expect(daily.map((day) => day.revenue_cents)).toEqual([0, 400, null]);
         expect(daily[0]).toMatchObject({
@@ -496,7 +499,7 @@ describeIsolatedPostgres(
           currency: "UAH",
         });
 
-        expect(await asTenant(() => orders.getTotalRevenue(user))).toEqual({
+        expect(await asTenant(() => dashboard.getTotalRevenue(user))).toEqual({
           total_revenue_cents: 800,
           total_orders: 1,
           currency: "UAH",
@@ -515,7 +518,7 @@ describeIsolatedPostgres(
         const stranger = randomUUID();
         cache.set(`dashboard:totalRevenue:${user.id}:[]`, {});
         cache.set(`dashboard:v2:statusSummary:${stranger}:[]`, {});
-        await asTenant(() => orders.getTotalRevenue(user));
+        await asTenant(() => dashboard.getTotalRevenue(user));
 
         const cancelled = await asTenant(() => orders.cancel(order.id, user));
 
@@ -524,7 +527,7 @@ describeIsolatedPostgres(
           `dashboard:v2:statusSummary:${stranger}:[]`,
         ]);
         expect(
-          await asTenant(() => orders.getTotalRevenue(user)),
+          await asTenant(() => dashboard.getTotalRevenue(user)),
         ).toMatchObject({
           total_revenue_cents: 0,
           total_orders: 0,

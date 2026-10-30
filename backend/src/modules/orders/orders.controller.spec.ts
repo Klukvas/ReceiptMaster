@@ -1,11 +1,13 @@
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
+import { OrdersDashboardService } from "./orders-dashboard.service";
 import { User } from "../users/entities/user.entity";
 import { HttpStatus } from "@nestjs/common";
 
 describe("OrdersController", () => {
   let controller: OrdersController;
   let ordersService: jest.Mocked<OrdersService>;
+  let dashboardService: jest.Mocked<OrdersDashboardService>;
   const mockUser = { id: "user-1" } as User;
   const mockReq = { user: mockUser };
 
@@ -37,6 +39,9 @@ describe("OrdersController", () => {
       remove: jest.fn().mockResolvedValue(undefined),
       approveBatch: jest.fn().mockResolvedValue({ approved: 2 }),
       deleteBatch: jest.fn().mockResolvedValue({ deleted: 2 }),
+    } as any;
+
+    dashboardService = {
       getDailyRevenue: jest.fn().mockResolvedValue([]),
       getOrderStatusSummary: jest
         .fn()
@@ -57,7 +62,7 @@ describe("OrdersController", () => {
       }),
     } as any;
 
-    controller = new OrdersController(ordersService);
+    controller = new OrdersController(ordersService, dashboardService);
   });
 
   describe("create", () => {
@@ -240,19 +245,25 @@ describe("OrdersController", () => {
     it("getDailyRevenue should pass days param", () => {
       controller.getDailyRevenue(mockReq, "14");
 
-      expect(ordersService.getDailyRevenue).toHaveBeenCalledWith(mockUser, 14);
+      expect(dashboardService.getDailyRevenue).toHaveBeenCalledWith(
+        mockUser,
+        14,
+      );
     });
 
     it("getDailyRevenue should default to 7 days", () => {
       controller.getDailyRevenue(mockReq, undefined);
 
-      expect(ordersService.getDailyRevenue).toHaveBeenCalledWith(mockUser, 7);
+      expect(dashboardService.getDailyRevenue).toHaveBeenCalledWith(
+        mockUser,
+        7,
+      );
     });
 
     it("getOrderStatusSummary should work", () => {
       controller.getOrderStatusSummary(mockReq);
 
-      expect(ordersService.getOrderStatusSummary).toHaveBeenCalledWith(
+      expect(dashboardService.getOrderStatusSummary).toHaveBeenCalledWith(
         mockUser,
       );
     });
@@ -265,7 +276,7 @@ describe("OrdersController", () => {
 
       controller.getRevenueByProducts(mockReq, dateRange);
 
-      expect(ordersService.getRevenueByProducts).toHaveBeenCalledWith(
+      expect(dashboardService.getRevenueByProducts).toHaveBeenCalledWith(
         mockUser,
         dateRange.startDateParsed,
         dateRange.endDateParsed,
@@ -280,7 +291,7 @@ describe("OrdersController", () => {
 
       controller.getTotalRevenue(mockReq, dateRange);
 
-      expect(ordersService.getTotalRevenue).toHaveBeenCalledWith(
+      expect(dashboardService.getTotalRevenue).toHaveBeenCalledWith(
         mockUser,
         undefined,
         undefined,
@@ -295,7 +306,7 @@ describe("OrdersController", () => {
 
       controller.getTotalTurnover(mockReq, dateRange);
 
-      expect(ordersService.getTotalTurnover).toHaveBeenCalledWith(
+      expect(dashboardService.getTotalTurnover).toHaveBeenCalledWith(
         mockUser,
         undefined,
         undefined,

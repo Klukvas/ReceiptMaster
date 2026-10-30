@@ -4,6 +4,7 @@ import { join } from "path";
 import { DataSource } from "typeorm";
 import { Client } from "pg";
 import { OrdersService } from "../src/modules/orders/orders.service";
+import { OrdersDashboardService } from "../src/modules/orders/orders-dashboard.service";
 import { SettingsService } from "../src/modules/settings/services/settings.service";
 import { Order } from "../src/modules/orders/entities/order.entity";
 import { OrderItem } from "../src/modules/orders/entities/order-item.entity";
@@ -33,6 +34,7 @@ describeIsolatedPostgres(
     let admin: Client;
     let db: DataSource;
     let service: OrdersService;
+    let dashboard: OrdersDashboardService;
     let user: User;
     let recipient: Recipient;
     const cache = new Map<string, unknown>();
@@ -87,6 +89,7 @@ describeIsolatedPostgres(
           getAutoGenerateReceipt: async () => false,
         } as unknown as SettingsService,
       );
+      dashboard = new OrdersDashboardService(db, memoryCache);
     });
 
     afterAll(() =>
@@ -441,12 +444,12 @@ describeIsolatedPostgres(
         await service.confirm(order.id, user);
         const all = () =>
           Promise.all([
-            service.getRevenueByProducts(user),
-            service.getRevenueByRecipients(user),
-            service.getTotalRevenue(user),
-            service.getTurnoverByProducts(user),
-            service.getTurnoverByRecipients(user),
-            service.getTotalTurnover(user),
+            dashboard.getRevenueByProducts(user),
+            dashboard.getRevenueByRecipients(user),
+            dashboard.getTotalRevenue(user),
+            dashboard.getTurnoverByProducts(user),
+            dashboard.getTurnoverByRecipients(user),
+            dashboard.getTotalTurnover(user),
           ]);
         const before = await all();
         expect(before[2]).toMatchObject({
