@@ -1,7 +1,8 @@
+import { ConflictException } from "@nestjs/common";
 import { DataSource } from "typeorm";
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { join } from "path";
-import { userInfo } from "os";
+import { Client } from "pg";
 import { installTenantContext } from "./tenant-data-source";
 import { runWithPublicToken, runWithTenant } from "./tenant-context";
 import { AddRLSPolicies1761500000006 } from "../../config/migrations/1761500000006-AddRLSPolicies";
@@ -16,17 +17,34 @@ import { Recipient } from "../../modules/recipients/entities/recipient.entity";
 import { Order, OrderStatus } from "../../modules/orders/entities/order.entity";
 import { OrderItem } from "../../modules/orders/entities/order-item.entity";
 import { ReceiptsService } from "../../modules/receipts/receipts.service";
+import { ReceiptGenerationOutbox } from "../../modules/receipts/entities/receipt-generation-outbox.entity";
+import { ReceiptArtifactService } from "../../modules/receipts/services/receipt-artifact.service";
+import { ReceiptSnapshotService } from "../../modules/receipts/services/receipt-snapshot.service";
+import { DocumentArtifactsService } from "../../modules/receipts/services/document-artifacts.service";
+import {
+  DocumentRenderService,
+  RenderSnapshot,
+} from "../../modules/receipts/services/document-render.service";
 import {
   Receipt,
   ReceiptStatus,
 } from "../../modules/receipts/entities/receipt.entity";
+import {
+  AUDIT_CLUSTER,
+  connectIsolatedAdmin,
+  createRestrictedRole,
+  describeIsolatedPostgres,
+  destroyDataSources,
+  teardownIsolatedPostgres,
+  typeormCredentials,
+} from "../../../test/helpers/isolated-postgres";
 
 // Opt in only to the disposable audit cluster, never normal application DB defaults.
-const pgDescribe =
-  process.env.AUDIT_PG_PORT === "55439" ? describe : describe.skip;
-pgDescribe(
+describeIsolatedPostgres(
   "tenant query context against PostgreSQL with a restricted non-owner",
-  () => {
+  AUDIT_CLUSTER,
+  (connection) => {
+    let root: Client;
     let admin: DataSource;
     let source: DataSource;
     const a = randomUUID();
@@ -39,23 +57,17 @@ pgDescribe(
     let legacyReceipt: Receipt;
     const role = `audit_app_${process.pid}_${Date.now()}`;
     const database = `audit_rls_${process.pid}_${Date.now()}`;
+    const freshDatabase = `audit_bootstrap_${process.pid}_${Date.now()}`;
+    const regenerationDatabase = `audit_regen_${process.pid}_${Date.now()}`;
+    let rolePassword: string;
 
     beforeAll(async () => {
-      const root = await new DataSource({
-        type: "postgres",
-        host: "127.0.0.1",
-        port: 55439,
-        username: userInfo().username,
-        database: "postgres",
-      }).initialize();
+      root = await connectIsolatedAdmin(connection);
       await root.query(`CREATE DATABASE "${database}"`);
-      await root.query(`CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS`);
-      await root.destroy();
+      rolePassword = await createRestrictedRole(root, role);
       admin = await new DataSource({
         type: "postgres",
-        host: "127.0.0.1",
-        port: 55439,
-        username: userInfo().username,
+        ...typeormCredentials(connection),
         database,
         entities: [join(__dirname, "../../**/*.entity.ts")],
         synchronize: true,
@@ -148,19 +160,24 @@ pgDescribe(
       source = installTenantContext(
         await new DataSource({
           type: "postgres",
-          host: "127.0.0.1",
-          port: 55439,
+          host: connection.host,
+          port: connection.port,
           username: role,
+          password: rolePassword,
           database,
           entities: [join(__dirname, "../../**/*.entity.ts")],
           extra: { max: 1 },
         }).initialize(),
       );
     }, 20000);
-    afterAll(async () => {
-      if (source?.isInitialized) await source.destroy();
-      if (admin?.isInitialized) await admin.destroy();
-    });
+    afterAll(() =>
+      teardownIsolatedPostgres({
+        dataSources: [source, admin],
+        admin: root,
+        databases: [freshDatabase, regenerationDatabase, database],
+        roles: [role],
+      }),
+    );
 
     it("applies the outbox migration in the same transaction that adds processing", async () => {
       const runner = admin.createQueryRunner();
@@ -196,13 +213,10 @@ pgDescribe(
     });
 
     it("bootstraps the complete migration chain on a clean database in one transaction", async () => {
-      const freshDatabase = `audit_bootstrap_${process.pid}_${Date.now()}`;
       await admin.query(`CREATE DATABASE "${freshDatabase}"`);
       const fresh = await new DataSource({
         type: "postgres",
-        host: "127.0.0.1",
-        port: 55439,
-        username: userInfo().username,
+        ...typeormCredentials(connection),
         database: freshDatabase,
         entities: [join(__dirname, "../../**/*.entity.ts")],
         migrations: [join(__dirname, "../../config/migrations/*.ts")],
@@ -277,6 +291,11 @@ pgDescribe(
         rolsuper: false,
         rolbypassrls: false,
       });
+      expect(
+        await source.query(
+          "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user",
+        ),
+      ).toEqual([]);
       expect(await source.query("SELECT * FROM orders")).toEqual([]);
       await expect(
         source.query(
@@ -421,102 +440,251 @@ pgDescribe(
         ),
       ).toEqual([]);
     });
-    it.each([
-      ["explicit", "revoke"],
-      ["fallback", "revoke"],
-      ["explicit", "void"],
-      ["fallback", "void"],
-    ])(
-      "preserves %s PDF regeneration against concurrent %s",
-      async (mode, mutation) => {
-        await admin.getRepository(Receipt).update(sharedReceipt.id, {
+    // Real-PostgreSQL evidence that a delayed regeneration cannot restore a revoked
+    // public token or undo a concurrent void. Regeneration is asynchronous: an explicit
+    // request freezes a candidate plus an outbox job that ReceiptArtifactService.execute
+    // promotes; a missing PDF is repaired synchronously by ReceiptArtifactService.repair.
+    // Both render outside any transaction, then promote under row locks with fenced
+    // updates. The renderer is held open by a promise gate while the concurrent mutation
+    // commits; everything runs as the restricted role under tenant context.
+    describe("delayed regeneration against concurrent revoke or void", () => {
+      const tenant = randomUUID();
+      const user = { id: tenant } as User;
+      const fixturePdf = Buffer.from("%PDF-1.4 regeneration fixture");
+      let owner: DataSource;
+      let runtime: DataSource;
+
+      beforeAll(async () => {
+        // The full migration chain provides the storage-lease, sweep and outbox tables
+        // and policies these services write, exactly as production has them.
+        await root.query(`CREATE DATABASE "${regenerationDatabase}"`);
+        owner = await new DataSource({
+          type: "postgres",
+          ...typeormCredentials(connection),
+          database: regenerationDatabase,
+          entities: [join(__dirname, "../../**/*.entity.ts")],
+          migrations: [join(__dirname, "../../config/migrations/*.ts")],
+        }).initialize();
+        await owner.runMigrations({ transaction: "all" });
+        await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+        await owner.query(
+          `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${role}"`,
+        );
+        await owner.query(
+          `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${role}"`,
+        );
+        await owner.getRepository(User).save({
+          id: tenant,
+          email: `${tenant}@example.test`,
+          password: "test-only",
+        });
+        runtime = installTenantContext(
+          await new DataSource({
+            type: "postgres",
+            host: connection.host,
+            port: connection.port,
+            username: role,
+            password: rolePassword,
+            database: regenerationDatabase,
+            entities: [join(__dirname, "../../**/*.entity.ts")],
+            extra: { max: 1 },
+          }).initialize(),
+        );
+      }, 30000);
+      afterAll(() => destroyDataSources([runtime, owner]));
+
+      /** A confirmed, locked order with a generated, shared receipt and frozen content. */
+      async function sharedGeneratedReceipt() {
+        const recipient = await owner
+          .getRepository(Recipient)
+          .save({ user_id: tenant, name: "Race recipient" });
+        const order = await owner.getRepository(Order).save({
+          user_id: tenant,
+          recipient_id: recipient.id,
+          status: OrderStatus.CONFIRMED,
+          is_locked: true,
+          subtotal_cents: 100,
+          total_cents: 100,
+          currency: "UAH",
+        });
+        const html = "<!doctype html><html><body>Frozen receipt</body></html>";
+        const snapshot = {
+          templateRevision: 1,
+          options: {},
+          htmlHash: createHash("sha256").update(html).digest("hex"),
+        } as unknown as RenderSnapshot;
+        const publicToken = randomBytes(32).toString("hex");
+        const receipt = await owner.getRepository(Receipt).save({
+          user_id: tenant,
+          order_id: order.id,
+          number: randomUUID(),
           status: ReceiptStatus.GENERATED,
-          public_token: token,
-          pdf_path: "object-storage://audit/old.pdf",
+          public_token: publicToken,
+          html_snapshot: html,
+          active_snapshot: snapshot,
+          active_revision: 1,
+          pdf_path: `object-storage://receipts/${tenant}/original.pdf`,
+          hash: "original",
+          progress: 100,
         });
-        let finishPdf: (value: { filePath: string; url: string }) => void;
-        let startedPdf: () => void;
+        return { receipt, publicToken, originalPath: receipt.pdf_path };
+      }
+
+      /** Real receipt services over the restricted pool; only Chromium and S3 are doubles. */
+      function receiptServices() {
+        let markStarted: () => void;
+        let release: () => void;
         const started = new Promise<void>((resolve) => {
-          startedPdf = resolve;
+          markStarted = resolve;
         });
-        const pdf = {
-          generateReceiptPdf: jest.fn(() => {
-            startedPdf();
-            return new Promise((resolve) => {
-              finishPdf = resolve;
-            });
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const renderer = {
+          generatePdf: jest.fn(async () => {
+            markStarted();
+            await released;
+            return fixturePdf;
           }),
         };
         const storage = {
-          parseObjectStoragePath: () => ({
-            bucket: "audit",
-            key: "fixture.pdf",
+          uploadReceipt: jest.fn(
+            async (_buffer: Buffer, filename: string) =>
+              `https://storage.example.test/${filename}`,
+          ),
+          parseObjectStoragePath: (path: string) => ({
+            bucket: "receipts",
+            key: path.replace("object-storage://", ""),
           }),
-          deleteFile: jest.fn().mockResolvedValue(undefined),
+          // The stored PDF is gone, so a download falls back to repair.
           fileExists: jest.fn().mockResolvedValue(false),
-          downloadFile: jest.fn().mockResolvedValue(Buffer.from("fixture-pdf")),
         };
-        const settings = {
-          getAllPdfSettings: jest.fn().mockResolvedValue({
-            companyInfo: {},
-            templateId: "standard",
-            receiptTitle: "Invoice",
-            templateLanguage: "en",
-          }),
-        };
-        const service = new ReceiptsService(
-          source.getRepository(Receipt),
-          source.getRepository(Order),
-          pdf as never,
+        const renders = new DocumentRenderService(
+          undefined,
+          renderer as never,
+          undefined,
+        );
+        const snapshots = new ReceiptSnapshotService(
+          runtime,
+          undefined,
+          undefined,
+          renders,
+        );
+        const leases = new DocumentArtifactsService(runtime, storage as never);
+        const artifacts = new ReceiptArtifactService(
+          runtime,
+          snapshots,
+          renders,
+          leases,
+        );
+        const receipts = new ReceiptsService(
+          runtime.getRepository(Receipt),
+          runtime.getRepository(Order),
+          undefined,
           storage as never,
-          source,
+          runtime,
           undefined,
-          settings as never,
           undefined,
+          { dispatch: jest.fn() } as never,
+          snapshots,
+          artifacts,
         );
-        const user = { id: a } as User;
-        const pending = runWithTenant(a, () =>
-          mode === "explicit"
-            ? service.regenerateReceiptPdf(sharedReceipt.id, user)
-            : service.getReceiptPdf(sharedReceipt.id, user),
-        );
-        await started;
-        await runWithTenant(a, () =>
-          mutation === "void"
-            ? service.voidReceipt(sharedReceipt.id, user, "fixture race")
-            : service.revokePublicToken(sharedReceipt.id, user),
-        );
-        expect(
-          (
-            await admin
-              .getRepository(Receipt)
-              .findOneByOrFail({ id: sharedReceipt.id })
-          ).public_token,
-        ).toBeNull();
-        finishPdf({
-          filePath: "object-storage://audit/new.pdf",
-          url: "https://example.test/new.pdf",
-        });
-        if (mutation === "void")
-          await expect(pending).rejects.toMatchObject({
-            statusCode: expect.any(Number),
-          });
-        else await pending;
-        const current = await admin
-          .getRepository(Receipt)
-          .findOneByOrFail({ id: sharedReceipt.id });
-        expect(current.public_token).toBeNull();
-        expect(current.status).toBe(
-          mutation === "void" ? ReceiptStatus.VOID : ReceiptStatus.GENERATED,
-        );
-        await expect(service.getPublicReceipt(token)).rejects.toMatchObject({
-          statusCode: 404,
-        });
-        await expect(service.getPublicReceiptPdf(token)).rejects.toMatchObject({
-          statusCode: 404,
-        });
-      },
-    );
+        return { receipts, artifacts, started, release: () => release() };
+      }
+
+      it.each([
+        ["explicit", "revoke"],
+        ["explicit", "void"],
+        ["fallback", "revoke"],
+        ["fallback", "void"],
+      ] as const)(
+        "%s regeneration finishing after a concurrent %s leaves the share token revoked and any void intact",
+        async (mode, mutation) => {
+          const { receipt, publicToken, originalPath } =
+            await sharedGeneratedReceipt();
+          const { receipts, artifacts, started, release } = receiptServices();
+          const inTenant = <T>(operation: () => Promise<T>) =>
+            runWithTenant(tenant, operation);
+
+          let pending: Promise<unknown>;
+          if (mode === "explicit") {
+            const queued = await inTenant(() =>
+              receipts.regenerateReceiptPdf(receipt.id, user),
+            );
+            expect(queued.replacement_status).toBe("processing");
+            const jobs = await owner
+              .getRepository(ReceiptGenerationOutbox)
+              .findBy({ receipt_id: receipt.id });
+            expect(jobs.map((job) => job.generation_id)).toEqual([
+              queued.generation_id,
+            ]);
+            // What the queue worker runs for that outbox job.
+            pending = inTenant(() =>
+              artifacts.execute(receipt.id, tenant, queued.generation_id),
+            );
+          } else {
+            pending = inTenant(() => receipts.getReceiptPdf(receipt.id, user));
+          }
+          // Fail fast if the operation settles without ever reaching the renderer.
+          await Promise.race([
+            started,
+            pending.then(() => {
+              throw new Error("finished before rendering");
+            }),
+          ]);
+          await inTenant(() =>
+            mutation === "void"
+              ? receipts.voidReceipt(receipt.id, user, "Concurrent void")
+              : receipts.revokePublicToken(receipt.id, user),
+          );
+          release();
+
+          if (mutation === "void" && mode === "explicit")
+            expect(await pending).toBeNull();
+          else if (mutation === "void")
+            await expect(pending).rejects.toBeInstanceOf(ConflictException);
+          else if (mode === "explicit")
+            expect(await pending).toMatchObject({
+              status: ReceiptStatus.GENERATED,
+              active_revision: 2,
+              public_token: null,
+              replacement_status: null,
+            });
+          else
+            expect(
+              ((await pending) as { buffer: Buffer }).buffer.equals(fixturePdf),
+            ).toBe(true);
+
+          const current = await owner
+            .getRepository(Receipt)
+            .createQueryBuilder("r")
+            .addSelect("r.pending_id")
+            .where("r.id = :id", { id: receipt.id })
+            .getOneOrFail();
+          expect(current.public_token).toBeNull();
+          if (mutation === "void") {
+            expect(current).toMatchObject({
+              status: ReceiptStatus.VOID,
+              active_revision: 1,
+              pdf_path: originalPath,
+              replacement_status: null,
+              pending_id: null,
+            });
+          } else {
+            // The regenerated PDF did land, without touching the share token.
+            expect(current.status).toBe(ReceiptStatus.GENERATED);
+            expect(current.active_revision).toBe(mode === "explicit" ? 2 : 1);
+            expect(current.pdf_path).not.toBe(originalPath);
+          }
+          await expect(
+            receipts.getPublicReceipt(publicToken),
+          ).rejects.toMatchObject({ statusCode: 404 });
+          await expect(
+            receipts.getPublicReceiptPdf(publicToken),
+          ).rejects.toMatchObject({ statusCode: 404 });
+        },
+      );
+    });
 
     it("returns one winning token to concurrent share creators", async () => {
       await admin.getRepository(Receipt).update(sharedReceipt.id, {

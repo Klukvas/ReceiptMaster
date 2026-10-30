@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card } from '../ui/Card';
@@ -10,9 +11,11 @@ interface StatCardProps {
  bgColor: string;
  href?: string;
  description?: string;
+ /** Optional note under the description, e.g. profit completeness. */
+ footer?: ReactNode;
 }
 
-export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, description }: StatCardProps) => {
+export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, description, footer }: StatCardProps) => {
  const content = (
  <Card className={href ? 'hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
  <div className="flex items-center">
@@ -25,6 +28,7 @@ export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, descri
  {description && (
  <p className="text-xs text-content-tertiary mt-0.5">{description}</p>
  )}
+ {footer && <div className="mt-1">{footer}</div>}
  </div>
  </div>
  </Card>

@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Check,
 } from "typeorm";
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { Order } from "./order.entity";
@@ -12,6 +13,10 @@ import { Product } from "../../products/entities/product.entity";
 import { User } from "../../users/entities/user.entity";
 
 @Entity("order_items")
+@Check(
+  "CHK_order_items_unit_cost_non_negative",
+  `"unit_cost_cents" IS NULL OR "unit_cost_cents" >= 0`,
+)
 @Index(["order_id"])
 @Index(["product_id"])
 export class OrderItem {
@@ -42,6 +47,15 @@ export class OrderItem {
   @ApiProperty()
   @Column({ type: "integer" })
   line_total_cents: number;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      "Purchase cost per unit captured when the draft line was written; null when unknown (lines created before cost snapshots)",
+  })
+  @Column({ type: "integer", nullable: true })
+  unit_cost_cents: number | null;
 
   @ApiHideProperty()
   @Column({ type: "uuid" })

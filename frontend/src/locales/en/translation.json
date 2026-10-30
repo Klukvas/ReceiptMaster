@@ -171,7 +171,8 @@
     "overridePrice": "Custom",
     "stock": "in stock",
     "nothingFound": "Nothing found",
-    "creating": "Creating..."
+    "creating": "Creating...",
+    "cancelConfirmedWarning": "This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it."
   },
   "products": {
     "title": "Products",
@@ -200,6 +201,7 @@
     "purchasePriceMustBePositive": "Purchase price must be a positive number",
     "salePriceMustBePositive": "Sale price must be a positive number",
     "quantityMustBeNonNegative": "Quantity must be a non-negative number",
+    "quantityConflict": "Nothing was saved: stock changed to {{server}} while you were editing. Your quantity {{mine}} is still in the form — save again to apply it.",
     "deleteProduct": "Delete Product",
     "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone.",
     "searchPlaceholder": "Search products by name, price, quantity, or currency...",
@@ -523,8 +525,8 @@
       },
       "receipts": {
         "title": "PDF Receipt Generation",
-        "description": "Background PDF generation via BullMQ queue. 10 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
-        "tag1": "10 templates",
+        "description": "Background PDF generation via BullMQ queue. 15 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
+        "tag1": "15 templates",
         "tag2": "SHA256 hash",
         "tag3": "S3 storage"
       },
@@ -738,7 +740,13 @@
     "totalTurnover": "Total Turnover",
     "topCustomers": "Top Customers",
     "sortByRevenue": "By revenue",
-    "sortByOrders": "By orders"
+    "sortByOrders": "By orders",
+    "profitUnknown": "Cost unknown",
+    "profitPartial": "Partial",
+    "profitPartialTooltip": "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
+    "csvProfitComplete": "Profit complete",
+    "csvUnknownCostLines": "Lines with unknown cost",
+    "csvUnknownCostTurnover": "Turnover with unknown cost"
   },
   "notFound": {
     "title": "Page Not Found",
@@ -755,6 +763,9 @@
     "next": "Continue",
     "back": "Back",
     "stepOf": "Step {{current}} of {{total}}",
+    "saveUnconfirmed": "We couldn't confirm the save. Retry is safe.",
+    "finishFailed": "Couldn't finish setup. Retry.",
+    "skipFailed": "Couldn't save that you skipped setup. It will be offered again next time.",
     "step1": {
       "title": "Company Information",
       "subtitle": "Tell us about your business"

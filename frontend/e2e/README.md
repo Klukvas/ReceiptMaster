@@ -13,7 +13,9 @@ yarn --cwd frontend e2e              # same thing via the package script
 
 `run.mjs` starts its own Vite dev server (with `VITE_WS_URL` pointed at the mock
 socket) unless one is already listening on `E2E_BASE_URL`, and stops it again
-afterwards. Exit code is non-zero when any check fails. Dev servers must run in tmux under the
+afterwards. Exit code is non-zero when any check fails, when the name filter matches no spec,
+or when a selected spec records no checks, so an empty run never reads as a pass. CI runs the
+whole suite as the `browser-regression` job. Dev servers must run in tmux under the
 workspace policy; start one on port 5231 before invoking this harness:
 
 ```bash
@@ -23,8 +25,8 @@ node frontend/e2e/run.mjs infra-audit
 node frontend/e2e/run.mjs proxy-audit
 ```
 
-`E2E_CHROME_PATH` is optional; by default the harness uses Playwright's installed
-browser. `proxy-audit` requires a local `nginx` and `openssl` (override the binary
+`E2E_CHROME_PATH` is optional; by default the harness uses Playwright's bundled
+Chromium (`npx playwright install chromium` once). `proxy-audit` requires a local `nginx` and `openssl` (override the binary
 with `E2E_NGINX_BINARY`), validates the actual proxy configuration, then sends
 synthetic signed webhook bytes and receipt events through polling and WebSocket.
 All generated proxy certificates/logs live under `frontend/e2e/.cache` and its
@@ -54,6 +56,11 @@ so they only run against `vite dev`.)
 | `mobile-product-dropdown` | At 320px and 375px — and with the on-screen keyboard shrinking the viewport — opening the product selector causes no horizontal overflow and leaves every option reachable and selectable |
 | `receipt-socket-url` | The receipt socket follows `VITE_API_URL` / the page origin instead of a hard-coded `localhost` |
 | `receipt-progress` | The generating chip and progress card leave the loading state when the receipt finishes — including when no socket event is delivered — without clearing an order that is still generating, and without a finished attempt's timers or lookup tally taking down the card a retry puts back under the same receipt id |
+| `auth-multitab` | Two pages of one browser context (shared `localStorage`) against a stateful refresh mock: a late losing refresh adopts the winner's tokens instead of clearing them (no redirect, request retried with the new token); an early loser (its 401 answered 800 ms before the winner's 201, longer than the old fixed 300 ms re-read) adopts the winner's pair, also when the winner keeps the access token and rotates only the refresh token; a genuine rejection with unchanged storage clears it and redirects; a network error or a 5xx on `/auth/refresh` keeps storage and does not redirect; a tab whose old token fails after another tab refreshed retries with the stored token without calling `/auth/refresh`. The session is seeded once by a guarded init script — `installApiMocks` is not used because it re-seeds on every navigation |
+| `product-form-conflict` | A rename sends only `{ name }`; a stale quantity edit sends `expectedQuantity`, and on 409 the form stays open with the typed values, shows the server's stock and resends against it |
+| `profit-lifecycle` | Unknown profit reads "—" with "Cost unknown" (never 0) on the KPI and recipient list; partial profit keeps its amount with a "Partial" badge naming excluded lines and turnover; the CSV download (`page.waitForEvent('download')`) leaves unknown profit empty and adds the completeness columns; the sparkline flags partial days, draws an unknown day as a gap and reads "Cost unknown" (not "Partial") when no charted line has a cost; cancelling a confirmed order warns (receipt voided, link revoked, stock not returned) while a draft does not, and the order list, receipts and every dashboard figure are refetched after the cancel |
+| `onboarding` | Against a stateful mock that replays a known `Idempotency-Key`: Back→Next without changes sends nothing and a rename sends one PATCH `{ name }` (never a second POST); two clicks in one task send one create; Escape, Skip and Close do nothing while a save is in flight; a 500 keeps the step and every value with a friendly message (no database text) and the next attempt sends the corrected form; a dropped response is reported as unconfirmed and Retry resends the same body with the same key, then PATCHes edits; a stock change on revisit (409) keeps the typed quantity, names the server's stock and saving again sends the new `expectedQuantity`; a failed completion keeps the wizard open and Retry finishes without re-creating; a failed Skip closes with a "will be offered again" toast; the Finish copy promises no PDF/receipt in en/ru/uk |
+| `locale-parity` | Node only: en, ru and uk have identical flattened key sets and the same `{{placeholders}}` and value types per key; the landing template count equals `TEMPLATE_METADATA` (evaluated from `backend/src/modules/receipts/templates/metadata.ts`) |
 
 `receipt-progress` waits out the panel's real 8s/20s deadlines, so it takes a
 couple of minutes; the other specs are quick.
@@ -84,7 +91,8 @@ SETTINGS_ORIGIN=http://127.0.0.1:4318 node frontend/e2e/settings-regressions.cjs
 ```
 
 The fixture uses the existing `frontend/dist/assets/*.css`; run the frontend build first.
-`SETTINGS_EVIDENCE` changes its generated bundle/output directory. Optional `SETTINGS_BASELINE`
+`SETTINGS_EVIDENCE` changes its generated bundle/output directory (default
+`<os.tmpdir()>/receiptmaster-settings-regressions`). Optional `SETTINGS_BASELINE`
 points at a directory mirroring baseline source paths, allowing the same browser assertions to
 prove the original failures without changing the working tree. The Nest HTTP and real image
 format checks run separately with `cd backend && yarn test --runInBand settings logo-storage`.
@@ -92,8 +100,10 @@ format checks run separately with `cd backend && yarn test --runInBand settings 
 The 22 browser scenarios include delayed logo upload/delete conflicts, confirmed template and
 automatic en/ru/uk titles after a successful POST followed by a failed GET, custom title
 provenance, and title draft recovery through failed GET/Retry. Logo delays use Playwright route
-promises and synthetic responses. Chromium sandbox stays enabled. `E2E_CHROME_PATH` selects the
-local Chrome executable; `SETTINGS_REPORT` and `SETTINGS_SCREENSHOTS` select evidence paths.
+promises and synthetic responses. The browser is Playwright's bundled Chromium unless
+`E2E_CHROME_PATH` names another executable; `SETTINGS_REPORT` and `SETTINGS_SCREENSHOTS` select
+evidence paths. This suite encodes the superseded individual-save contract and is not run in CI:
+against the current unified-save SettingsPage it fails (0/22 on 2026-10-29).
 The fixture bundles source at startup: rebuild/restart only the current fixture after edits and
 after any active browser run finishes; preserve a baseline fixture needed for review.
 
@@ -107,17 +117,20 @@ connects to real application services. The older `settings-regressions.cjs` and 
 retain the earlier individual-save contract and historical evidence; use the new suite for
 current SettingsPage behavior.
 
-From the repository root, build CSS with `cd frontend && yarn build`. Start in a uniquely
-named tmux session, from `backend/`:
+CI runs it as the `browser-documents` job. From the repository root, build CSS with
+`cd frontend && yarn build`. Start the fixture in a uniquely named tmux session, from `backend/`:
 
 ```sh
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
-TEMPLATE_FIXTURE_PORT=4327 TEMPLATE_EVIDENCE=temp/template-features-20261015-225300 \
-./node_modules/.bin/ts-node --transpile-only test/serve-template-features.ts
+TEMPLATE_EVIDENCE=/tmp/template-features yarn ts-node --transpile-only test/serve-template-features.ts
 ```
 
-Run `node frontend/e2e/template-features.cjs` from the repository root against a fresh fixture.
-`TEMPLATE_FIXTURE_URL`, `TEMPLATE_EVIDENCE` and `E2E_CHROME_PATH` can override defaults.
+Run `TEMPLATE_EVIDENCE=/tmp/template-features node frontend/e2e/template-features.cjs` from the
+repository root against a fresh fixture; it exits non-zero on the first failed check.
+Both sides default `TEMPLATE_EVIDENCE` to `<os.tmpdir()>/receiptmaster-template-features`, never
+the repository. `TEMPLATE_FIXTURE_PORT`, `TEMPLATE_FIXTURE_URL` and `E2E_CHROME_PATH` (suite) or
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` (fixture renderer) override the port and browsers; by default
+both use Playwright's bundled Chromium with its sandbox disabled, like the production renderer —
+the browser only loads the local synthetic fixture.
 The fixture serves `http://127.0.0.1:4327`, `/fixture/state`, synthetic failure controls at
 `POST /fixture/control`, and explicit synthetic worker execution at `POST /fixture/run-jobs`.
 Its manifest records the served JavaScript hash and source entrypoints. Keep the fixture
@@ -129,7 +142,11 @@ PDF evidence: `test/verify-template-features-pdfs.ts` renders the current 53-sce
 `test/verify-template-features-pdfs.py` inspects its manifest/PDFs using pdfplumber/pypdf.
 Restricted-role PostgreSQL migration/concurrency tests are implemented in
 `backend/test/template-features-sql.e2e-spec.ts`. They require an explicitly isolated server
-on port 55447 and `TEMPLATE_PG_PORT=55447` (optional `TEMPLATE_PG_USER`). They create and
-clean only a uniquely named synthetic database/runtime role. They are skipped unless that
-opt-in is present. Synthetic tests are not
+on `127.0.0.1:55447`, `TEMPLATE_PG_PORT=55447` and `ISOLATED_PG_USER` (alias `TEMPLATE_PG_USER`,
+optional `ISOLATED_PG_PASSWORD`) plus a `receiptmaster_isolated_pg_sentinel` database marking
+that cluster as disposable; see *Tests* in `docs/context/backend-patterns.md`. The cluster must be
+PostgreSQL 13 or newer: teardown drops each suite database with `DROP DATABASE … WITH (FORCE)`. They create and
+clean only a uniquely named synthetic database/runtime role, refuse a cluster without the
+sentinel or with `market_db`, and are skipped without the opt-in unless `REQUIRE_PG_SUITES=1`
+(CI), which turns the skip into a failure. Synthetic tests are not
 DB/S3 integration certification. Do not run real migrations for this workflow.

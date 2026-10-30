@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import {
   companyFields,
   contactFields,
+  type DocumentConfig,
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
@@ -14,6 +15,8 @@ import { DocumentFormatting, selectClass } from "./DocumentFormatting";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 export type EditorSection = "company" | "receipt" | "language";
+// Template options come from GET /settings/templates, i.e. the backend's template IDs.
+type TemplateId = DocumentConfig["templateId"];
 export function DocumentEditor({
   model,
   section,
@@ -226,7 +229,7 @@ export function DocumentEditor({
                     className={selectClass}
                     value={config.templateId}
                     onChange={(event) =>
-                      patch({ templateId: event.target.value })
+                      patch({ templateId: event.target.value as TemplateId })
                     }
                   >
                     {templates.data?.map((value) => (
@@ -516,7 +519,7 @@ export function DocumentEditor({
         templates={templates.data?.filter((value) => !value.locked) || []}
         initialTemplateId={config.templateId}
         onSelectTemplate={(templateId) => {
-          patch({ templateId });
+          patch({ templateId: templateId as TemplateId });
           setGallery(false);
         }}
       />

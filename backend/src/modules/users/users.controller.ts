@@ -23,6 +23,7 @@ import { AuthResponseDto } from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { User } from "./entities/user.entity";
+import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -51,7 +52,7 @@ export class UsersController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: "Login" })
   @ApiResponse({
-    status: 200,
+    status: 201,
     description: "Login successful",
     type: AuthResponseDto,
   })
@@ -64,11 +65,14 @@ export class UsersController {
   @Post("refresh")
   @ApiOperation({ summary: "Refresh access token using refresh token" })
   @ApiResponse({
-    status: 200,
+    status: 201,
     description: "Tokens refreshed successfully",
     type: AuthResponseDto,
   })
-  @ApiResponse({ status: 401, description: "Invalid or expired refresh token" })
+  @ApiFailureResponses({
+    400: "Malformed or missing refresh_token",
+    401: "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+  })
   async refresh(@Body() body: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.usersService.refreshToken(body.refresh_token);
   }
@@ -77,7 +81,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Logout and revoke refresh token" })
-  @ApiResponse({ status: 200, description: "Logged out successfully" })
+  @ApiResponse({ status: 201, description: "Logged out successfully" })
   async logout(@Body() body: RefreshTokenDto): Promise<{ message: string }> {
     await this.usersService.revokeRefreshToken(body.refresh_token);
     return { message: "Logged out successfully" };
@@ -111,7 +115,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Change current user password" })
-  @ApiResponse({ status: 200, description: "Password changed successfully" })
+  @ApiResponse({ status: 201, description: "Password changed successfully" })
   @ApiResponse({ status: 400, description: "Validation error" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   async changePassword(

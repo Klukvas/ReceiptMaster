@@ -82,9 +82,14 @@ export const run = async () => {
       .replace("/usr/share/nginx/html", scratch);
     const config = resolve(scratch, "nginx.conf");
     writeFileSync(resolve(scratch, "index.html"), "SPA FALLBACK");
+    // Every temp path lives in the scratch dir: packaged nginx builds default to
+    // root-owned directories that an unprivileged CI user cannot create.
+    const tempPaths = ["client_body", "proxy", "fastcgi", "uwsgi", "scgi"]
+      .map((kind) => `${kind}_temp_path ${scratch}/${kind};`)
+      .join(" ");
     writeFileSync(
       config,
-      `pid ${scratch}/nginx.pid;\nerror_log ${scratch}/error.log;\nevents {}\nhttp { access_log off; client_body_temp_path ${scratch}/body; proxy_temp_path ${scratch}/proxy;\n${production}\n}`,
+      `pid ${scratch}/nginx.pid;\nerror_log ${scratch}/error.log;\nevents {}\nhttp { access_log off; ${tempPaths}\n${production}\n}`,
     );
     const binary = process.env.E2E_NGINX_BINARY || "nginx";
     const syntax = spawnSync(binary, ["-p", scratch, "-c", config, "-t"]);

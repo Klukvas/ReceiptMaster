@@ -1,11 +1,37 @@
 import { ApiProperty } from "@nestjs/swagger";
 
-export class DailyRevenueDto {
+const PROFIT_DESCRIPTION =
+  "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost.";
+
+/** Present on every profit payload: how much of the period has an unknown cost. */
+export class ProfitCompletenessDto {
+  @ApiProperty({
+    description:
+      "Order lines excluded from profit because their cost is unknown",
+  })
+  unknown_cost_lines: number;
+
+  @ApiProperty({
+    description: "Turnover (line totals, in cents) of the excluded lines",
+  })
+  unknown_cost_turnover_cents: number;
+
+  @ApiProperty({
+    description: "True when every line in this group has a known cost",
+  })
+  profit_complete: boolean;
+}
+
+export class DailyRevenueDto extends ProfitCompletenessDto {
   @ApiProperty()
   date: string;
 
-  @ApiProperty()
-  revenue_cents: number;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: `${PROFIT_DESCRIPTION} A day without confirmed orders is 0.`,
+  })
+  revenue_cents: number | null;
 
   @ApiProperty()
   turnover_cents: number;
@@ -22,15 +48,19 @@ export class OrderStatusSummaryDto {
   cancelled: number;
 }
 
-export class RevenueByProductDto {
+export class RevenueByProductDto extends ProfitCompletenessDto {
   @ApiProperty()
   product_id: string;
 
   @ApiProperty()
   product_name: string;
 
-  @ApiProperty()
-  total_revenue_cents: number;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: PROFIT_DESCRIPTION,
+  })
+  total_revenue_cents: number | null;
 
   @ApiProperty()
   total_quantity: number;
@@ -39,15 +69,19 @@ export class RevenueByProductDto {
   currency: string;
 }
 
-export class RevenueByRecipientDto {
+export class RevenueByRecipientDto extends ProfitCompletenessDto {
   @ApiProperty()
   recipient_id: string;
 
   @ApiProperty()
   recipient_name: string;
 
-  @ApiProperty()
-  total_revenue_cents: number;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: PROFIT_DESCRIPTION,
+  })
+  total_revenue_cents: number | null;
 
   @ApiProperty()
   total_orders: number;
@@ -56,9 +90,13 @@ export class RevenueByRecipientDto {
   currency: string;
 }
 
-export class TotalRevenueDto {
-  @ApiProperty()
-  total_revenue_cents: number;
+export class TotalRevenueDto extends ProfitCompletenessDto {
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: PROFIT_DESCRIPTION,
+  })
+  total_revenue_cents: number | null;
 
   @ApiProperty()
   total_orders: number;

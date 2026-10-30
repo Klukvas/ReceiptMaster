@@ -101,13 +101,12 @@ async function scenario(name, fn, tab = "receipt", design = {}) {
   await context.close();
 }
 (async () => {
-  browser = await chromium.launch({
-    executablePath:
-      process.env.E2E_CHROME_PATH ||
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    headless: true,
-    chromiumSandbox: true,
-  });
+  // Playwright's bundled Chromium unless E2E_CHROME_PATH names another binary.
+  browser = await chromium.launch(
+    process.env.E2E_CHROME_PATH
+      ? { executablePath: process.env.E2E_CHROME_PATH }
+      : {},
+  );
   await scenario(
     "company loads nine fields; name-only save preserves eight; reload/cancel",
     async (p) => {

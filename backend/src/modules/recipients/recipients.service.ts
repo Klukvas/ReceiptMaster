@@ -8,6 +8,10 @@ import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import {
+  IdempotentCreateResult,
+  createIdempotently,
+} from "../../common/idempotency/idempotent-create";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -32,6 +36,27 @@ export class RecipientsService {
       user_id: user.id,
     });
     return this.recipientsRepository.save(recipient);
+  }
+
+  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  async createWithIdempotencyKey(
+    createRecipientDto: CreateRecipientDto,
+    user: User,
+    idempotencyKey: string,
+  ): Promise<IdempotentCreateResult<Recipient>> {
+    return this.recipientsRepository.manager.transaction((manager) =>
+      createIdempotently(
+        manager,
+        { scope: "recipient", key: idempotencyKey, userId: user.id },
+        () =>
+          manager.save(
+            manager.create(Recipient, {
+              ...createRecipientDto,
+              user_id: user.id,
+            }),
+          ),
+      ),
+    );
   }
 
   async findAll(

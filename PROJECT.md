@@ -106,7 +106,7 @@
 - PDF generation using Playwright (headless Chromium) + Handlebars templates
 - HTML snapshot stored alongside PDF for audit
 - Template ID and version tracked per receipt
-- 10 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate
+- 15 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate, Thermal, Dark, Branded, Delivery, Proforma
 - Multi-language receipt rendering (EN, UK, RU)
 - Upload to Hetzner Object Storage (S3-compatible)
 - SHA256 hash for receipt integrity
@@ -274,7 +274,7 @@ All branding and configuration options organized into tabs.
 
 - **Tab 2 — Receipt Design**:
   - Receipt title customizer (main title text)
-  - Template selector — visual grid of 10 templates with preview
+  - Template selector — visual grid of 15 templates with preview
   - Footer customizer (footer title + subtitle)
   - Test receipt button — generates a sample PDF with current settings to preview
 
@@ -690,18 +690,26 @@ The backend is designed for horizontal scaling:
 
 | File | Base Image | Purpose |
 |---|---|---|
-| `backend/Dockerfile` | `node:20-alpine` + Chromium | Production backend |
-| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Dev/CI backend |
+| `backend/Dockerfile` | `node:20-alpine` + Chromium | Legacy; not used by CI or any compose file |
+| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Production backend image (CI `build-and-deploy`) and local `docker-compose.yml` backend |
 | `frontend/Dockerfile` | `node:20-alpine` (build) -> `nginx:alpine` (serve) | Multi-stage frontend build with self-signed SSL |
+
+Images install with `yarn install --frozen-lockfile`. Their build contexts (`./backend`, `./frontend`) cannot see the root `yarn.lock`, so `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it; after any dependency change, copy the root lock over both (CI `test-backend` fails when they differ).
 
 ### CI/CD (GitHub Actions)
 
 **Main Pipeline** (`.github/workflows/ci.yml`) -- triggers on push/PR to `main`:
 
-1. **test-backend** -- lint, test, build
-2. **test-frontend** -- lint, build
-3. **build-and-deploy** -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
-4. **deploy-production** (main branch only) -- SSH to app server, pull images, write `.env`, start containers, health check
+1. **test-backend** -- lockfile copies match, lint, unit tests with coverage, build
+2. **test-frontend** -- lint, OpenAPI types, build
+3. **contract-test** -- `backend/openapi.json` matches the code; frontend type-checks against it
+4. **e2e-backend** -- API e2e tests against PostgreSQL 15, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
+5. **browser-regression** -- `node frontend/e2e/run.mjs` (all browser specs, Playwright Chromium, local nginx/openssl for proxy-audit)
+6. **browser-documents** -- `frontend/e2e/template-features.cjs` against the synthetic `backend/test/serve-template-features.ts` fixture; evidence uploaded on failure
+7. **build-and-deploy** (push to `main` only, needs 1–6) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
+8. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate and deploy the immutable image pair
+
+Jobs 1–6 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
 
 **Database Deployment** (`.github/workflows/deploy-database.yml`) -- manual trigger:
 - SSH to DB server, pull images, optional force-recreate

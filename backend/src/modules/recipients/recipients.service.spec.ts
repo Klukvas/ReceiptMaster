@@ -67,6 +67,61 @@ describe("RecipientsService", () => {
     });
   });
 
+  describe("createWithIdempotencyKey", () => {
+    const transactionManager = (stored: unknown) => ({
+      queryRunner: { isTransactionActive: true },
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(stored),
+      delete: jest.fn(),
+      insert: jest.fn().mockResolvedValue({}),
+      create: jest.fn((_entity, data) => ({ ...data })),
+      save: jest.fn((data) => Promise.resolve({ id: "rec-new", ...data })),
+    });
+
+    it("creates the recipient and stores the response under the recipient scope", async () => {
+      const manager = transactionManager(null);
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: false,
+        data: { id: "rec-new", name: "Jane", user_id: "user-1" },
+      });
+      expect(manager.query.mock.calls[0][1][0]).toMatch(/^recipient:/);
+      expect(manager.insert).toHaveBeenCalledTimes(1);
+    });
+
+    it("replays a stored response without saving a second recipient", async () => {
+      const manager = transactionManager({
+        id: "row-1",
+        response: { id: "rec-1", name: "Jane" },
+        expires_at: new Date(Date.now() + 60_000),
+      });
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: true,
+        data: { id: "rec-1", name: "Jane" },
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findAll", () => {
     it("should return paginated recipients with aggregated data", async () => {
       const result = await service.findAll({ limit: 10, offset: 0 }, mockUser);

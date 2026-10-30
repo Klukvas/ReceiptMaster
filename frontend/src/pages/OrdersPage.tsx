@@ -190,6 +190,10 @@ export const OrdersPage = () => {
    if (!selectionReady) return;
    setSelectedKeys(new Set(pagination.items.filter(order => keys.has(order.id)).map(order => order.id)));
  };
+ // The cancel dialog only has the id; a confirmed order (or one not on this
+ // page) gets the warning that its document is voided and stock stays out.
+ const cancelTargetIsDraft = confirmAction.type === 'cancel' && pagination.items
+   .some(order => order.id === confirmAction.order?.id && order.status === 'draft');
  const allSelectedAreDraft = validSelectedKeys.size > 0 && pagination.items
    .filter(order => validSelectedKeys.has(order.id)).every(order => order.status === 'draft');
 
@@ -431,10 +435,18 @@ export const OrdersPage = () => {
  }
  message={
  confirmAction.type ==="cancel"
+ ? cancelTargetIsDraft
  ? t(
 "orders.cancelOrderMessage",
 "Are you sure you want to cancel this order?",
  )
+ : `${t(
+"orders.cancelOrderMessage",
+"Are you sure you want to cancel this order?",
+ )} ${t(
+"orders.cancelConfirmedWarning",
+"This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it.",
+ )}`
  : confirmAction.type ==="bulkDelete"
  ? t("orders.batchDeleteMessage", { count: validSelectedKeys.size })
  : t("orders.deleteOrderMessage")

@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-29
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -13,7 +13,7 @@ This document describes how the ReceiptMaster backend is structured, the pattern
 - **Validation:** class-validator, class-transformer, Zod (env)
 - **API Docs:** Swagger/OpenAPI on `/api/v1/docs`
 - **Node:** 20 LTS
-- **Package Manager:** Yarn (monorepo workspaces)
+- **Package Manager:** Yarn (monorepo workspaces). The root `yarn.lock` is authoritative; `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it so each package's Docker build can run `yarn install --frozen-lockfile` — after any dependency change copy the root lock over both (CI fails on drift). `yarn lint` only checks; `yarn lint:fix` applies fixes.
 
 Entry points:
 - `backend/src/main.ts` — bootstraps NestJS, configures global pipes/CORS/Swagger
@@ -281,6 +281,51 @@ export class OrdersService {
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
+- Never `save()` a whole entity loaded without a lock: write only the changed columns with a
+  conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
+  precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
+- Check a quota and insert in **one** transaction, after taking the tenant's quota lock
+- Idempotent creates go through `common/idempotency/idempotent-create.ts` (`createIdempotently`,
+  used by `POST /products` and `POST /recipients`; orders keep their own older implementation).
+  Inside the caller's transaction and before any other lock it validates the key (1–255 visible
+  ASCII, else 400 `VALIDATION_ERROR`), takes `pg_advisory_xact_lock(hashtext(scopedKey))`, replays an
+  unexpired `idempotency_keys` row for (scoped key, user) or deletes an expired one, runs the create
+  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (no migration: the
+  existing table, `order_id` NULL). `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
+  fits `varchar(255)` for every accepted key and never equals an order key, which is stored raw in
+  the same `(key, user_id)`-unique column. The controller sets `X-Idempotency-Replayed: true` on a
+  replay (`@Res({ passthrough: true })`, so interceptors still see the body); without the header the
+  original create path runs unchanged. Guarantee: within 24 h, retries with one key — concurrent
+  ones too — create at most one entity and get the first response. Not covered: a failed create
+  stores nothing (a retry runs it again), a repeated key with a different body replays the first
+  response, and the client must keep its key (the onboarding keeps it only in memory)
+
+#### Tenant advisory locks and lock ordering
+
+Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
+
+| Key | Taken by | Serializes |
+|---|---|---|
+| `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
+| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
+| `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
+| `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
+| `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel | receipts and document configuration |
+| `hashtextextended(userId, 2)` | document storage cleanup | storage sweeps |
+
+Migrations additionally hold a session-level `pg_advisory_lock` (`common/services/migration.service.ts`).
+
+**Ordering rule** (prevents lock-order deadlocks): a transaction takes at most one tenant advisory
+lock, and takes it first; row locks follow in ascending id order (`ORDER BY id … FOR UPDATE`). The
+only combinations of advisory locks in use start with an idempotency key lock, which is not a tenant
+lock and is always taken first: order create with a key takes key lock → order-quota lock → product
+rows; product create with a key takes key lock → `product-quota`; recipient create with a key takes
+only its key lock. Product create takes `product-quota` (never `hashtextextended(userId, 1)`); a
+product update takes no advisory lock and at most its own row lock. Order cancel takes `hashtextextended(userId, 1)` → order row → the order's receipt rows (id
+order) → logo asset rows, the same tenant → order → receipt order as generation and promotion.
+Confirm, `approveBatch` (id order), edit and delete take order row locks without a tenant lock;
+manual void and repair start at the order row too — none of them takes the tenant lock after a row
+lock.
 
 ### 4. DTO — Input/Output Validation
 
@@ -332,6 +377,7 @@ export class CreateOrderDto {
 - Use `@Type()` from class-transformer to cast types (e.g., string ID to UUID)
 - Use `@ApiProperty()` to document request/response in Swagger
 - The global `ValidationPipe` runs automatically on all controller inputs
+- Zod-validated bodies (`@Body() body: unknown`) are invisible to Swagger: register the schema in `src/openapi/api-components.ts` and document the route with `src/openapi/api-docs.decorators.ts` (`ApiJsonBody`, `ApiDocumentDraftBody` for the JSON/multipart draft envelope, `ApiDataResponse`, `ApiFailureResponses` for the shared `{ error, errorCode }` body)
 
 ### 5. Entity — Database Schema
 
@@ -457,7 +503,12 @@ export class OrdersController { ... }
 File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but standard Passport pattern)
 
 **Related files:**
-- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`
+- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`.
+  Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` a QueryBuilder
+  `UPDATE … SET revoked = true WHERE token AND revoked = false AND expires_at > now RETURNING user_id`
+  redeems the token (read the rows from `UpdateResult.raw`; `manager.query` would return the driver's
+  `[rows, count]` tuple), then `createRefreshToken(userId, manager)` inserts the successor in the same
+  transaction. No row → 401 `UNAUTHORIZED`. `refresh_tokens` has no RLS and refresh runs without tenant context
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
 
 ### Middleware (Request Context)
@@ -499,7 +550,9 @@ The application does not provision or change production roles. Run migrations wi
 privileged connection, then set `AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
 The switch parses the literal strings `true` and `false`; a typo fails startup validation.
 Tests use a disposable PostgreSQL cluster with a restricted non-owner role and a single pool
-connection; normal database defaults are never used by the opt-in audit suite.
+connection; normal database defaults are never used by the opt-in audit suite (parameters under
+*Tests* below). These suites use a synthetic role they create; they are not evidence about the
+roles and policies actually deployed in production, which need their own review.
 
 Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
 recipients. A token grants access to exactly its generated receipt and related graph, not the
@@ -673,6 +726,19 @@ export interface ReceiptGenerationJobData {
 Snapshot/HTML/pending-asset entity columns use `select: false`; internal services explicitly select them. Receipt controllers return an allowlist, and nested order receipts cannot load the large private columns by default. Public metadata explicitly selects and projects frozen visible values; it never queries live settings for new documents.
 
 `DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded objects have a 24-hour grace. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving MAX_RECEIPTS = 10. Legacy local filesystem files are not processed by immutable object-storage cleanup.
+
+The additive `1792300000000-AddOrderItemUnitCost` migration adds nullable `order_items.unit_cost_cents`
+with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`), no default and no backfill (legacy
+lines stay unknown). `ADD COLUMN … NULL` is metadata-only; the inline CHECK costs one scan of
+`order_items` under the ACCESS EXCLUSIVE lock that `ADD COLUMN` already holds. `NOT VALID` + `VALIDATE`
+would not shorten that lock because `scripts/deploy-production.sh` runs every pending migration in one
+transaction (`transaction: 'all'`, `lock_timeout` 30 s); the table is small for this product. The
+row-level `tenant_isolation_order_items` policy and table-level grants cover the new column unchanged.
+Rollout: the deploy script applies it with the new image before swapping containers (it is listed in
+`KNOWN_MIGRATIONS`/`EXPECTED_MIGRATIONS`); the old image ignores the column and its inserts store
+NULL; rolling back the image is safe; `down` drops captured costs and must not run in production.
+`test/order-item-cost-migration.e2e-spec.ts` runs the chain up to the previous release, seeds legacy
+lines, then up → CHECK → restricted-role write under RLS → down → up on a fresh database.
 
 The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
 
@@ -900,32 +966,70 @@ async findAll(
 3. **Implement service method** (`backend/src/modules/[feature]/[feature].service.ts`)
    ```typescript
    async create(dto: CreateProductDto, user: User): Promise<Product> {
-     // Validate subscription limits
-     await this.subscriptionService.assertCanCreateProduct(user.id);
-
-     // Check for duplicates if needed
-     const existing = await this.productsRepository.findOne({
-       where: { user_id: user.id, name: dto.name },
+     // Quota check and insert commit together under the tenant's quota lock
+     return this.productsRepository.manager.transaction(async (manager) => {
+       await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
+       const product = manager.create(Product, { ...dto, user_id: user.id });
+       return manager.save(product);
      });
-     if (existing) throw ApiErrors.PRODUCT_ALREADY_EXISTS(dto.name);
-
-     // Create & save
-     const product = this.productsRepository.create({
-       user_id: user.id,
-       ...dto,
-     });
-     await this.productsRepository.save(product);
-
-     // Invalidate cache
-     await this.cacheService.invalidateUserCache(user.id);
-
-     return product;
    }
    ```
 
-4. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
+4. **Contract** — run `yarn openapi:export` in `backend/` and commit `backend/openapi.json`. CI (`contract-test`) runs `node dist/openapi/generate-openapi.js --check`, which fails when the code and the committed contract differ or when a routed handler is missing from the document, then regenerates the frontend types and type-checks them. The exporter boots Nest in preview mode with forced test env (`NODE_ENV=test`, no migrations, billing off, `.invalid` DB/Redis hosts): no provider, queue, cron, migration, webhook or storage client runs, so it needs no services.
+
+5. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
    - Unhappy path: test that the error is thrown with correct HTTP status
    - Happy path: test that the entity is saved & returned
+
+   **API e2e** (`yarn test:e2e`, `test/e2e/*`) truncates every table. `test/helpers/test-app.ts`
+   refuses to compile the app unless `NODE_ENV=test` and `DB_NAME` ends in `_test`.
+
+   **Isolated PostgreSQL suites** — `src/common/tenancy/tenant-data-source.pg.spec.ts` (tenant
+   RLS, connection-context reset, transactions, and — on a fully migrated database — delayed
+   explicit/repair regeneration that cannot restore a revoked share token or undo a concurrent
+   void), `test/orders-audit.e2e-spec.ts`, `test/template-features-sql.e2e-spec.ts`,
+   `test/products-concurrency.e2e-spec.ts` (stock precondition writes, lock-parked conflicts,
+   product-quota races and rollback), `test/refresh-rotation.e2e-spec.ts` (single-use rotation
+   under concurrency, successor-insert rollback, expiry), `test/order-lifecycle.e2e-spec.ts`
+   (confirm/approve/cancel races, cancel voiding documents and links, delayed workers after a
+   cancel, rejected follow-ups), `test/order-profit-snapshot.e2e-spec.ts` (cost capture, profit from
+   snapshots, unknown vs zero cost, daily gaps, sort order, cache versions),
+   `test/idempotent-create.e2e-spec.ts` (product/recipient replay, concurrent same-key requests parked
+   on the key lock, order/product/recipient keys of one value kept apart, replay at the product quota,
+   refused creates not stored, expiry, other tenants, unchanged keyless create) and
+   `test/order-item-cost-migration.e2e-spec.ts` — create and drop their own uniquely named
+   databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
+   through the production tenant query context — `test/helpers/restricted-app-database.ts`
+   (entity-synchronized schema plus the RLS policy migration) or `test/helpers/migrated-app-database.ts`
+   (the full migration chain: functions, FORCE RLS policies, outbox and storage tables) — and park
+   concurrent calls on real row/table/advisory locks, polling `pg_stat_activity` instead of sleeping.
+   Teardown goes through `teardownIsolatedPostgres` /
+   `destroyDataSources`: every data source is settled independently, each database is dropped
+   `WITH (FORCE)`, each role is dropped and the maintenance client is closed even when an earlier
+   step fails; all failures are rethrown together. `test/helpers/isolated-postgres.ts` gates them:
+
+   | Variable | Meaning |
+   |---|---|
+   | `AUDIT_PG_PORT=55439` / `TEMPLATE_PG_PORT=55447` | Opt-in; must be exactly that port. The host is always `127.0.0.1` |
+   | `ISOLATED_PG_USER` (alias `TEMPLATE_PG_USER`) | Required admin user of the disposable cluster; there is no OS-username fallback |
+   | `ISOLATED_PG_PASSWORD` | Optional admin password |
+   | `REQUIRE_PG_SUITES=1` | A missing opt-in fails instead of skipping (CI `e2e-backend` sets it) |
+   | Sentinel database `receiptmaster_isolated_pg_sentinel` | Must exist in the cluster; it marks the cluster as disposable (CI creates it before the suites) |
+
+   Without an opt-in the suites skip; an incomplete or wrong opt-in fails with the reason. Each
+   suite connects to the `postgres` maintenance database first and, before creating anything,
+   refuses a cluster that lacks the sentinel database or contains `market_db` — so another
+   project's cluster on the same port is refused too. Locally, in a cluster started only for these
+   suites, for example:
+   `docker run -d --rm --name pg-isolated -p 127.0.0.1:55439:5432 -p 127.0.0.1:55447:5432 -e POSTGRES_PASSWORD=postgres postgres:15-alpine`
+   (check first that nothing else listens on those ports; the cluster must be PostgreSQL 13 or newer
+   because teardown uses `DROP DATABASE … WITH (FORCE)`), then
+   `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
+   then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration idempotent-create`.
+   `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
+   no database.
+   Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.
 
 ---
 

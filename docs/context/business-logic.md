@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-29
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -33,7 +33,7 @@ All entities are tenant-scoped via `user_id` foreign key.
 
 ### 1. Order Lifecycle
 
-**States:** DRAFT → CONFIRMED → (optionally) CANCELLED
+**States:** DRAFT → CONFIRMED; DRAFT or CONFIRMED → CANCELLED (terminal). Deletion is separate.
 
 File: `backend/src/modules/orders/entities/order.entity.ts`
 
@@ -41,7 +41,7 @@ File: `backend/src/modules/orders/entities/order.entity.ts`
 export enum OrderStatus {
   DRAFT = "draft",            // In progress, can be edited
   CONFIRMED = "confirmed",    // Locked, ready for receipt
-  CANCELLED = "cancelled",    // Soft-deleted, no longer relevant
+  CANCELLED = "cancelled",    // Terminal status; the order stays as history (not deleted)
 }
 ```
 
@@ -68,7 +68,8 @@ export enum OrderStatus {
 
 4. **Create Atomic Transaction**
    - Insert Order (DRAFT status)
-   - Insert OrderItems for each line item
+   - Insert OrderItems for each line item, each freezing the locked product's purchase cost in
+     `unit_cost_cents` (see *Historical profit* below)
    - Calculate total (subtotal + tax/discounts, if any)
    - Cache idempotency response
 
@@ -79,10 +80,14 @@ File: `backend/src/modules/orders/orders.service.ts::create()`
 
 **Confirmation Flow:**
 
-Only DRAFT orders can be confirmed. Once confirmed:
+Only DRAFT orders can be confirmed. `confirm()` locks the order row (`FOR UPDATE`), checks DRAFT under
+the lock and updates conditionally, so a cancel that committed first is seen and wins.
+`approveBatch()` locks all its orders in id order (like `deleteBatch`) and checks DRAFT under the
+locks. Once confirmed:
 - Status changes to CONFIRMED
 - Order is locked (cannot be edited)
 - Can now generate Receipt
+- Line costs are not re-read: they were frozen when the draft lines were written
 
 **Auto-generated receipt (opt-in):** when `user_settings.autoGenerateReceipt` is on, `confirm()` and `approveBatch()` call `ReceiptsService.generateReceipt(orderId, user)` with default settings for every newly confirmed order, after the status change has committed. Calls are sequential (generation takes the per-tenant advisory lock). Any failure — plan limits, snapshot validation, a settings lookup error — is logged and swallowed: confirmation always succeeds and the manual "Generate receipt" path remains. Because the account keeps only the 10 newest generated receipts, bulk-approving many orders with the flag on evicts older receipts (see the ten-generated-receipt limit in step 2 below).
 
@@ -90,14 +95,44 @@ File: `backend/src/modules/orders/orders.service.ts::confirm()` / `autoGenerateR
 
 **Cancellation Flow:**
 
-Cancellation changes status to CANCELLED. Deletion is a separate soft-delete operation:
+Cancellation is a status change to CANCELLED, allowed from DRAFT and from CONFIRMED (the UI offers
+both). It is not a deletion and returns no stock. One transaction:
+
+1. Tenant lock `pg_advisory_xact_lock(hashtextextended(userId, 1))` — the receipt generation/promotion
+   lock — then the order row `FOR UPDATE` (404 if missing; `ORDER_ALREADY_CANCELLED` if cancelled).
+2. If CONFIRMED: `ReceiptsService.voidForCancellation()` locks the order's non-void receipts in id
+   order and voids each (`void_reason = "order_cancelled"`, `voided_at`), revoking `public_token` and
+   clearing `replacement_*` and every `pending_*` field. A pending logo that differs from the active one
+   gets its 24 h cleanup grace; the active PDF, frozen content and active logo stay as history. The
+   order's `is_locked` is left alone (manual void unlocks; a cancelled order is never edited again).
+3. Conditional update to CANCELLED. After commit: dashboard cache invalidation, return `findOne`.
+
+Receipts voided by hand before the cancel keep their own reason and timestamp. Stock comes back only
+from deleting the order (single or batch), exactly once, cancelled or not.
+
+Races (all PostgreSQL-tested in `test/order-lifecycle.e2e-spec.ts` unless noted):
+
+| Concurrent with cancel | Outcome |
+|---|---|
+| confirm / `approveBatch` | order lock + DRAFT check under it: whichever commits second sees the other; a confirm can never resurrect a cancelled order |
+| generation request (manual or auto) | precreation re-checks CONFIRMED under tenant → order locks; if it committed first, the cancel voids its PROCESSING receipt; after the cancel it is rejected (auto-generation logs and swallows) |
+| queued/in-flight render | claim, promotion (`CONFIRMED` check under tenant → order locks, `matches`) and `failed()` all no-op on a VOID receipt; the outbox deletes the entry; no `receipt.completed` event |
+| regenerate / repair / share / manual void | 409 / conflict / 400 / 400 on the VOID receipt |
+| edit / delete | order row lock; edit rejected (not DRAFT), delete restores stock once |
+| eviction | runs under the same tenant lock |
+
+Lock order everywhere: tenant → order → receipts → leases; manual void and repair start at the order
+row and never take the tenant lock afterwards, so no cycle exists.
+
+Deletion is a separate soft-delete operation:
 - Lock live orders inside the transaction before restoring stock and setting `deleted_at`
 - Single and overlapping batch deletes restore reserved quantities exactly once
 - Batch order locks and affected product locks follow deterministic ID order
 - Updating line items locks and persists the union of old/new products, so removed products regain stock
 - Order updates/deletes invalidate dashboard caches
 
-File: `backend/src/modules/orders/orders.service.ts::cancel()`
+Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
+`backend/src/modules/receipts/receipts.service.ts::voidForCancellation()`
 
 ---
 
@@ -251,6 +286,9 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
 4. **Entitlement Check on Action**
    - On every `createOrder()`, `createProduct()`, or template selection, assert limits
    - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreate*()`
+   - Order and product quotas are checked inside the creating transaction
+     (`assertCanCreateOrderInTx`, `assertCanCreateProductInTx`) under a per-user advisory lock,
+     reading the plan without creating a subscription row (no row = free)
    - Throws 402 (Payment Required) if limit exceeded or template restricted
 
 **Paddle Configuration:**
@@ -390,8 +428,14 @@ File: `backend/src/modules/users/users.service.ts::refreshToken()`
 Refresh/logout bodies use a real `RefreshTokenDto`: `refresh_token` must be a string of
 exactly 128 lowercase hexadecimal characters (the format produced by `randomBytes(64)`).
 The service independently rejects malformed input before any token repository lookup/update.
-Refresh looks up an unrevoked stored opaque token, rejects expired tokens, revokes the old token
-and issues a new access/refresh pair. It does not decode refresh tokens as JWTs.
+Refresh is single-use and atomic: in one transaction a conditional
+`UPDATE refresh_tokens SET revoked = true WHERE token = $1 AND revoked = false AND expires_at > now
+RETURNING user_id` redeems the token, then the successor is inserted with the same transaction
+manager. Concurrent refreshes with one token serialize on that row: the first commits, the rest
+re-check, match nothing and get 401 `UNAUTHORIZED`. A failed successor insert rolls the redemption
+back, so the token still works; expired tokens are rejected and stay unrevoked. It does not decode
+refresh tokens as JWTs. Known gaps (separate task): tokens are stored in plaintext, refresh does not
+check `isActive`, there is no reuse detection and no `/auth/refresh` throttle.
 
 **JWT Strategy:**
 
@@ -432,9 +476,30 @@ File: `backend/src/modules/products/entities/product.entity.ts`
 
 File: `backend/src/modules/products/products.service.ts::create()`
 
-- Validate subscription: check product count limit
-- Check no duplicate name for this user
-- Save and return
+- One transaction: `assertCanCreateProductInTx` takes `pg_advisory_xact_lock(hashtext('product-quota'),
+  hashtext(userId))`, reads the plan (no subscription row = free), counts the tenant's products with
+  the ORM (soft-deleted ones excluded), then the product is inserted
+- Two creates for the last free slot: one succeeds, the other gets 402 `PRODUCT_LIMIT_EXCEEDED`;
+  a create that rolls back after its insert releases the slot
+- The audit log entry is written by `AuditLogInterceptor` only after the handler succeeds, so a
+  rolled-back or rejected create is never logged
+- With an `Idempotency-Key` (the onboarding wizard sends one) the transaction first takes the key's
+  advisory lock and replays a stored response from the last 24 hours, so a retried or concurrent
+  repeat creates nothing — even at the plan limit, because the quota lock comes after the key. Only
+  a successful create stores its response (`common/idempotency/idempotent-create.ts`)
+- Duplicate live names are rejected only by the partial unique index `IDX_products_user_name`
+  `(user_id, name) WHERE deleted_at IS NULL`; there is no explicit check, so the violation currently
+  surfaces as a 500 rather than the documented 409 `PRODUCT_ALREADY_EXISTS` (known drift, not fixed here)
+
+**Stock edits (`update()`):**
+
+- Only fields present in the body are written, in one conditional `UPDATE … WHERE id AND user_id
+  AND deleted_at IS NULL`; the product form sends only fields that differ from what it loaded
+- `quantity` is a precondition write and requires `expectedQuantity`: the UPDATE adds
+  `AND quantity = expectedQuantity`, so an edit based on a stale form cannot overwrite stock that an
+  order changed (409 `PRODUCT_QUANTITY_CONFLICT`, nothing saved). A rename keeps the current stock
+- Orders, order edits/deletes and Telegram orders keep changing stock under row locks or atomic
+  increments; a stock edit parked behind such a lock re-checks after it commits
 
 **Recipients:**
 
@@ -449,8 +514,8 @@ File: `backend/src/modules/recipients/entities/recipient.entity.ts`
 
 File: `backend/src/modules/recipients/recipients.service.ts::create()`
 
-- Validate no duplicate email for this user
-- Save and return
+- Save and return (nothing checks e-mail uniqueness today)
+- With an `Idempotency-Key`: same replay rules as products, in one transaction with the key lock
 
 ---
 
@@ -477,14 +542,40 @@ File: `backend/src/modules/orders/orders.service.ts`
 Dashboard metrics exclude soft-deleted orders in all six raw revenue/turnover methods.
 Dashboard metrics are expensive (aggregations, date grouping). Solutions:
 
-1. **Cache with TTL** (5 minutes, configurable)
+1. **Cache with TTL** (5 minutes)
    - Query runs, result stored in Redis
    - Subsequent queries return cached value
    - On order mutation, invalidate cache pattern
 
-2. **Cache Keys:**
-   - `dashboard:getTotalRevenue:${userId}:${dateRange}` → cache value
-   - On `createOrder()`, `updateOrder()`, `deleteOrder()`, call `invalidateDashboardCache(userId)`
+2. **Cache Keys** (`backend/src/modules/orders/dashboard-cache.ts`):
+   - `dashboard:v2:{method}:{userId}:{JSON args}`. The version segment changes with the payload
+     shape, so entries cached by an older release are never served (they expire)
+   - `invalidateDashboardCache(userId)` deletes `dashboard:*:{userId}:*` — every version — on order
+     create/update/confirm/cancel/delete/batch and on Telegram order creation
+   - Product price changes need no invalidation: profit no longer reads the current price
+
+**Historical profit (cost snapshots).** In code "revenue" means profit and "turnover" means gross.
+Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order's lines, using the nullable
+`order_items.unit_cost_cents` snapshot — never the product's current `purchase_price_cents`.
+
+- **Capture:** at order create (web and Telegram) from the locked product row; on a DRAFT edit a line
+  with the same product and quantity keeps its stored cost (including NULL), any other line captures
+  the current cost. Nothing is captured on confirm; once confirmed the lines are immutable. A
+  product cost that is not a non-negative integer is stored as NULL rather than guessed.
+- **Legacy lines** (written before the migration) stay NULL = unknown. No backfill: today's price is
+  not historical truth.
+- **Queries** drop the join to `products` (it never filtered rows: the line FK guarantees the product
+  row and products are only soft-deleted) and report `unknown_cost_lines`,
+  `unknown_cost_turnover_cents` and `profit_complete` per group. The profit is NULL when no line of a
+  group has a known cost; a day without orders is a complete 0. Turnover is unchanged.
+- **UI:** null profit reads "—" with "Cost unknown"; incomplete profit gets a "Partial" badge whose
+  tooltip names the excluded lines and turnover; the sparkline leaves gaps; the CSV leaves the profit
+  cell empty and adds `profit_complete`, `unknown_cost_lines`, `unknown_cost_turnover` columns.
+- **Rollout:** migration `1792300000000-AddOrderItemUnitCost` (additive nullable column + CHECK ≥ 0)
+  is applied by `scripts/deploy-production.sh` with the new image before containers swap. Old code
+  ignores the column (its inserts store NULL = honest unknown), so rolling back to the old image is
+  safe. Never run its `down` in production: it drops the captured costs. Right after the deploy every
+  historical period shows profit unknown/partial — intended.
 
 **Metrics Provided:**
 
@@ -542,6 +633,18 @@ Files:
 │ deleted_at     │ (soft delete)
 └────────────────┘
 
+┌──────────────────────┐
+│ OrderItem            │
+├──────────────────────┤
+│ id (PK)              │
+│ order_id (FK)        │
+│ product_id (FK)      │
+│ unit_price_cents     │
+│ unit_cost_cents NULL │ (cost snapshot; NULL = unknown)
+│ qty                  │
+│ line_total_cents     │
+└──────────────────────┘
+
 ┌────────────────┐
 │ Receipt        │
 ├────────────────┤
@@ -575,10 +678,11 @@ Files:
    - Each OrderItem quantity must be ≥ 1
 
 2. **Order State Machine:**
-   - DRAFT → CONFIRMED (only state)
-   - DRAFT → CANCELLED (only state)
-   - CONFIRMED → (locked, cannot transition)
-   - CANCELLED → (locked, cannot transition)
+   - DRAFT → CONFIRMED
+   - DRAFT → CANCELLED
+   - CONFIRMED → CANCELLED (voids the order's documents and revokes share links; no stock return)
+   - CANCELLED → terminal (cannot be confirmed, edited or re-cancelled; can still be deleted)
+   - Every transition locks the order row and checks the status under the lock
 
 3. **Receipt Generation:**
    - Can only generate receipt for CONFIRMED orders
@@ -597,11 +701,14 @@ Files:
    - No cross-tenant data leakage
 
 6. **Idempotency:**
-   - Same `Idempotency-Key` within 24 hours returns same response
-   - Prevents duplicate orders if client retries
+   - Same `Idempotency-Key` within 24 hours returns same response (orders, products, recipients)
+   - Prevents duplicate orders, products and recipients if the client retries, also concurrently
+   - Keys are per user and per kind: an order, a product and a recipient key of the same value are
+     independent
 
 7. **Soft Deletes:**
    - Orders are deleted via the `deleted_at` timestamp; cancellation is a separate status change
+     that keeps the order and its stock reservation
    - Queries exclude soft-deleted records unless explicitly included
    - All six raw revenue/turnover aggregation queries also filter `o.deleted_at IS NULL`
    - Preserves audit trail

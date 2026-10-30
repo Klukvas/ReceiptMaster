@@ -11,11 +11,12 @@ import {
   RawBodyRequest,
   UseGuards,
 } from "@nestjs/common";
-import { ApiTags, ApiExcludeEndpoint } from "@nestjs/swagger";
+import { ApiTags, ApiExcludeEndpoint, ApiOperation } from "@nestjs/swagger";
 import { ThrottlerGuard, Throttle } from "@nestjs/throttler";
 import { Request } from "express";
 import { type EventEntity } from "@paddle/paddle-node-sdk";
 import { PaddleService } from "./paddle.service";
+import { ApiDataResponse } from "../../openapi/api-docs.decorators";
 
 @ApiTags("paddle")
 @Controller()
@@ -25,6 +26,8 @@ export class PaddleController {
   constructor(private readonly paddleService: PaddleService) {}
 
   @Get("billing/config")
+  @ApiOperation({ summary: "Public billing capability flag (no auth)" })
+  @ApiDataResponse(200, "BillingConfigResponse", "Whether billing is enabled")
   getBillingConfig(): { billingEnabled: boolean } {
     return { billingEnabled: this.paddleService.isBillingEnabled() };
   }

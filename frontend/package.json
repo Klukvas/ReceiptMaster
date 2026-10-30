@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "preview": "vite preview",
     "start": "vite --host 0.0.0.0 --port 5173",
     "openapi:generate": "openapi-typescript ../backend/openapi.json -o src/lib/api-types.generated.ts",

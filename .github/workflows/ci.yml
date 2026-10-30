@@ -23,6 +23,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Docker images build from ./backend and ./frontend, which cannot see the
+      # root lock, so each package carries a byte-for-byte copy of it.
+      - name: Verify package lockfiles match the root yarn.lock
+        run: |
+          status=0
+          for lock in backend/yarn.lock frontend/yarn.lock; do
+            if ! cmp -s ../yarn.lock "../$lock"; then
+              echo "::error file=$lock::$lock differs from the root yarn.lock. From the repository root run: cp yarn.lock $lock"
+              status=1
+            fi
+          done
+          exit "$status"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -120,6 +133,16 @@ jobs:
         working-directory: ./frontend
         run: yarn install --frozen-lockfile
 
+      # The Yarn workspace install above also installs the backend. The exporter
+      # boots Nest in preview mode, so no database, Redis or other service is needed.
+      - name: Build backend
+        working-directory: ./backend
+        run: yarn build
+
+      - name: Verify backend/openapi.json matches the code
+        working-directory: ./backend
+        run: node dist/openapi/generate-openapi.js --check
+
       - name: Generate types from OpenAPI spec
         working-directory: ./frontend
         run: yarn openapi:generate
@@ -133,12 +156,22 @@ jobs:
         run: |
           echo "## Contract Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Validated frontend types against \`backend/openapi.json\` spec." >> $GITHUB_STEP_SUMMARY
+          echo "Validated \`backend/openapi.json\` against the backend code, then frontend types against it." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "If this job fails, a backend API change broke the frontend contract." >> $GITHUB_STEP_SUMMARY
-          echo "Fix: update \`openapi.json\` (\`yarn openapi:export\`) and regenerate types." >> $GITHUB_STEP_SUMMARY
+          echo "If this job fails, the API changed without its contract, or the contract change broke the frontend." >> $GITHUB_STEP_SUMMARY
+          echo "Fix: run \`yarn openapi:export\` in backend/, commit \`backend/openapi.json\`, then regenerate types and fix the frontend." >> $GITHUB_STEP_SUMMARY
 
   e2e-backend:
+    env:
+      # The PostgreSQL integration suites create and drop their own databases and a
+      # restricted NOSUPERUSER/NOBYPASSRLS role. They only dial their fixed loopback
+      # ports, require the sentinel database created below, refuse a cluster holding
+      # market_db, and fail instead of skipping here.
+      AUDIT_PG_PORT: "55439"
+      TEMPLATE_PG_PORT: "55447"
+      ISOLATED_PG_USER: postgres
+      ISOLATED_PG_PASSWORD: postgres
+      REQUIRE_PG_SUITES: "1"
     name: "E2E: Backend API"
     runs-on: ubuntu-latest
     services:
@@ -150,6 +183,8 @@ jobs:
           POSTGRES_DB: market_db_test
         ports:
           - 5435:5432
+          - 55439:5432
+          - 55447:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s
@@ -183,6 +218,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      # The suites refuse any cluster without this sentinel database. Both mapped
+      # ports reach the same service container, so marking it once covers both.
+      - name: Mark the service cluster as disposable for the PostgreSQL suites
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -p 55439 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"
+
       - name: Run E2E tests
         run: yarn test:e2e
         env:
@@ -201,17 +243,134 @@ jobs:
           TELEGRAM_BOT_TOKEN: test-telegram-bot-token
           TELEGRAM_BOT_OWNER_USER_ID: 00000000-0000-0000-0000-000000000000
 
+      # Lives under src/ with the unit tests, which skip it without the opt-in above.
+      - name: Run tenant RLS integration suite
+        run: yarn jest --ci --runInBand src/common/tenancy/tenant-data-source.pg.spec.ts
+
       - name: E2E summary
         if: always()
         run: |
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Backend API end-to-end tests against a real PostgreSQL database." >> $GITHUB_STEP_SUMMARY
+          echo "PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) ran under a restricted non-owner role." >> $GITHUB_STEP_SUMMARY
+
+  browser-regression:
+    name: "Browser: regression suite"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # proxy-audit runs the production nginx.conf through a local nginx and openssl.
+      - name: Check proxy-audit tools
+        run: |
+          nginx -v
+          openssl version
+
+      - name: Generate API types from OpenAPI spec
+        working-directory: ./frontend
+        run: yarn openapi:generate
+
+      # run.mjs starts its own Vite dev server and fails when a spec records no checks.
+      - name: Run browser regression suite
+        run: node frontend/e2e/run.mjs
+
+  browser-documents:
+    name: "Browser: document features"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # Playwright's bundled Chromium with its default (disabled) sandbox, like the
+      # production PDF renderer, so Ubuntu's user-namespace restriction does not apply.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate API types from OpenAPI spec
+        working-directory: ./frontend
+        run: yarn openapi:generate
+
+      # The fixture serves the built stylesheet from frontend/dist/assets.
+      - name: Build frontend
+        working-directory: ./frontend
+        run: yarn build
+
+      # Real Nest controllers/services, React and Chromium PDF rendering over synthetic
+      # in-memory persistence and storage; it never connects to a real service.
+      - name: Start synthetic document fixture
+        working-directory: ./backend
+        env:
+          TEMPLATE_EVIDENCE: ${{ runner.temp }}/template-features
+        run: |
+          mkdir -p "$TEMPLATE_EVIDENCE"
+          nohup yarn --silent ts-node --transpile-only test/serve-template-features.ts \
+            > "$TEMPLATE_EVIDENCE/fixture.log" 2>&1 &
+          fixture=$!
+          for attempt in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:4327/fixture/state > /dev/null; then
+              echo "Fixture ready after $attempt checks"
+              exit 0
+            fi
+            if ! kill -0 "$fixture" 2> /dev/null; then
+              echo "::error::Document fixture exited before serving"
+              cat "$TEMPLATE_EVIDENCE/fixture.log"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::Document fixture did not serve http://127.0.0.1:4327 within 180s"
+          cat "$TEMPLATE_EVIDENCE/fixture.log"
+          exit 1
+
+      - name: Run document feature suite
+        env:
+          TEMPLATE_EVIDENCE: ${{ runner.temp }}/template-features
+        run: node frontend/e2e/template-features.cjs
+
+      # Synthetic data only: screenshots, preview PDF, results and the fixture log.
+      - name: Upload document evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-features-evidence
+          path: ${{ runner.temp }}/template-features
+          retention-days: 7
 
   build-and-deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, contract-test, e2e-backend]
+    needs:
+      - test-backend
+      - test-frontend
+      - contract-test
+      - e2e-backend
+      - browser-regression
+      - browser-documents
     permissions:
       contents: read
     steps:

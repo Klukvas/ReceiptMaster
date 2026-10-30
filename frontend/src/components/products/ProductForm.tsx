@@ -1,29 +1,33 @@
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
-import { productsApi, suppliersApi, type Product, amountToCents } from "../../lib/api";
+import {
+  productsApi,
+  suppliersApi,
+  type Product,
+  type UpdateProductRequest,
+} from "../../lib/api";
+import { ErrorCode, parseApiError } from "../../lib/api-errors";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { Combobox } from "../ui/Combobox";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  buildProductUpdate,
+  toProductFields,
+  type ProductFormValues,
+} from "./product-update";
 
 interface ProductFormProps {
   product?: Product | null;
   onClose: () => void;
 }
 
-const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error && typeof error === "object" && "response" in error) {
-    const response = (error as { response?: { data?: { message?: string } } })
-      .response;
-    return response?.data?.message || defaultMessage;
-  }
-  return defaultMessage;
-};
+type QuantityConflict = { readonly server: number; readonly mine: number };
 
 export const ProductForm = ({ product, onClose }: ProductFormProps) => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProductFormValues>({
     name: "",
     purchase_price_cents: "",
     sale_price_cents: "",
@@ -33,6 +37,13 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState<string>("");
+  // The stock a quantity edit replaces: the loaded value, or the server's after
+  // a conflict, so saving again is an informed overwrite.
+  const [quantityBaseline, setQuantityBaseline] = useState<number | null>(
+    null,
+  );
+  const [quantityConflict, setQuantityConflict] =
+    useState<QuantityConflict | null>(null);
 
   const queryClient = useQueryClient();
   const { t } = useTranslation();
@@ -76,8 +87,20 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
         currency: product.currency,
         supplier_id: product.supplier_id ?? "",
       });
+      setQuantityBaseline(product.quantity);
     }
   }, [product]);
+
+  const showQuantityConflict = async (productId: string, mine: number) => {
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    try {
+      const { data: current } = await productsApi.getById(productId);
+      setQuantityBaseline(current.quantity);
+      setQuantityConflict({ server: current.quantity, mine });
+    } catch (reloadError) {
+      setBackendError(parseApiError(reloadError).message);
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: productsApi.create,
@@ -86,19 +109,33 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t("products.createError", "Error creating product")));
+      setBackendError(
+        parseApiError(error).message ||
+          t("products.createError", "Error creating product"),
+      );
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Product> }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateProductRequest }) =>
       productsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       onClose();
     },
-    onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t("products.updateError", "Error updating product")));
+    onError: (error: unknown, { id, data }) => {
+      const { code, message } = parseApiError(error);
+      // Nothing was saved; the form keeps every typed value for a second try.
+      if (
+        code === ErrorCode.PRODUCT_QUANTITY_CONFLICT &&
+        data.quantity !== undefined
+      ) {
+        void showQuantityConflict(id, data.quantity);
+        return;
+      }
+      setBackendError(
+        message || t("products.updateError", "Error updating product"),
+      );
     },
   });
 
@@ -127,22 +164,23 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     e.preventDefault();
     setErrors({});
     setBackendError("");
+    setQuantityConflict(null);
     if (!validateForm()) return;
 
-    const data = {
-      name: formData.name.trim(),
-      purchase_price_cents: amountToCents(formData.purchase_price_cents),
-      sale_price_cents: amountToCents(formData.sale_price_cents),
-      quantity: parseInt(formData.quantity),
-      currency: formData.currency as Product["currency"],
-      supplier_id: formData.supplier_id || null,
-    };
-
-    if (product) {
-      updateMutation.mutate({ id: product.id, data });
-    } else {
-      createMutation.mutate(data);
+    if (!product) {
+      createMutation.mutate(toProductFields(formData));
+      return;
     }
+    const changes = buildProductUpdate(
+      product,
+      formData,
+      quantityBaseline ?? product.quantity,
+    );
+    if (Object.keys(changes).length === 0) {
+      onClose();
+      return;
+    }
+    updateMutation.mutate({ id: product.id, data: changes });
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending;
@@ -242,19 +280,30 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             />
           </div>
 
-          <Input
-            label={t("products.quantity")}
-            type="number"
-            min="0"
-            placeholder="0"
-            value={formData.quantity}
-            onChange={(e) => {
-              setFormData({ ...formData, quantity: e.target.value });
-              if (errors.quantity) setErrors({ ...errors, quantity: "" });
-            }}
-            required
-            error={errors.quantity}
-          />
+          <div>
+            <Input
+              label={t("products.quantity")}
+              type="number"
+              min="0"
+              placeholder="0"
+              value={formData.quantity}
+              onChange={(e) => {
+                setFormData({ ...formData, quantity: e.target.value });
+                if (errors.quantity) setErrors({ ...errors, quantity: "" });
+              }}
+              required
+              error={errors.quantity}
+            />
+            {quantityConflict && (
+              <p
+                role="alert"
+                data-testid="quantity-conflict"
+                className="mt-1 text-sm text-warning-base"
+              >
+                {t("products.quantityConflict", quantityConflict)}
+              </p>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-content-secondary mb-1">

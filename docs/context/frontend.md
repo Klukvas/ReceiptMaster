@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -93,26 +93,39 @@ frontend/
 **Request interceptor** (lines 62–73):
 - Adds `Authorization: Bearer {auth_token}` from `localStorage.getItem('auth_token')`
 
-**Response interceptor** (lines 101–156):
-- Handles 401 (Unauthorized) with refresh-token flow:
-  - Gets `refresh_token` from localStorage
-  - Calls `POST /auth/refresh` with refresh token
-  - Retries original request with new access token
-  - Queues failed requests while refreshing to avoid race conditions
-  - Clears auth + redirects to home on refresh failure
-- Non-auth endpoints skip retry
+**Response interceptor** (`api.ts` + `lib/auth-session.ts`):
+- Handles 401 (Unauthorized) on non-auth endpoints. Tokens live in `localStorage`, shared by all
+  tabs; there is no cross-tab lock (no Web Locks), so tabs coordinate only through storage. The
+  server redeems a refresh token once, so of two tabs refreshing with the same token one loses.
+  - **Pre-check:** if storage already holds a different access token than the request carried
+    (another tab or an earlier refresh rotated it), retry once with the stored token — no refresh
+  - Otherwise send the stored `refresh_token` once per tab (requests arriving meanwhile are
+    queued), store the new pair, retry the original request and release the queue
+  - **Refresh failed:** `resolveRefreshFailure` decides from storage alone, comparing it with the
+    session this tab sent. Storage holds a new pair → another tab won: adopt it and retry (the
+    queue too). A 401/403 with storage unchanged may be an early loser whose winner has not answered
+    yet: it waits for a `storage` event on `refresh_token` (written after the access token) for at
+    most 3 s, then re-reads. A half-changed read (the two `setItem` calls are separate) or an emptied
+    storage is re-read once after 300 ms. Still unchanged (or emptied by a logout) and 401/403 →
+    genuine rejection: `clearAuthAndRedirect` clears storage and goes to `/`. Network/5xx → reject,
+    keep storage. A rotation that keeps the access token and only changes the refresh token is
+    adopted too
+  - `clearAuthAndRedirect` is the only client code that ends a session on an API failure
 
 **API method groups** (lines 159–497):
 - `authApi.login()`, `register()`, `refresh()`, `logout()`, `getProfile()`, `updateProfile()`, `changePassword()`
 - `productsApi.getAll()`, `getById()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getLowStock()`
-- `recipientsApi.*` — same CRUD pattern
+- `recipientsApi.*` — same CRUD pattern; `recipientsApi.update` takes `UpdateRecipientRequest` (changed
+  fields only, `null` clears an optional field)
+- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` send
+  the optional `Idempotency-Key` header (see *Onboarding wizard*)
 - `suppliersApi.*` — same CRUD pattern
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`
 - `dashboardApi.*` — revenue & turnover analytics
 - `receiptsApi.getAll()`, `create()`, `getById()`, `getPdf()`, `getPrinters()`, `print()`, `regenerate()`, `void()`, `testPreview()`, `share()`, `revokeShare()`, `getTemplatePreviewHtml()`
 - `settingsApi.*` — logo upload, receipt design, templates, company info, payment/delivery terms, auto-receipt flag (`getAutoReceipt` / `updateAutoReceipt`)
 
-**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience.
+**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience. Wire types are derived from `api-types.generated.ts` (gitignored; `yarn openapi:generate` from `backend/openapi.json`) rather than hand-written: besides the entity types, `Receipt` (the `ReceiptProjection` the receipt routes return; `Order.receipts` reuses it), `InventoryValue` and the document types in `lib/document-config.ts` (`DocumentConfig`, `ConfigVersion`, `DocumentDraft`, `PresetSummary`, `Preset`) are aliases of `components["schemas"]`. `TemplateCapabilities`/`DocumentTemplate` stay hand-written. `templateId` is therefore the backend's template-ID union; values read from the templates list are narrowed at the call site.
 
 **Utilities** (lines 500–528):
 - `formatCurrency(cents, currency)` — e.g., `100` cents → "1.00 UAH"
@@ -211,6 +224,33 @@ export const useOrders = () => {
 - `['products']`, `['recipients']`, `['suppliers']` — entity lists
 
 Always invalidate after mutations (`onSuccess` callback) so UI refetches fresh data.
+Cancelling an order (`useOrders`) invalidates everything it changes on the server: `['orders']`,
+`['receipts']` (a confirmed order's document is voided) and every dashboard key — `['dashboard']`,
+`['totalRevenue']`, `['totalTurnover']`, `['dailyRevenue']`, `['orderStatusSummary']` (the default
+`staleTime` is 5 minutes, so without this the dashboards would keep pre-cancel figures).
+
+### Orders: cancel warning
+
+`OrdersPage` resolves the cancel target's status from the loaded list. Cancelling a confirmed order
+(or one not on the page) adds `orders.cancelConfirmedWarning` (en/ru/uk) to the confirmation: the
+receipt is voided, the public share link revoked, and stock is not returned — deleting the order
+returns it. A draft gets the plain question.
+
+### Dashboard: unknown and partial profit
+
+"Revenue" is profit from the cost frozen on each order line. Profit payloads carry
+`unknown_cost_lines`, `unknown_cost_turnover_cents` and `profit_complete`, and the profit may be null
+(`lib/profit.ts`: `formatProfit`, `profitChartValue`, `combineCompleteness`).
+`components/dashboard/ProfitStatus.tsx` renders nothing for complete figures, "Cost unknown"
+(`dashboard.profitUnknown`) next to "—" for a null profit, and a "Partial" badge
+(`dashboard.profitPartial`) whose tooltip (`dashboard.profitPartialTooltip`) names the excluded lines
+and turnover. It is used by the KPI card (`KPIPrimaryCard`/`StatCard` `footer`), the recipient list
+(`TopRecipientsList` accepts a null amount, sorted last, and a `status` node) and the sparkline
+header, which passes `combineProfit` of the charted days (`lib/profit.ts`: null when no day has a
+known-cost line, so all-unknown reads "Cost unknown" rather than "Partial"; empty days do not count). `RevenueChart` accepts null values (no bar) with a tooltip note; the sparkline passes null
+days with `connectNulls={false}`, so an unknown day is a gap, not a zero. The analytics CSV leaves an
+unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
+`unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
 
 ### Server-Side Pagination: `useServerPagination`
 
@@ -287,10 +327,14 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `isAuthenticated: boolean` — derived (!!user && !!token)
 
 **Methods:**
-- `login(email, password)` — calls `authApi.login()`, stores tokens, redirects to `/dashboard`
+- `login(email, password)` — calls `authApi.login()`, stores tokens through `auth-session.ts`
+  `storeSession` (access token first, then refresh token — the key other tabs wait for), redirects
+  to `/dashboard`. AuthContext reads/clears storage only through `auth-session.ts` helpers
 - `register(email, password)` — same as login
 - `logout()` — calls `authApi.logout()`, clears localStorage, redirects to home
-- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`
+- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`. On failure it
+  only marks this render signed out; it never touches storage (the interceptor decides, so a tab
+  that lost a refresh race cannot wipe the session another tab just stored)
 
 **Token storage:**
 - Access token → `localStorage.auth_token` (short-lived, 15 min typical)
@@ -412,10 +456,11 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   frontend builds require the public client token and production environment; backend
   production validation requires complete Paddle settings and frontend URL. Example env
   files contain only empty values. Deployment preserves the existing secret environment.
-- `.dockerignore` excludes local `.env*` files from the frontend build context. Private
-  package authentication uses a BuildKit secret during the Yarn install; the token is
-  not persisted in a Docker layer. PR verification uses only the standard read-only
-  GitHub token; publish/deploy credentials are confined to main-push jobs.
+- `.dockerignore` excludes local `.env*` files from the frontend build context. Every
+  dependency comes from the public npm registry, so the image's `yarn install
+  --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
+  PR verification runs with a `contents: read` workflow token and no secrets;
+  publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
 - Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
   `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
@@ -531,6 +576,44 @@ components/
 ├── seo/               # SEO component wrappers
 └── ui/                # Primitives (Button, Modal, DataTable, Tabs, etc.)
 ```
+
+### Product form: stock edits (`components/products/ProductForm.tsx`)
+
+Editing sends only the fields that differ from the product as loaded (`product-update.ts`
+`buildProductUpdate`), so a rename is `PATCH { name }` and never carries a stale stock value. A
+changed quantity is sent as `{ quantity, expectedQuantity }`, where `expectedQuantity` is the
+baseline: the loaded stock, or the server's after a conflict. On 409 `PRODUCT_QUANTITY_CONFLICT`
+(parsed with `lib/api-errors.ts`) the form stays open with every typed value, reloads
+`GET /products/:id`, shows under the quantity field that stock is now N and the typed value was not
+saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and invalidates
+`["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
+`productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
+stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
+
+### Onboarding wizard (`components/onboarding/OnboardingModal.tsx`)
+
+Four steps (company, template, first product, first customer); the parent keeps every step's input,
+so Back/Next never lose it. Company and template call idempotent settings endpoints on each Next.
+Product and customer steps keep an entity record in a ref (`onboarding-entities.ts`
+`saveEntityStep`): `id` and the server's copy (`saved`) after a create, or `pending` — the exact body
+and its `Idempotency-Key` (`crypto.randomUUID()`, one per create attempt) — while a create's outcome
+is unknown. Revisiting a saved step sends nothing when the form still matches `saved`, otherwise a
+PATCH with only the changed fields (products via `buildProductUpdate`: a changed quantity carries
+`expectedQuantity`; a 409 reloads the product, keeps the input and shows `products.quantityConflict`).
+A blank name never creates and never changes an existing entity.
+
+- **Single flight:** one `inFlight` ref covers Next, Back, Skip, Finish, Retry and closing (Escape/X);
+  Skip and Back are also disabled while saving, so a double click sends one request.
+- **Errors** keep the step and every value and show an inline alert: `parseApiError` text for a refused
+  request (the next attempt sends the current form with a new key); for no response or a 502/503/504,
+  `onboarding.saveUnconfirmed` with Retry, which resends the same body with the **same** key (the
+  server replays the create if it happened) and then PATCHes any edits made meanwhile.
+- **Completion:** Finish calls `onComplete()` only after `POST /settings/onboarding-complete`
+  succeeds; on failure the modal stays open with `onboarding.finishFailed` and Retry (saved steps are
+  not re-sent). A failed Skip closes the wizard for this visit with the `onboarding.skipFailed` toast
+  (offered again next time). The Finish button stays "Get started"; nothing here mentions a PDF.
+- **Limits:** the key lives only in memory — a reload or another tab during an unconfirmed save can
+  still create a duplicate.
 
 ### UI Primitives: `components/ui/`
 
@@ -706,7 +789,7 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 
 ## Common Gotchas
 
-1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic.
+1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic, and don't clear `auth_token`/`refresh_token` on an API error elsewhere — another tab may have just rotated them.
 2. **Query key consistency** — always invalidate the same key after mutations (e.g., `['orders']` after `deleteOrder`).
 3. **Image/asset paths** — public assets in `frontend/public/` (referenced as `/logo-icon.svg`).
 4. **Env vars** — prefix public client settings with `VITE_` for Vite to expose them. Check `frontend/env.example`; never put backend secrets in Vite settings.
@@ -758,6 +841,6 @@ The Orders action menu opens `CustomizeDocumentModal`, using the same editor wit
 
 `PublicReceiptPage` uses the frozen visible projection and formatting preferences. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
 
-Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract and evidence.
+Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage, and runs in CI as `browser-documents`; the other browser specs (`node frontend/e2e/run.mjs`) run as `browser-regression`. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract; it no longer matches the current SettingsPage and is not run in CI.
 
 Closing Orders customization through Escape, Close or successful generation/retry restores focus to the surviving More actions button. Cancelling unsaved-draft confirmation leaves focus trapped inside the open editor.

@@ -24,6 +24,8 @@ import { Button } from "../components/ui/Button";
 import { StatCardSkeleton } from "../components/ui/Skeleton";
 import { StatCard } from "../components/dashboard/StatCard";
 import { RevenueSparkline } from "../components/dashboard/RevenueSparkline";
+import { ProfitStatus } from "../components/dashboard/ProfitStatus";
+import { formatProfit } from "../lib/profit";
 import { OrderStatusSummary } from "../components/dashboard/OrderStatusSummary";
 import { LowStockWidget } from "../components/dashboard/LowStockWidget";
 import { OnboardingModal } from "../components/onboarding/OnboardingModal";
@@ -159,11 +161,24 @@ export const DashboardHomePage = () => {
           <>
             <StatCard
               name={t("home.totalRevenue")}
-              value={formatCurrency(
-                totalRevenue?.data?.total_revenue_cents || 0,
-                totalRevenue?.data?.currency,
-              )}
+              value={
+                totalRevenue?.data
+                  ? formatProfit(
+                      totalRevenue.data.total_revenue_cents,
+                      totalRevenue.data.currency,
+                    )
+                  : formatCurrency(0)
+              }
               description={t("home.revenueDescription")}
+              footer={
+                totalRevenue?.data && (
+                  <ProfitStatus
+                    profit={totalRevenue.data.total_revenue_cents}
+                    completeness={totalRevenue.data}
+                    currency={totalRevenue.data.currency}
+                  />
+                )
+              }
               icon={DollarSign}
               color="text-success-base"
               bgColor="bg-[var(--color-success-light)]"

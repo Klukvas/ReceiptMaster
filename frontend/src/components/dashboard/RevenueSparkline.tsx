@@ -9,7 +9,13 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { dashboardApi, formatCurrency } from "../../lib/api";
+import {
+  combineCompleteness,
+  combineProfit,
+  profitChartValue,
+} from "../../lib/profit";
 import { Card } from "../ui/Card";
+import { ProfitStatus } from "./ProfitStatus";
 import { SkeletonChart } from "../ui/Skeleton";
 import { useTranslation } from "../../hooks/useTranslation";
 
@@ -42,16 +48,24 @@ export const RevenueSparkline = () => {
         month: "short",
         day: "numeric",
       }),
-      revenue: d.revenue_cents / 100,
+      // A day whose lines all lack a cost has no profit point: the line breaks.
+      revenue: profitChartValue(d.revenue_cents),
       turnover: d.turnover_cents / 100,
     })) || [];
+  const completeness = combineCompleteness(data?.data ?? []);
+  // Null when every charted line lacks a cost: "Cost unknown", not "Partial".
+  const chartProfit = combineProfit(data?.data ?? []);
 
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-content-secondary">
-          {t("dashboard.revenueOverTime", "Revenue Over Time")}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-content-secondary">
+            {t("dashboard.revenueOverTime", "Revenue Over Time")}
+          </h3>
+          {/* Gaps in the line mark unknown days; this flags any excluded line. */}
+          <ProfitStatus profit={chartProfit} completeness={completeness} />
+        </div>
         <div className="flex gap-1">
           {[7, 30].map((d) => (
             <button
@@ -91,8 +105,8 @@ export const RevenueSparkline = () => {
             width={60}
           />
           <Tooltip
-            formatter={(value: number | undefined) =>
-              formatCurrency((value ?? 0) * 100)
+            formatter={(value) =>
+              typeof value === "number" ? formatCurrency(value * 100) : "—"
             }
             contentStyle={{
               backgroundColor: "var(--color-bg-elevated)",
@@ -111,6 +125,7 @@ export const RevenueSparkline = () => {
           <Area
             type="monotone"
             dataKey="revenue"
+            connectNulls={false}
             stroke="#4F46E5"
             fill={`url(#${revenueGradientId})`}
             name={t("dashboard.revenue", "Revenue")}

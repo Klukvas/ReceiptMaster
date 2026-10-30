@@ -11,7 +11,7 @@ market/
 │   ├── test/               # E2E tests
 │   ├── scripts/            # Initialization scripts
 │   ├── package.json        # Backend dependencies
-│   └── Dockerfile          # Docker image for API
+│   └── Dockerfile.playwright # API image (production + compose); Dockerfile is legacy/unused
 ├── frontend/               # React application
 │   ├── src/                # Frontend source code
 │   ├── public/             # Static files

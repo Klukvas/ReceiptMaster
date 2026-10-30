@@ -20,10 +20,12 @@ import { DocumentStorageLeases1792100000001 } from "../src/config/migrations/179
 import { DataSource, EntitySchema, QueryRunner } from "typeorm";
 import { randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 const EVIDENCE_DIR =
   process.env.TEMPLATE_EVIDENCE ||
-  "temp/template-features-20261015-225300/fix3";
+  join(tmpdir(), "receiptmaster-template-features", "fix3");
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 import sharp = require("sharp");
 

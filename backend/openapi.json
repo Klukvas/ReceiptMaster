@@ -16,7 +16,17 @@
       "post": {
         "operationId": "ProductsController_create",
         "summary": "Создать товар",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -29,11 +39,31 @@
         },
         "responses": {
           "201": {
-            "description": "Товар успешно создан",
+            "description": "Товар успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -180,6 +210,33 @@
         ]
       }
     },
+    "/products/stock-value": {
+      "get": {
+        "operationId": "ProductsController_getStockValue",
+        "summary": "Get total inventory value (cost & retail)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aggregate stock value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryValueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/products/{id}": {
       "get": {
         "operationId": "ProductsController_findOne",
@@ -252,8 +309,35 @@
               }
             }
           },
+          "400": {
+            "description": "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Товар не найден"
+            "description": "Товар не найден (PRODUCT_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -389,11 +473,43 @@
         ]
       }
     },
+    "/billing/config": {
+      "get": {
+        "operationId": "PaddleController_getBillingConfig",
+        "summary": "Public billing capability flag (no auth)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Whether billing is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingConfigResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "paddle"
+        ]
+      }
+    },
     "/recipients": {
       "post": {
         "operationId": "RecipientsController_create",
         "summary": "Создать получателя",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -406,11 +522,21 @@
         },
         "responses": {
           "201": {
-            "description": "Получатель успешно создан",
+            "description": "Получатель успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -661,11 +787,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Order returned from idempotency cache"
-          },
           "201": {
-            "description": "Order successfully created",
+            "description": "Order successfully created, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
@@ -793,6 +916,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "description": "Only orders containing this product",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -833,7 +965,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Orders approved"
           },
           "400": {
@@ -866,7 +998,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Orders deleted"
           },
           "400": {
@@ -1479,6 +1611,42 @@
     "/receipts/orders/{orderId}/receipt": {
       "post": {
         "operationId": "ReceiptsController_createReceipt",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentSelectionRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentSelectionRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
         "summary": "Создать чек для заказа",
         "parameters": [
           {
@@ -1496,19 +1664,60 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
                 }
               }
             }
           },
           "400": {
-            "description": "Невозможно создать чек"
+            "description": "Невозможно создать чек",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Заказ не найден"
+            "description": "Заказ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Чек для заказа уже существует"
+            "description": "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1524,6 +1733,42 @@
     "/receipts/orders/{orderId}/receipt/compact": {
       "post": {
         "operationId": "ReceiptsController_createCompactReceipt",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentSelectionRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentSelectionRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
         "summary": "Создать компактный чек для заказа",
         "parameters": [
           {
@@ -1541,19 +1786,60 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
                 }
               }
             }
           },
           "400": {
-            "description": "Невозможно создать чек"
+            "description": "Невозможно создать чек",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Заказ не найден"
+            "description": "Заказ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Чек для заказа уже существует"
+            "description": "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1569,6 +1855,42 @@
     "/receipts/orders/{orderId}/receipt/standard": {
       "post": {
         "operationId": "ReceiptsController_createStandardReceipt",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentSelectionRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentSelectionRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
         "summary": "Создать стандартный чек для заказа",
         "parameters": [
           {
@@ -1586,19 +1908,60 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
                 }
               }
             }
           },
           "400": {
-            "description": "Невозможно создать чек"
+            "description": "Невозможно создать чек",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Заказ не найден"
+            "description": "Заказ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Чек для заказа уже существует"
+            "description": "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1641,7 +2004,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedReceiptResponse"
+                  "$ref": "#/components/schemas/ReceiptListResponse"
                 }
               }
             }
@@ -1677,7 +2040,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
                 }
               }
             }
@@ -1752,7 +2115,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Чек отправлен на печать"
           },
           "404": {
@@ -1775,6 +2138,16 @@
     "/receipts/{id}/void": {
       "post": {
         "operationId": "ReceiptsController_voidReceipt",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptVoidRequest"
+              }
+            }
+          }
+        },
         "summary": "Void a receipt and unlock the order",
         "parameters": [
           {
@@ -1787,12 +2160,12 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Receipt voided successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
                 }
               }
             }
@@ -1820,7 +2193,7 @@
         "summary": "Generate a test receipt PDF preview using current user settings",
         "parameters": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Test PDF generated"
           }
         },
@@ -1837,6 +2210,42 @@
     "/receipts/{id}/regenerate": {
       "post": {
         "operationId": "ReceiptsController_regenerateReceiptPdf",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptRegenerationRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded ReceiptRegenerationRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
         "summary": "Принудительно регенерировать PDF чек",
         "parameters": [
           {
@@ -1849,18 +2258,65 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "PDF чек успешно регенерирован",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Receipt"
+                  "$ref": "#/components/schemas/ReceiptProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or reproduce combined with new configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Чек не найден"
+            "description": "Чек не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale expectedActiveRevision or preset revision, replacement already running, or reconstruction required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Ошибка при регенерации PDF"
@@ -1891,8 +2347,15 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Public link generated"
+          "201": {
+            "description": "Public link generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptShareResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Receipt not found"
@@ -1923,11 +2386,132 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Public link revoked"
+          "201": {
+            "description": "Public link revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptProjection"
+                }
+              }
+            }
           },
           "404": {
             "description": "Receipt not found"
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/preview": {
+      "post": {
+        "operationId": "DocumentPreviewController_preview",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPreviewRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentPreviewRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Render an unsaved document draft as a PDF",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Rendered PDF (private, no-store); nothing is persisted",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid draft, envelope or logo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Two previews are already rendering; retry shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2078,10 +2662,63 @@
     "/settings/logo/upload": {
       "post": {
         "operationId": "SettingsController_uploadLogo",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PNG, JPEG, GIF or SVG, at most 5 MiB"
+                  }
+                },
+                "required": [
+                  "logo"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
         "parameters": [],
         "responses": {
           "201": {
-            "description": ""
+            "description": "Logo stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing logo file or unsupported image type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2177,6 +2814,78 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/auto-receipt": {
+      "get": {
+        "operationId": "SettingsController_getAutoReceipt",
+        "summary": "Get auto-generate receipt on confirm flag",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoReceiptResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateAutoReceipt",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoReceiptRequest"
+              }
+            }
+          }
+        },
+        "summary": "Toggle auto-generate receipt on confirm",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Saved flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoReceiptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2426,6 +3135,53 @@
         ]
       }
     },
+    "/settings/footer": {
+      "post": {
+        "operationId": "SettingsController_updateFooter",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FooterUpdateRequest"
+              }
+            }
+          }
+        },
+        "summary": "Update footer title and subtitle together",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Footer updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/settings/primary-color": {
       "get": {
         "operationId": "SettingsController_getPrimaryColor",
@@ -2578,6 +3334,532 @@
         ]
       }
     },
+    "/settings/document-config": {
+      "get": {
+        "operationId": "DocumentConfigController_read",
+        "summary": "Read the account document configuration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentConfigVersionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "DocumentConfigController_save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentConfigSaveRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentConfigSaveRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the account document configuration",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Committed revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentConfigVersionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid draft, envelope or logo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict: the stored value changed since it was read; reload and retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/document-presets": {
+      "get": {
+        "operationId": "DocumentConfigController_list",
+        "summary": "List document presets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Preset summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPresetListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "DocumentConfigController_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPresetCreateRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentPresetCreateRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a document preset",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Created preset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPresetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid draft, envelope or logo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Maximum 20 presets, or a preset with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/document-presets/{id}": {
+      "get": {
+        "operationId": "DocumentConfigController_preset",
+        "summary": "Read one document preset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Editable preset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPresetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preset ID or unknown query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "DocumentConfigController_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPresetUpdateRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentPresetUpdateRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a document preset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated preset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPresetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preset ID, draft, envelope or logo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict: the stored value changed since it was read; reload and retry; or a preset with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DocumentConfigController_remove",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRevisionRequest"
+              }
+            }
+          }
+        },
+        "summary": "Delete a document preset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPresetDeletedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid preset ID or body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict: the stored value changed since it was read; reload and retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/auth/register": {
       "post": {
         "operationId": "UsersController_register",
@@ -2629,7 +3911,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Login successful",
             "content": {
               "application/json": {
@@ -2656,8 +3938,18 @@
         "operationId": "UsersController_refresh",
         "summary": "Refresh access token using refresh token",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Tokens refreshed successfully",
             "content": {
               "application/json": {
@@ -2667,8 +3959,25 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed or missing refresh_token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Invalid or expired refresh token"
+            "description": "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2681,8 +3990,18 @@
         "operationId": "UsersController_logout",
         "summary": "Logout and revoke refresh token",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Logged out successfully"
           }
         },
@@ -2780,7 +4099,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Password changed successfully"
           },
           "400": {
@@ -3108,6 +4427,12 @@
               "UAH"
             ],
             "example": "UAH"
+          },
+          "supplier_id": {
+            "type": "string",
+            "description": "ID поставщика (null снимает поставщика)",
+            "example": "uuid",
+            "nullable": true
           }
         },
         "required": [
@@ -3141,6 +4466,10 @@
             "enum": [
               "UAH"
             ]
+          },
+          "supplier_id": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "format": "date-time",
@@ -3188,6 +4517,40 @@
           "data"
         ]
       },
+      "InventoryValueDto": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UAH"
+            ]
+          },
+          "purchaseValueCents": {
+            "type": "number",
+            "description": "Stock value at purchase (cost) price, in cents"
+          },
+          "saleValueCents": {
+            "type": "number",
+            "description": "Stock value at sale (retail) price, in cents"
+          },
+          "totalUnits": {
+            "type": "number",
+            "description": "Total units in stock across all products"
+          },
+          "productCount": {
+            "type": "number",
+            "description": "Number of (non-deleted) products in stock"
+          }
+        },
+        "required": [
+          "currency",
+          "purchaseValueCents",
+          "saleValueCents",
+          "totalUnits",
+          "productCount"
+        ]
+      },
       "UpdateProductDto": {
         "type": "object",
         "properties": {
@@ -3218,6 +4581,18 @@
               "UAH"
             ],
             "example": "UAH"
+          },
+          "supplier_id": {
+            "type": "string",
+            "description": "ID поставщика (null снимает поставщика)",
+            "example": "uuid",
+            "nullable": true
+          },
+          "expectedQuantity": {
+            "type": "integer",
+            "description": "Stock the client last saw. Required with quantity (and only with it); a mismatch returns 409 PRODUCT_QUANTITY_CONFLICT",
+            "example": 50,
+            "minimum": 0
           }
         }
       },
@@ -3335,18 +4710,21 @@
           },
           "email": {
             "type": "string",
-            "description": "Email получателя",
-            "example": "ivan@example.com"
+            "description": "Email получателя; null очищает",
+            "example": "ivan@example.com",
+            "nullable": true
           },
           "phone": {
             "type": "string",
-            "description": "Телефон получателя",
-            "example": "+7 (999) 123-45-67"
+            "description": "Телефон получателя; null очищает",
+            "example": "+7 (999) 123-45-67",
+            "nullable": true
           },
           "address": {
             "type": "string",
-            "description": "Адрес получателя",
-            "example": "г. Москва, ул. Тверская, д. 1"
+            "description": "Адрес получателя; null очищает",
+            "example": "г. Москва, ул. Тверская, д. 1",
+            "nullable": true
           }
         }
       },
@@ -3425,6 +4803,11 @@
           },
           "line_total_cents": {
             "type": "number"
+          },
+          "unit_cost_cents": {
+            "type": "number",
+            "nullable": true,
+            "description": "Purchase cost per unit captured when the draft line was written; null when unknown (lines created before cost snapshots)"
           }
         },
         "required": [
@@ -3434,7 +4817,8 @@
           "product_name",
           "unit_price_cents",
           "qty",
-          "line_total_cents"
+          "line_total_cents",
+          "unit_cost_cents"
         ]
       },
       "Order": {
@@ -3681,17 +5065,34 @@
       "DailyRevenueDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "date": {
             "type": "string"
           },
           "revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost. A day without confirmed orders is 0."
           },
           "turnover_cents": {
             "type": "number"
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "date",
           "revenue_cents",
           "turnover_cents"
@@ -3719,6 +5120,18 @@
       "RevenueByProductDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "product_id": {
             "type": "string"
           },
@@ -3726,7 +5139,9 @@
             "type": "string"
           },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_quantity": {
             "type": "number"
@@ -3736,6 +5151,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "product_id",
           "product_name",
           "total_revenue_cents",
@@ -3746,6 +5164,18 @@
       "RevenueByRecipientDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "recipient_id": {
             "type": "string"
           },
@@ -3753,7 +5183,9 @@
             "type": "string"
           },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_orders": {
             "type": "number"
@@ -3763,6 +5195,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "recipient_id",
           "recipient_name",
           "total_revenue_cents",
@@ -3773,8 +5208,22 @@
       "TotalRevenueDto": {
         "type": "object",
         "properties": {
+          "unknown_cost_lines": {
+            "type": "number",
+            "description": "Order lines excluded from profit because their cost is unknown"
+          },
+          "unknown_cost_turnover_cents": {
+            "type": "number",
+            "description": "Turnover (line totals, in cents) of the excluded lines"
+          },
+          "profit_complete": {
+            "type": "boolean",
+            "description": "True when every line in this group has a known cost"
+          },
           "total_revenue_cents": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Profit from the purchase cost frozen on each order line. Lines with an unknown cost are excluded; null when no line in this group has a known cost."
           },
           "total_orders": {
             "type": "number"
@@ -3784,6 +5233,9 @@
           }
         },
         "required": [
+          "unknown_cost_lines",
+          "unknown_cost_turnover_cents",
+          "profit_complete",
           "total_revenue_cents",
           "total_orders",
           "currency"
@@ -3862,37 +5314,14 @@
           "currency"
         ]
       },
-      "PaginatedReceiptResponse": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "number"
-          },
-          "offset": {
-            "type": "number"
-          },
-          "limit": {
-            "type": "number"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Receipt"
-            }
-          }
-        },
-        "required": [
-          "total",
-          "offset",
-          "limit",
-          "data"
-        ]
-      },
       "ReceiptDesignResponseDto": {
         "type": "object",
         "properties": {
           "receiptTitle": {
             "type": "string"
+          },
+          "hasCustomReceiptTitle": {
+            "type": "boolean"
           },
           "templateId": {
             "type": "string"
@@ -3918,6 +5347,7 @@
         },
         "required": [
           "receiptTitle",
+          "hasCustomReceiptTitle",
           "templateId",
           "templateLanguage",
           "footerTitle",
@@ -4038,6 +5468,18 @@
       "LoginDto": {
         "type": "object",
         "properties": {}
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "description": "128-character hexadecimal refresh token"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
       },
       "User": {
         "type": "object",
@@ -4233,6 +5675,1267 @@
             }
           }
         }
+      },
+      "ApiErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "errorCode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "errorCode"
+        ]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "DocumentConfig": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "companyName": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "companyAddress": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "companyEmail": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      ""
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  }
+                ]
+              },
+              "companyPhone": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyTaxId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyIban": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companySwift": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyWebsite": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "companyTagline": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "companyName",
+              "companyAddress",
+              "companyEmail",
+              "companyPhone",
+              "companyTaxId",
+              "companyIban",
+              "companySwift",
+              "companyWebsite",
+              "companyTagline"
+            ],
+            "additionalProperties": false
+          },
+          "templateId": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "modern",
+              "elegant",
+              "vintage",
+              "tech",
+              "wave",
+              "minimal",
+              "standard",
+              "compact",
+              "corporate",
+              "thermal",
+              "dark",
+              "branded",
+              "delivery",
+              "proforma"
+            ]
+          },
+          "documentLanguage": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru",
+              "uk"
+            ]
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "automatic"
+                    ]
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "custom"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "mode",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "footerTitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "footerSubtitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "primaryColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "paymentTerms": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "deliveryTerms": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "logo": {
+            "type": "object",
+            "properties": {
+              "assetId": {
+                "type": "string",
+                "format": "uuid",
+                "nullable": true
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "size": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "auto"
+                    ]
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 24,
+                    "maximum": 200
+                  }
+                ]
+              },
+              "alignment": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "left",
+                  "center",
+                  "right"
+                ]
+              }
+            },
+            "required": [
+              "assetId",
+              "visible",
+              "size",
+              "alignment"
+            ],
+            "additionalProperties": false
+          },
+          "visibility": {
+            "type": "object",
+            "properties": {
+              "companyAddress": {
+                "type": "boolean"
+              },
+              "companyEmail": {
+                "type": "boolean"
+              },
+              "companyPhone": {
+                "type": "boolean"
+              },
+              "companyTaxId": {
+                "type": "boolean"
+              },
+              "companyIban": {
+                "type": "boolean"
+              },
+              "companySwift": {
+                "type": "boolean"
+              },
+              "companyWebsite": {
+                "type": "boolean"
+              },
+              "recipientEmail": {
+                "type": "boolean"
+              },
+              "recipientPhone": {
+                "type": "boolean"
+              },
+              "recipientAddress": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "companyAddress",
+              "companyEmail",
+              "companyPhone",
+              "companyTaxId",
+              "companyIban",
+              "companySwift",
+              "companyWebsite",
+              "recipientEmail",
+              "recipientPhone",
+              "recipientAddress"
+            ],
+            "additionalProperties": false
+          },
+          "formatting": {
+            "type": "object",
+            "properties": {
+              "numberLocale": {
+                "type": "string",
+                "enum": [
+                  "ru-RU",
+                  "en-US",
+                  "en-GB",
+                  "uk-UA",
+                  "de-DE",
+                  "fr-FR"
+                ]
+              },
+              "currencyDisplay": {
+                "type": "string",
+                "enum": [
+                  "symbol",
+                  "narrowSymbol",
+                  "code"
+                ]
+              },
+              "dateLocale": {
+                "type": "string",
+                "enum": [
+                  "document",
+                  "ru-RU",
+                  "en-US",
+                  "en-GB",
+                  "uk-UA",
+                  "de-DE",
+                  "fr-FR"
+                ]
+              },
+              "dateStyle": {
+                "type": "string",
+                "enum": [
+                  "numeric",
+                  "short",
+                  "medium",
+                  "long"
+                ]
+              },
+              "timeStyle": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "short",
+                  "medium"
+                ]
+              },
+              "hourCycle": {
+                "type": "string",
+                "enum": [
+                  "h12",
+                  "h23"
+                ]
+              },
+              "timeZone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "numberLocale",
+              "currencyDisplay",
+              "dateLocale",
+              "dateStyle",
+              "timeStyle",
+              "hourCycle",
+              "timeZone"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "company",
+          "templateId",
+          "documentLanguage",
+          "title",
+          "footerTitle",
+          "footerSubtitle",
+          "primaryColor",
+          "paymentTerms",
+          "deliveryTerms",
+          "logo",
+          "visibility",
+          "formatting"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentConfigOverrides": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "companyName": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "companyAddress": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "companyEmail": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      ""
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  }
+                ]
+              },
+              "companyPhone": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyTaxId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyIban": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companySwift": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "companyWebsite": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "companyTagline": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "additionalProperties": false
+          },
+          "templateId": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "modern",
+              "elegant",
+              "vintage",
+              "tech",
+              "wave",
+              "minimal",
+              "standard",
+              "compact",
+              "corporate",
+              "thermal",
+              "dark",
+              "branded",
+              "delivery",
+              "proforma"
+            ]
+          },
+          "documentLanguage": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru",
+              "uk"
+            ]
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "automatic"
+                    ]
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "custom"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "mode",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "footerTitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "footerSubtitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "primaryColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "paymentTerms": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "deliveryTerms": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "logo": {
+            "type": "object",
+            "properties": {
+              "assetId": {
+                "type": "string",
+                "format": "uuid",
+                "nullable": true
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "size": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "auto"
+                    ]
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 24,
+                    "maximum": 200
+                  }
+                ]
+              },
+              "alignment": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "left",
+                  "center",
+                  "right"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "visibility": {
+            "type": "object",
+            "properties": {
+              "companyAddress": {
+                "type": "boolean"
+              },
+              "companyEmail": {
+                "type": "boolean"
+              },
+              "companyPhone": {
+                "type": "boolean"
+              },
+              "companyTaxId": {
+                "type": "boolean"
+              },
+              "companyIban": {
+                "type": "boolean"
+              },
+              "companySwift": {
+                "type": "boolean"
+              },
+              "companyWebsite": {
+                "type": "boolean"
+              },
+              "recipientEmail": {
+                "type": "boolean"
+              },
+              "recipientPhone": {
+                "type": "boolean"
+              },
+              "recipientAddress": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "formatting": {
+            "type": "object",
+            "properties": {
+              "numberLocale": {
+                "type": "string",
+                "enum": [
+                  "ru-RU",
+                  "en-US",
+                  "en-GB",
+                  "uk-UA",
+                  "de-DE",
+                  "fr-FR"
+                ]
+              },
+              "currencyDisplay": {
+                "type": "string",
+                "enum": [
+                  "symbol",
+                  "narrowSymbol",
+                  "code"
+                ]
+              },
+              "dateLocale": {
+                "type": "string",
+                "enum": [
+                  "document",
+                  "ru-RU",
+                  "en-US",
+                  "en-GB",
+                  "uk-UA",
+                  "de-DE",
+                  "fr-FR"
+                ]
+              },
+              "dateStyle": {
+                "type": "string",
+                "enum": [
+                  "numeric",
+                  "short",
+                  "medium",
+                  "long"
+                ]
+              },
+              "timeStyle": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "short",
+                  "medium"
+                ]
+              },
+              "hourCycle": {
+                "type": "string",
+                "enum": [
+                  "h12",
+                  "h23"
+                ]
+              },
+              "timeZone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "DocumentDraft": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentConfigSaveRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483646
+          }
+        },
+        "required": [
+          "config",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentPresetCreateRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "config",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentPresetUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483646
+          }
+        },
+        "required": [
+          "config",
+          "name",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentRevisionRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483646
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentSelectionRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "presetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "presetRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/DocumentConfigOverrides"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReceiptRegenerationRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "presetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "presetRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/DocumentConfigOverrides"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "reproduce",
+              "replace"
+            ],
+            "default": "reproduce"
+          },
+          "expectedActiveRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483646
+          },
+          "confirmReconstruction": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DocumentPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "logoAction": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "replace",
+              "remove"
+            ],
+            "default": "keep"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "DocumentConfigVersion": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "config",
+          "revision"
+        ]
+      },
+      "DocumentConfigVersionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentConfigVersion"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DocumentPresetSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "revision",
+          "updated_at"
+        ]
+      },
+      "DocumentPresetListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentPresetSummary"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DocumentPreset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "config": {
+            "$ref": "#/components/schemas/DocumentConfig"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "revision",
+          "config"
+        ]
+      },
+      "DocumentPresetResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocumentPreset"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DocumentPresetDeletedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "deleted": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              }
+            },
+            "required": [
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ReceiptProjection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "void_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "active_revision": {
+            "type": "integer"
+          },
+          "replacement_status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "replacement_error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "number",
+          "pdf_url",
+          "hash",
+          "status",
+          "template_id",
+          "template_version",
+          "progress",
+          "error_message",
+          "created_at",
+          "voided_at",
+          "void_reason",
+          "public_token",
+          "active_revision",
+          "replacement_status",
+          "replacement_error"
+        ]
+      },
+      "ReceiptListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptProjection"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "offset",
+          "limit"
+        ]
+      },
+      "ReceiptVoidRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "ReceiptShareResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "url"
+        ]
+      },
+      "AutoReceiptRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "AutoReceiptResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "FooterUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "footerTitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "footerSubtitle": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "footerTitle",
+          "footerSubtitle"
+        ]
+      },
+      "BillingConfigResponse": {
+        "type": "object",
+        "properties": {
+          "billingEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "billingEnabled"
+        ]
+      },
+      "LogoUploadResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "message",
+          "filename",
+          "originalName",
+          "size",
+          "url",
+          "userId"
+        ]
       }
     }
   }

@@ -29,6 +29,7 @@ export const ErrorCode = {
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
   PRODUCT_ALREADY_EXISTS: "PRODUCT_ALREADY_EXISTS",
+  PRODUCT_QUANTITY_CONFLICT: "PRODUCT_QUANTITY_CONFLICT",
 
   // Recipient errors
   RECIPIENT_NOT_FOUND: "RECIPIENT_NOT_FOUND",
@@ -82,6 +83,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   // Product errors
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
   [ErrorCode.PRODUCT_ALREADY_EXISTS]: "Product with this name already exists",
+  [ErrorCode.PRODUCT_QUANTITY_CONFLICT]:
+    "Stock changed while you were editing; nothing was saved",
 
   // Recipient errors
   [ErrorCode.RECIPIENT_NOT_FOUND]: "Recipient not found",
