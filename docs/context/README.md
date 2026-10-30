@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -73,7 +73,7 @@ market/
 │   └── e2e/                 # browser regression suite (`node frontend/e2e/run.mjs`)
 │                            #   — see frontend/e2e/README.md
 ├── docker-compose*.yml      # dev / application / database / production variants
-├── nginx/ · hetzner/        # reverse proxy + Terraform infra
+├── nginx/                   # reverse proxy
 └── docs/context/            # ← you are here
 ```
 

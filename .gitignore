@@ -119,8 +119,10 @@ scripts/
 *.tfstate
 *.tfstate.backup
 *.tfstate.*.backup
-terraform.tfvars
-*.auto.tfvars
+*.tfvars
+*.tfvars.json
+tfplan
+*.tfplan
 crash.log
 crash.*.log
 override.tf

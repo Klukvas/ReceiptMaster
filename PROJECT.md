@@ -44,7 +44,6 @@
 | | Handlebars | latest |
 | **Object Storage** | Hetzner Object Storage | S3-compatible (AWS SDK v2) |
 | **Infrastructure** | Docker / Docker Compose | 3.8+ |
-| | Terraform (Hetzner Cloud) | ~1.0 |
 | | Nginx | Alpine |
 | | GitHub Actions | CI/CD |
 | **Telegram** | Telegram Bot API | via Axios |
@@ -665,16 +664,6 @@ The backend is designed for horizontal scaling:
 - **Advisory lock** on migrations ensures only one instance runs them
 - **RLS + tenant context** is per-request via `AsyncLocalStorage` (no shared state)
 - Scale with: `docker compose up --scale backend=N`
-
-### Hetzner Cloud (Terraform)
-
-- **Provider**: Hetzner Cloud (`hcloud ~> 1.0`)
-- **Location**: `nbg1` (Nuremberg, Germany)
-- **Network**: Private `10.0.0.0/16`, Subnet `10.0.1.0/24`
-- **App Server**: `cx22` (2 vCPU, 4 GB RAM, 40 GB SSD) -- IP `10.0.1.10`
-- **DB Server**: `cx22` (2 vCPU, 4 GB RAM, 40 GB SSD) -- IP `10.0.1.20`
-- **Firewall (App)**: SSH, HTTP, HTTPS, port 3000 -- open to `0.0.0.0/0`
-- **Firewall (DB)**: SSH open to `0.0.0.0/0`; PostgreSQL open only to `10.0.1.0/24`
 
 ### Docker Compose Files
 
