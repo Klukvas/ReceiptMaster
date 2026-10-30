@@ -643,8 +643,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof Error) {
-      // Unexpected JS errors
-      this.logger.error("Unhandled error:", exception.stack);
+      // Unexpected errors, QueryFailedError included: the message never leaves the server
       return response.status(500).json({
         error: "Internal server error",
         errorCode: "INTERNAL_SERVER_ERROR",
@@ -653,12 +652,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     // Unknown error
     return response.status(500).json({
-      error: "Unknown error",
+      error: "Unknown error occurred",
       errorCode: "UNKNOWN_ERROR",
     });
   }
 }
 ```
+
+Only `ApiErrorResponse` and Nest `HttpException` messages reach the client — they are written for
+it, deliberate 5xx such as `RECEIPT_GENERATION_FAILED` included. Every other error gets the fixed
+body above (before 2026-10-30 its raw message was sent, leaking SQL from database errors). Each
+error is logged once with `error`, `errorCode`, `status`, `detail` (the original message) and
+`stack`, so the cause of a generic 500 lives in the log only.
 
 **Error Response Shape:**
 

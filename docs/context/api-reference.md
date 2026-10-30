@@ -2042,7 +2042,7 @@ All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 }
 ```
 
-`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`.
+`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
 
 Common HTTP status codes:
 
