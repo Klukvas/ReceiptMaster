@@ -828,6 +828,11 @@
     "billingDisabled": "Payments are currently unavailable. Your current plan and usage limits still apply.",
     "planUnavailable": "Not included in your current plan"
   },
+  "appError": {
+    "title": "Something went wrong",
+    "description": "The page could not be displayed. Reload it to try again.",
+    "reload": "Reload page"
+  },
   "errors": {
     "userAlreadyExists": "User with this email already exists",
     "userNotFound": "User not found",

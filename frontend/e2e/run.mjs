@@ -24,6 +24,7 @@ const SPECS = [
   { name: "auth-multitab", load: () => import("./auth-multitab.spec.mjs") },
   { name: "product-form-conflict", load: () => import("./product-form-conflict.spec.mjs") },
   { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
+  { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
   { name: "onboarding", load: () => import("./onboarding.spec.mjs") },
   { name: "locale-parity", load: () => import("./locale-parity.spec.mjs") },
 ];

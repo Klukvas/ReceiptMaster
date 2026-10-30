@@ -13,7 +13,7 @@ Root: `/Users/andreypavlenko/Desktop/Projects/b2c/market`
 frontend/
 ├── e2e/                      # Browser regression suite — see frontend/e2e/README.md
 ├── src/
-│   ├── main.tsx              # App entry point (initializes React 19, loads i18n)
+│   ├── main.tsx              # App entry point (initializes React 19, loads i18n, error boundary)
 │   ├── App.tsx               # Provider setup + routing (React Router 7.8)
 │   ├── pages/                # Page components (lazy-loaded for code splitting)
 │   ├── components/           # Organized by feature (orders/, products/, ui/, etc.)
@@ -21,7 +21,7 @@ frontend/
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
 │   ├── providers/            # Context providers (PaddleProvider for billing)
-│   ├── lib/                  # Utilities (api.ts, api-errors.ts, i18n.ts)
+│   ├── lib/                  # Utilities (api.ts, api-errors.ts, chunk-load.ts, i18n.ts)
 │   └── locales/              # i18next translations (en, ru, uk)
 ├── package.json
 ├── vite.config.ts
@@ -35,6 +35,20 @@ frontend/
 - Renders React app into `#root`
 - Loads i18n (lines 4–5) **before** `<App />`
 - Strict mode on for dev
+- Wraps `<App />` in `AppErrorBoundary`, so nothing that throws while rendering leaves a blank page
+
+### Render failures: `components/common/AppErrorBoundary.tsx`
+
+The only error boundary, around the whole app (`App.tsx` itself has just `Suspense`). A tab left open
+across a deploy asks for a lazy-route chunk that no longer exists, and `React.lazy` rethrows that
+during render. `lib/chunk-load.ts` recognises the failure (`isChunkLoadError` knows the Chromium,
+Firefox, Safari and Vite preload wording). The boundary keeps `PageSpinner` up and reloads once,
+which works because nginx serves `index.html` with `no-cache` and so returns the new chunk names.
+`claimChunkReload` allows one reload per `CHUNK_RELOAD_GUARD_MS` (60 s, in `sessionStorage`), and
+refuses when storage is unavailable, since an unguarded reload could loop. A chunk still failing
+after that, or any other render error, shows `ErrorFallback` (`appError.*`) with a Reload button;
+the detail goes to `console.error` only. The fallback replaces the whole tree, so it has no links
+and a reload is the way out. Errors in event handlers and queries never reach it.
 
 ### App Structure: `App.tsx`
 **Provider stack (top→down):**
@@ -758,7 +772,8 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 
 | File | Purpose |
 |------|---------|
-| `src/main.tsx` | App entry, loads i18n |
+| `src/main.tsx` | App entry, loads i18n, mounts the error boundary |
+| `src/components/common/AppErrorBoundary.tsx` | Chunk-load recovery and render-failure fallback |
 | `src/App.tsx` | Providers, routing, React Query config |
 | `src/lib/api.ts` | Axios instance, request/response interceptors, all API methods |
 | `src/lib/api-errors.ts` | Error parsing, error code enum, friendly messages |
