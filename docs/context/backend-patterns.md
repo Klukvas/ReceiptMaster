@@ -507,11 +507,19 @@ File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but sta
 
 **Related files:**
 - `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`.
-  Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` a QueryBuilder
-  `UPDATE … SET revoked = true WHERE token AND revoked = false AND expires_at > now RETURNING user_id`
-  redeems the token (read the rows from `UpdateResult.raw`; `manager.query` would return the driver's
-  `[rows, count]` tuple), then `createRefreshToken(userId, manager)` inserts the successor in the same
-  transaction. No row → 401 `UNAUTHORIZED`. `refresh_tokens` has no RLS and refresh runs without tenant context
+  Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` it finds the token
+  by hash, locks the owner `FOR NO KEY UPDATE` (serializes one user's rotations and password
+  changes; lock order users → refresh_tokens, shared with `changePassword`), redeems with a conditional QueryBuilder
+  `UPDATE … WHERE id AND revoked = false AND expires_at > now RETURNING id` (read the rows from
+  `UpdateResult.raw`; `manager.query` would return the driver's `[rows, count]` tuple), then
+  `issueRefreshToken(manager, userId, familyId)` inserts the successor in the same transaction. The
+  transaction returns a `RefreshOutcome` (`rotated | rejected | replayed`) and the 401 is thrown after
+  commit, so a replay's family revocation is not rolled back. `refresh_tokens` has no RLS and refresh
+  runs without tenant context
+- `backend/src/modules/users/refresh-tokens.ts` — token hashing (SHA-256), lookup with the
+  plaintext fallback for pre-hashing rows, redemption, family revocation, the 30 s replay grace
+- `backend/src/config/trusted-proxy.ts` — `trustReverseProxy(app)` (`trust proxy` = 1 hop, the
+  frontend nginx), called from `main.ts`; per-IP throttles depend on it
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
 
 ### Middleware (Request Context)
@@ -777,6 +785,20 @@ entity cannot write order lines once the column is gone.
 flags, profit against the pre-change formula, a later price change, restricted-role reads, the
 cross-tenant warning, the row-security refusal, and down → up.
 
+The additive `1792400000000-HashRefreshTokens` migration adds nullable `refresh_tokens.token_hash`
+(unique, `UQ_refresh_tokens_token_hash`), `family_id` (partial index on live rows) and `redeemed_at` (timestamptz, set only by a rotation),
+and drops NOT NULL from `token`. It backfills `token_hash = encode(sha256(convert_to(token,'UTF8')),'hex')`
+and `family_id = id`; `token` was never unique, so all but the newest copy of a duplicated plaintext
+lose both hash and plaintext (and are revoked) before the unique index is built. Rollout is
+expand-only: existing rows keep their plaintext so the previous image — which a failed release rolls
+back to with the migration retained — still redeems them, and its plaintext-only inserts still fit;
+the current code reads plaintext only where `token_hash IS NULL`. Tokens issued by the new image are
+hash-only, so after a rollback those sessions must log in again. Once no plaintext row can be live
+(30 days after release) a later release may drop `token` and the fallback. `down` deletes hash-only
+rows (ending those sessions) to restore NOT NULL. Listed in `KNOWN_MIGRATIONS`/`EXPECTED_MIGRATIONS`.
+`test/refresh-token-hash-migration.e2e-spec.ts` covers backfill, dedup, previous-image writes, the
+current service through a restricted role, down and re-apply.
+
 The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
 
 The additive `1792100000000-DocumentConfiguration` migration adds config/revision/logo columns, tenant assets/presets, one active snapshot and one pending replacement. New tables have FORCE RLS with explicit USING/WITH CHECK and tenant-qualified asset foreign keys. A trigger validates the legacy varchar settings tenant against the asset owner. It deliberately does not retrofit unrelated settings RLS.
@@ -1027,7 +1049,11 @@ async findAll(
    void), `test/orders-audit.e2e-spec.ts`, `test/template-features-sql.e2e-spec.ts`,
    `test/products-concurrency.e2e-spec.ts` (stock precondition writes, lock-parked conflicts,
    product-quota races and rollback), `test/refresh-rotation.e2e-spec.ts` (single-use rotation
-   under concurrency, successor-insert rollback, expiry), `test/order-lifecycle.e2e-spec.ts`
+   under concurrency, hash-only successors, successor-insert rollback, expiry),
+   `test/refresh-token-security.e2e-spec.ts` (inactive users, replay inside/after the grace window
+   and family revocation, plaintext rows of a rolled-back image, logout, a password change racing a
+   rotation parked on an advisory lock), `test/refresh-token-hash-migration.e2e-spec.ts`,
+   `test/order-lifecycle.e2e-spec.ts`
    (confirm/approve/cancel races, cancel voiding documents and links, delayed workers after a
    cancel, rejected follow-ups), `test/order-profit-snapshot.e2e-spec.ts` (cost capture, profit from
    snapshots, unknown vs zero cost, daily gaps, sort order, cache versions),
@@ -1067,7 +1093,7 @@ async findAll(
    because teardown uses `DROP DATABASE … WITH (FORCE)`), then
    `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
    then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
-   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration order-item-cost-backfill idempotent-create`.
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation refresh-token-security refresh-token-hash-migration order-lifecycle order-profit-snapshot order-item-cost-migration order-item-cost-backfill idempotent-create`.
    `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
    no database.
    Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.

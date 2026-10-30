@@ -63,6 +63,8 @@ export class UsersController {
   }
 
   @Post("refresh")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
   @ApiOperation({ summary: "Refresh access token using refresh token" })
   @ApiResponse({
     status: 201,
@@ -71,7 +73,8 @@ export class UsersController {
   })
   @ApiFailureResponses({
     400: "Malformed or missing refresh_token",
-    401: "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+    401: "Unknown, expired or already redeemed refresh token, or inactive user (UNAUTHORIZED); single use. A redeemed token presented again more than 30 s after its redemption also revokes every live token of its rotation family",
+    429: "Too many refresh attempts from this client (20 per minute)",
   })
   async refresh(@Body() body: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.usersService.refreshToken(body.refresh_token);

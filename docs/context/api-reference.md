@@ -81,7 +81,16 @@ lookup, and invalid/expired tokens return 401. Logout uses the same validated re
 A refresh token is **single use**. Redeeming it and storing its successor commit together: of
 concurrent requests with the same token exactly one gets 201 and the others get the same 401
 `UNAUTHORIZED` body as an unknown token; if storing the successor fails, nothing is redeemed and
-the old token still works. An expired token is rejected and left as it is.
+the old token still works. An expired token is rejected and left as it is, and so is the token of
+a deactivated user (`isActive = false`).
+
+**Reuse detection.** Every successor belongs to the rotation family its login started. A redeemed
+token presented again within 30 s of its redemption is treated as a lost race between tabs (or a
+retry) and only gets the 401; presented later, the 401 also revokes every live token of that family
+(the session that kept rotating has to log in again; other logins of the user are unaffected).
+
+Throttled to 20 requests per 60 s per client IP (429). Tokens issued from this release on are
+stored as SHA-256 only; tokens issued earlier keep their stored plaintext until they expire (30 days).
 
 **Request Body:**
 ```typescript
@@ -99,7 +108,8 @@ the old token still works. An expired token is rejected and left as it is.
 
 **Errors:**
 - 400 — Malformed/missing refresh token
-- 401 `UNAUTHORIZED` — Unknown, expired or already redeemed refresh token
+- 401 `UNAUTHORIZED` — Unknown, expired, already redeemed or replayed refresh token, or inactive user
+- 429 — More than 20 refreshes in 60 s from this client IP
 
 ---
 
@@ -107,7 +117,8 @@ the old token still works. An expired token is rejected and left as it is.
 
 **POST** `/auth/logout` (requires auth)
 
-Revokes the refresh token.
+Revokes the refresh token. A logged-out token presented later gets a plain 401; only a token that
+a refresh already redeemed counts as a replay.
 
 **Response** (201):
 ```typescript
@@ -165,7 +176,8 @@ Updates user profile information.
 
 **POST** `/auth/change-password` (requires auth)
 
-Changes authenticated user's password.
+Changes authenticated user's password and, in the same transaction, revokes all of the user's
+refresh tokens — including the successor of a refresh that is committing at the same moment.
 
 **Request Body:**
 ```typescript
@@ -2088,7 +2100,11 @@ To fetch next page: `offset = current_offset + limit`
 
 - Global: 30 requests per 60 seconds per IP
 - Auth endpoints (login/register): 5 requests per 60 seconds per IP
+- `/auth/refresh`: 20 requests per 60 seconds per IP
 - Paddle webhook: 60 requests per 60 seconds (per webhook endpoint)
+
+"IP" is the client address the frontend nginx saw: the API trusts exactly one proxy hop
+(`X-Forwarded-For` entries a client writes itself are ignored).
 
 Returns 429 (Too Many Requests) when limit exceeded.
 

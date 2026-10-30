@@ -1,11 +1,9 @@
 import "reflect-metadata";
-import { randomBytes, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { QueryRunner } from "typeorm";
-import { JwtService } from "@nestjs/jwt";
-import { ConfigService } from "@nestjs/config";
 import { UsersService } from "../src/modules/users/users.service";
 import { User } from "../src/modules/users/entities/user.entity";
-import { RefreshToken } from "../src/modules/users/entities/refresh-token.entity";
+import { hashRefreshToken } from "../src/modules/users/refresh-tokens";
 import {
   AUDIT_CLUSTER,
   describeIsolatedPostgres,
@@ -14,16 +12,16 @@ import {
   RestrictedAppDatabase,
   openRestrictedAppDatabase,
 } from "./helpers/restricted-app-database";
+import {
+  DAY_MS,
+  UNAUTHORIZED,
+  issueToken,
+  liveTokenHashes,
+  tokenRow,
+  tokensOf,
+  usersServiceOn,
+} from "./helpers/refresh-token-fixtures";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const UNAUTHORIZED = {
-  statusCode: 401,
-  error: "Unauthorized access",
-  errorCode: "UNAUTHORIZED",
-};
-
-// Refresh runs before authentication, so it has no tenant context; the service is
-// still wired to the restricted role through the production query-context wrapper.
 describeIsolatedPostgres(
   "refresh-token rotation on PostgreSQL",
   AUDIT_CLUSTER,
@@ -34,12 +32,7 @@ describeIsolatedPostgres(
 
     beforeAll(async () => {
       db = await openRestrictedAppDatabase(connection, "audit_refresh");
-      users = new UsersService(
-        db.app.getRepository(User),
-        db.app.getRepository(RefreshToken),
-        new JwtService({ secret: randomBytes(32).toString("hex") }),
-        {} as ConfigService,
-      );
+      users = usersServiceOn(db);
     }, 30000);
 
     afterAll(async () => {
@@ -53,32 +46,13 @@ describeIsolatedPostgres(
       });
     });
 
-    const issue = async (expiresInMs = DAY_MS): Promise<string> => {
-      const token = randomBytes(64).toString("hex");
-      await db.admin.getRepository(RefreshToken).insert({
-        token,
-        user_id: user.id,
-        expires_at: new Date(Date.now() + expiresInMs),
-      });
-      return token;
-    };
-
-    const tokensOf = () =>
-      db.admin
-        .getRepository(RefreshToken)
-        .find({ where: { user_id: user.id }, order: { created_at: "ASC" } });
-
-    const activeTokens = async () =>
-      (await tokensOf()).filter(
-        (row) => !row.revoked && row.expires_at > new Date(),
-      );
-
+    const issue = (expiresInMs = DAY_MS) =>
+      issueToken(db, user.id, { expiresInMs });
+    const activeTokens = () => liveTokenHashes(db, user.id);
+    const storedHashes = async () =>
+      (await tokensOf(db, user.id)).map((row) => row.token_hash);
     const revoked = async (token: string) =>
-      (
-        await db.admin
-          .getRepository(RefreshToken)
-          .findOneByOrFail({ token, user_id: user.id })
-      ).revoked;
+      (await tokenRow(db, token)).revoked;
 
     it("rotates into the unchanged response format and stays single-use", async () => {
       const original = await issue();
@@ -93,12 +67,32 @@ describeIsolatedPostgres(
       expect(response.user).toEqual({ id: user.id, email: user.email });
       expect(response.refresh_token).toMatch(/^[a-f0-9]{128}$/);
       expect(await revoked(original)).toBe(true);
-      expect((await activeTokens()).map((row) => row.token)).toEqual([
-        response.refresh_token,
+      expect(await activeTokens()).toEqual([
+        hashRefreshToken(response.refresh_token),
       ]);
       await expect(users.refreshToken(original)).rejects.toMatchObject(
         UNAUTHORIZED,
       );
+    });
+
+    it("stores the successor as a hash only, in the redeemed token's family", async () => {
+      const original = await issue();
+
+      const { refresh_token } = await users.refreshToken(original);
+
+      const [redeemed, successor] = await Promise.all([
+        tokenRow(db, original),
+        tokenRow(db, refresh_token),
+      ]);
+      expect(successor.token).toBeNull();
+      expect(successor.token_hash).toBe(hashRefreshToken(refresh_token));
+      expect(successor.family_id).toBe(redeemed.family_id);
+      expect(redeemed.redeemed_at).toBeInstanceOf(Date);
+      const plaintextHits = await db.admin.query(
+        "SELECT COUNT(*)::int AS n FROM refresh_tokens WHERE token = $1 OR token = $2",
+        [original, refresh_token],
+      );
+      expect(plaintextHits[0].n).toBe(0);
     });
 
     it("one old token never produces two successful successors", async () => {
@@ -110,8 +104,8 @@ describeIsolatedPostgres(
       let results: PromiseSettledResult<{ refresh_token: string }>[];
       try {
         await blocker.query(
-          "SELECT id FROM refresh_tokens WHERE token = $1 FOR UPDATE",
-          [original],
+          "SELECT id FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE",
+          [hashRefreshToken(original)],
         );
         const pending = Promise.allSettled([
           users.refreshToken(original),
@@ -136,8 +130,8 @@ describeIsolatedPostgres(
       expect(rejected).toHaveLength(1);
       expect(rejected[0].reason).toMatchObject(UNAUTHORIZED);
       expect(await revoked(original)).toBe(true);
-      expect((await activeTokens()).map((row) => row.token)).toEqual([
-        fulfilled[0].value.refresh_token,
+      expect(await activeTokens()).toEqual([
+        hashRefreshToken(fulfilled[0].value.refresh_token),
       ]);
     });
 
@@ -165,12 +159,12 @@ describeIsolatedPostgres(
           /forced successor insert failure/,
         );
         expect(await revoked(original)).toBe(false);
-        expect((await tokensOf()).map((row) => row.token)).toEqual([original]);
+        expect(await storedHashes()).toEqual([hashRefreshToken(original)]);
 
         const retried = await users.refreshToken(original);
         expect(await revoked(original)).toBe(true);
-        expect((await activeTokens()).map((row) => row.token)).toEqual([
-          retried.refresh_token,
+        expect(await activeTokens()).toEqual([
+          hashRefreshToken(retried.refresh_token),
         ]);
       } finally {
         await db.admin.query(`DROP TRIGGER "${name}" ON refresh_tokens`);
@@ -186,7 +180,7 @@ describeIsolatedPostgres(
         UNAUTHORIZED,
       );
       expect(await revoked(expired)).toBe(false);
-      expect((await tokensOf()).map((row) => row.token)).toEqual([expired]);
+      expect(await storedHashes()).toEqual([hashRefreshToken(expired)]);
     });
   },
 );

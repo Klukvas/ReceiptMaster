@@ -428,14 +428,39 @@ File: `backend/src/modules/users/users.service.ts::refreshToken()`
 Refresh/logout bodies use a real `RefreshTokenDto`: `refresh_token` must be a string of
 exactly 128 lowercase hexadecimal characters (the format produced by `randomBytes(64)`).
 The service independently rejects malformed input before any token repository lookup/update.
-Refresh is single-use and atomic: in one transaction a conditional
-`UPDATE refresh_tokens SET revoked = true WHERE token = $1 AND revoked = false AND expires_at > now
-RETURNING user_id` redeems the token, then the successor is inserted with the same transaction
-manager. Concurrent refreshes with one token serialize on that row: the first commits, the rest
-re-check, match nothing and get 401 `UNAUTHORIZED`. A failed successor insert rolls the redemption
-back, so the token still works; expired tokens are rejected and stay unrevoked. It does not decode
-refresh tokens as JWTs. Known gaps (separate task): tokens are stored in plaintext, refresh does not
-check `isActive`, there is no reuse detection and no `/auth/refresh` throttle.
+It does not decode refresh tokens as JWTs.
+
+Storage (`refresh_tokens`, helpers in `users/refresh-tokens.ts`): only `token_hash` (hex SHA-256 of
+the 512-bit token, unique) is written; `token` holds plaintext only on rows from before migration
+`1792400000000-HashRefreshTokens` (or written by a rolled-back image), and lookups fall back to it
+only where `token_hash IS NULL`. Those rows expire within 30 days. Each login/register starts a
+`family_id`; successors inherit it. `redeemed_at` (timestamptz) is set only when a rotation redeems
+a token — never by logout, a password change or a family revocation.
+
+Rotation, in one transaction:
+1. Find the presented token (no lock); unknown → 401.
+2. Lock its owner `FOR NO KEY UPDATE`; missing or `isActive = false` → 401, the token stays
+   unredeemed. This serializes every rotation and password change of one user (FK checks of inserts
+   that reference the user take `FOR KEY SHARE` and are not blocked), so a family or password
+   revocation never misses a successor that a concurrent rotation is still committing.
+3. Conditional `UPDATE … SET revoked = true, redeemed_at = now WHERE id AND revoked = false AND
+   expires_at > now RETURNING id`; on a match insert the successor (same family) and return it.
+   Concurrent refreshes with one token serialize on the user lock: the first commits, the rest
+   re-check and match nothing. A failed successor insert rolls the redemption back, so the token
+   still works.
+4. No match: re-read the token. Not redeemed (expired, logged out, revoked by a password change or a
+   family revocation, or revoked before `redeemed_at` existed) → plain 401, untouched. Redeemed within
+   `REPLAY_GRACE_MS` (30 s) → plain 401 — the losing tab of a multi-tab race adopts the winner's
+   session (`frontend/src/lib/auth-session.ts`). Redeemed earlier → a replay: every live token of the
+   family is revoked and a warning is logged (count, user and family ids, never the token). The
+   transaction returns an outcome and the 401 is thrown only after it commits, so the family
+   revocation persists.
+
+Password change: `UPDATE users` and revoking every live token run in one transaction, users row
+first. A rotation in flight holds that row `FOR NO KEY UPDATE`, so the password change waits for it
+and its revocation (a later statement) sees and revokes the successor; a rotation that starts later
+finds its token revoked. Logout revokes by hash (plaintext for pre-hashing rows) and leaves
+`redeemed_at` alone.
 
 **JWT Strategy:**
 
@@ -453,11 +478,17 @@ File: `backend/src/app.module.ts`
 ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])  // 30 reqs per 60s globally
 ```
 
-Controller-level override:
+Controller-level override (`ThrottlerGuard` is applied per route, not globally):
 
 ```typescript
-@Throttle({ default: { ttl: 60000, limit: 5 } })  // 5 login attempts per 60s
+@Throttle({ default: { ttl: 60000, limit: 5 } })  // login/register: 5 attempts per 60s
+@Throttle({ default: { ttl: 60000, limit: 20 } }) // /auth/refresh: 20 per 60s
 ```
+
+Limits are per `req.ip`. `main.ts` calls `trustReverseProxy(app)` (`config/trusted-proxy.ts`,
+`trust proxy` = 1 hop): production traffic reaches the API only through the frontend nginx, so
+`req.ip` is the address nginx appended to `X-Forwarded-For`. Without it every client shared one
+bucket (nginx's address).
 
 ---
 

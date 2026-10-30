@@ -3970,7 +3970,17 @@
             }
           },
           "401": {
-            "description": "Unknown, expired or already redeemed refresh token (UNAUTHORIZED); single use",
+            "description": "Unknown, expired or already redeemed refresh token, or inactive user (UNAUTHORIZED); single use. A redeemed token presented again more than 30 s after its redemption also revokes every live token of its rotation family",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many refresh attempts from this client (20 per minute)",
             "content": {
               "application/json": {
                 "schema": {
