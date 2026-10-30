@@ -250,6 +250,64 @@ describeIsolatedPostgres(
         ]);
       });
 
+      it("a draft edit after the backfill rewrites lines unflagged: an estimate is carried, a changed line recaptures", async () => {
+        const beans = await seedProduct(100, 500, "beans");
+        const cups = await seedProduct(40, 90, "cups");
+        const order = await draft([
+          { product: beans, qty: 2 },
+          { product: cups, qty: 3 },
+        ]);
+        await db.admin.query(
+          "UPDATE order_items SET unit_cost_estimated = true WHERE order_id = $1",
+          [order.id],
+        );
+        for (const product of [beans, cups])
+          await db.admin
+            .getRepository(Product)
+            .update(
+              { id: product.id },
+              { purchase_price_cents: product.purchase_price_cents + 1000 },
+            );
+
+        const edited = await asTenant(() =>
+          orders.update(
+            order.id,
+            {
+              items: [
+                { productId: beans.id, qty: 2 },
+                { productId: cups.id, qty: 4 },
+              ],
+            },
+            user,
+          ),
+        );
+
+        // beans keeps the estimate, now unflagged: this is why `down` leaves it in place.
+        expect(
+          await db.admin.query(
+            `SELECT product_name, unit_cost_cents, unit_cost_estimated
+             FROM order_items WHERE order_id = $1 ORDER BY product_name`,
+            [order.id],
+          ),
+        ).toEqual([
+          {
+            product_name: "beans",
+            unit_cost_cents: 100,
+            unit_cost_estimated: false,
+          },
+          {
+            product_name: "cups",
+            unit_cost_cents: 1040,
+            unit_cost_estimated: false,
+          },
+        ]);
+        expect(JSON.stringify(edited)).not.toContain("unit_cost_estimated");
+        expect(JSON.stringify(order)).not.toContain("unit_cost_estimated");
+        expect(
+          JSON.stringify(await asTenant(() => orders.findOne(order.id, user))),
+        ).not.toContain("unit_cost_estimated");
+      });
+
       it("Telegram orders freeze the cost and drop the owner's dashboard cache", async () => {
         const beans = await seedProduct(120, 500, "beans");
         const saved = { ...process.env };

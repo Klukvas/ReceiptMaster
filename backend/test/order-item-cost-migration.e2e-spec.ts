@@ -47,9 +47,10 @@ describeIsolatedPostgres(
     let app: DataSource;
     let policiesBefore: unknown[];
 
-    const migrationFiles = readdirSync(MIGRATIONS_DIR).filter((file) =>
-      file.endsWith(".ts"),
-    );
+    // Pinned to this migration; later ones (the backfill) have their own suites.
+    const migrationFiles = readdirSync(MIGRATIONS_DIR)
+      .filter((file) => file.endsWith(".ts") && file <= NEW_MIGRATION_FILE)
+      .sort();
 
     const ownerSource = (files: string[]) =>
       new DataSource({
@@ -209,18 +210,13 @@ describeIsolatedPostgres(
       await migrateToLatest();
       const lineId = randomUUID();
 
+      // Raw insert: the entity also maps the backfill's later column, absent here.
       await runWithTenant(tenant, () =>
-        app.getRepository(OrderItem).insert({
-          id: lineId,
-          order_id: orderId,
-          product_id: productId,
-          product_name: "Legacy beans",
-          unit_price_cents: 500,
-          unit_cost_cents: 120,
-          qty: 1,
-          line_total_cents: 500,
-          user_id: tenant,
-        }),
+        app.query(
+          `INSERT INTO order_items (id, order_id, product_id, product_name, unit_price_cents, unit_cost_cents, qty, line_total_cents, user_id)
+           VALUES ($1, $2, $3, 'Legacy beans', 500, 120, 1, 500, $4)`,
+          [lineId, orderId, productId, tenant],
+        ),
       );
 
       expect(

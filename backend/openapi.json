@@ -4807,7 +4807,7 @@
           "unit_cost_cents": {
             "type": "number",
             "nullable": true,
-            "description": "Purchase cost per unit captured when the draft line was written; null when unknown (lines created before cost snapshots)"
+            "description": "Purchase cost per unit frozen on the line: captured when the draft line was written, or the product's cost at backfill time for lines that predate cost snapshots; null when no valid cost could be assigned"
           }
         },
         "required": [

@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -621,8 +621,10 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 ```
 
 `OrderItem` carries `unit_cost_cents: number | null` — the product's purchase cost frozen when the
-draft line was written (null = unknown, e.g. lines created before cost snapshots). It appears only in
-the owner's order/receipt JSON; frozen documents, PDFs and the public share page never include it.
+draft line was written. Lines created before cost snapshots hold an estimate: the product's cost when
+they were backfilled. Null = unknown, which now remains only for a negative product cost or a line
+whose product belongs to another tenant. It appears only in the owner's order/receipt JSON; frozen documents, PDFs and the public share page never include
+it. The internal `unit_cost_estimated` flag is never returned.
 
 **Special Response Header:**
 - `X-Idempotency-Replayed: true` — Returned from cache (original response status is reused)
@@ -818,8 +820,11 @@ File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (7 
 
 "Revenue" in these routes is **profit**: Σ (unit price − `order_items.unit_cost_cents`) × qty over
 confirmed, non-deleted orders. It never reads the product's current purchase price, so changing a
-product's cost does not rewrite history. Lines whose cost is unknown (NULL) are left out of the sum
-and reported instead — an unknown cost is never counted as zero. Every profit payload carries:
+product's cost does not rewrite history. Lines from before cost snapshots count with their backfilled
+estimate, so they are included and not reported as unknown. Lines whose cost is unknown (NULL, now only
+a negative product cost or a line whose product belongs to another tenant) are left out of the sum and
+reported instead — an unknown cost is never
+counted as zero. Every profit payload carries:
 
 ```typescript
 type ProfitCompleteness = {
