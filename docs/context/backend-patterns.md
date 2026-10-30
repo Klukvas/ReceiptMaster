@@ -29,6 +29,7 @@ backend/src/modules/orders/
 ├── orders.module.ts        # DI container — imports entities, registers service/controller
 ├── orders.controller.ts    # HTTP routes — parse input, call service, return response
 ├── orders.service.ts       # Business logic — validates, queries DB, fires events
+├── orders-dashboard.service.ts  # Read-only cached dashboard aggregates (raw SQL)
 ├── idempotency-cleanup.service.ts  # Supporting service — called by scheduler
 ├── dto/                    # Request/Response DTOs — validate input shape, document API
 │   ├── create-order.dto.ts
@@ -50,7 +51,7 @@ backend/src/modules/orders/
     SubscriptionModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, IdempotencyCleanupService],
+  providers: [OrdersService, OrdersDashboardService, IdempotencyCleanupService],
   exports: [OrdersService],  // Let other modules inject OrdersService
 })
 export class OrdersModule {}
@@ -257,16 +258,18 @@ export class OrdersService {
     };
   }
 
-  // Cache expensive operations
-  private dashboardCacheKey(method: string, userId: string, ...args: unknown[]): string {
-    return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
-  }
-
+  // Every order write drops the tenant's cached dashboard entries (all key versions)
   private async invalidateDashboardCache(userId: string): Promise<void> {
-    await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+    await this.cacheService.delByPattern(dashboardCachePattern(userId));
   }
 }
 ```
+
+Dashboard reads are a separate provider: `orders-dashboard.service.ts` (`OrdersDashboardService`,
+injected with only `DataSource` + `CacheService`) holds the eight cached `get*` aggregates the
+`/orders/dashboard/*` routes call, each wrapped in its private `cachedDashboard(key, fn)` with keys
+from `dashboard-cache.ts` and profit SQL from `dashboard-profit.ts`. It never writes; invalidation
+stays with the writers (`OrdersService` above, and `TelegramService` for bot-created orders).
 
 **Conventions:**
 - Inject repositories via `@InjectRepository(Entity)` and the `DataSource` for transactions
@@ -279,7 +282,7 @@ export class OrdersService {
 - Soft deletion must be explicit in raw SQL aggregates (`o.deleted_at IS NULL`), since ORM defaults do not apply to raw queries
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
-- Cache expensive queries, invalidate on write
+- Cache expensive queries, invalidate on write (read side in `OrdersDashboardService`, invalidation in the writing service)
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
 - Never `save()` a whole entity loaded without a lock: write only the changed columns with a
   conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a

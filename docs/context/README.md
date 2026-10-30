@@ -74,7 +74,7 @@ market/
 │   └── e2e/                 # browser regression suite (`node frontend/e2e/run.mjs`)
 │                            #   — see frontend/e2e/README.md
 ├── docker-compose*.yml      # dev / application / database / production variants
-├── nginx/ · hetzner/        # reverse proxy + Terraform infra
+├── nginx/                   # reverse proxy
 └── docs/context/            # ← you are here
 ```
 
