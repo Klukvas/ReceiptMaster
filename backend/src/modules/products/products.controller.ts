@@ -54,6 +54,7 @@ export class ProductsController {
   @ApiFailureResponses({
     400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
     402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+    409: "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
   })
   @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   async create(
@@ -147,7 +148,7 @@ export class ProductsController {
   @ApiFailureResponses({
     400: "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
     404: "Товар не найден (PRODUCT_NOT_FOUND)",
-    409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT)",
+    409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT), or another live product already has the new name (PRODUCT_ALREADY_EXISTS)",
   })
   update(
     @Param("id") id: string,

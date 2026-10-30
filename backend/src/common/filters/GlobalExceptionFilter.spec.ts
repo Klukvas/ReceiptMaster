@@ -1,6 +1,7 @@
-import { HttpException, HttpStatus } from "@nestjs/common";
+import { HttpException, HttpStatus, Logger } from "@nestjs/common";
+import { QueryFailedError } from "typeorm";
 import { GlobalExceptionFilter } from "./GlobalExceptionFilter";
-import { ApiErrorResponse } from "../errors/ApiError";
+import { ApiErrorResponse, ApiErrors } from "../errors/ApiError";
 
 describe("GlobalExceptionFilter", () => {
   let filter: GlobalExceptionFilter;
@@ -85,7 +86,7 @@ describe("GlobalExceptionFilter", () => {
     });
   });
 
-  it("should handle regular Error", () => {
+  it("should answer a regular Error with a generic message", () => {
     const exception = new Error("Something broke");
 
     filter.catch(exception, mockHost);
@@ -94,8 +95,56 @@ describe("GlobalExceptionFilter", () => {
       HttpStatus.INTERNAL_SERVER_ERROR,
     );
     expect(mockResponse.json).toHaveBeenCalledWith({
-      error: "Something broke",
+      error: "Internal server error",
       errorCode: "INTERNAL_SERVER_ERROR",
+    });
+  });
+
+  it("keeps database error text out of the response but in the log", () => {
+    const logError = jest
+      .spyOn(Logger.prototype, "error")
+      .mockImplementation(() => undefined);
+    const exception = new QueryFailedError(
+      'INSERT INTO "products"("name") VALUES ($1)',
+      ["Widget"],
+      new Error(
+        'null value in column "name" of relation "products" violates not-null constraint',
+      ),
+    );
+
+    try {
+      filter.catch(exception, mockHost);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        error: "Internal server error",
+        errorCode: "INTERNAL_SERVER_ERROR",
+      });
+      expect(logError).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          detail: expect.stringContaining('relation "products"'),
+          stack: expect.any(String),
+        }),
+      );
+    } finally {
+      // No restoreMocks in the jest config: a failed assertion must not leave
+      // the logger silenced for the rest of the file.
+      logError.mockRestore();
+    }
+  });
+
+  it("passes the message of a deliberate 500 ApiErrorResponse through", () => {
+    filter.catch(ApiErrors.RECEIPT_GENERATION_FAILED("order-1"), mockHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      error: "Failed to generate receipt for order order-1",
+      errorCode: "RECEIPT_GENERATION_FAILED",
     });
   });
 
