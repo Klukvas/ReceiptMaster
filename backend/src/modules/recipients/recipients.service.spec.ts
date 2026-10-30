@@ -5,6 +5,7 @@ import { Recipient } from "./entities/recipient.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
+import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 
 describe("RecipientsService", () => {
   let service: RecipientsService;
@@ -190,6 +191,39 @@ describe("RecipientsService", () => {
         service.update("unknown", { name: "Test" } as any, mockUser),
       ).rejects.toThrow(ApiErrorResponse);
     });
+
+    it("rejects a null name with 400 before touching the database", async () => {
+      await expect(
+        service.update(
+          "rec-1",
+          { name: null } as unknown as UpdateRecipientDto,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: "VALIDATION_ERROR",
+        error: "Validation error for name: name cannot be null",
+      });
+      expect(recipientsRepo.findOne).not.toHaveBeenCalled();
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it.each(["email", "phone", "address"])(
+      "still clears %s with null",
+      async (field) => {
+        recipientsRepo.findOne.mockResolvedValue({ ...mockRecipient });
+
+        await service.update(
+          "rec-1",
+          { [field]: null } as UpdateRecipientDto,
+          mockUser,
+        );
+
+        expect(recipientsRepo.save).toHaveBeenCalledWith(
+          expect.objectContaining({ [field]: null, name: "John Doe" }),
+        );
+      },
+    );
   });
 
   describe("remove", () => {

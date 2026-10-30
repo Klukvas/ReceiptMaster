@@ -14,6 +14,8 @@ import {
   IdempotentCreateResult,
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
+import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
+import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
 
 const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "product.name",
@@ -42,16 +44,28 @@ function assertStockPrecondition(
 /** Every column except supplier_id is NOT NULL, so only it may be cleared. */
 const CLEARABLE_FIELDS: ReadonlySet<string> = new Set(["supplier_id"]);
 
-/** `@IsOptional` lets null through the DTO; reject it here instead of a 500. */
-function assertNoNullForRequiredFields(fields: ProductChanges): void {
-  const cleared = Object.entries(fields).find(
-    ([key, value]) => value === null && !CLEARABLE_FIELDS.has(key),
-  );
-  if (cleared) {
-    throw ApiErrors.VALIDATION_ERROR(
-      cleared[0],
-      `${cleared[0]} cannot be null`,
-    );
+/** Partial unique index on (user_id, name) WHERE deleted_at IS NULL. */
+const PRODUCT_NAME_UNIQUE_INDEX = "IDX_products_user_name";
+
+/**
+ * The index is the only duplicate-name check, so it also settles racing
+ * creates and renames; its violation becomes the documented 409. A write
+ * without a name cannot hit the index, so its errors pass through untouched.
+ */
+async function rejectingDuplicateName<T>(
+  name: string | undefined,
+  write: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (
+      name !== undefined &&
+      isUniqueViolationOf(error, PRODUCT_NAME_UNIQUE_INDEX)
+    ) {
+      throw ApiErrors.PRODUCT_ALREADY_EXISTS(name);
+    }
+    throw error;
   }
 }
 
@@ -79,8 +93,10 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
-    return this.productsRepository.manager.transaction((manager) =>
-      this.insertWithinQuota(manager, createProductDto, user),
+    return rejectingDuplicateName(createProductDto.name, () =>
+      this.productsRepository.manager.transaction((manager) =>
+        this.insertWithinQuota(manager, createProductDto, user),
+      ),
     );
   }
 
@@ -94,11 +110,13 @@ export class ProductsService {
     user: User,
     idempotencyKey: string,
   ): Promise<IdempotentCreateResult<Product>> {
-    return this.productsRepository.manager.transaction((manager) =>
-      createIdempotently(
-        manager,
-        { scope: "product", key: idempotencyKey, userId: user.id },
-        () => this.insertWithinQuota(manager, createProductDto, user),
+    return rejectingDuplicateName(createProductDto.name, () =>
+      this.productsRepository.manager.transaction((manager) =>
+        createIdempotently(
+          manager,
+          { scope: "product", key: idempotencyKey, userId: user.id },
+          () => this.insertWithinQuota(manager, createProductDto, user),
+        ),
       ),
     );
   }
@@ -172,7 +190,7 @@ export class ProductsService {
     user: User,
   ): Promise<Product> {
     const { expectedQuantity, ...fields } = updateProductDto;
-    assertNoNullForRequiredFields(fields);
+    assertNoNullForRequiredFields(fields, CLEARABLE_FIELDS);
     assertStockPrecondition(fields.quantity, expectedQuantity);
     const changes = presentFields(fields);
     if (Object.keys(changes).length === 0) return this.findOne(id, user);
@@ -187,7 +205,9 @@ export class ProductsService {
     if (expectedQuantity !== undefined) {
       query.andWhere("quantity = :expectedQuantity", { expectedQuantity });
     }
-    const { affected } = await query.execute();
+    const { affected } = await rejectingDuplicateName(fields.name, () =>
+      query.execute(),
+    );
     if (!affected) {
       // A missing or soft-deleted row is a 404; an existing one lost the race.
       await this.findOne(id, user);

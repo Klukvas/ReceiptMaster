@@ -142,6 +142,51 @@ describe("Recipients (e2e)", () => {
 
       expect(res.body.name).toBe("Jane Doe");
     });
+
+    it("rejects a null name with 400 VALIDATION_ERROR and keeps the name", async () => {
+      const created = await request(server)
+        .post("/api/v1/recipients")
+        .set(authHeader(token))
+        .send(validRecipient)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/recipients/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ name: null })
+        .expect(400);
+
+      expect(res.body).toEqual({
+        error: "Validation error for name: name cannot be null",
+        errorCode: "VALIDATION_ERROR",
+      });
+      const current = await request(server)
+        .get(`/api/v1/recipients/${created.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+      expect(current.body.name).toBe(validRecipient.name);
+    });
+
+    it("still clears email, phone and address with null", async () => {
+      const created = await request(server)
+        .post("/api/v1/recipients")
+        .set(authHeader(token))
+        .send(validRecipient)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/recipients/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ email: null, phone: null, address: null })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        name: validRecipient.name,
+        email: null,
+        phone: null,
+        address: null,
+      });
+    });
   });
 
   describe("DELETE /api/v1/recipients/:id", () => {

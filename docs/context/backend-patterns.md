@@ -843,9 +843,41 @@ async generate(orderId: string, user: User): Promise<Receipt> {
 }
 ```
 
+### Map Known Constraint Violations in the Service
+
+When a database constraint is the rule (no racy pre-check), catch its violation where the write
+happens and throw the domain error; let everything else through. Match the constraint by name —
+for a unique *index* Postgres reports the index name:
+
+```typescript
+// Simplified: products.service.ts wraps this in rejectingDuplicateName(name, write),
+// used by create, createWithIdempotencyKey and the rename path of update.
+// IDX_products_user_name is the partial (user_id, name) index.
+try {
+  return await this.productsRepository.manager.transaction(/* insert */);
+} catch (error) {
+  if (isUniqueViolationOf(error, "IDX_products_user_name")) {
+    throw ApiErrors.PRODUCT_ALREADY_EXISTS(dto.name); // 409
+  }
+  throw error; // anything else → generic 500
+}
+```
+
+`isUniqueViolationOf` lives in `common/utils/unique-violation.util.ts` (SQLSTATE 23505 + constraint
+name). Catch outside `manager.transaction(...)`: the transaction has already rolled back.
+
+### Refuse null for NOT NULL Fields in PATCH Bodies
+
+`PartialType` adds `@IsOptional`, which lets `null` through class-validator. Services whose update
+DTO allows clearing some columns call `assertNoNullForRequiredFields(fields, clearableFields)`
+(`common/utils/null-fields.util.ts`) before touching the database: `null` for any other field is a
+400 `VALIDATION_ERROR` instead of a NOT NULL violation (products: only `supplier_id` is clearable;
+recipients: `email`, `phone`, `address`).
+
 ### Global Filter Handles the Rest
 
-Any unhandled error bubbles up and the `GlobalExceptionFilter` catches it, logging it and returning a 500.
+Any unhandled error bubbles up and the `GlobalExceptionFilter` catches it, logging its message and
+stack and returning a generic 500 (`Internal server error` / `INTERNAL_SERVER_ERROR`).
 
 ---
 

@@ -104,6 +104,89 @@ describe("Products (e2e)", () => {
     });
   });
 
+  describe("duplicate live names (IDX_products_user_name)", () => {
+    const create = (body = validProduct) =>
+      request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(body);
+    const listNames = async () =>
+      (
+        await request(server)
+          .get("/api/v1/products")
+          .set(authHeader(token))
+          .expect(200)
+      ).body.data.map((row: { name: string }) => row.name);
+
+    it("a second create with the same name is 409 PRODUCT_ALREADY_EXISTS", async () => {
+      await create().expect(201);
+
+      const res = await create().expect(409);
+
+      expect(res.body).toEqual({
+        error: `Product with name ${validProduct.name} already exists`,
+        errorCode: "PRODUCT_ALREADY_EXISTS",
+      });
+      expect(await listNames()).toEqual([validProduct.name]);
+    });
+
+    it("an Idempotency-Key create with a taken name is 409 and stores nothing to replay", async () => {
+      await create().expect(201);
+      const post = () =>
+        request(server)
+          .post("/api/v1/products")
+          .set(authHeader(token))
+          .set("Idempotency-Key", "duplicate-name-key")
+          .send(validProduct);
+
+      const first = await post().expect(409);
+      const retry = await post().expect(409);
+
+      expect(first.body.errorCode).toBe("PRODUCT_ALREADY_EXISTS");
+      expect(retry.headers["x-idempotency-replayed"]).toBeUndefined();
+      expect(await listNames()).toEqual([validProduct.name]);
+    });
+
+    it("a soft-deleted product's name can be used again", async () => {
+      const original = await create().expect(201);
+      await request(server)
+        .delete(`/api/v1/products/${original.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+
+      await create().expect(201);
+    });
+
+    it("renaming onto another live product's name is 409 and changes nothing", async () => {
+      await create().expect(201);
+      const other = await create({ ...validProduct, name: "Other" }).expect(
+        201,
+      );
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${other.body.id}`)
+        .set(authHeader(token))
+        .send({ name: validProduct.name })
+        .expect(409);
+
+      expect(res.body.errorCode).toBe("PRODUCT_ALREADY_EXISTS");
+      expect((await listNames()).sort()).toEqual(
+        ["Other", validProduct.name].sort(),
+      );
+    });
+
+    it("the same name in another tenant is allowed", async () => {
+      await create().expect(201);
+      const other = await registerUser(server, "other@test.com", "password123");
+
+      await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(other.access_token))
+        .send(validProduct)
+        .expect(201);
+    });
+  });
+
   describe("GET /api/v1/products", () => {
     it("should return paginated products", async () => {
       // Create 3 products
