@@ -22,6 +22,7 @@ import {
   ApiBearerAuth,
 } from "@nestjs/swagger";
 import { OrdersService, IdempotencyResponse } from "./orders.service";
+import { OrdersDashboardService } from "./orders-dashboard.service";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { PaginatedOrderResponse } from "../../common/dto/paginated-response.dto";
 import { CreateOrderDto } from "./dto/create-order.dto";
@@ -49,7 +50,10 @@ import { User } from "../users/entities/user.entity";
 @Controller("orders")
 @UseGuards(JwtAuthGuard)
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly dashboardService: OrdersDashboardService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Create order" })
@@ -230,7 +234,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query("days") days?: string,
   ) {
-    return this.ordersService.getDailyRevenue(
+    return this.dashboardService.getDailyRevenue(
       req.user,
       days ? parseInt(days) : 7,
     );
@@ -246,7 +250,7 @@ export class OrdersController {
     type: OrderStatusSummaryDto,
   })
   getOrderStatusSummary(@Request() req: { user: User }) {
-    return this.ordersService.getOrderStatusSummary(req.user);
+    return this.dashboardService.getOrderStatusSummary(req.user);
   }
 
   @Get("dashboard/revenue-by-products")
@@ -260,7 +264,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getRevenueByProducts(
+    return this.dashboardService.getRevenueByProducts(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
@@ -278,7 +282,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getRevenueByRecipients(
+    return this.dashboardService.getRevenueByRecipients(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
@@ -296,7 +300,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getTotalRevenue(
+    return this.dashboardService.getTotalRevenue(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
@@ -314,7 +318,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getTurnoverByProducts(
+    return this.dashboardService.getTurnoverByProducts(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
@@ -332,7 +336,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getTurnoverByRecipients(
+    return this.dashboardService.getTurnoverByRecipients(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
@@ -350,7 +354,7 @@ export class OrdersController {
     @Request() req: { user: User },
     @Query() dateRange: DateRangeDto,
   ) {
-    return this.ordersService.getTotalTurnover(
+    return this.dashboardService.getTotalTurnover(
       req.user,
       dateRange.startDateParsed,
       dateRange.endDateParsed,
