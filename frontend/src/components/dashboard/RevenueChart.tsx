@@ -25,6 +25,8 @@ interface RevenueChartProps {
   isLoading?: boolean;
   color?: string;
   emptyMessage?: string;
+  /** Replaces the plot when every row is unknown and no bar could be drawn. */
+  unknownMessage?: string;
 }
 
 const CustomTooltip = ({
@@ -60,17 +62,22 @@ export const RevenueChart = ({
   isLoading,
   color = "#4F46E5",
   emptyMessage = "No data",
+  unknownMessage = "Cost unknown",
 }: RevenueChartProps) => {
   if (isLoading) return <SkeletonChart height="h-72" />;
 
   const chartHeight = Math.max(250, data.length * 40);
+  const hasBars = data.some((item) => item.value !== null);
 
   return (
     <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
       <h3 className="text-sm font-semibold text-content mb-5">{title}</h3>
-      {data.length === 0 ? (
-        <div className="flex items-center justify-center h-[250px] text-sm text-content-tertiary">
-          {emptyMessage}
+      {!hasBars ? (
+        <div
+          className="flex items-center justify-center h-[250px] px-6 text-center text-sm text-content-tertiary"
+          data-testid="chart-message"
+        >
+          {data.length === 0 ? emptyMessage : unknownMessage}
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
@@ -101,7 +108,9 @@ export const RevenueChart = ({
               tickLine={false}
               width={90}
             />
+            {/* filterNull would drop an unknown row and with it the tooltip. */}
             <Tooltip
+              filterNull={false}
               content={<CustomTooltip />}
               cursor={{ fill: "currentColor", opacity: 0.04 }}
             />

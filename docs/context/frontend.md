@@ -251,8 +251,11 @@ Profit payloads carry
 and turnover. It is used by the KPI card (`KPIPrimaryCard`/`StatCard` `footer`), the recipient list
 (`TopRecipientsList` accepts a null amount, sorted last, and a `status` node) and the sparkline
 header, which passes `combineProfit` of the charted days (`lib/profit.ts`: null when no day has a
-known-cost line, so all-unknown reads "Cost unknown" rather than "Partial"; empty days do not count). `RevenueChart` accepts null values (no bar) with a tooltip note; the sparkline passes null
-days with `connectNulls={false}`, so an unknown day is a gap, not a zero. The analytics CSV leaves an
+known-cost line, so all-unknown reads "Cost unknown" rather than "Partial"; empty days do not count). `RevenueChart` accepts null values (no bar) and its tooltip shows "—" with the row's note; when
+every row is null it shows `unknownMessage` (`dashboard.profitChartUnknown`) instead of an empty plot.
+The sparkline passes null days with `connectNulls={false}`, so an unknown day is a gap, not a zero,
+and its tooltip shows "—" for that day's profit. Both tooltips set `filterNull={false}`: the Recharts
+default drops null entries, and with them the whole bar tooltip. The analytics CSV leaves an
 unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
 `unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
 

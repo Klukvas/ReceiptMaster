@@ -1,7 +1,8 @@
 // Historical profit with unknown purchase costs, and cancelling a confirmed order,
 // against a mocked API. Unknown profit must read as "—"/"Cost unknown" (never a
-// zero), partial profit must say what it leaves out, and the CSV must keep the
-// difference. Cancelling a confirmed order must warn and refresh what it changed.
+// zero) with a tooltip that says so, a chart with nothing to plot must say why,
+// partial profit must say what it leaves out, and the CSV must keep the difference.
+// Cancelling a confirmed order must warn and refresh what it changed.
 
 import { readFile } from "node:fs/promises";
 import {
@@ -11,7 +12,7 @@ import {
   withPage,
 } from "./support/harness.mjs";
 import { makeOrder } from "./support/fixtures.mjs";
-import { Results, waitFor } from "./support/runner.mjs";
+import { Results, settle, waitFor } from "./support/runner.mjs";
 
 const VIEWPORT = { viewport: { width: 1280, height: 900 } };
 
@@ -92,7 +93,7 @@ const mockDashboard = async (page, state) => {
     state.requests.push(`GET dashboard/${path}`);
     const body = {
       "total-revenue": state.total,
-      "revenue-by-products": BY_PRODUCT,
+      "revenue-by-products": state.byProduct ?? BY_PRODUCT,
       "revenue-by-recipients": BY_RECIPIENT,
       "daily-revenue": state.daily ?? DAILY,
       "status-summary": { draft: 1, confirmed: 1, cancelled: 0 },
@@ -112,15 +113,36 @@ const mockDashboard = async (page, state) => {
   });
 };
 
-const analytics = async (page, total) => {
+const analytics = async (page, total, byProduct = BY_PRODUCT) => {
   page.setDefaultTimeout(8000);
-  const state = { ...createState(), total };
+  const state = { ...createState(), total, byProduct };
   await installApiMocks(page, state);
   await mockDashboard(page, state);
   await page.goto(`${BASE_URL}/analytics`);
   // Chart labels are SVG text; single-word product names keep them matchable.
-  await page.getByText("Beans", { exact: true }).first().waitFor();
+  await page
+    .getByText(byProduct[0].product_name, { exact: true })
+    .first()
+    .waitFor();
   return state;
+};
+
+/** The card of a dashboard chart, found by its heading. */
+const chartCard = (page, title) =>
+  page.getByRole("heading", { name: title }).locator("xpath=..");
+
+/**
+ * Moves the mouse onto a bar row or a day of a chart and reads its tooltip once
+ * it shows `expected`: a previous hover's text may still be in place.
+ */
+const tooltipAt = async (page, card, position, expected) => {
+  await card.locator(".recharts-wrapper").scrollIntoViewIfNeeded();
+  const plot = await card.locator(".recharts-wrapper").boundingBox();
+  const { x, y } = await position(plot);
+  await page.mouse.move(x, y);
+  const tooltip = card.locator(".recharts-tooltip-wrapper");
+  await settle(async () => (await tooltip.innerText()).includes(expected));
+  return tooltip.innerText();
 };
 
 const unknownTotalIsADash = async (results) => {
@@ -165,6 +187,74 @@ const partialTotalHasABadge = async (results) => {
       "the badge explains how many lines and how much turnover were left out",
       title.includes("2 order line") && /52[,.]00/.test(title),
       title,
+    );
+  });
+};
+
+const unknownBarHasATooltip = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    await analytics(page, PARTIAL_TOTAL);
+    const card = chartCard(page, "Revenue by Product");
+    const label = await card.getByText("Cups", { exact: true }).boundingBox();
+    const unknown = await tooltipAt(
+      page,
+      card,
+      async (plot) => ({
+        x: plot.x + plot.width / 2,
+        y: label.y + label.height / 2,
+      }),
+      "Cups",
+    );
+    results.check(
+      "hovering a bar with an unknown profit shows '—' and why, not nothing",
+      unknown.includes("Cups") &&
+        unknown.includes("—") &&
+        unknown.includes("Cost unknown") &&
+        unknown.includes("2 order line") &&
+        !/0[,.]00/.test(unknown.replace(/52[,.]00/, "")),
+      JSON.stringify(unknown),
+    );
+    const known = await card.getByText("Beans", { exact: true }).boundingBox();
+    const amount = await tooltipAt(
+      page,
+      card,
+      async (plot) => ({
+        x: plot.x + plot.width / 2,
+        y: known.y + known.height / 2,
+      }),
+      "Beans",
+    );
+    results.check(
+      "hovering a known bar still shows its amount without a note",
+      amount.includes("Beans") &&
+        /800/.test(amount) &&
+        !amount.includes("Cost unknown"),
+      JSON.stringify(amount),
+    );
+  });
+};
+
+const allUnknownChartSaysSo = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    await analytics(page, UNKNOWN_TOTAL, [BY_PRODUCT[1]]);
+    const card = chartCard(page, "Revenue by Product");
+    const message = card.getByTestId("chart-message");
+    const shown = await message
+      .waitFor()
+      .then(() => true)
+      .catch(() => false);
+    results.check(
+      "a chart whose every row is unknown says so instead of an empty plot",
+      shown &&
+        (await message.innerText()).includes("purchase cost is unknown") &&
+        (await card.locator(".recharts-wrapper").count()) === 0,
+      shown ? await card.innerText() : "no message rendered",
+    );
+    results.check(
+      "the quantity chart still plots those products",
+      (await chartCard(page, "Top Products by Quantity")
+        .locator(".recharts-wrapper")
+        .count()) === 1,
     );
   });
 };
@@ -223,6 +313,25 @@ const homeShowsPartialAndGaps = async (results) => {
       "the unknown day is drawn as a gap, not a zero",
       (profitPath?.match(/M/g) || []).length === 2,
       String(profitPath),
+    );
+    // The middle day has no profit point; the axis label marks where it is.
+    const day = await card
+      .locator(".recharts-xAxis-tick-labels text")
+      .nth(1)
+      .boundingBox();
+    const tooltip = await tooltipAt(
+      page,
+      card,
+      async (plot) => ({
+        x: day.x + day.width / 2,
+        y: plot.y + 60,
+      }),
+      "Turnover",
+    );
+    results.check(
+      "hovering the unknown day shows '—' for its profit next to its turnover",
+      /Revenue\s*:\s*—/.test(tooltip) && /Turnover\s*:\s*[^—\s]/.test(tooltip),
+      JSON.stringify(tooltip),
     );
   });
 };
@@ -380,6 +489,8 @@ export const run = async () => {
   const results = new Results("profit and cancel");
   await unknownTotalIsADash(results);
   await partialTotalHasABadge(results);
+  await unknownBarHasATooltip(results);
+  await allUnknownChartSaysSo(results);
   await csvKeepsUnknownEmpty(results);
   await homeShowsPartialAndGaps(results);
   await homeAllUnknownSaysCostUnknown(results);

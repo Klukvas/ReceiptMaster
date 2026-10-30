@@ -742,6 +742,7 @@
     "sortByRevenue": "By revenue",
     "sortByOrders": "By orders",
     "profitUnknown": "Cost unknown",
+    "profitChartUnknown": "Nothing to chart: the purchase cost is unknown for all orders in this period.",
     "profitPartial": "Partial",
     "profitPartialTooltip": "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
     "csvProfitComplete": "Profit complete",

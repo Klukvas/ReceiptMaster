@@ -742,6 +742,7 @@
     "sortByRevenue": "За доходом",
     "sortByOrders": "За замовленнями",
     "profitUnknown": "Собівартість невідома",
+    "profitChartUnknown": "Немає що показати на графіку: собівартість невідома для всіх замовлень за цей період.",
     "profitPartial": "Неповний",
     "profitPartialTooltip": "Без урахування рядків замовлень з невідомою собівартістю: {{lines}} (оборот {{turnover}})",
     "csvProfitComplete": "Прибуток повний",

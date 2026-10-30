@@ -742,6 +742,7 @@
     "sortByRevenue": "По выручке",
     "sortByOrders": "По заказам",
     "profitUnknown": "Себестоимость неизвестна",
+    "profitChartUnknown": "Нечего показать на графике: себестоимость неизвестна для всех заказов за этот период.",
     "profitPartial": "Неполная",
     "profitPartialTooltip": "Без учёта строк заказов с неизвестной себестоимостью: {{lines}} (оборот {{turnover}})",
     "csvProfitComplete": "Прибыль полная",
