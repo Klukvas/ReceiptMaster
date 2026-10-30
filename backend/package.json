@@ -118,7 +118,16 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)sx?$": "ts-jest"
+      "^.+\\.(t|j)sx?$": [
+        "ts-jest",
+        {
+          "diagnostics": {
+            "exclude": [
+              "**/frontend/src/**"
+            ]
+          }
+        }
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",
