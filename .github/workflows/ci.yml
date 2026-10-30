@@ -247,12 +247,56 @@ jobs:
       - name: Run tenant RLS integration suite
         run: yarn jest --ci --runInBand src/common/tenancy/tenant-data-source.pg.spec.ts
 
+      # Production's history: migrated by the superuser, then converted with the same scripts an
+      # operator runs. No application password is needed beyond this disposable service.
+      - name: Convert a separate test database to the production role layout
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "55439"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5435
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: market_db_restricted_test
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE market_db_restricted_test"
+          yarn migration:run
+          for script in 01-roles 02-ownership 03-grants 04-verify; do
+            psql -v ON_ERROR_STOP=1 -d market_db_restricted_test -f "db/roles/$script.sql"
+          done
+          psql -v ON_ERROR_STOP=1 -d postgres -c "ALTER ROLE rm_app PASSWORD 'restricted-test-only'"
+
+      - name: Run API E2E as the restricted application role
+        run: yarn jest --config test/jest-e2e.json --runInBand --forceExit --testPathPattern 'test/e2e/'
+        env:
+          E2E_RESTRICTED_ROLE: "1"
+          E2E_ADMIN_DB_USERNAME: postgres
+          E2E_ADMIN_DB_PASSWORD: postgres
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5435
+          DB_USERNAME: rm_app
+          DB_PASSWORD: restricted-test-only
+          DB_NAME: market_db_restricted_test
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long
+          API_PREFIX: api/v1
+          AUTO_RUN_MIGRATIONS: "false"
+          API_KEY: test-api-key
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          TELEGRAM_BOT_TOKEN: test-telegram-bot-token
+          TELEGRAM_BOT_OWNER_USER_ID: 00000000-0000-0000-0000-000000000000
+
       - name: E2E summary
         if: always()
         run: |
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Backend API end-to-end tests against a real PostgreSQL database." >> $GITHUB_STEP_SUMMARY
+          echo "test/e2e ran twice: as the superuser, then as rm_app on a database converted with backend/db/roles." >> $GITHUB_STEP_SUMMARY
           echo "PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) ran under a restricted non-owner role." >> $GITHUB_STEP_SUMMARY
 
   browser-regression:

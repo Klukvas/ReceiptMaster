@@ -50,6 +50,7 @@ Common combinations: a **full-stack feature** → `backend-patterns` + `frontend
 ```
 market/
 ├── backend/                 # NestJS API
+│   ├── db/roles/            # production role scripts + rollout runbook (README.md)
 │   └── src/
 │       ├── main.ts, app.module.ts
 │       ├── modules/         # orders, products, receipts, recipients, settings,

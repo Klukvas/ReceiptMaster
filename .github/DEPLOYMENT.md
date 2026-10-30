@@ -26,20 +26,23 @@ blocks deployment; it is not repaired automatically.
    checksum and exact file allowlist. Existing application files are preserved.
 3. The script takes a host lock, repeats discovery, captures actual old image IDs and
    retains local rollback tags. It pulls and checks both new image SHA labels. Existing
-   Compose files remain the base; a release-local override supplies only the two images,
-   disabled billing and `AUTO_RUN_MIGRATIONS=false`.
+   Compose files remain the base; a release-local override supplies the two images,
+   disabled billing, `AUTO_RUN_MIGRATIONS=false`, the one-shot `migrate` service and the
+   `postgres`/`db-backup` credential mapping. It holds `${...}` placeholders, never values.
+   The `docker-compose.production.yml` in the bundle is a reference and is not applied.
 4. It verifies the new image's exact migration set. It stops the old backend for a short
    maintenance period, then takes a custom-format `pg_dump` directly from the existing
    PostgreSQL container. The host backup has mode 0600. Both the archive list and full
    payload are parsed with `pg_restore`; a SHA256 accompanies the final backup outside
    the release directory. This does not perform a production restore or contact S3.
 5. A one-shot new image runs only the additive migration UP, holding the application's
-   PostgreSQL advisory lock. The one-off uses the validated Compose environment and
-   confirms the backup database fingerprint before any migration. Every pool connection
+   PostgreSQL advisory lock. The one-off runs as `DB_OWNER_USERNAME` when set, otherwise as
+   the runtime role, and owner credentials never enter the backend container. It confirms
+   the backup database fingerprint before any migration. Every pool connection
    has bounded lock/statement timeouts. Failed commands stop the uniquely named migration
    container and confirm termination before rollback; unknown completion requires manual
-   intervention. It checks the new operational tables' permissions. No
-   automatic DOWN, role provisioning or data cleanup occurs.
+   intervention. Before and after applying, it checks that the runtime role can use every
+   table and sequence. No automatic DOWN, role provisioning or data cleanup occurs.
 6. Only backend and frontend are recreated, with `--no-deps --no-build --pull never`.
    The frontend is recreated to refresh nginx's backend DNS. Success requires API DB/
    Redis/storage health, billing capability false, public TLS frontend and JS asset,
@@ -54,9 +57,11 @@ additive database migration and verified backup remain; never automatically run 
 migration. A real restore requires a separately reviewed operation. Backup validation
 proves archive readability, not a completed restore rehearsal.
 
-The script reports the existing database role's superuser/bypass flags. An existing
-owner/superuser may bypass RLS; this release does not provision or claim a restricted
-production role. Nonowner RLS behavior is separately covered by integration tests.
+The script reports the application's database role from the backend's own connection: its
+name, superuser and bypass flags, and how many objects it owns. An owner or superuser
+bypasses RLS. Until `REQUIRE_RESTRICTED_APP_ROLE` is set this is a warning; afterwards it
+blocks the release. The script never provisions roles; `backend/db/roles/README.md` is the
+operator runbook, and integration tests cover the scripts it uses.
 
 ## Enabling payments later
 
