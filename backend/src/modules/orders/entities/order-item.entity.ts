@@ -52,10 +52,19 @@ export class OrderItem {
     type: Number,
     nullable: true,
     description:
-      "Purchase cost per unit captured when the draft line was written; null when unknown (lines created before cost snapshots)",
+      "Purchase cost per unit frozen on the line: captured when the draft line was written, or the product's cost at backfill time for lines that predate cost snapshots; null when no valid cost could be assigned",
   })
   @Column({ type: "integer", nullable: true })
   unit_cost_cents: number | null;
+
+  /**
+   * True when `unit_cost_cents` was backfilled from the product's price instead
+   * of captured with the line. Provenance for the migration only: not selected,
+   * so it never reaches API responses, documents or the public projection.
+   */
+  @ApiHideProperty()
+  @Column({ type: "boolean", default: false, select: false })
+  unit_cost_estimated: boolean;
 
   @ApiHideProperty()
   @Column({ type: "uuid" })

@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -562,8 +562,16 @@ Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order'
   with the same product and quantity keeps its stored cost (including NULL), any other line captures
   the current cost. Nothing is captured on confirm; once confirmed the lines are immutable. A
   product cost that is not a non-negative integer is stored as NULL rather than guessed.
-- **Legacy lines** (written before the migration) stay NULL = unknown. No backfill: today's price is
-  not historical truth.
+- **Legacy lines** (written before snapshots existed) hold an estimate. Migration
+  `1792310000000-BackfillOrderItemUnitCost`, the owner's knowing decision so existing users get their
+  analytics back, set `unit_cost_cents` to the product's purchase price at backfill time and
+  `unit_cost_estimated` to true on every line without a cost: all order statuses, soft-deleted orders
+  and lines on soft-deleted products. That price estimates the historical cost, it is not the truth.
+  It stays frozen like any snapshot, so a later price change does not move it. New lines keep
+  capturing real snapshots with the flag false, and a line that already had one was not touched.
+- **Unknown** (NULL) now remains only where no valid cost could be assigned: a negative product cost
+  is never stored, at capture or by the backfill, and the backfill skips a line whose product belongs
+  to another tenant (it logs their count and the release continues).
 - **Queries** drop the join to `products` (it never filtered rows: the line FK guarantees the product
   row and products are only soft-deleted) and report `unknown_cost_lines`,
   `unknown_cost_turnover_cents` and `profit_complete` per group. The profit is NULL when no line of a
@@ -571,11 +579,17 @@ Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order'
 - **UI:** null profit reads "—" with "Cost unknown"; incomplete profit gets a "Partial" badge whose
   tooltip names the excluded lines and turnover; the sparkline leaves gaps; the CSV leaves the profit
   cell empty and adds `profit_complete`, `unknown_cost_lines`, `unknown_cost_turnover` columns.
-- **Rollout:** migration `1792300000000-AddOrderItemUnitCost` (additive nullable column + CHECK ≥ 0)
-  is applied by `scripts/deploy-production.sh` with the new image before containers swap. Old code
-  ignores the column (its inserts store NULL = honest unknown), so rolling back to the old image is
-  safe. Never run its `down` in production: it drops the captured costs. Right after the deploy every
-  historical period shows profit unknown/partial — intended.
+- **Rollout:** `1792300000000-AddOrderItemUnitCost` (additive nullable column + CHECK ≥ 0) and
+  `1792310000000-BackfillOrderItemUnitCost` (the `unit_cost_estimated` flag and the estimates) are
+  applied by `scripts/deploy-production.sh` with the new image before containers swap. Old code
+  ignores both columns (the flag has a default, its inserts store a NULL cost), so rolling back to the
+  old image is safe. Never run `AddOrderItemUnitCost`'s `down` in production: it drops the captured
+  costs. The backfill's `down` clears only flagged lines and drops the flag, so real snapshots survive;
+  a draft line edited after the backfill is written again with the flag false, so one that kept its
+  estimate stays populated. Roll back to the old image before running that `down`: TypeORM includes
+  the defaulted column in INSERT … RETURNING, so the current entity cannot write order lines once the
+  column is gone. The migration does not touch Redis: dashboard entries cached just before
+  it can keep showing the old figures for up to their 5-minute TTL.
 
 **Metrics Provided:**
 
@@ -640,7 +654,8 @@ Files:
 │ order_id (FK)        │
 │ product_id (FK)      │
 │ unit_price_cents     │
-│ unit_cost_cents NULL │ (cost snapshot; NULL = unknown)
+│ unit_cost_cents NULL │ (cost snapshot or backfilled estimate; NULL = unknown)
+│ unit_cost_estimated  │ (true = backfilled estimate; internal, never selected)
 │ qty                  │
 │ line_total_cents     │
 └──────────────────────┘

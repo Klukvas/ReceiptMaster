@@ -46,6 +46,13 @@ class ReleasePrecheckTests(unittest.TestCase):
         self.assertEqual(state[4], 'existing'); self.assertEqual((self.work / '.env').read_bytes(), before)
         self.assertTrue(all(args[1:3] in (['image','inspect'], ['exec','postgres'], ['exec','backend']) or args[1] == 'compose' for args in self.calls))
         self.assertTrue(all('pull' not in args and 'stop' not in args and 'run' not in args for args in self.calls))
+    def test_only_the_backfill_pending_passes_on_the_released_history(self):
+        self.history = [name for name in self.ns['KNOWN_MIGRATIONS'] if name != 'BackfillOrderItemUnitCost1792310000000']
+        self.assertIn('AddOrderItemUnitCost1792300000000', self.history)
+        self.assertEqual(self.check()[9], self.history)
+    def test_backfill_already_applied_passes(self):
+        self.history = list(self.ns['KNOWN_MIGRATIONS'])
+        self.assertEqual(self.check()[9], self.history)
     def test_unknown_history_blocks_before_mutation(self):
         self.history.append('UnknownMigration9999999999999')
         with self.assertRaisesRegex(RuntimeError, 'Unexpected pending'): self.check()
@@ -257,6 +264,31 @@ class MigrationTerminationTests(unittest.TestCase):
         self.ns['run'] = run
         with self.assertRaises(self.ns['MigrationCompletionUnknown']): self.ns['run_migration'](self.command)
         self.assertIn('stopped and not isinstance(deploy_error, MigrationCompletionUnknown)',SCRIPT)
+    def printed_by(self, run):
+        import io
+        self.ns['run'] = run
+        raw = io.BytesIO(); stream = io.TextIOWrapper(raw, encoding='ascii')
+        try:
+            with self.ns['contextlib'].redirect_stdout(stream): self.ns['run_migration'](self.command)
+        finally:
+            stream.flush()
+        return raw.getvalue().decode('ascii')
+    def test_completed_migration_prints_only_the_backfill_warning(self):
+        output = ('[Nest] 1 - 10/30/2026, 12:00:00\u202fPM WARN [BackfillOrderItemUnitCost] 2 line(s) stay unknown\n'
+                  'DB_PASSWORD=synthetic-secret\npostgres://fixture:synthetic-secret@db/app\n').encode() + b'\xff binary\n'
+        printed = self.printed_by(lambda args: output)
+        self.assertIn('[BackfillOrderItemUnitCost] 2 line(s) stay unknown', printed)
+        self.assertEqual(len(printed.splitlines()), 1)
+        self.assertNotIn('synthetic-secret', printed)
+    def test_completed_migration_without_the_warning_prints_nothing(self):
+        self.assertEqual(self.printed_by(lambda args: b'DB_PASSWORD=synthetic-secret\n'), '')
+    def test_failing_migration_prints_nothing_and_fails_as_before(self):
+        error = RuntimeError('Command failed: docker compose run')
+        def run(args):
+            if args == self.command: raise error
+            return b''
+        with self.assertRaises(RuntimeError) as caught: self.printed_by(run)
+        self.assertIs(caught.exception, error)
 
 class HTTPSProbeTests(unittest.TestCase):
     def setUp(self):

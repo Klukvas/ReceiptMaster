@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-10-30
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -728,8 +728,8 @@ Snapshot/HTML/pending-asset entity columns use `select: false`; internal service
 `DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded objects have a 24-hour grace. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving MAX_RECEIPTS = 10. Legacy local filesystem files are not processed by immutable object-storage cleanup.
 
 The additive `1792300000000-AddOrderItemUnitCost` migration adds nullable `order_items.unit_cost_cents`
-with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`), no default and no backfill (legacy
-lines stay unknown). `ADD COLUMN … NULL` is metadata-only; the inline CHECK costs one scan of
+with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`) and no default; on its own it left
+legacy lines NULL. `ADD COLUMN … NULL` is metadata-only; the inline CHECK costs one scan of
 `order_items` under the ACCESS EXCLUSIVE lock that `ADD COLUMN` already holds. `NOT VALID` + `VALIDATE`
 would not shorten that lock because `scripts/deploy-production.sh` runs every pending migration in one
 transaction (`transaction: 'all'`, `lock_timeout` 30 s); the table is small for this product. The
@@ -739,6 +739,30 @@ Rollout: the deploy script applies it with the new image before swapping contain
 NULL; rolling back the image is safe; `down` drops captured costs and must not run in production.
 `test/order-item-cost-migration.e2e-spec.ts` runs the chain up to the previous release, seeds legacy
 lines, then up → CHECK → restricted-role write under RLS → down → up on a fresh database.
+
+`1792310000000-BackfillOrderItemUnitCost` adds `order_items.unit_cost_estimated` (boolean, NOT NULL,
+default false) and sets every NULL `unit_cost_cents` to the same tenant's product
+`purchase_price_cents` when that is ≥ 0, flagging those lines. It is an owner decision recorded in the
+file: the value is an estimate, and it deliberately supersedes the "no backfill" comment in the
+already-applied migration above, which stays unedited. Raw SQL so soft-deleted products are reached.
+One guard fails closed: `row_security_active()` must be false for both tables in `up` and `down`,
+because row security would narrow the writes and any verifying count alike (with no tenant set every
+row is hidden, so a zero-row UPDATE would look like success); the chain leaves both tables ENABLE
+without FORCE, so that holds for a superuser or the table owner. A line pointing at another tenant's
+product does not stop the release: it is not backfilled and stays unknown. After the UPDATE, the NULL
+lines whose product has a non-negative cost are exactly that set, and their count (never ids or tenant
+data) is logged through Nest's `Logger`, because TypeORM's logger is off in production. `run_migration`
+in the deploy script prints that one line; every other line of migration output stays unechoed. No
+trigger exists on either table. `down` nulls only flagged lines, then drops the flag. The entity maps the flag with
+`select: false` and `@ApiHideProperty()`, so it reaches no response, document or OpenAPI schema, and
+no application code writes it; lines rewritten by a draft edit take the default. Under the deploy
+script it runs in the same one-transaction path (`lock_timeout` 30 s, `statement_timeout` 180 s) with
+the backend stopped, so the UPDATE has no concurrent writers. To undo it, roll back to the old image
+before running `down`: TypeORM includes the defaulted column in INSERT … RETURNING, so the current
+entity cannot write order lines once the column is gone.
+`test/order-item-cost-backfill.e2e-spec.ts` seeds the previous release's state, then covers values and
+flags, profit against the pre-change formula, a later price change, restricted-role reads, the
+cross-tenant warning, the row-security refusal, and down → up.
 
 The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
 
@@ -996,8 +1020,8 @@ async findAll(
    snapshots, unknown vs zero cost, daily gaps, sort order, cache versions),
    `test/idempotent-create.e2e-spec.ts` (product/recipient replay, concurrent same-key requests parked
    on the key lock, order/product/recipient keys of one value kept apart, replay at the product quota,
-   refused creates not stored, expiry, other tenants, unchanged keyless create) and
-   `test/order-item-cost-migration.e2e-spec.ts` — create and drop their own uniquely named
+   refused creates not stored, expiry, other tenants, unchanged keyless create),
+   `test/order-item-cost-migration.e2e-spec.ts` and `test/order-item-cost-backfill.e2e-spec.ts` — create and drop their own uniquely named
    databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
    through the production tenant query context — `test/helpers/restricted-app-database.ts`
    (entity-synchronized schema plus the RLS policy migration) or `test/helpers/migrated-app-database.ts`
@@ -1026,7 +1050,7 @@ async findAll(
    because teardown uses `DROP DATABASE … WITH (FORCE)`), then
    `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
    then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
-   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration idempotent-create`.
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation order-lifecycle order-profit-snapshot order-item-cost-migration order-item-cost-backfill idempotent-create`.
    `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
    no database.
    Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.

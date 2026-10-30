@@ -1,9 +1,10 @@
 /**
  * Historical profit reads only the cost frozen on each order line
  * (`order_items.unit_cost_cents`), never the product's current purchase price.
- * A line whose cost is unknown (NULL, i.e. created before snapshots existed) is
- * left out of the profit sum and reported through the completeness counters, so
- * an unknown cost is never shown as a zero cost.
+ * A line whose cost is unknown (NULL: no valid cost could be assigned, at capture
+ * or by the backfill of lines older than snapshots) is left out of the profit sum
+ * and reported through the completeness counters, so an unknown cost is never
+ * shown as a zero cost.
  *
  * These fragments are constant SQL (no input is interpolated) and expect the
  * line table aliased as `oi`. They are also correct over a LEFT JOIN where `oi`

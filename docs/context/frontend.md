@@ -238,7 +238,11 @@ returns it. A draft gets the plain question.
 
 ### Dashboard: unknown and partial profit
 
-"Revenue" is profit from the cost frozen on each order line. Profit payloads carry
+"Revenue" is profit from the cost frozen on each order line. Lines from before cost snapshots hold a
+backfilled estimate, which the API returns as an ordinary known cost, so history shows full figures
+with no badge. The states below now appear only for lines with no valid cost: a negative product cost,
+or a line whose product belongs to another tenant.
+Profit payloads carry
 `unknown_cost_lines`, `unknown_cost_turnover_cents` and `profit_complete`, and the profit may be null
 (`lib/profit.ts`: `formatProfit`, `profitChartValue`, `combineCompleteness`).
 `components/dashboard/ProfitStatus.tsx` renders nothing for complete figures, "Cost unknown"
