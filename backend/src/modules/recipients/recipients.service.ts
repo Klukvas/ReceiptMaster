@@ -12,6 +12,7 @@ import {
   IdempotentCreateResult,
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
+import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -19,6 +20,13 @@ const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   phone: "recipient.phone",
   created_at: "recipient.created_at",
 };
+
+/** null clears these nullable contact columns; name is NOT NULL. */
+const CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
+  "email",
+  "phone",
+  "address",
+]);
 
 @Injectable()
 export class RecipientsService {
@@ -127,6 +135,7 @@ export class RecipientsService {
     updateRecipientDto: UpdateRecipientDto,
     user: User,
   ): Promise<Recipient> {
+    assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
     Object.assign(recipient, updateRecipientDto);
     return this.recipientsRepository.save(recipient);

@@ -519,8 +519,11 @@ File: `backend/src/modules/products/products.service.ts::create()`
   repeat creates nothing — even at the plan limit, because the quota lock comes after the key. Only
   a successful create stores its response (`common/idempotency/idempotent-create.ts`)
 - Duplicate live names are rejected only by the partial unique index `IDX_products_user_name`
-  `(user_id, name) WHERE deleted_at IS NULL`; there is no explicit check, so the violation currently
-  surfaces as a 500 rather than the documented 409 `PRODUCT_ALREADY_EXISTS` (known drift, not fixed here)
+  `(user_id, name) WHERE deleted_at IS NULL` — no pre-check, so racing creates are settled by the
+  database too. `ProductsService` maps that index's unique violation (SQLSTATE 23505, matched by
+  index name via `common/utils/unique-violation.util.ts`) to 409 `PRODUCT_ALREADY_EXISTS` after the
+  transaction rolls back; any other constraint violation stays a generic 500. A soft-deleted
+  product's name is free again, and the same name in another tenant is unaffected
 
 **Stock edits (`update()`):**
 
@@ -529,6 +532,8 @@ File: `backend/src/modules/products/products.service.ts::create()`
 - `quantity` is a precondition write and requires `expectedQuantity`: the UPDATE adds
   `AND quantity = expectedQuantity`, so an edit based on a stale form cannot overwrite stock that an
   order changed (409 `PRODUCT_QUANTITY_CONFLICT`, nothing saved). A rename keeps the current stock
+- A rename onto another live product's name hits the same index and is refused with 409
+  `PRODUCT_ALREADY_EXISTS`, nothing saved
 - Orders, order edits/deletes and Telegram orders keep changing stock under row locks or atomic
   increments; a stock edit parked behind such a lock re-checks after it commits
 
@@ -547,6 +552,10 @@ File: `backend/src/modules/recipients/recipients.service.ts::create()`
 
 - Save and return (nothing checks e-mail uniqueness today)
 - With an `Idempotency-Key`: same replay rules as products, in one transaction with the key lock
+
+**Update (`update()`):** `null` clears `email`, `phone` or `address`. `name` is NOT NULL, so
+`name: null` is refused with 400 `VALIDATION_ERROR` before the recipient is read — the same rule
+(`common/utils/null-fields.util.ts`) products apply to every field except `supplier_id`
 
 ---
 

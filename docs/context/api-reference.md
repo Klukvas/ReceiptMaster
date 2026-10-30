@@ -231,8 +231,9 @@ so it never collides with an order or recipient key of the same value.
 - 402 `PRODUCT_LIMIT_EXCEEDED` — Plan product limit reached (free: 10, pro: 100). The count excludes
   soft-deleted products and is taken in the insert's transaction under a per-tenant lock, so two
   creates racing for the last slot get one 201 and one 402; a rolled-back create frees its slot.
-- 409 `PRODUCT_ALREADY_EXISTS` — Duplicate name (drift: nothing throws this today; the unique index
-  violation surfaces as 500 — see business-logic.md *Products*)
+- 409 `PRODUCT_ALREADY_EXISTS` — Another live (not soft-deleted) product of this user has exactly
+  this name. The partial unique index decides, so of two racing creates one gets 201 and the other
+  409; a refused create stores no `Idempotency-Key` response, so a retry is checked again
 
 **Request Body:**
 ```typescript
@@ -327,6 +328,7 @@ re-checks after that order commits. Nothing in the body is saved on a mismatch.
 - 409 `PRODUCT_QUANTITY_CONFLICT` — Stock no longer equals `expectedQuantity`; reload with
   `GET /products/:id` and resend against the current value. **Compatibility change (2026-10-29):**
   a client sending `quantity` alone now gets 400 instead of a blind overwrite.
+- 409 `PRODUCT_ALREADY_EXISTS` — The new `name` belongs to another live product; nothing is saved
 
 ---
 
@@ -571,6 +573,11 @@ Updates recipient details.
 (the onboarding wizard sends only changed fields this way)
 
 **Response** (200): `Recipient`
+
+**Errors:**
+- 400 `VALIDATION_ERROR` — `name: null` (the name is required and cannot be cleared); nothing is
+  saved. Other class-validator failures return 400 `HTTP_EXCEPTION`
+- 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
 
 ---
 
@@ -2054,7 +2061,7 @@ All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 }
 ```
 
-`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`.
+`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
 
 Common HTTP status codes:
 

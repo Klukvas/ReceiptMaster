@@ -67,6 +67,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -330,7 +340,7 @@
             }
           },
           "409": {
-            "description": "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT)",
+            "description": "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT), or another live product already has the new name (PRODUCT_ALREADY_EXISTS)",
             "content": {
               "application/json": {
                 "schema": {
@@ -702,6 +712,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Recipient"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "name sent as null (VALIDATION_ERROR), or an invalid body (HTTP_EXCEPTION)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
