@@ -1,6 +1,6 @@
 # Production release
 
-Last Updated: 2026-10-15
+Last Updated: 2026-10-30
 
 A trusted push to `main` runs verification, then publishes the frontend and backend
 Docker Hub images under the same full commit SHA. Pull requests cannot publish or deploy.
@@ -9,10 +9,10 @@ backend and `VITE_BILLING_ENABLED=false` in the frontend image. Paddle secrets a
 required for this release. Existing plan records and quota enforcement remain active.
 
 The workflow uses the existing trusted `APP_HOST`, `SSH_USER`, `SSH_KEY` and Docker Hub
-configuration. It does not rewrite production `.env`, reset a repository, prune images,
-remove orphan containers, or update PostgreSQL/Redis. Registry pull access must already
-be available on the production host. Ambiguous container/project/configuration state
-blocks deployment; it is not repaired automatically.
+configuration. It does not rewrite production `.env`, reset a repository, remove orphan
+containers, or update PostgreSQL/Redis. Registry pull access must already be available on
+the production host. Ambiguous container/project/configuration state blocks deployment; it
+is not repaired automatically.
 
 ## Guarded sequence
 
@@ -47,6 +47,14 @@ blocks deployment; it is not repaired automatically.
    The frontend is recreated to refresh nginx's backend DNS. Success requires API DB/
    Redis/storage health, billing capability false, public TLS frontend and JS asset,
    cache-busted `release.json` matching the SHA, and running image identities.
+7. Only after that success, still under the host lock, it removes old application images. The
+   last three released pairs and the captured old pair stay, with all of their tags. Removal is
+   `docker rmi` without force on exact application release and rollback tags, so `postgres`,
+   `redis` and `market-db-backup` are out of reach. A cleanup failure or the two-minute limit
+   only prints a warning: the release stays complete and the next verified release retries.
+   A server already below the precheck's free-space floor never reaches this step, so it
+   needs one manual `docker rmi` of old tags first. Release directories are kept because
+   each new release still lists every earlier override.
 
 An application/health failure after maintenance recreates both applications from the
 captured old image IDs using the original configuration. Rollback success also requires bounded API/dependency health, public TLS root/JS and

@@ -1168,6 +1168,21 @@ quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
 
+After `DEPLOY PASS`, still under the deploy lock, the gate removes old application images so the
+root disk does not fill up. It never runs in the precheck phase or on a failure or rollback path. It
+keeps the last `RETAINED_RELEASES` (3) releases, counted from the `release.override.json` entries in
+the Compose override chain because a rolled-back release leaves only a `rollback.override.json` there,
+plus the old pair the current run captured. Images are kept whole, so every tag of a retained image
+survives. Removal is `docker rmi` without force, on exact
+`<registry>/receiptmaster-{backend,frontend}:<sha>` and
+`receiptmaster-rollback-{backend,frontend}:<run>-<attempt>` tags only. `postgres`, `redis`,
+`market-db-backup` and any other tag, including `latest`, are out of reach. Cleanup stops after
+`IMAGE_CLEANUP_SECONDS`, and every failure only prints a `WARNING`, so a live release stays complete
+and the next verified release retries. A server already below the precheck's free-space floor never
+gets that far, so it needs one manual `docker rmi` of old tags first. Keep every
+`/opt/market/releases/*` directory: precheck requires each override in the chain to exist, though
+Compose resolves only the newest override's images, so removing old images does not affect the chain.
+
 ## Settings writes and logo images
 
 Settings use a partial TypeORM `upsert` on the existing unique `userId`: only supplied columns participate in `ON CONFLICT DO UPDATE`, so independent field saves cannot replay stale whole-row snapshots. All settings request bodies use Zod schemas in `settings/dto/settings-input.ts` and map validation issues to the existing API error envelope. Combined footer updates validate both fields before one upsert. Regression tests exercise detached in-memory snapshots, actual generated PostgreSQL SQL without a connection, and the real Nest HTTP controller against synthetic repositories.
