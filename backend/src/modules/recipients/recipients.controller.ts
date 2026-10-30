@@ -101,6 +101,9 @@ export class RecipientsController {
     description: "Получатель успешно обновлен",
     type: Recipient,
   })
+  @ApiFailureResponses({
+    400: "name sent as null (VALIDATION_ERROR), or an invalid body (HTTP_EXCEPTION)",
+  })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
   update(
     @Param("id") id: string,

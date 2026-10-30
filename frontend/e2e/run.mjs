@@ -27,6 +27,7 @@ const SPECS = [
   { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
   { name: "onboarding", load: () => import("./onboarding.spec.mjs") },
   { name: "locale-parity", load: () => import("./locale-parity.spec.mjs") },
+  { name: "api-errors", load: () => import("./api-errors.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

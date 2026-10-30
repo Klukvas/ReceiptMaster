@@ -42,9 +42,9 @@ E2E_BASE_URL=http://127.0.0.1:5232 node e2e/run.mjs mobile-product-dropdown
 E2E_BASE_URL=http://127.0.0.1:5232 node e2e/run.mjs receipt-progress
 ```
 
-(The two unit specs, and the guard checks at the end of `chunk-recovery`, import
-TypeScript modules through the dev server's transform, so they only run against
-`vite dev`.)
+(The unit specs — `dropdown-position`, `receipt-socket-url` and the unit half of `api-errors` —
+and the guard checks at the end of `chunk-recovery` import TypeScript modules through the dev
+server's transform, so they only run against `vite dev`.)
 
 ## Specs
 
@@ -63,6 +63,7 @@ TypeScript modules through the dev server's transform, so they only run against
 | `profit-lifecycle` | Unknown profit reads "—" with "Cost unknown" (never 0) on the KPI and recipient list; hovering an unknown bar or day shows "—" (the bar also says why); a chart whose every row is unknown shows a message instead of an empty plot; a period preset ends on the current UTC date; partial profit keeps its amount with a "Partial" badge naming excluded lines and turnover; the CSV download (`page.waitForEvent('download')`) leaves unknown profit empty and adds the completeness columns; the sparkline flags partial days, draws an unknown day as a gap and reads "Cost unknown" (not "Partial") when no charted line has a cost; cancelling a confirmed order warns (receipt voided, link revoked, stock not returned) while a draft does not, and the order list, receipts and every dashboard figure are refetched after the cancel |
 | `onboarding` | Against a stateful mock that replays a known `Idempotency-Key`: Back→Next without changes sends nothing and a rename sends one PATCH `{ name }` (never a second POST); two clicks in one task send one create; Escape, Skip and Close do nothing while a save is in flight; a 500 keeps the step and every value with a friendly message (no database text) and the next attempt sends the corrected form; a dropped response is reported as unconfirmed and Retry resends the same body with the same key, then PATCHes edits; a stock change on revisit (409) keeps the typed quantity, names the server's stock and saving again sends the new `expectedQuantity`; a failed completion keeps the wizard open and Retry finishes without re-creating; a failed Skip closes with a "will be offered again" toast; the Finish copy promises no PDF/receipt in en/ru/uk |
 | `locale-parity` | Node only: en, ru and uk have identical flattened key sets and the same `{{placeholders}}` and value types per key; the landing template count equals `TEMPLATE_METADATA` (evaluated from `backend/src/modules/receipts/templates/metadata.ts`) |
+| `api-errors` | In en/ru/uk, `parseApiError` returns the locale's `errors.<camelCase>` entry for every `ErrorCode` that has one, and an unknown code still falls back to the backend text; in ru and uk, creating a product whose name is taken (mocked 409 `PRODUCT_ALREADY_EXISTS`) shows the translated message in the form, not the English fallback |
 
 `receipt-progress` waits out the panel's real 8s/20s deadlines, so it takes a
 couple of minutes; the other specs are quick.

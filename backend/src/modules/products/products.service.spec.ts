@@ -6,6 +6,18 @@ import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { CreateProductDto } from "./dto/create-product.dto";
+import { QueryFailedError } from "typeorm";
+
+const uniqueViolation = (constraint: string) =>
+  new QueryFailedError(
+    'INSERT INTO "products"',
+    [],
+    Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint,
+    }),
+  );
 
 describe("ProductsService", () => {
   let service: ProductsService;
@@ -119,6 +131,29 @@ describe("ProductsService", () => {
       ).rejects.toMatchObject({ errorCode: "PRODUCT_LIMIT_EXCEEDED" });
       expect(txManager.save).not.toHaveBeenCalled();
     });
+
+    it("maps a duplicate live name (unique index) to 409 PRODUCT_ALREADY_EXISTS", async () => {
+      txManager.save.mockRejectedValue(
+        uniqueViolation("IDX_products_user_name"),
+      );
+
+      await expect(
+        service.create({ name: "Widget" } as CreateProductDto, mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "PRODUCT_ALREADY_EXISTS",
+        error: "Product with name Widget already exists",
+      });
+    });
+
+    it("rethrows a unique violation of any other constraint unchanged", async () => {
+      const otherViolation = uniqueViolation("UQ_some_other_constraint");
+      txManager.save.mockRejectedValue(otherViolation);
+
+      await expect(
+        service.create({ name: "Widget" } as CreateProductDto, mockUser),
+      ).rejects.toBe(otherViolation);
+    });
   });
 
   describe("createWithIdempotencyKey", () => {
@@ -179,6 +214,25 @@ describe("ProductsService", () => {
       });
       expect(calls).toEqual(["key-lock"]);
       expect(txManager.save).not.toHaveBeenCalled();
+    });
+
+    it("maps a duplicate name to 409 and stores no replayable response", async () => {
+      useTransaction(null);
+      txManager.save.mockRejectedValue(
+        uniqueViolation("IDX_products_user_name"),
+      );
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Widget" } as CreateProductDto,
+          mockUser,
+          "key-1",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "PRODUCT_ALREADY_EXISTS",
+      });
+      expect(txManager.insert).not.toHaveBeenCalled();
     });
   });
 
@@ -332,6 +386,20 @@ describe("ProductsService", () => {
       ).rejects.toMatchObject({
         statusCode: 409,
         errorCode: "PRODUCT_QUANTITY_CONFLICT",
+      });
+    });
+
+    it("maps a rename onto another live product's name to 409", async () => {
+      updateQuery().execute.mockRejectedValue(
+        uniqueViolation("IDX_products_user_name"),
+      );
+
+      await expect(
+        service.update("prod-1", { name: "Gadget" }, mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "PRODUCT_ALREADY_EXISTS",
+        error: "Product with name Gadget already exists",
       });
     });
 

@@ -148,15 +148,19 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 
 ### Error Handling: `lib/api-errors.ts`
 
-**parseApiError(error)** (lines 117–183):
+**parseApiError(error)**:
 - Takes any error, returns `{ message: string; code: string }`
 - Checks Axios error response format: `{ error: string; errorCode: string }`
 - Falls back to legacy `{ message: string }`
 - Network errors → "Ошибка сети. Проверьте подключение..."
-- **i18n-aware**: translates error codes via `i18n.t('errors.${code.toLowerCase()}')`
+- **i18n-aware**: translates error codes via the camelCase locale key —
+  `PRODUCT_ALREADY_EXISTS` → `i18n.t('errors.productAlreadyExists')` (until 2026-10-30 it looked up
+  a lower snake_case key that no locale has, so ru/uk always showed English). A code without a
+  locale entry falls back to `ERROR_MESSAGES` (English), then to the backend's `error` text.
+  Guarded by `frontend/e2e/api-errors.spec.mjs`
 - Fallback to `ERROR_MESSAGES` constant if i18n not ready
 
-**ErrorCode enum** (lines 11–58):
+**ErrorCode enum**:
 - User: `USER_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_CREDENTIALS`
 - Order: `ORDER_NOT_FOUND`, `ORDER_ALREADY_CONFIRMED`, `ORDER_ALREADY_CANCELLED`, `ORDER_CANNOT_BE_MODIFIED`
 - Receipt: `RECEIPT_NOT_FOUND`, `RECEIPT_ALREADY_EXISTS`, `RECEIPT_GENERATION_FAILED`, `RECEIPT_PRINT_FAILED`

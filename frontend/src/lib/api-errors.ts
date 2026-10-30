@@ -115,6 +115,17 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 /**
+ * Locale keys are camelCase while error codes are SCREAMING_SNAKE_CASE:
+ * PRODUCT_ALREADY_EXISTS → errors.productAlreadyExists.
+ */
+function errorTranslationKey(errorCode: string): string {
+  const camelCase = errorCode
+    .toLowerCase()
+    .replace(/_([a-z0-9])/g, (_, next: string) => next.toUpperCase());
+  return `errors.${camelCase}`;
+}
+
+/**
  * Parse API error from axios error
  */
 export function parseApiError(error: unknown): {
@@ -134,12 +145,9 @@ export function parseApiError(error: unknown): {
 
     if (data.error && data.errorCode) {
       // New format: { error, errorCode }
-      const userFriendlyMessage = i18n.t(
-        `errors.${data.errorCode.toLowerCase()}`,
-        {
-          defaultValue: ERROR_MESSAGES[data.errorCode] || data.error,
-        },
-      );
+      const userFriendlyMessage = i18n.t(errorTranslationKey(data.errorCode), {
+        defaultValue: ERROR_MESSAGES[data.errorCode] || data.error,
+      });
       return {
         message: userFriendlyMessage,
         code: data.errorCode,
