@@ -1,9 +1,13 @@
 # Production release
 
-Last Updated: 2026-10-30
+Last Updated: 2026-10-31
 
 A trusted push to `main` runs verification, then publishes the frontend and backend
 Docker Hub images under the same full commit SHA. Pull requests cannot publish or deploy.
+Verification includes CI's `test-release-gate` job, which runs
+`python3 scripts/deploy-production.test.py` on every pull request and push. It drives this
+script against fake Docker plus real `docker compose config` rendering and never contacts
+production. A failure there stops image publication and therefore deployment.
 The current release deliberately has payments disabled: `BILLING_ENABLED=false` on the
 backend and `VITE_BILLING_ENABLED=false` in the frontend image. Paddle secrets are not
 required for this release. Existing plan records and quota enforcement remain active.

@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -1182,6 +1182,12 @@ and the next verified release retries. A server already below the precheck's fre
 gets that far, so it needs one manual `docker rmi` of old tags first. Keep every
 `/opt/market/releases/*` directory: precheck requires each override in the chain to exist, though
 Compose resolves only the newest override's images, so removing old images does not affect the chain.
+
+CI's `test-release-gate` job runs `python3 scripts/deploy-production.test.py` on pull requests and
+pushes, and `build-and-deploy` needs it, so a failing gate test stops publication and deployment. The
+real-Compose tests skip without `docker`, so the job checks for the Compose CLI first and fails
+instead. Run the file locally before pushing a gate change; it needs `python3`, `node` and
+`docker compose`, and it never contacts production.
 
 ## Settings writes and logo images
 
