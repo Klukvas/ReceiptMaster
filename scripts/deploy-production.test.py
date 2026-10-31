@@ -1,11 +1,18 @@
 """Execute production precheck seams with fake Docker; never contacts production."""
+import contextlib
+import fcntl
+import io
+import json
 import pathlib
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
 SCRIPT = pathlib.Path(__file__).with_name('deploy-production.sh').read_text().split("<<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
 PREFIX = SCRIPT.split('phase, workdir, sha, run_id, registry =', 1)[0]
+MAIN = SCRIPT[len(PREFIX):]
 
 class ReleasePrecheckTests(unittest.TestCase):
     def setUp(self):
@@ -68,6 +75,11 @@ class ReleasePrecheckTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Ambiguous'): self.check()
     def test_wrong_workdir_blocks(self):
         with self.assertRaisesRegex(RuntimeError, 'working directory'): self.ns['precheck'](str(self.work / 'wrong'))
+    def test_missing_release_override_in_the_chain_blocks(self):
+        # This is why release directories are never deleted, even though their images are.
+        for service in ('backend','frontend'):
+            self.containers[service]['Config']['Labels']['com.docker.compose.project.config_files'] += ',' + str(self.work / 'removed' / 'release.override.json')
+        with self.assertRaisesRegex(RuntimeError, 'Compose configuration unavailable'): self.check()
     def test_baseline_health_failure_blocks(self):
         self.ns['health'] = lambda url: (_ for _ in ()).throw(RuntimeError('baseline down'))
         with self.assertRaisesRegex(RuntimeError, 'baseline down'): self.check()
@@ -494,5 +506,257 @@ class RollbackFailureTests(unittest.TestCase):
         self.ns['time'] = type('Clock', (), {'monotonic': staticmethod(lambda: clock[0]), 'sleep': staticmethod(lambda seconds: clock.__setitem__(0, clock[0] + seconds))})
         self.fail_release()
         self.assertIn('ROLLBACK HEALTH FAILED', self.output.getvalue())
+
+class ImageRetentionTests(unittest.TestCase):
+    OLD = {'backend': 'sha256:backend-c', 'frontend': 'sha256:frontend-c'}
+    IMAGES = {service: 'klukvas/receiptmaster-' + service + ':' + 'd' * 40 for service in ('backend','frontend')}
+    def setUp(self):
+        self.ns = {}; exec(compile(PREFIX, '<release>', 'exec'), self.ns)
+        self.commands = []; self.removed = []; self.timeouts = []; self.refused = set(); self.rows = []
+        def run(args, **kwargs):
+            self.commands.append(args); self.timeouts.append(kwargs.get('timeout'))
+            if args[:3] == ['docker','image','ls']:
+                return '\n'.join(' '.join(row) for row in self.rows).encode()
+            if args[2] in self.refused: raise RuntimeError('Command failed: docker rmi')
+            self.removed.append(args[2])
+            return b''
+        self.ns['run'] = run
+    def release_rows(self, *digits):
+        return [('klukvas/receiptmaster-' + service + ':' + digit * 40, 'sha256:' + service + '-' + digit) for digit in digits for service in ('backend','frontend')]
+    def rollback_rows(self, run_id, digit):
+        return [('receiptmaster-rollback-' + service + ':' + run_id, 'sha256:' + service + '-' + digit) for service in ('backend','frontend')]
+    def chain(self, *digits):
+        return ['/opt/market/market/docker-compose.production.yml'] + ['/opt/market/releases/' + digit * 40 + '-' + str(number) + '-1/release.override.json' for number, digit in enumerate(digits, 1)]
+    def refs(self, rows): return [row[0] for row in rows]
+    def clean(self, configs, old=None):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.ns['remove_stale_images'](configs, 'klukvas', '4-1', self.IMAGES, old or self.OLD)
+        return output.getvalue()
+    def test_only_images_older_than_the_retained_releases_are_removed(self):
+        self.rows = self.release_rows('a','b','c','d') + self.rollback_rows('2-1','a') + self.rollback_rows('3-1','b') + self.rollback_rows('4-1','c')
+        output = self.clean(self.chain('a','b','c','d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a') + self.rollback_rows('2-1','a')))
+        self.assertIn('removed 4 of 4', output)
+    def test_fewer_releases_than_retained_removes_nothing(self):
+        self.rows = self.release_rows('c','d') + self.rollback_rows('4-1','c')
+        self.assertIn('removed 0 of 0', self.clean(self.chain('c','d')))
+        self.assertEqual(self.removed, [])
+    def test_rollback_pair_outside_the_retained_releases_survives_with_all_its_tags(self):
+        self.rows = self.release_rows('a','c','d') + self.rollback_rows('4-1','c')
+        self.clean(self.chain('d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a')))
+    def test_rollback_tags_of_this_run_are_retained_even_if_ids_do_not_match(self):
+        self.rows = self.release_rows('a','c','d') + self.rollback_rows('4-1','c')
+        self.clean(self.chain('d'), old={'backend': 'sha256:other-backend', 'frontend': 'sha256:other-frontend'})
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a')))
+    def test_captured_old_pair_survives_by_id_without_a_rollback_tag(self):
+        self.rows = self.release_rows('a','c','d')
+        self.clean(self.chain('d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a')))
+    def test_failed_release_takes_no_retention_slot(self):
+        self.rows = self.release_rows('a','b','c','d','e')
+        self.clean(self.chain('a','b','c','d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a','e')))
+    def test_rolled_back_release_in_the_chain_takes_no_retention_slot(self):
+        self.rows = self.release_rows('a','b','c','d','e')
+        configs = self.chain('a','b','c')
+        self.clean(configs + ['/opt/market/releases/' + 'e' * 40 + '-8-1/rollback.override.json', '/opt/market/releases/' + 'd' * 40 + '-9-1/release.override.json'])
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a','e')))
+    def test_redeployed_sha_counts_once(self):
+        self.rows = self.release_rows('a','b','c','d')
+        self.clean(self.chain('a','b','c','d','d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a')))
+    def test_unrecognized_chain_entries_are_ignored(self):
+        configs = ['/opt/market/market/docker-compose.production.yml', '/opt/market/releases/not-a-release/release.override.json', '/opt/market/releases/' + 'd' * 40 + '-9-1/release.override.json']
+        self.assertEqual(self.ns['released_shas'](configs), ['d' * 40])
+    def test_other_images_are_out_of_reach(self):
+        others = [('postgres:15-alpine','sha256:postgres'), ('redis:7-alpine','sha256:redis'), ('market-db-backup:latest','sha256:backup'), ('market_db-backup:latest','sha256:backup2'),
+                  ('<none>:<none>','sha256:dangling'), ('klukvas/receiptmaster-backend:<none>','sha256:digest-only'), ('klukvas/receiptmaster-backend:latest','sha256:backend-a'), ('klukvas/receiptmaster-backend:' + 'A' * 40,'sha256:upper'),
+                  ('klukvas/receiptmaster-backend-canary:' + 'a' * 40,'sha256:canary'), ('someone/receiptmaster-backend:' + 'a' * 40,'sha256:foreign'), ('prefix/klukvas/receiptmaster-backend:' + 'a' * 40,'sha256:nested'),
+                  ('receiptmaster-rollback-backend:latest','sha256:rollback-latest'), ('receiptmaster-rollback-postgres:1-1','sha256:rollback-postgres')]
+        self.rows = others + self.release_rows('a','b','c','d')
+        self.clean(self.chain('a','b','c','d'))
+        self.assertCountEqual(self.removed, self.refs(self.release_rows('a')))
+    def test_removal_is_an_explicit_rmi_without_force(self):
+        self.rows = self.release_rows('a','d')
+        self.clean(self.chain('a','b','c','d'))
+        self.assertEqual(self.commands[0][:3], ['docker','image','ls'])
+        self.assertEqual(self.commands[1:], [['docker','rmi',ref] for ref in self.refs(self.release_rows('a'))])
+    def test_refused_removal_warns_and_the_rest_continue(self):
+        self.rows = self.release_rows('a','d')
+        refused, other = self.refs(self.release_rows('a'))
+        self.refused = {refused}
+        output = self.clean(self.chain('a','b','c','d'))
+        self.assertEqual(self.removed, [other])
+        self.assertIn('WARNING: image cleanup could not remove ' + refused, output)
+        self.assertIn('removed 1 of 2', output)
+    def test_failed_listing_only_warns(self):
+        def run(args, **kwargs):
+            self.commands.append(args)
+            raise RuntimeError('Command failed: docker image ls')
+        self.ns['run'] = run
+        self.assertIn('WARNING: image cleanup skipped: Command failed: docker image ls', self.clean(self.chain('a','d')))
+        self.assertEqual(len(self.commands), 1)
+    def test_malformed_listing_removes_nothing(self):
+        self.rows = self.release_rows('a','d') + [('unexpected-row',)]
+        self.assertIn('WARNING: image cleanup skipped', self.clean(self.chain('a','b','c','d')))
+        self.assertEqual(self.removed, [])
+    def test_listing_without_the_released_pair_removes_nothing(self):
+        self.rows = self.release_rows('a','b')
+        self.assertIn('WARNING: image cleanup skipped: Released images', self.clean(self.chain('a','b','c','d')))
+        self.assertEqual(self.removed, [])
+    def test_time_limit_bounds_each_removal_and_the_whole_cleanup(self):
+        self.rows = self.release_rows('a','d','e')
+        clock = [0]
+        self.ns['time'] = types.SimpleNamespace(monotonic=lambda: clock[0])
+        unlimited = self.ns['run']
+        def slow_run(args, **kwargs):
+            clock[0] += 70
+            return unlimited(args, **kwargs)
+        self.ns['run'] = slow_run
+        output = self.clean(self.chain('a','b','c','d'))
+        self.assertEqual(self.timeouts, [120, 50])
+        self.assertIn('WARNING: image cleanup reached its time limit', output)
+        self.assertIn('removed 1 of 4', output)
+    def test_real_compose_resolves_no_image_from_an_older_override(self):
+        import shutil, subprocess
+        if not shutil.which('docker'): self.skipTest('Docker Compose CLI is unavailable')
+        release_override = self.ns['release_override']
+        removed_id = 'sha256:' + 'e' * 64
+        layers = [
+            {'services': {'backend': {'image':'base/backend:gone','environment':{'DB_USERNAME':'${DB_USERNAME}'}}, 'frontend': {'image':'base/frontend:gone'}, 'postgres': {'image':'postgres:15-alpine'}, 'db-backup': {'image':'market-db-backup'}}, 'networks': {'marketflow-network': {}}},
+            release_override({'backend':'old/backend:gone','frontend':'old/frontend:gone'}),
+            {'services': {'backend': {'image':removed_id}, 'frontend': {'image':removed_id}}},
+            release_override({'backend':'new/backend:live','frontend':'new/frontend:live'}),
+        ]
+        with tempfile.TemporaryDirectory(dir=pathlib.Path(__file__).resolve().parent) as space:
+            work = pathlib.Path(space)
+            (work / 'chain.env').write_text('DB_NAME=market\nDB_USERNAME=fixture\nDB_PASSWORD=fixture\n')
+            files = sum((['-f', str(work / (str(index) + '.json'))] for index in range(len(layers))), [])
+            for index, layer in enumerate(layers): (work / (str(index) + '.json')).write_text(json.dumps(layer))
+            command = ['docker','compose','--project-name','chain-fixture','--project-directory',str(work),'--env-file',str(work / 'chain.env')] + files + ['--profile','release-migrate','config','--format','json']
+            resolved = subprocess.run(command,capture_output=True,check=True).stdout.decode()
+        self.assertNotIn('gone', resolved)
+        self.assertNotIn(removed_id, resolved)
+        services = json.loads(resolved)['services']
+        self.assertEqual((services['backend']['image'],services['frontend']['image'],services['migrate']['image']),('new/backend:live','new/frontend:live','new/backend:live'))
+
+class ReleaseFlowCleanupTests(unittest.TestCase):
+    """Runs the script's real main flow, so these prove when cleanup runs rather than where it is written."""
+    SHA = 'd' * 40
+    RUN = '4-1'
+    OLD = {'backend': 'sha256:old-backend', 'frontend': 'sha256:old-frontend'}
+    def setUp(self):
+        self.space = tempfile.TemporaryDirectory(dir=pathlib.Path(__file__).resolve().parent)
+        root = pathlib.Path(self.space.name)
+        self.work = root / 'market'; self.work.mkdir()
+        self.release = root / 'releases' / (self.SHA + '-' + self.RUN); self.release.mkdir(parents=True)
+        (self.release / 'release.sha').write_text(self.SHA + '\n')
+        self.override = self.release / 'release.override.json'
+        self.earlier = root / 'releases' / ('a' * 40 + '-1-1'); self.earlier.mkdir()
+        (self.earlier / 'release.override.json').write_text('{}')
+        self.ns = {'__file__': 'deploy-production.sh'}; exec(compile(PREFIX, '<release>', 'exec'), self.ns)
+        self.commands = []; self.fails = lambda args: False; self.lock_held_during_cleanup = None
+        self.running = dict(self.OLD); self.public_sha = self.SHA; self.output = ''
+        self.listing = '\n'.join(['klukvas/receiptmaster-backend:' + self.SHA + ' sha256:new', 'klukvas/receiptmaster-frontend:' + self.SHA + ' sha256:new', 'klukvas/receiptmaster-backend:' + 'f' * 40 + ' sha256:stale']).encode()
+        def container(name, env=()): return {'Id': name, 'Image': self.OLD.get(name, 'sha256:' + name), 'Config': {'Env': list(env)}}
+        state = (container('backend', ['DB_USERNAME=rm_app']), container('frontend'), container('postgres'), container('redis'), 'existing', self.work, [str(self.earlier / 'release.override.json')], [self.work / '.env'], 'existing-network', [], 'a' * 32)
+        class Response:
+            status = 200
+            def __init__(self, body): self.body = body
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return self.body
+        def open_https(url, **kwargs):
+            if 'billing/config' in url: return Response(b'{"billingEnabled": false}')
+            if 'release.json' in url: return Response(json.dumps({'sha': self.public_sha, 'billingEnabled': False}).encode())
+            return Response(b'<script type="module" src="/assets/app.js"></script>')
+        def docker_exec(args, **kwargs):
+            if args[-1].endswith('-Fc'): kwargs['stdout'].write(b'archive')
+            return types.SimpleNamespace(returncode=0)
+        self.ns['subprocess'] = types.SimpleNamespace(run=docker_exec, PIPE=-1, DEVNULL=-3)
+        self.ns.update(precheck=lambda workdir, check_lock=True: state, discover=lambda service: {'Image': self.running[service]}, run=self.docker, health=lambda url: None, open_https=open_https)
+    def tearDown(self): self.space.cleanup()
+    def docker(self, args, **kwargs):
+        self.commands.append(args)
+        if self.fails(args): raise RuntimeError('Command failed: ' + ' '.join(args[:3]))
+        if args[:3] == ['docker','image','inspect']:
+            return json.dumps([{'Id': 'sha256:new', 'Config': {'Labels': {'org.opencontainers.image.version': self.SHA}}}]).encode()
+        if args[:3] == ['docker','image','ls']:
+            self.lock_held_during_cleanup = self.deploy_lock_is_held()
+            return self.listing
+        if 'up' in args:
+            self.running[args[-1]] = 'sha256:new' if str(self.override) in args else self.OLD[args[-1]]
+        return b''
+    def deploy_lock_is_held(self):
+        with open(self.work.parent / '.receiptmaster-deploy.lock') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+        return False
+    def deploy(self, phase='deploy'):
+        output = io.StringIO()
+        try:
+            with patch.object(sys, 'argv', ['-', phase, str(self.work), self.SHA, self.RUN, 'klukvas']), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                exec(compile(MAIN, '<release>', 'exec'), self.ns)
+        finally:
+            self.output = output.getvalue()
+    def cleanup_commands(self):
+        return [args for args in self.commands if args[:3] == ['docker','image','ls'] or args[1] == 'rmi']
+    def assert_release_failed_without_cleanup(self):
+        with self.assertRaises(SystemExit) as caught: self.deploy()
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn('RELEASE BLOCKED', self.output)
+        self.assertEqual(self.cleanup_commands(), [])
+    def test_verified_release_cleans_up_under_the_lock_after_deploy_pass(self):
+        self.deploy()
+        self.assertLess(self.output.index('DEPLOY PASS'), self.output.index('IMAGE CLEANUP: removed 1 of 1'))
+        self.assertEqual(self.cleanup_commands()[-1], ['docker','rmi','klukvas/receiptmaster-backend:' + 'f' * 40])
+        self.assertTrue(self.lock_held_during_cleanup)
+    def test_cleanup_keeps_every_release_directory(self):
+        self.deploy()
+        self.assertTrue((self.earlier / 'release.override.json').is_file())
+        self.assertTrue(self.override.is_file())
+    def test_precheck_phase_never_cleans_up(self):
+        with self.assertRaises(SystemExit) as caught: self.deploy('precheck')
+        self.assertEqual(caught.exception.code, 0)
+        self.assertEqual(self.commands, [])
+    def test_failed_pull_never_cleans_up(self):
+        self.fails = lambda args: args[1] == 'pull'
+        self.assert_release_failed_without_cleanup()
+    def test_failed_migration_never_cleans_up(self):
+        self.fails = lambda args: '--name' in args and args[args.index('--name') + 1].endswith('-apply')
+        self.assert_release_failed_without_cleanup()
+        self.assertIn('ROLLBACK VERIFIED', self.output)
+    def test_rolled_back_start_failure_never_cleans_up(self):
+        self.fails = lambda args: 'up' in args and str(self.override) in args
+        self.assert_release_failed_without_cleanup()
+        self.assertIn('ROLLBACK VERIFIED', self.output)
+    def test_unverified_public_release_rolls_back_without_cleanup(self):
+        clock = [0]
+        self.ns['time'] = types.SimpleNamespace(time=lambda: clock[0], monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+        self.public_sha = 'e' * 40
+        self.assert_release_failed_without_cleanup()
+        self.assertIn('ROLLBACK VERIFIED', self.output)
+    def test_failed_rollback_never_cleans_up(self):
+        self.fails = lambda args: 'up' in args
+        self.assert_release_failed_without_cleanup()
+        self.assertIn('ROLLBACK HEALTH FAILED', self.output)
+    def assert_release_stayed_complete(self):
+        self.deploy()
+        self.assertIn('DEPLOY PASS', self.output)
+        self.assertIn('WARNING: image cleanup', self.output)
+        self.assertNotIn('RELEASE BLOCKED', self.output)
+        self.assertNotIn('ROLLBACK', self.output)
+        self.assertFalse((self.release / 'rollback.override.json').exists())
+        self.assertEqual(self.running, {'backend': 'sha256:new', 'frontend': 'sha256:new'})
+    def test_failed_listing_leaves_the_release_complete(self):
+        self.fails = lambda args: args[:3] == ['docker','image','ls']
+        self.assert_release_stayed_complete()
+    def test_refused_removal_leaves_the_release_complete(self):
+        self.fails = lambda args: args[1] == 'rmi'
+        self.assert_release_stayed_complete()
 
 if __name__ == '__main__': unittest.main()

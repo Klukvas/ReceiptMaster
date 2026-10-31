@@ -8,11 +8,13 @@ EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLea
 # Flip to True, in a reviewed commit, once production runs as the restricted application role.
 REQUIRE_RESTRICTED_APP_ROLE = False
 COMPOSE_NETWORK = 'marketflow-network'
+RETAINED_RELEASES = 3
+IMAGE_CLEANUP_SECONDS = 120
 KNOWN_MIGRATIONS = ['AddAutoGenerateReceipt1792200000000', 'AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddOnboardingCompleted1761800000000', 'AddOrderItemUnitCost1792300000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'BackfillOrderItemUnitCost1792310000000', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'DropPaymentStatusFromOrders1762400000000', 'HashRefreshTokens1792400000000', 'MakeReceiptTitleNullable1762800000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002']
 
-def run(args, *, data=None, capture=True):
+def run(args, *, data=None, capture=True, timeout=300):
     result = subprocess.run(args, input=data, stdout=subprocess.PIPE if capture else None,
-                            stderr=subprocess.PIPE, check=False, timeout=300)
+                            stderr=subprocess.PIPE, check=False, timeout=timeout)
     if result.returncode:
         # Docker errors/config output can contain credentials. Do not echo them.
         raise RuntimeError('Command failed: ' + ' '.join(args[:3]))
@@ -156,6 +158,50 @@ def rollback_after_failure(deploy_error, stopped, original, release, old_images)
             print('ROLLBACK HEALTH FAILED: application recovery is unverified; original deployment failed; manual intervention required')
     # Preserve the triggering deployment error even if rollback commands/health failed.
     raise deploy_error
+
+def released_shas(configs):
+    # Compose records every override oldest first. A rolled-back release leaves only its
+    # rollback.override.json there, so the release.override.json entries are the history of
+    # what stayed live, newest first here. Keep the files themselves: precheck requires every
+    # one, while Compose resolves only the newest override's images.
+    directories = [path.parent.name for path in map(pathlib.Path, configs) if path.name == 'release.override.json']
+    shas = [name.split('-')[0] for name in directories if re.fullmatch('[0-9a-f]{40}-[0-9]+-[0-9]+', name)]
+    return list(dict.fromkeys(reversed(shas)))
+
+def stale_image_refs(rows, registry, retained_refs, in_use_ids):
+    # Images are kept whole: a rollback tag is a second name for a release image, and
+    # rmi without force still untags one name of an image that a container is using.
+    pattern = re.escape(registry) + '/receiptmaster-(backend|frontend):[0-9a-f]{40}|receiptmaster-rollback-(backend|frontend):[0-9]+-[0-9]+'
+    application = [(ref, image_id) for ref, image_id in rows if re.fullmatch(pattern, ref)]
+    kept_ids = set(in_use_ids) | {image_id for ref, image_id in application if ref in retained_refs}
+    return [ref for ref, image_id in application if image_id not in kept_ids]
+
+def remove_stale_images(configs, registry, run_id, images, old_images):
+    # The release is already live, so a failure here only warns and the next release retries.
+    deadline = time.monotonic() + IMAGE_CLEANUP_SECONDS
+    try:
+        released = released_shas(configs)[:RETAINED_RELEASES]
+        retained = {registry + '/receiptmaster-' + service + ':' + sha for service in images for sha in released} | {'receiptmaster-rollback-' + service + ':' + run_id for service in images}
+        listing = run(['docker', 'image', 'ls', '--no-trunc', '--format', '{{.Repository}}:{{.Tag}} {{.ID}}'], timeout=IMAGE_CLEANUP_SECONDS)
+        rows = [tuple(row.split()) for row in listing.decode().splitlines()]
+        if not set(images.values()) <= {row[0] for row in rows}:
+            raise RuntimeError('Released images are missing from the image listing')
+        stale = stale_image_refs(rows, registry, retained, old_images.values())
+    except Exception as error:
+        print('WARNING: image cleanup skipped: ' + str(error))
+        return
+    removed = 0
+    for ref in stale:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print('WARNING: image cleanup reached its time limit; the next release continues it')
+            break
+        try:
+            run(['docker', 'rmi', ref], timeout=remaining)
+            removed += 1
+        except Exception:
+            print('WARNING: image cleanup could not remove ' + ref)
+    print('IMAGE CLEANUP: removed ' + str(removed) + ' of ' + str(len(stale)) + ' stale application image tags')
 
 def precheck(workdir, check_lock=True):
     backend, frontend, pg, redis = [discover(x) for x in ('backend', 'frontend', 'postgres', 'redis')]
@@ -365,6 +411,9 @@ await assertRuntimePrivileges();
             print('DEPLOY PASS: immutable image pair, billing disabled, API/dependencies, TLS frontend/JS health')
         except Exception as deploy_error:
             rollback_after_failure(deploy_error, stopped and not isinstance(deploy_error, MigrationCompletionUnknown), original, release, old_images)
+        # rollback_after_failure always raises, so only a verified release reaches this line.
+        # The deploy lock is still held, so no other release can be using these images.
+        remove_stale_images(configs + [str(override)], registry, run_id, images, old_images)
 
 except Exception as error:
     print('RELEASE BLOCKED: ' + str(error), file=sys.stderr)
