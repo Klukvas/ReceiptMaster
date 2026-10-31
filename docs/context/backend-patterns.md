@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -966,8 +966,11 @@ ConfigModule.forRoot({
 })
 ```
 
-Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
-`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, a valid `FRONTEND_URL`, and explicitly
+Production always requires `FRONTEND_URL` to be the bare `https` origin customers reach, with no
+path or trailing slash, whether billing is on or off. Public receipt links and the Paddle checkout URL are
+built from it, and both consumers keep a `http://localhost:5173` fallback that only development and
+test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`,
+`PADDLE_WEBHOOK_SECRET`, `PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
 `PADDLE_ENVIRONMENT=production`. Missing values or sandbox mode fail startup. Development/test
 may leave billing disabled. `.env.example` lists empty configuration keys; production image
 selection uses an explicit immutable `IMAGE_TAG`. Test-mode boot ignores `.env` files.
@@ -1161,12 +1164,18 @@ async findAll(
 
 `BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
 defaulting to false. Empty optional Paddle settings are accepted while OFF; ON production
-requires complete keys, prices, frontend URL and explicit production environment.
+requires complete keys, prices and explicit production environment.
 `PaddleService` guards SDK construction, payment creation/portal, signature verification,
 direct webhook handling and scheduled subscription downgrades. Stored entitlements and
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
+
+The server's Compose file and `.env` are not updated by releases, so anything the new backend needs
+from them belongs in `release_override()` in that script. `FRONTEND_URL` is set there as the literal
+`PUBLIC_ORIGIN`, the same way as `BILLING_ENABLED`; credentials stay `${...}` placeholders. A new
+required backend setting has to ship in the same change as its override entry, because the image and
+the script deploy together and a backend that fails validation rolls the release back.
 
 After `DEPLOY PASS`, still under the deploy lock, the gate removes old application images so the
 root disk does not fill up. It never runs in the precheck phase or on a failure or rollback path. It

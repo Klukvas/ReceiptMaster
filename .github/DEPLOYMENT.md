@@ -1,6 +1,6 @@
 # Production release
 
-Last Updated: 2026-10-30
+Last Updated: 2026-10-31
 
 A trusted push to `main` runs verification, then publishes the frontend and backend
 Docker Hub images under the same full commit SHA. Pull requests cannot publish or deploy.
@@ -27,8 +27,10 @@ is not repaired automatically.
 3. The script takes a host lock, repeats discovery, captures actual old image IDs and
    retains local rollback tags. It pulls and checks both new image SHA labels. Existing
    Compose files remain the base; a release-local override supplies the two images,
-   disabled billing, `AUTO_RUN_MIGRATIONS=false`, the one-shot `migrate` service and the
-   `postgres`/`db-backup` credential mapping. It holds `${...}` placeholders, never values.
+   disabled billing, `AUTO_RUN_MIGRATIONS=false`, the public `FRONTEND_URL`, the one-shot
+   `migrate` service and the `postgres`/`db-backup` credential mapping. Credentials stay
+   `${...}` placeholders, never values. The backend refuses to start in production without
+   that origin, so public receipt links cannot silently point at localhost.
    The `docker-compose.production.yml` in the bundle is a reference and is not applied.
 4. It verifies the new image's exact migration set. It stops the old backend for a short
    maintenance period, then takes a custom-format `pg_dump` directly from the existing
@@ -75,7 +77,7 @@ operator runbook, and integration tests cover the scripts it uses.
 
 This requires an explicit configuration/release change. Set strict backend/frontend flags
 to true, securely configure backend `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
-`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, `FRONTEND_URL`, and explicitly
+`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
 `PADDLE_ENVIRONMENT=production`. Supply the public frontend client token and explicit
 production environment during its image build. Keep secrets out of chat and source control.
 The frontend also requires the server capability to be enabled before initializing Paddle.

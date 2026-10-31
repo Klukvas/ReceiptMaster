@@ -8,6 +8,7 @@ EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLea
 # Flip to True, in a reviewed commit, once production runs as the restricted application role.
 REQUIRE_RESTRICTED_APP_ROLE = False
 COMPOSE_NETWORK = 'marketflow-network'
+PUBLIC_ORIGIN = 'https://receiptmaster.org'
 RETAINED_RELEASES = 3
 IMAGE_CLEANUP_SECONDS = 120
 KNOWN_MIGRATIONS = ['AddAutoGenerateReceipt1792200000000', 'AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddOnboardingCompleted1761800000000', 'AddOrderItemUnitCost1792300000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'BackfillOrderItemUnitCost1792310000000', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'DropPaymentStatusFromOrders1762400000000', 'HashRefreshTokens1792400000000', 'MakeReceiptTitleNullable1762800000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002']
@@ -70,11 +71,11 @@ def migration_command(compose, code, identity, app_role, check_only=False, run_i
     return compose + ['run', '--rm', '--no-deps', '-T', '--name', name, '--entrypoint', 'node'] + flags + ['migrate', '-e', code]
 
 def release_override(images):
-    # The server's Compose file is not updated by releases, so role separation lives here.
-    # Values stay ${...} placeholders: this file is kept on disk and must never hold a secret.
+    # The server's Compose file is not updated by releases, so role separation and the public origin live here.
+    # Credentials stay ${...} placeholders: this file is kept on disk and must never hold a secret.
     # postgres and db-backup are only ever recreated by an operator; --no-deps keeps the release off them.
     return {'services': {
-        'backend': {'image': images['backend'], 'environment': {'BILLING_ENABLED': 'false', 'AUTO_RUN_MIGRATIONS': 'false'}},
+        'backend': {'image': images['backend'], 'environment': {'BILLING_ENABLED': 'false', 'AUTO_RUN_MIGRATIONS': 'false', 'FRONTEND_URL': PUBLIC_ORIGIN}},
         'frontend': {'image': images['frontend']},
         'postgres': {'environment': {
             'POSTGRES_USER': '${POSTGRES_BOOTSTRAP_USER:-postgres}',

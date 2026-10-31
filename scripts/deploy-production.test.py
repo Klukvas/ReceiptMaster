@@ -299,6 +299,23 @@ class ReleasePrecheckTests(unittest.TestCase):
         text = json.dumps(self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'}))
         self.assertIn('${DB_OWNER_PASSWORD:-${DB_PASSWORD}}',text)
         self.assertIn('${DB_BACKUP_PASSWORD:-${DB_PASSWORD}}',text)
+    def test_release_gives_the_backend_the_public_origin(self):
+        services = self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'})['services']
+        self.assertEqual(services['backend']['environment']['FRONTEND_URL'],'https://receiptmaster.org')
+    def test_real_compose_applies_the_public_origin_over_whatever_the_server_holds(self):
+        import json, shutil, subprocess
+        if not shutil.which('docker'): self.skipTest('Docker Compose CLI is unavailable')
+        override = self.work / 'release.override.json'
+        override.write_text(json.dumps(self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'})))
+        envfile = self.work / 'origin.env'; envfile.write_text('DB_NAME=market\nDB_USERNAME=fixture\nDB_PASSWORD=fixture\nFRONTEND_URL=http://localhost:5173\n')
+        # The frozen server file omits the key entirely; the repository's file forwards it.
+        for name, environment in (('frozen server file',['DB_USERNAME=${DB_USERNAME}']), ('repository file',['FRONTEND_URL=${FRONTEND_URL:-}'])):
+            with self.subTest(base=name):
+                base = self.work / 'origin-compose.json'
+                base.write_text(json.dumps({'services': {'backend': {'image':'old-backend','environment':environment}, 'frontend': {'image':'old-frontend'}, 'postgres': {'image':'postgres:15-alpine'}, 'db-backup': {'image':'market-db-backup'}}, 'networks': {'marketflow-network': {}}}))
+                command = ['docker','compose','--project-name','origin-fixture','--project-directory',str(self.work),'--env-file',str(envfile),'-f',str(base),'-f',str(override),'config','--format','json']
+                resolved = json.loads(subprocess.run(command,capture_output=True,check=True).stdout)['services']
+                self.assertEqual(resolved['backend']['environment']['FRONTEND_URL'],'https://receiptmaster.org')
     def test_migration_command_uses_validated_compose_without_raw_env_source(self):
         compose = ['docker','compose','--env-file','recorded-custom.env','-f','original.yml','-f','release.override.json']
         command = self.ns['migration_command'](compose, 'NODE_CODE', 'a' * 32, 'rm_app', check_only=True)
