@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -585,9 +585,13 @@ Updates recipient details.
 
 **DELETE** `/recipients/:id`
 
-Soft-deletes recipient.
+Permanently deletes a recipient that has no orders. Recipients have no soft delete.
 
-**Response** (200): `{ ok: true }`
+**Response** (200): empty body
+
+**Errors:**
+- 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
+- 409 `RECIPIENT_HAS_ORDERS` — The recipient has an order, live or soft-deleted; nothing is deleted
 
 ---
 

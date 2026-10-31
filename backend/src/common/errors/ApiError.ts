@@ -138,6 +138,12 @@ export const ApiErrors = {
       "RECIPIENT_ALREADY_EXISTS",
       409,
     ),
+  RECIPIENT_HAS_ORDERS: (id: string) =>
+    new ApiErrorResponse(
+      `Recipient ${id} cannot be deleted: it has orders, including any deleted ones kept for history`,
+      "RECIPIENT_HAS_ORDERS",
+      409,
+    ),
 
   // Supplier errors
   SUPPLIER_NOT_FOUND: (id: string) =>

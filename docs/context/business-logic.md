@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -557,6 +557,12 @@ File: `backend/src/modules/recipients/recipients.service.ts::create()`
 `name: null` is refused with 400 `VALIDATION_ERROR` before the recipient is read — the same rule
 (`common/utils/null-fields.util.ts`) products apply to every field except `supplier_id`
 
+**Deletion (`remove()`):** a recipient row is really deleted, so it is refused with 409
+`RECIPIENT_HAS_ORDERS` while any order references it, live or soft-deleted. `orders.recipient_id` is
+`ON DELETE CASCADE`: deleting past a soft-deleted order would purge kept history, and
+`receipts.order_id` has no cascade, so an order with a receipt would fail on its foreign key. Users
+cannot restore or purge a soft-deleted order, so such a recipient stays in their list permanently
+
 ---
 
 ### 7. Settings & Customization
@@ -767,6 +773,7 @@ Files:
    - Orders are deleted via the `deleted_at` timestamp; cancellation is a separate status change
      that keeps the order and its stock reservation
    - Queries exclude soft-deleted records unless explicitly included
+   - A soft-deleted order still blocks deleting its recipient (`RECIPIENT_HAS_ORDERS`)
    - All six raw revenue/turnover aggregation queries also filter `o.deleted_at IS NULL`
    - Preserves audit trail
 

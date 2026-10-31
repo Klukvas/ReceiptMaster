@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -622,6 +622,19 @@ saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and inval
 `productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
 stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
 
+### Product form: similar products (`hooks/useSimilarProducts.ts`)
+
+The create form warns about products with a similar name while the user types. The hook sends a
+debounced `GET /products?search=<name>&limit=10` once the trimmed name has two characters, under
+`["products", "similar", term]`, so saving a product invalidates it. It searches on the server
+because `limit` is capped at 100 (`common/dto/pagination.dto.ts`): a client-side filter would see
+only the newest page of the catalog. The hint is advisory, so a failed search just shows nothing.
+
+### Recipients page: refused deletes (`pages/RecipientsPage.tsx`)
+
+A refused delete closes the confirmation and shows `parseApiError(...).message` as a toast, so 409
+`RECIPIENT_HAS_ORDERS` reads as `errors.recipientHasOrders` (en/ru/uk).
+
 ### Onboarding wizard (`components/onboarding/OnboardingModal.tsx`)
 
 Four steps (company, template, first product, first customer); the parent keeps every step's input,
@@ -793,6 +806,7 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/providers/PaddleProvider.tsx` | Paddle SDK init for billing |
 | `src/hooks/useOrders.ts` | Orders CRUD + mutations + UI state example |
 | `src/hooks/useServerPagination.ts` | Table pagination, sorting, filtering |
+| `src/hooks/useSimilarProducts.ts` | Debounced server search behind the product form's similar-name hint |
 | `src/hooks/useCheckout.ts` | Paddle checkout flow |
 | `src/hooks/useSubscription.ts` | Current plan + usage limits |
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |

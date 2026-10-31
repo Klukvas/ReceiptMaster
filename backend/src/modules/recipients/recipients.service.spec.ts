@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { RecipientsService } from "./recipients.service";
 import { Recipient } from "./entities/recipient.entity";
+import { Order } from "../orders/entities/order.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
@@ -227,36 +228,38 @@ describe("RecipientsService", () => {
   });
 
   describe("remove", () => {
-    it("should delete recipient without orders", async () => {
+    beforeEach(() => {
       recipientsRepo.findOne.mockResolvedValue(mockRecipient);
+      recipientsRepo.manager = { exists: jest.fn() };
+    });
 
-      const deleteQb = {
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(0),
-      };
-      recipientsRepo.createQueryBuilder.mockReturnValue(deleteQb);
+    it("should delete recipient without orders", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(false);
 
       await service.remove("rec-1", mockUser);
 
       expect(recipientsRepo.remove).toHaveBeenCalledWith(mockRecipient);
     });
 
-    it("should throw if recipient has orders", async () => {
-      recipientsRepo.findOne.mockResolvedValue(mockRecipient);
+    it("looks for orders of this recipient including soft-deleted ones", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(false);
 
-      const deleteQb = {
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(5),
-      };
-      recipientsRepo.createQueryBuilder.mockReturnValue(deleteQb);
+      await service.remove("rec-1", mockUser);
 
-      await expect(service.remove("rec-1", mockUser)).rejects.toThrow(
-        ApiErrorResponse,
-      );
+      expect(recipientsRepo.manager.exists).toHaveBeenCalledWith(Order, {
+        where: { recipient_id: "rec-1", user_id: "user-1" },
+        withDeleted: true,
+      });
+    });
+
+    it("refuses a recipient with orders with 409 and deletes nothing", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(true);
+
+      await expect(service.remove("rec-1", mockUser)).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_HAS_ORDERS",
+      });
+      expect(recipientsRepo.remove).not.toHaveBeenCalled();
     });
   });
 });

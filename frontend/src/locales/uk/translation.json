@@ -851,6 +851,7 @@
     "productAlreadyExists": "Товар з такою назвою вже існує",
     "recipientNotFound": "Отримувач не знайдений",
     "recipientAlreadyExists": "Отримувач з таким email вже існує",
+    "recipientHasOrders": "Цього отримувача не можна видалити: у нього є замовлення, зокрема видалені, які зберігаються для історії",
     "settingsNotFound": "Налаштування не знайдено",
     "invalidSettings": "Невірні налаштування",
     "fileNotFound": "Файл не знайдено",

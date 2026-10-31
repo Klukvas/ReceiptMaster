@@ -128,6 +128,17 @@ describe("ApiErrors", () => {
     });
   });
 
+  describe("Recipient errors", () => {
+    it("RECIPIENT_HAS_ORDERS should return 409 with the standard body", () => {
+      const error = ApiErrors.RECIPIENT_HAS_ORDERS("r-123");
+      expect(error.statusCode).toBe(409);
+      expect(error.toJSON()).toEqual({
+        error: expect.stringContaining("r-123"),
+        errorCode: "RECIPIENT_HAS_ORDERS",
+      });
+    });
+  });
+
   describe("Settings errors", () => {
     it("SETTINGS_NOT_FOUND should return 404", () => {
       const error = ApiErrors.SETTINGS_NOT_FOUND();

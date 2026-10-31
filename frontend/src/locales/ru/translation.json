@@ -851,6 +851,7 @@
     "productAlreadyExists": "Товар с таким названием уже существует",
     "recipientNotFound": "Получатель не найден",
     "recipientAlreadyExists": "Получатель с таким email уже существует",
+    "recipientHasOrders": "Этого получателя нельзя удалить: у него есть заказы, включая удалённые, которые хранятся для истории",
     "settingsNotFound": "Настройки не найдены",
     "invalidSettings": "Неверные настройки",
     "fileNotFound": "Файл не найден",

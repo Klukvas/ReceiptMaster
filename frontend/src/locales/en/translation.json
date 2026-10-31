@@ -851,6 +851,7 @@
     "productAlreadyExists": "Product with this name already exists",
     "recipientNotFound": "Recipient not found",
     "recipientAlreadyExists": "Recipient with this email already exists",
+    "recipientHasOrders": "This recipient can't be deleted: it has orders, including deleted ones kept for history",
     "settingsNotFound": "Settings not found",
     "invalidSettings": "Invalid settings",
     "fileNotFound": "File not found",

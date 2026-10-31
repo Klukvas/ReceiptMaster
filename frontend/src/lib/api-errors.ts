@@ -34,6 +34,7 @@ export const ErrorCode = {
   // Recipient errors
   RECIPIENT_NOT_FOUND: "RECIPIENT_NOT_FOUND",
   RECIPIENT_ALREADY_EXISTS: "RECIPIENT_ALREADY_EXISTS",
+  RECIPIENT_HAS_ORDERS: "RECIPIENT_HAS_ORDERS",
 
   // Settings errors
   SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
@@ -90,6 +91,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECIPIENT_NOT_FOUND]: "Recipient not found",
   [ErrorCode.RECIPIENT_ALREADY_EXISTS]:
     "Recipient with this email already exists",
+  [ErrorCode.RECIPIENT_HAS_ORDERS]:
+    "This recipient can't be deleted: it has orders, including deleted ones kept for history",
 
   // Settings errors
   [ErrorCode.SETTINGS_NOT_FOUND]: "Settings not found",

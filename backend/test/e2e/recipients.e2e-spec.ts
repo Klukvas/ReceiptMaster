@@ -6,7 +6,7 @@ import {
   registerUser,
   authHeader,
 } from "../helpers/test-app";
-import { cleanDatabase } from "../helpers/db-cleanup";
+import { cleanDatabase, withAdminQuery } from "../helpers/db-cleanup";
 
 describe("Recipients (e2e)", () => {
   let app: INestApplication;
@@ -190,6 +190,71 @@ describe("Recipients (e2e)", () => {
   });
 
   describe("DELETE /api/v1/recipients/:id", () => {
+    const createRecipientWithOrder = async () => {
+      const recipient = await request(server)
+        .post("/api/v1/recipients")
+        .set(authHeader(token))
+        .send(validRecipient)
+        .expect(201);
+      const product = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send({
+          name: "Recipient delete product",
+          purchase_price_cents: 5000,
+          sale_price_cents: 9900,
+          quantity: 10,
+          currency: "UAH",
+        })
+        .expect(201);
+      const order = await request(server)
+        .post("/api/v1/orders")
+        .set(authHeader(token))
+        .send({
+          recipientId: recipient.body.id,
+          items: [{ productId: product.body.id, qty: 1 }],
+        })
+        .expect(201);
+      return { recipientId: recipient.body.id, orderId: order.body.id };
+    };
+
+    const softDeleteOrder = (orderId: string) =>
+      request(server)
+        .delete(`/api/v1/orders/${orderId}`)
+        .set(authHeader(token))
+        .expect(200);
+
+    const insertReceipt = (orderId: string) =>
+      withAdminQuery(app, (query) =>
+        query(
+          `INSERT INTO receipts(id, user_id, order_id, number, status)
+           SELECT gen_random_uuid(), user_id, id, 'R-' || id, 'generated'
+           FROM orders WHERE id = $1`,
+          [orderId],
+        ),
+      );
+
+    const storedRows = (orderId: string) =>
+      withAdminQuery(app, async (query) => ({
+        orders: await query("SELECT id FROM orders WHERE id = $1", [orderId]),
+        receipts: await query("SELECT id FROM receipts WHERE order_id = $1", [
+          orderId,
+        ]),
+      }));
+
+    const expectRefused = async (recipientId: string) => {
+      const res = await request(server)
+        .delete(`/api/v1/recipients/${recipientId}`)
+        .set(authHeader(token))
+        .expect(409);
+
+      expect(res.body.errorCode).toBe("RECIPIENT_HAS_ORDERS");
+      await request(server)
+        .get(`/api/v1/recipients/${recipientId}`)
+        .set(authHeader(token))
+        .expect(200);
+    };
+
     it("should delete a recipient", async () => {
       const created = await request(server)
         .post("/api/v1/recipients")
@@ -200,6 +265,33 @@ describe("Recipients (e2e)", () => {
         .delete(`/api/v1/recipients/${created.body.id}`)
         .set(authHeader(token))
         .expect(200);
+    });
+
+    it("refuses a recipient with a live order", async () => {
+      const { recipientId } = await createRecipientWithOrder();
+
+      await expectRefused(recipientId);
+    });
+
+    it("refuses with 409, not a foreign key 500, when the only order is soft-deleted and has a receipt", async () => {
+      const { recipientId, orderId } = await createRecipientWithOrder();
+      await insertReceipt(orderId);
+      await softDeleteOrder(orderId);
+
+      await expectRefused(recipientId);
+
+      const stored = await storedRows(orderId);
+      expect(stored.orders).toHaveLength(1);
+      expect(stored.receipts).toHaveLength(1);
+    });
+
+    it("keeps a soft-deleted order without a receipt instead of cascading it away", async () => {
+      const { recipientId, orderId } = await createRecipientWithOrder();
+      await softDeleteOrder(orderId);
+
+      await expectRefused(recipientId);
+
+      expect((await storedRows(orderId)).orders).toHaveLength(1);
     });
   });
 

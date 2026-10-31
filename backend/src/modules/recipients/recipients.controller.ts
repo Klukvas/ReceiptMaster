@@ -118,8 +118,8 @@ export class RecipientsController {
   @ApiResponse({ status: 200, description: "Получатель успешно удален" })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
   @ApiResponse({
-    status: 400,
-    description: "Нельзя удалить получателя с существующими заказами",
+    status: 409,
+    description: "Нельзя удалить получателя с заказами, включая удалённые",
   })
   remove(@Param("id") id: string, @Request() req: { user: User }) {
     return this.recipientsService.remove(id, req.user);

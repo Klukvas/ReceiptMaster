@@ -1228,6 +1228,7 @@ GET /health
 | `PRODUCT_ALREADY_EXISTS` | 409 | Product name conflict |
 | `RECIPIENT_NOT_FOUND` | 404 | Recipient ID not found |
 | `RECIPIENT_ALREADY_EXISTS` | 409 | Recipient email conflict |
+| `RECIPIENT_HAS_ORDERS` | 409 | Recipient has orders, live or soft-deleted |
 | `RECEIPT_NOT_FOUND` | 404 | Receipt ID not found |
 | `RECEIPT_ALREADY_EXISTS` | 409 | Receipt already generated for order |
 | `RECEIPT_GENERATION_FAILED` | 500 | PDF generation error |
