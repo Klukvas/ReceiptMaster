@@ -71,7 +71,9 @@ the gate uses `rm_owner` as soon as `.env` names it, so that role must already o
    decompresses:
    `docker compose $args up -d --no-deps --no-build --pull never --force-recreate db-backup`, then
    `docker exec marketflow-db-backup /scripts/backup-db.sh`. Until the script's retention fix ships,
-   it exits non-zero after the upload, so judge it by the S3 object.
+   it exits non-zero after the upload, so judge it by the S3 object. Once the fix is on the server,
+   this run also deletes S3 backups older than `BACKUP_RETENTION_DAYS`, so get the owner's approval
+   before the first such run.
 7. Push a no-op release, then confirm the migration role. A mistyped key falls back to `DB_USERNAME`
    without any error, so check it; this must print `rm_owner`. Rebuild `$args` first, because the
    release added a file to the chain:
