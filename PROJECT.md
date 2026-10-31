@@ -698,10 +698,11 @@ Images install with `yarn install --frozen-lockfile`. Their build contexts (`./b
 4. **e2e-backend** -- API e2e tests against PostgreSQL 15, with `test/e2e` run once as the superuser and once as `rm_app` on a database converted with `backend/db/roles`, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
 5. **browser-regression** -- `node frontend/e2e/run.mjs` (all browser specs, Playwright Chromium, local nginx/openssl for proxy-audit)
 6. **browser-documents** -- `frontend/e2e/template-features.cjs` against the synthetic `backend/test/serve-template-features.ts` fixture; evidence uploaded on failure
-7. **build-and-deploy** (push to `main` only, needs 1–6) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
-8. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate (through a one-shot `migrate` service that uses `DB_OWNER_*` when set) and deploy the immutable image pair
+7. **test-release-gate** -- `python3 scripts/deploy-production.test.py` (fake Docker plus real `docker compose config` rendering); the job fails if the Compose CLI is missing, because those tests would otherwise skip
+8. **build-and-deploy** (push to `main` only, needs 1–7) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
+9. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate (through a one-shot `migrate` service that uses `DB_OWNER_*` when set) and deploy the immutable image pair
 
-Jobs 1–6 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
+Jobs 1–7 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
 
 **Database Deployment** (`.github/workflows/deploy-database.yml`) -- manual trigger:
 - SSH to DB server, pull images, optional force-recreate

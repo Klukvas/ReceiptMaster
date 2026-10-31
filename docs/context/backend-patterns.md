@@ -1192,6 +1192,12 @@ gets that far, so it needs one manual `docker rmi` of old tags first. Keep every
 `/opt/market/releases/*` directory: precheck requires each override in the chain to exist, though
 Compose resolves only the newest override's images, so removing old images does not affect the chain.
 
+CI's `test-release-gate` job runs `python3 scripts/deploy-production.test.py` on pull requests and
+pushes, and `build-and-deploy` needs it, so a failing gate test stops publication and deployment. The
+real-Compose tests skip without `docker`, so the job checks for the Compose CLI first and fails
+instead. Run the file locally before pushing a gate change; it needs `python3`, `node` and
+`docker compose`, and it never contacts production.
+
 ## Settings writes and logo images
 
 Settings use a partial TypeORM `upsert` on the existing unique `userId`: only supplied columns participate in `ON CONFLICT DO UPDATE`, so independent field saves cannot replay stale whole-row snapshots. All settings request bodies use Zod schemas in `settings/dto/settings-input.ts` and map validation issues to the existing API error envelope. Combined footer updates validate both fields before one upsert. Regression tests exercise detached in-memory snapshots, actual generated PostgreSQL SQL without a connection, and the real Nest HTTP controller against synthetic repositories.
