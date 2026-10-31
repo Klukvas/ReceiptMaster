@@ -1,5 +1,6 @@
 import { envSchema } from "./env.schema";
 const base = { JWT_SECRET: "test-only-validation-value-32-characters" };
+const publicOrigin = { FRONTEND_URL: "https://example.test" };
 const billing = {
   BILLING_ENABLED: true,
   PADDLE_API_KEY: "test-value",
@@ -7,7 +8,7 @@ const billing = {
   PADDLE_PRO_PRICE_ID: "pri_test_pro",
   PADDLE_BUSINESS_PRICE_ID: "pri_test_business",
   PADDLE_ENVIRONMENT: "production",
-  FRONTEND_URL: "https://example.test",
+  ...publicOrigin,
 };
 describe("production billing configuration", () => {
   it.each(Object.keys(billing).filter((key) => key !== "BILLING_ENABLED"))(
@@ -57,29 +58,69 @@ describe("migration startup switch", () => {
   });
 });
 
-describe("explicit billing switch", () => {
-  it("starts production without Paddle configuration when billing is off or omitted", () => {
+describe("production public origin", () => {
+  const production = { ...base, NODE_ENV: "production" };
+
+  it("accepts the origin the release sets, with billing off", () => {
     expect(
       envSchema.parse({
-        ...base,
-        NODE_ENV: "production",
-        BILLING_ENABLED: "false",
-      }),
+        ...production,
+        FRONTEND_URL: "https://receiptmaster.org",
+      }).FRONTEND_URL,
+    ).toBe("https://receiptmaster.org");
+  });
+
+  it.each([
+    undefined,
+    "",
+    "not-a-url",
+    "http://localhost:5173",
+    "https://localhost",
+    "http://receiptmaster.org",
+    "https://receiptmaster.org/",
+    "https://receiptmaster.org/app",
+  ])("refuses to start production with FRONTEND_URL %p", (value) => {
+    const result = envSchema.safeParse({ ...production, FRONTEND_URL: value });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map(({ path }) => path)).toContainEqual([
+      "FRONTEND_URL",
+    ]);
+  });
+
+  it.each(["development", "test"])(
+    "leaves %s free to omit it or point at a local frontend",
+    (nodeEnv) => {
+      for (const value of [undefined, "", "http://localhost:5173"]) {
+        expect(
+          envSchema.safeParse({
+            ...base,
+            NODE_ENV: nodeEnv,
+            FRONTEND_URL: value,
+          }).success,
+        ).toBe(true);
+      }
+    },
+  );
+});
+
+describe("explicit billing switch", () => {
+  it("starts production without Paddle configuration when billing is off or omitted", () => {
+    const production = { ...base, ...publicOrigin, NODE_ENV: "production" };
+    expect(
+      envSchema.parse({ ...production, BILLING_ENABLED: "false" }),
     ).toMatchObject({ BILLING_ENABLED: false });
-    expect(envSchema.parse({ ...base, NODE_ENV: "production" })).toMatchObject({
+    expect(envSchema.parse(production)).toMatchObject({
       BILLING_ENABLED: false,
     });
     expect(
       envSchema.parse({
-        ...base,
-        NODE_ENV: "production",
+        ...production,
         BILLING_ENABLED: "false",
         PADDLE_API_KEY: "",
         PADDLE_WEBHOOK_SECRET: "",
         PADDLE_PRO_PRICE_ID: "",
         PADDLE_BUSINESS_PRICE_ID: "",
         PADDLE_ENVIRONMENT: "",
-        FRONTEND_URL: "",
       }),
     ).toMatchObject({ BILLING_ENABLED: false });
   });
