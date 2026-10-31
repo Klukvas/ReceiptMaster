@@ -1009,15 +1009,17 @@ export class PaginationDto {
 ```typescript
 export class DateRangeDto {
   @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
 
   // Parsed & validated versions (computed by getter)
   get startDateParsed(): Date | undefined { ... }
+  // A date-only value (YYYY-MM-DD) ends at 23:59:59.999Z of that UTC day;
+  // queries compare with `<=`, so the selected day is included.
   get endDateParsed(): Date | undefined { ... }
 }
 ```

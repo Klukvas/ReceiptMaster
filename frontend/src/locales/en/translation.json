@@ -742,6 +742,7 @@
     "sortByRevenue": "By revenue",
     "sortByOrders": "By orders",
     "profitUnknown": "Cost unknown",
+    "profitChartUnknown": "Nothing to chart: the purchase cost is unknown for all orders in this period.",
     "profitPartial": "Partial",
     "profitPartialTooltip": "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
     "csvProfitComplete": "Profit complete",
@@ -826,6 +827,11 @@
     "paddleUnavailable": "Payment system unavailable. Please refresh the page.",
     "billingDisabled": "Payments are currently unavailable. Your current plan and usage limits still apply.",
     "planUnavailable": "Not included in your current plan"
+  },
+  "appError": {
+    "title": "Something went wrong",
+    "description": "The page could not be displayed. Reload it to try again.",
+    "reload": "Reload page"
   },
   "errors": {
     "userAlreadyExists": "User with this email already exists",

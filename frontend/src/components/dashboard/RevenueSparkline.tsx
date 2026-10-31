@@ -104,7 +104,9 @@ export const RevenueSparkline = () => {
             stroke="var(--color-text-tertiary)"
             width={60}
           />
+          {/* filterNull would hide the profit row of an unknown day. */}
           <Tooltip
+            filterNull={false}
             formatter={(value) =>
               typeof value === "number" ? formatCurrency(value * 100) : "—"
             }

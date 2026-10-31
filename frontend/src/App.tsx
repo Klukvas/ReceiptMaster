@@ -10,6 +10,7 @@ import { useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/layout/Layout";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ScrollToTop } from "./components/ScrollToTop";
+import { PageSpinner } from "./components/common/PageSpinner";
 import { HomePage } from "./pages/HomePage";
 
 // Lazy-loaded page components for code splitting
@@ -85,13 +86,7 @@ const AppRoutes: React.FC = () => {
   const { isAuthenticated: _isAuthenticated } = useAuth();
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-base" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageSpinner />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route

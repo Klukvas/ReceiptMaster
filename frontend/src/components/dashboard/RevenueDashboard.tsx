@@ -173,6 +173,7 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
           isLoading={productsLoading}
           color="#10b981"
           emptyMessage={t("dashboard.noData")}
+          unknownMessage={t("dashboard.profitChartUnknown")}
         />
         <TopProductsChart
           title={t("dashboard.topProductsByQty", "Top Products by Quantity")}
@@ -191,6 +192,7 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
           isLoading={recipientsLoading}
           color="#10b981"
           emptyMessage={t("dashboard.noData")}
+          unknownMessage={t("dashboard.profitChartUnknown")}
         />
         <TopRecipientsList
           recipients={recipientListData}

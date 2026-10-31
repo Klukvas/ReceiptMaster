@@ -67,7 +67,8 @@ market/
 │   │   ├── services/        # OrderService, ReceiptService, NotificationService
 │   │   ├── lib/             # api.ts (Axios client + interceptors), auth-session.ts
 │   │   │                    #   (cross-tab refresh outcome), api-errors.ts, profit.ts
-│   │   │                    #   (unknown/partial profit display helpers)
+│   │   │                    #   (unknown/partial profit display helpers), chunk-load.ts
+│   │   │                    #   (stale-chunk reload guard for AppErrorBoundary)
 │   │   ├── hooks/           # useOrders, useCheckout, useReceiptSocket, useServerPagination, …
 │   │   ├── contexts/        # AuthContext, ThemeContext
 │   │   └── providers/       # PaddleProvider
