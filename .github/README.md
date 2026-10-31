@@ -1,104 +1,95 @@
-# GitHub Actions Workflows
+# GitHub Actions Workflow
 
-This directory contains GitHub Actions workflows for the MarketFlow project.
+This directory contains the GitHub Actions workflow for the ReceiptMaster project.
 
-## Workflows
+**Every push to `main`, including a merged pull request, deploys production.**
 
-### 1. `test.yml` - Testing and Validation
+- [PROJECT.md](../PROJECT.md#cicd-github-actions) lists the jobs in `ci.yml`.
+- [DEPLOYMENT.md](DEPLOYMENT.md) describes the guarded production release.
+
+## Workflow
+
+### `ci.yml` - Test, Build, and Deploy
 - **Triggers:** Pull requests to main, pushes to main
-- **Purpose:** Run tests, linting, and build validation
-- **Jobs:**
-  - `test-backend`: Run backend tests, linting, and build
-  - `test-frontend`: Run frontend linting and build
-  - `docker-build-test`: Build Docker images for testing (not pushed)
-
-### 2. `build-and-deploy.yml` - Docker Build and Deploy
-- **Triggers:** Pull requests to main, pushes to main
-- **Purpose:** Build and push Docker images to GitHub Container Registry
-- **Registry:** `ghcr.io`
+- **Purpose:** Run the verification jobs, then publish images and deploy production
 - **Behavior:**
-  - **On PR:** Builds and pushes images with commit SHA tag
-  - **On main push:** Builds and pushes images with both SHA and `latest` tags
-- **Images:**
-  - `ghcr.io/{owner}/{repo}/frontend:{sha}` (always)
-  - `ghcr.io/{owner}/{repo}/backend:{sha}` (always)
-  - `ghcr.io/{owner}/{repo}/frontend:latest` (main branch only)
-  - `ghcr.io/{owner}/{repo}/backend:latest` (main branch only)
+  - **On PR:** Runs only the verification jobs. A new push cancels the PR's run in progress.
+  - **On main push:** Runs the verification jobs. If they all pass, `build-and-deploy` publishes the images and `deploy-production` releases them.
+
+PostgreSQL runs on the production server in the application's Compose project. No workflow deploys it, and a release only backs it up and migrates it.
+
+## Docker Images
+
+`build-and-deploy` pushes both images to Docker Hub under the full commit SHA:
+
+- `{DOCKERHUB_USERNAME}/receiptmaster-frontend:{sha}`
+- `{DOCKERHUB_USERNAME}/receiptmaster-backend:{sha}`
+
+These SHA tags are the only tags CI publishes, and pull requests never build or push images. CI no longer updates the `latest` tag on Docker Hub, so it points at an old image.
 
 ## Setup Instructions
 
-### 1. Enable GitHub Container Registry
-1. Go to your repository settings
-2. Navigate to "Actions" → "General"
-3. Under "Workflow permissions", select "Read and write permissions"
-4. Check "Allow GitHub Actions to create and approve pull requests"
+### Repository Secrets
+Set these under Settings → Secrets and variables → Actions:
 
-### 2. Repository Secrets (if needed)
-The workflows use `GITHUB_TOKEN` which is automatically provided by GitHub Actions. No additional secrets are required for basic functionality.
+| Secret | Purpose |
+|---|---|
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Docker Hub login and image namespace |
+| `SSH_USER`, `SSH_KEY` | SSH access to the production server |
+| `APP_HOST` | Production server |
+| `FRONTEND_API_URL`, `FRONTEND_API_KEY` | Frontend image build arguments |
 
-### 3. Package Visibility
-1. Go to your repository's "Packages" section
-2. Set package visibility to "Public" or "Private" as needed
-3. Configure access permissions for your team
+Database credentials are not GitHub secrets. They live in the server's `.env`, which a release never rewrites.
 
 ## Usage
 
 ### For Pull Requests
-- All tests and builds run automatically
-- Docker images are built and pushed for testing
-- No production deployment occurs
+- All verification jobs run automatically
+- Nothing is published or deployed
 
 ### For Main Branch Pushes
-- All tests and builds run
-- Docker images are built and pushed with commit SHA
-- Production images with `latest` tag are deployed
+- All verification jobs run
+- Docker images are built and pushed with the commit SHA
+- Those images are deployed to production
 
-### Manual Workflow Triggers
-You can manually trigger workflows from the GitHub Actions tab:
-1. Go to "Actions" tab in your repository
-2. Select the workflow you want to run
-3. Click "Run workflow"
+### Retrying a Failed Release
+`ci.yml` has no manual trigger. To retry a failed release, re-run its failed jobs:
 
-## Image Tags
-
-- `latest`: Production images (main branch only)
-- `{sha}`: Specific commit images
-- `{branch}`: Branch-specific images
-- `pr-{number}`: Pull request images
+```bash
+gh run rerun <run-id> --failed
+```
 
 ## Monitoring
 
 - Check the "Actions" tab for workflow status
 - View build logs for debugging
-- Monitor package registry for image updates
+- `build-and-deploy` reports the published images, and `deploy-production` reports the release
 - Set up notifications for failed builds
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Permission Denied**
-   - Ensure workflow permissions are set correctly
-   - Check that `GITHUB_TOKEN` has necessary permissions
+1. **Docker Hub Login or Push Fails**
+   - Verify `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
+   - Ensure the token can push to both image repositories
 
 2. **Docker Build Fails**
    - Verify Dockerfile syntax
    - Check for missing dependencies
    - Review build context and file paths
 
-3. **Registry Push Fails**
-   - Verify registry credentials
-   - Check package visibility settings
-   - Ensure repository has package write permissions
+3. **Release Blocked**
+   - `deploy-production` prints `RELEASE BLOCKED:` with the reason
+   - The precheck is read-only, so after a failure there fix the cause and re-run the failed jobs
+   - See [DEPLOYMENT.md](DEPLOYMENT.md) for the full sequence and rollback behavior
 
 ### Debug Commands
 
 ```bash
 # Test Docker builds locally
-docker build -t marketflow-frontend:test ./frontend
-docker build -t marketflow-backend:test ./backend
-
-# Test image functionality
-docker run --rm -p 3000:3000 marketflow-backend:test
-docker run --rm -p 5173:5173 marketflow-frontend:test
+docker build -t receiptmaster-frontend:test ./frontend
+docker build -t receiptmaster-backend:test -f backend/Dockerfile.playwright ./backend
 ```
+
+Neither image runs alone. The frontend's nginx needs a `backend` host at startup, and the backend needs its environment, PostgreSQL and Redis.

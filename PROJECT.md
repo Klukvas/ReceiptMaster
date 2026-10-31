@@ -601,8 +601,8 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
       |
       v
 +--------------------------------------+
-|  App Server (Hetzner cx22)           |
-|  Public IP  .  Private: 10.0.1.10   |
+|  Production Server (Hetzner)         |
+|  One Compose project, one network    |
 |                                      |
 |  +--------------------------------+  |
 |  | Frontend (Nginx)  :80 / :443  |  |
@@ -629,13 +629,6 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 |  | - BullMQ job queue            |  |
 |  | - Telegram sessions (4h TTL)  |  |
 |  +--------------------------------+  |
-+----------------+---------------------+
-                 | Private network
-                 | 10.0.0.0/16
-                 v
-+--------------------------------------+
-|  DB Server (Hetzner cx22)            |
-|  Private: 10.0.1.20                  |
 |                                      |
 |  +--------------------------------+  |
 |  | PostgreSQL 15  :5432           |  |
@@ -643,8 +636,10 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 |  | - Composite indexes           |  |
 |  | - Advisory locks (migrations) |  |
 |  +--------------------------------+  |
+|                                      |
 |  +--------------------------------+  |
-|  | pgAdmin 4  :5050              |  |
+|  | DB backup                      |  |
+|  | - pg_dump to S3 every 4 days   |  |
 |  +--------------------------------+  |
 +--------------------------------------+
 
@@ -673,9 +668,8 @@ The backend is designed for horizontal scaling:
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Local development (Postgres + Redis + Backend + Frontend with hot reload) |
-| `docker-compose.prod.yml` | Standalone production (all services, scalable backend) |
-| `docker-compose.application.yml` | Production app server (Backend + Frontend + Redis, connects to remote DB) |
-| `docker-compose.database.yml` | Production database server (PostgreSQL + pgAdmin) |
+| `docker-compose.prod.yml` | Self-built stack on `market-*:latest` images for `yarn docker:prod:*` (all services, scalable backend); not used by the production release |
+| `docker-compose.production.yml` | Production layout on one server (Postgres + Redis + Backend + Frontend + S3 backup). A release ships this file as a reference only: the server keeps its own copy (`.github/DEPLOYMENT.md`) |
 | `backend/docker-compose.test.yml` | Test database (Postgres on port 5433) |
 
 ### Dockerfiles
@@ -703,9 +697,6 @@ Images install with `yarn install --frozen-lockfile`. Their build contexts (`./b
 9. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate (through a one-shot `migrate` service that uses `DB_OWNER_*` when set) and deploy the immutable image pair
 
 Jobs 1–7 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
-
-**Database Deployment** (`.github/workflows/deploy-database.yml`) -- manual trigger:
-- SSH to DB server, pull images, optional force-recreate
 
 ### Nginx
 
