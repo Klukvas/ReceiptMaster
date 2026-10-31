@@ -89,7 +89,6 @@ yarn frontend:dev   # Frontend on http://localhost:5173
 - **Frontend**: http://localhost:5173
 - **API**: http://localhost:3000
 - **Swagger Documentation**: http://localhost:3000/docs
-- **pgAdmin**: http://localhost:5050 (admin@market.com / admin)
 
 ## 📊 Features
 
@@ -210,14 +209,12 @@ http://localhost:3000/docs
 
 ## 🔄 CI/CD Pipeline
 
-### Automated Workflows
+### Automated Workflow
 
-The project includes two GitHub Actions workflows:
+The project has one GitHub Actions workflow, `ci.yml`, which runs verification on pull requests and pushes to `main`:
 
-- **`ci.yml`**: Runs verification on pull requests and pushes to `main`
-  - Pull requests: Verification only, nothing is published or deployed
-  - Main branch: After verification passes, publishes Docker images and deploys production, so merging a pull request releases it
-- **`deploy-database.yml`**: Manually triggered database server deployment, not part of a release
+- Pull requests: Verification only, nothing is published or deployed
+- Main branch: After verification passes, publishes Docker images and deploys production, so merging a pull request releases it
 
 ### Docker Images
 

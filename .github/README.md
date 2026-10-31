@@ -1,26 +1,22 @@
-# GitHub Actions Workflows
+# GitHub Actions Workflow
 
-This directory contains GitHub Actions workflows for the ReceiptMaster project.
+This directory contains the GitHub Actions workflow for the ReceiptMaster project.
 
 **Every push to `main`, including a merged pull request, deploys production.**
 
 - [PROJECT.md](../PROJECT.md#cicd-github-actions) lists the jobs in `ci.yml`.
 - [DEPLOYMENT.md](DEPLOYMENT.md) describes the guarded production release.
 
-## Workflows
+## Workflow
 
-### 1. `ci.yml` - Test, Build, and Deploy
+### `ci.yml` - Test, Build, and Deploy
 - **Triggers:** Pull requests to main, pushes to main
 - **Purpose:** Run the verification jobs, then publish images and deploy production
 - **Behavior:**
   - **On PR:** Runs only the verification jobs. A new push cancels the PR's run in progress.
   - **On main push:** Runs the verification jobs. If they all pass, `build-and-deploy` publishes the images and `deploy-production` releases them.
 
-### 2. `deploy-database.yml` - Deploy Database Server
-- **Trigger:** Manual only
-- **Purpose:** Connect to `DB_HOST` over SSH and start `docker-compose.database.yml` there
-- **Production:** This workflow predates the single-server setup and has no part in a release. Production's PostgreSQL now runs in the application's Compose project, so check what `DB_HOST` points to before running it.
-- **Data loss:** The `force_recreate` input runs `docker compose down -v` and `docker volume prune -f`, which destroys the database.
+PostgreSQL runs on the production server in the application's Compose project. No workflow deploys it, and a release only backs it up and migrates it.
 
 ## Docker Images
 
@@ -36,15 +32,14 @@ These SHA tags are the only tags CI publishes, and pull requests never build or 
 ### Repository Secrets
 Set these under Settings → Secrets and variables → Actions:
 
-| Secret | Used by | Purpose |
-|---|---|---|
-| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Both workflows | Docker Hub login and image namespace |
-| `SSH_USER`, `SSH_KEY` | Both workflows | SSH access to the target server |
-| `APP_HOST` | `ci.yml` | Production server |
-| `FRONTEND_API_URL`, `FRONTEND_API_KEY` | `ci.yml` | Frontend image build arguments |
-| `DB_HOST` | `deploy-database.yml` | Database server |
-| `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | `deploy-database.yml` | Written to the database server's `.env` |
-| `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` | `deploy-database.yml` | Written to the database server's `.env` |
+| Secret | Purpose |
+|---|---|
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Docker Hub login and image namespace |
+| `SSH_USER`, `SSH_KEY` | SSH access to the production server |
+| `APP_HOST` | Production server |
+| `FRONTEND_API_URL`, `FRONTEND_API_KEY` | Frontend image build arguments |
+
+Database credentials are not GitHub secrets. They live in the server's `.env`, which a release never rewrites.
 
 ## Usage
 
@@ -57,12 +52,7 @@ Set these under Settings → Secrets and variables → Actions:
 - Docker images are built and pushed with the commit SHA
 - Those images are deployed to production
 
-### Manual Workflow Triggers
-Only `deploy-database.yml` can be started by hand:
-1. Go to "Actions" tab in your repository
-2. Select "Deploy Database Server"
-3. Click "Run workflow"
-
+### Retrying a Failed Release
 `ci.yml` has no manual trigger. To retry a failed release, re-run its failed jobs:
 
 ```bash
