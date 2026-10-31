@@ -3,6 +3,7 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
+import { Order } from "../orders/entities/order.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
@@ -144,18 +145,15 @@ export class RecipientsService {
   async remove(id: string, user: User): Promise<void> {
     const recipient = await this.findOne(id, user);
 
-    // Проверяем, есть ли у получателя заказы
-    const ordersCount = await this.recipientsRepository
-      .createQueryBuilder("recipient")
-      .leftJoin("recipient.orders", "order")
-      .where("recipient.id = :id", { id })
-      .andWhere("order.id IS NOT NULL")
-      .getCount();
+    // orders.recipient_id cascades, so a soft-deleted order counts too: deleting
+    // past it would purge kept history, or fail on its receipt's foreign key.
+    const hasOrders = await this.recipientsRepository.manager.exists(Order, {
+      where: { recipient_id: id, user_id: user.id },
+      withDeleted: true,
+    });
 
-    if (ordersCount > 0) {
-      throw ApiErrors.BAD_REQUEST(
-        "Нельзя удалить получателя, у которого есть заказы",
-      );
+    if (hasOrders) {
+      throw ApiErrors.RECIPIENT_HAS_ORDERS(id);
     }
 
     await this.recipientsRepository.remove(recipient);

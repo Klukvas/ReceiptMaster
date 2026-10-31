@@ -32,9 +32,12 @@ export function adminConnectionFromEnv(
   };
 }
 
-async function truncateTables(
-  query: (sql: string) => Promise<unknown>,
-): Promise<void> {
+type AdminQuery = (
+  sql: string,
+  params?: unknown[],
+) => Promise<Record<string, unknown>[]>;
+
+async function truncateTables(query: AdminQuery): Promise<void> {
   await query("SET session_replication_role = 'replica'");
   for (const table of TABLES_IN_ORDER) {
     await query(`TRUNCATE TABLE "${table}" CASCADE`);
@@ -42,18 +45,27 @@ async function truncateTables(
   await query("SET session_replication_role = 'origin'");
 }
 
-export async function cleanDatabase(app: INestApplication): Promise<void> {
+/** Test setup and checks that RLS hides from the application role outside a request. */
+export async function withAdminQuery<T>(
+  app: INestApplication,
+  run: (query: AdminQuery) => Promise<T>,
+): Promise<T> {
   const connection = adminConnectionFromEnv();
   if (!connection) {
     const dataSource = app.get<DataSource>(getDataSourceToken());
-    await truncateTables((sql) => dataSource.query(sql));
-    return;
+    return run((sql, params) => dataSource.query(sql, params));
   }
   const admin = new Client(connection);
   await admin.connect();
   try {
-    await truncateTables((sql) => admin.query(sql));
+    return await run(
+      async (sql, params) => (await admin.query(sql, params)).rows,
+    );
   } finally {
     await admin.end();
   }
+}
+
+export async function cleanDatabase(app: INestApplication): Promise<void> {
+  await withAdminQuery(app, truncateTables);
 }

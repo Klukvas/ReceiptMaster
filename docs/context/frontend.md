@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-30
+**Last Updated:** 2026-10-31
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -621,6 +621,11 @@ saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and inval
 `["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
 `productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
 stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
+
+### Recipients page: refused deletes (`pages/RecipientsPage.tsx`)
+
+A refused delete closes the confirmation and shows `parseApiError(...).message` as a toast, so 409
+`RECIPIENT_HAS_ORDERS` reads as `errors.recipientHasOrders` (en/ru/uk).
 
 ### Onboarding wizard (`components/onboarding/OnboardingModal.tsx`)
 
