@@ -23,6 +23,7 @@ const SPECS = [
   { name: "receipt-progress", load: () => import("./receipt-progress.spec.mjs") },
   { name: "auth-multitab", load: () => import("./auth-multitab.spec.mjs") },
   { name: "product-form-conflict", load: () => import("./product-form-conflict.spec.mjs") },
+  { name: "product-similar-hint", load: () => import("./product-similar-hint.spec.mjs") },
   { name: "recipient-delete-conflict", load: () => import("./recipient-delete-conflict.spec.mjs") },
   { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
   { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
