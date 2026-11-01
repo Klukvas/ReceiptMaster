@@ -138,11 +138,9 @@ export const useOrders = () => {
 
   const generateReceiptMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const receiptsBefore = await countReceipts();
       const result = await receiptService.generateReceipt(orderId);
       // The PDF renders in the background; say so, otherwise nothing seems to happen.
       toast(t("receipts.generatingReceipt"));
-      if (receiptsBefore >= RECEIPT_RETENTION_LIMIT) showReceiptEvictionNotice();
       return result;
     },
     onSuccess: () => {
@@ -216,8 +214,33 @@ export const useOrders = () => {
     setConfirmAction({ isOpen: false, type: null, order: null });
   };
 
-  const handleGenerateReceipt = (orderId: string) => {
+  // Generating beyond the retention cap deletes the oldest receipt and breaks its public
+  // link, so name that receipt and ask first. A failed lookup must not block generating.
+  const [receiptReplacement, setReceiptReplacement] = useState<{
+    orderId: string;
+    number: string;
+    limit: number;
+  } | null>(null);
+
+  const handleGenerateReceipt = async (orderId: string) => {
+    const retention = await receiptsApi
+      .getRetention()
+      .then((response) => response.data)
+      .catch(() => null);
+    if (retention?.replaces) {
+      setReceiptReplacement({
+        orderId,
+        number: retention.replaces.number,
+        limit: retention.limit,
+      });
+      return;
+    }
     generateReceiptMutation.mutate(orderId);
+  };
+
+  const confirmReceiptReplacement = () => {
+    if (receiptReplacement) generateReceiptMutation.mutate(receiptReplacement.orderId);
+    setReceiptReplacement(null);
   };
 
   const handleDownloadReceipt = (receiptId: string) => {
@@ -270,6 +293,9 @@ export const useOrders = () => {
     handleCancel,
     handleDeleteOrder,
     handleGenerateReceipt,
+    receiptReplacement,
+    confirmReceiptReplacement,
+    cancelReceiptReplacement: () => setReceiptReplacement(null),
     handleDownloadReceipt,
     handlePrintReceipt,
     // Batch actions

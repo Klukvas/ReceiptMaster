@@ -25,7 +25,8 @@ import { useTranslation } from"../hooks/useTranslation";
 import { useSubscription } from"../hooks/useSubscription";
 import { isOrderLimitReached } from"../lib/subscriptionApi";
 import { UsageBar } from"../components/subscription/UsageBar";
-import { useSearchParams } from"react-router-dom";
+import { Button } from"../components/ui/Button";
+import { Link, useSearchParams } from"react-router-dom";
 import { useCreateIntent } from"../hooks/useCreateIntent";
 import { UpgradeModal } from"../components/subscription/UpgradeModal";
 
@@ -77,6 +78,9 @@ export const OrdersPage = () => {
  handleCancel,
  handleDeleteOrder,
  handleGenerateReceipt,
+ receiptReplacement,
+ confirmReceiptReplacement,
+ cancelReceiptReplacement,
  handleDownloadReceipt,
  handlePrintReceipt,
  isDeleting,
@@ -408,6 +412,24 @@ export const OrdersPage = () => {
  <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-2" />
  }
  emptyMessage={t("orders.noOrders")}
+ emptyAction={
+ <div className="flex flex-col items-center gap-3">
+ <p className="max-w-xs text-xs text-content-tertiary">
+ {t("orders.emptyPrerequisites")}
+ </p>
+ <div className="flex gap-3 text-sm">
+ <Link className="text-accent-base hover:underline" to="/products?create=1">
+ {t("home.addProduct")}
+ </Link>
+ <Link className="text-accent-base hover:underline" to="/recipients?create=1">
+ {t("home.addRecipient")}
+ </Link>
+ </div>
+ <Button onClick={() => openCreateOrder()}>
+ {t("orders.createFirstOrder")}
+ </Button>
+ </div>
+ }
  emptySearchMessage={t("orders.noOrdersFound")}
  renderActions={renderOrderActions}
  renderCard={renderOrderCard}
@@ -426,6 +448,19 @@ export const OrdersPage = () => {
  isDeleting={isBatchDeleting}
  />
  )}
+
+ <ConfirmModal
+ isOpen={receiptReplacement !== null}
+ onClose={cancelReceiptReplacement}
+ onConfirm={confirmReceiptReplacement}
+ title={t("orders.replaceReceiptTitle")}
+ message={t("orders.replaceReceiptMessage", {
+ limit: receiptReplacement?.limit,
+ number: receiptReplacement?.number,
+ })}
+ confirmLabel={t("orders.generateReceipt")}
+ variant="warning"
+ />
 
  {showForm && (
  <CreateOrderModal

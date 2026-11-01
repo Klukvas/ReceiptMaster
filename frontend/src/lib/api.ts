@@ -350,6 +350,14 @@ export const receiptsApi = {
   create: (orderId: string) =>
     api.post<Receipt>(`/receipts/orders/${orderId}/receipt`),
 
+  /** Retention cap and the receipt the next one would replace (null while under the cap). */
+  getRetention: () =>
+    api.get<{
+      limit: number;
+      count: number;
+      replaces: { id: string; number: string; order_id: string } | null;
+    }>("/receipts/retention"),
+
   getById: (id: string) => api.get<Receipt>(`/receipts/${id}`),
 
   getPdf: (id: string) =>
