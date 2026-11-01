@@ -5,8 +5,8 @@ exec python3 - "$@" <<'PY'
 import contextlib, fcntl, hashlib, json, os, pathlib, re, subprocess, sys, time, urllib.request, urllib.parse
 
 EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'AddAutoGenerateReceipt1792200000000', 'AddOrderItemUnitCost1792300000000', 'BackfillOrderItemUnitCost1792310000000', 'HashRefreshTokens1792400000000']
-# Flip to True, in a reviewed commit, once production runs as the restricted application role.
-REQUIRE_RESTRICTED_APP_ROLE = False
+# Production runs as the restricted application role since 2026-10-31; a release now fails if that regresses.
+REQUIRE_RESTRICTED_APP_ROLE = True
 COMPOSE_NETWORK = 'marketflow-network'
 PUBLIC_ORIGIN = 'https://receiptmaster.org'
 RETAINED_RELEASES = 3
