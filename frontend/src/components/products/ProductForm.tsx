@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
+import { parseApiError } from "../../lib/api-errors";
 import { productsApi, suppliersApi, type Product, amountToCents } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -15,15 +16,6 @@ interface ProductFormProps {
   product?: Product | null;
   onClose: () => void;
 }
-
-const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error && typeof error === "object" && "response" in error) {
-    const response = (error as { response?: { data?: { message?: string } } })
-      .response;
-    return response?.data?.message || defaultMessage;
-  }
-  return defaultMessage;
-};
 
 export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [formData, setFormData] = useState({
@@ -100,7 +92,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t("products.createError", "Error creating product")));
+      setBackendError(parseApiError(error).message || t("products.createError"));
     },
   });
 
@@ -113,7 +105,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
-      setBackendError(getErrorMessage(error, t("products.updateError", "Error updating product")));
+      setBackendError(parseApiError(error).message || t("products.updateError"));
     },
   });
 
@@ -130,9 +122,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     if (isNaN(salePrice) || salePrice < 0) {
       newErrors.sale_price_cents = t("products.salePriceMustBePositive");
     }
-    const quantity = parseInt(formData.quantity);
-    if (isNaN(quantity) || quantity < 0) {
-      newErrors.quantity = t("products.quantityMustBeNonNegative");
+    // parseInt("1.5") is 1: reject fractions instead of silently storing a different number.
+    if (!/^\d+$/.test(formData.quantity.trim())) {
+      newErrors.quantity = t("products.quantityMustBeWhole");
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -273,6 +265,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             label={t("products.quantity")}
             type="number"
             min="0"
+            step="1"
             placeholder="0"
             value={formData.quantity}
             onChange={(e) => {

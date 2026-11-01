@@ -6,6 +6,7 @@ import {
  suppliersApi,
  type Supplier,
 } from"../../lib/api";
+import { parseApiError } from"../../lib/api-errors";
 import { Button } from"../ui/Button";
 import { Input } from"../ui/Input";
 import { Card } from"../ui/Card";
@@ -64,8 +65,9 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  queryClient.invalidateQueries({ queryKey: ["suppliers"] });
  onClose();
  },
- onError: () => {
- toast.error(t("errors.badRequest"));
+ // Show the real reason (too long, duplicate, offline) instead of a blanket "Bad request".
+ onError: (error: unknown) => {
+ toast.error(parseApiError(error).message);
  },
  });
 
@@ -82,8 +84,9 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  queryClient.invalidateQueries({ queryKey: ["suppliers"] });
  onClose();
  },
- onError: () => {
- toast.error(t("errors.badRequest"));
+ // Show the real reason (too long, duplicate, offline) instead of a blanket "Bad request".
+ onError: (error: unknown) => {
+ toast.error(parseApiError(error).message);
  },
  });
 

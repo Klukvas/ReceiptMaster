@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import toast from "react-hot-toast";
 import { recipientsApi, type Recipient } from "../../lib/api";
+import { parseApiError } from "../../lib/api-errors";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
@@ -45,6 +46,9 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       toast.success(t("recipients.recipientCreated"));
       onClose();
     },
+    onError: (error: unknown) => {
+      toast.error(parseApiError(error).message);
+    },
   });
 
   const updateMutation = useMutation({
@@ -54,6 +58,9 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
       toast.success(t("recipients.recipientUpdated"));
       onClose();
+    },
+    onError: (error: unknown) => {
+      toast.error(parseApiError(error).message);
     },
   });
 

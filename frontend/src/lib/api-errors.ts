@@ -114,6 +114,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
 
+/** USER_ALREADY_EXISTS -> errors.userAlreadyExists (the locale files use camelCase keys). */
+const errorTranslationKey = (code: string): string =>
+  `errors.${code
+    .toLowerCase()
+    .replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
+
 // Codes that say nothing specific on their own; the server's detail is the useful part.
 const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
   ErrorCode.VALIDATION_ERROR,
@@ -157,12 +163,9 @@ export function parseApiError(error: unknown): {
       }
 
       // New format: { error, errorCode }
-      const userFriendlyMessage = i18n.t(
-        `errors.${data.errorCode.toLowerCase()}`,
-        {
-          defaultValue: ERROR_MESSAGES[data.errorCode] || data.error,
-        },
-      );
+      const userFriendlyMessage = i18n.t(errorTranslationKey(data.errorCode), {
+        defaultValue: ERROR_MESSAGES[data.errorCode] || data.error,
+      });
       return {
         message: userFriendlyMessage,
         code: data.errorCode,
