@@ -457,7 +457,11 @@ export const OrdersPage = () => {
 
  {/* Confirm action modal (cancel / delete / bulk delete) */}
  <ConfirmModal
- isOpen={confirmAction.isOpen && (confirmAction.type !== "bulkDelete" || validSelectedKeys.size > 0)}
+ isOpen={
+ confirmAction.isOpen &&
+ ((confirmAction.type !== "bulkDelete" && confirmAction.type !== "bulkApprove") ||
+ validSelectedKeys.size > 0)
+ }
  onClose={handleCloseConfirm}
  onConfirm={() => handleConfirmAction([...validSelectedKeys])}
  title={
@@ -465,6 +469,8 @@ export const OrdersPage = () => {
  ? t("orders.cancelOrder","Cancel Order")
  : confirmAction.type ==="bulkDelete"
  ? t("orders.batchDeleteTitle")
+ : confirmAction.type ==="bulkApprove"
+ ? t("orders.batchApproveTitle")
  : t("orders.deleteOrder")
  }
  message={
@@ -475,11 +481,15 @@ export const OrdersPage = () => {
  )
  : confirmAction.type ==="bulkDelete"
  ? t("orders.batchDeleteMessage", { count: validSelectedKeys.size })
+ : confirmAction.type ==="bulkApprove"
+ ? t("orders.batchApproveMessage", { count: validSelectedKeys.size })
  : t("orders.deleteOrderMessage")
  }
  confirmLabel={
  confirmAction.type ==="cancel"
  ? t("orders.cancelOrder","Cancel Order")
+ : confirmAction.type ==="bulkApprove"
+ ? t("orders.batchApprove")
  : t("common.delete")
  }
  dismissLabel={
@@ -487,12 +497,18 @@ export const OrdersPage = () => {
  ? t("orders.keepOrder","Keep order")
  : undefined
  }
- variant={confirmAction.type ==="cancel" ?"warning" :"danger"}
+ variant={
+ confirmAction.type ==="cancel" || confirmAction.type ==="bulkApprove"
+ ?"warning"
+ :"danger"
+ }
  isLoading={
  confirmAction.type ==="cancel"
  ? isCancelling
  : confirmAction.type ==="bulkDelete"
  ? isBatchDeleting
+ : confirmAction.type ==="bulkApprove"
+ ? isBatchApproving
  : isDeleting
  }
  />

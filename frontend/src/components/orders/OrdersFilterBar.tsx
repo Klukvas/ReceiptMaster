@@ -82,7 +82,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
  {activeFilterCount > 0 && (
  <div className="flex items-center gap-2">
  <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-accent-light)] text-primary-700 border border-accent-base">
- {activeFilterCount} {t("orders.activeFilters")}
+ {t("orders.activeFiltersCount", { count: activeFilterCount })}
  </span>
  <button
  onClick={onClearAll}

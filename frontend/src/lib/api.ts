@@ -1,5 +1,6 @@
 import { isProtectedPath, markSessionExpired } from "./session-expiry";
 import axios from "axios";
+import i18n from "./i18n";
 
 export type {
   Product,
@@ -512,9 +513,21 @@ export const formatCurrency = (cents: number, currency: string = "UAH") => {
   }).format(amount);
 };
 
-export const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString("ru-RU");
+// Dates follow the interface language (and the viewer's own time zone); they used to be
+// hard-wired to ru-RU for everyone.
+const DATE_LOCALES: Record<string, string> = {
+  ru: "ru-RU",
+  uk: "uk-UA",
+  en: "en-GB",
 };
+const dateLocale = (): string =>
+  DATE_LOCALES[i18n.language?.split("-")[0] ?? "en"] ?? "en-GB";
+
+export const formatDate = (dateString: string) =>
+  new Date(dateString).toLocaleString(dateLocale());
+
+export const formatDateOnly = (dateString: string | number | Date) =>
+  new Date(dateString).toLocaleDateString(dateLocale());
 
 // Parsing utilities
 export const amountToCents = (amount: string | number): number => {

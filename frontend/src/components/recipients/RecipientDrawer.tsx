@@ -23,6 +23,7 @@ import { ordersApi, formatCurrency, formatDate, type Recipient } from '../../lib
 import { Drawer } from '../ui/Drawer';
 import { RecipientAvatar } from './RecipientAvatar';
 import { useTranslation } from '../../hooks/useTranslation';
+import toast from 'react-hot-toast';
 
 interface RecipientDrawerProps {
  recipient: Recipient | null;
@@ -49,11 +50,13 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  try {
  await navigator.clipboard.writeText(recipient.address);
  setAddressCopied(true);
+ toast.success(t("common.copied"));
  setTimeout(() => setAddressCopied(false), 2000);
  } catch {
- // clipboard API might not be available
+ // The clipboard API needs a secure context and permission; say so instead of doing nothing.
+ toast.error(t("common.copyFailed"));
  }
- }, [recipient?.address]);
+ }, [recipient?.address, t]);
 
  if (!recipient) return null;
 

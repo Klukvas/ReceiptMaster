@@ -10,7 +10,7 @@ import { useNotifications } from "./useNotifications";
 
 interface ConfirmAction {
   isOpen: boolean;
-  type: "cancel" | "delete" | "bulkDelete" | null;
+  type: "cancel" | "delete" | "bulkDelete" | "bulkApprove" | null;
   order: Order | null;
 }
 
@@ -162,6 +162,10 @@ export const useOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       setSelectedKeys(new Set());
+      setConfirmAction({ isOpen: false, type: null, order: null });
+    },
+    onError: () => {
+      setConfirmAction({ isOpen: false, type: null, order: null });
     },
   });
 
@@ -203,6 +207,8 @@ export const useOrders = () => {
       deleteOrderMutation.mutate(confirmAction.order.id);
     } else if (confirmAction.type === "bulkDelete") {
       if (validOrderIds.length > 0) batchDeleteMutation.mutate(validOrderIds);
+    } else if (confirmAction.type === "bulkApprove") {
+      if (validOrderIds.length > 0) batchApproveMutation.mutate(validOrderIds);
     }
   };
 
@@ -223,8 +229,11 @@ export const useOrders = () => {
   };
 
   // Batch action handlers
+  // Approving locks the orders against edits (and may create receipts), so ask first.
   const handleBatchApprove = (validOrderIds: string[]) => {
-    if (validOrderIds.length > 0) batchApproveMutation.mutate(validOrderIds);
+    if (validOrderIds.length > 0) {
+      setConfirmAction({ isOpen: true, type: "bulkApprove", order: null });
+    }
   };
 
   const handleBulkDeleteConfirm = () => {
