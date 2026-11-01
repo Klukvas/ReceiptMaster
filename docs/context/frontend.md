@@ -81,7 +81,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
 | `/blog` | `BlogListPage` | No | None | Blog listing |
 | `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown) |
-| `/terms`, `/privacy`, etc. | Static pages | No | None | Legal docs |
+| `/terms`, `/privacy`, `/refund-policy`, `/cookie-policy` | Legal pages | No | None | Follow the interface language (en/ru/uk; any other language shows English) — see "Legal pages" |
 | `*` | `NotFoundPage` | No | None | 404 fallback |
 
 **Protected routes** wrap with `<ProtectedRoute>` component (line 101ff):
@@ -451,6 +451,12 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 
 **Convention:** Organize translation keys hierarchically (orders.recipient, settings.receiptTitle, etc.). Check JSON files for the full key structure.
 
+**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
+
+### Legal pages
+
+`TermsPage`, `PrivacyPage`, `RefundPolicyPage` and `CookiePolicyPage` are thin wrappers: they pick the text for the interface language with `pickLegalContent` (`pages/legal/types.ts`; `ru`/`uk` or English for anything else) and render it inside `LegalLayout`. The texts are per-language content modules, `pages/legal/<slug>.{en,ru,uk}.tsx`, each exporting a `LegalContent` (`title`, `seoDescription`, `body` JSX); `<SEO>` gets the translated title/description and `lang`. Page chrome (the "Last updated" line, its date format, the footer links) uses the `legal.*` locale keys. The `ru`/`uk` texts are **unreviewed translations** of the English originals; the English text is the source of truth, so a change there must be mirrored in the other two files with the same section structure (`e2e/legal-pages.spec.mjs` compares headings, lists, tables and links across languages). They need a legal review before being relied on.
+
 ### Receipt template previews
 
 `components/settings/TemplatePreviewIframe.tsx` is shared by template settings, the
@@ -617,7 +623,7 @@ components/
 ├── dashboard/         # Analytics charts, widgets
 ├── landing/           # Homepage, hero, pricing
 ├── layout/            # Layout, Sidebar, Header
-├── legal/             # Terms, Privacy, etc. (static)
+├── legal/             # LegalLayout (page chrome); the texts live in pages/legal/
 ├── onboarding/        # Onboarding flow
 ├── orders/            # Order CRUD, forms, filters, actions
 ├── products/          # Product CRUD
