@@ -82,9 +82,11 @@ const knownTimeZones = (): string[] => {
 export function DocumentFormatSection({
   config,
   onChange,
+  defaultOpen,
 }: {
   config: DocumentConfig;
   onChange: (value: DocumentConfig) => void;
+  defaultOpen?: boolean;
 }) {
   const { t, currentLanguage } = useTranslation();
   const formatting = config.formatting;
@@ -117,6 +119,7 @@ export function DocumentFormatSection({
     <DocumentSection
       title={t("document.sectionFormats")}
       description={t("document.sectionFormatsHelp")}
+      defaultOpen={defaultOpen}
     >
       <fieldset>
         <legend className="mb-1 block text-sm font-medium text-content-secondary">

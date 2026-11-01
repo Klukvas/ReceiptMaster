@@ -1,19 +1,36 @@
-import { useId, type ReactNode } from "react";
+import { useContext, useId, type ReactNode } from "react";
+import { Disclosure } from "../ui/Disclosure";
+import { DocumentLayoutContext } from "./document-layout";
 
 export const selectClass =
   "w-full rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content focus:ring-2 focus:ring-[var(--color-ring)]";
 
-/** A titled card of related settings, with one plain line on what they change on the document. */
+/**
+ * A group of related settings with one plain line on what it changes on the document: an open
+ * card on the settings page, an accordion (closed unless `defaultOpen`) in the per-document dialog.
+ */
 export const DocumentSection = ({
   title,
   description,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  defaultOpen?: boolean;
 }) => {
   const titleId = useId();
+  const layout = useContext(DocumentLayoutContext);
+  if (layout === "dialog")
+    return (
+      <Disclosure summary={title} defaultOpen={defaultOpen}>
+        {description && (
+          <p className="text-sm text-content-tertiary">{description}</p>
+        )}
+        {children}
+      </Disclosure>
+    );
   return (
     <section
       aria-labelledby={titleId}

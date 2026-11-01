@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, type Order } from "../../lib/api";
 import { documentError, documentEnvelope } from "../../lib/document-config";
 import { useDocumentDraft } from "../../hooks/useDocumentDraft";
+import { formatOrderNumber } from "../../lib/order-number";
 import { DocumentEditor } from "../settings/DocumentEditor";
 import { Button } from "../ui/Button";
 import { ConfirmModal } from "../ui/ConfirmModal";
@@ -102,7 +103,17 @@ export function CustomizeDocumentModal({
       onClose={close}
       size="xl"
     >
-      <div className="max-h-[82vh] space-y-4 overflow-y-auto">
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-content">
+          {t("document.forOrder", {
+            order: [
+              order.order_number ? formatOrderNumber(order) : "",
+              order.recipient?.name ?? "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          })}
+        </p>
         {active?.replacement_status === "failed" && (
           <div
             role="status"

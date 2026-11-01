@@ -1057,8 +1057,6 @@
     "show_recipientEmail": "Show the customer’s email",
     "show_recipientPhone": "Show the customer’s phone",
     "show_recipientAddress": "Show the customer’s address",
-    "sectionLook": "Look",
-    "sectionLookHelp": "The template, title, colour and logo of your documents.",
     "templateLocked": "Higher plan",
     "paperThermal": "Receipt roll",
     "titleHeading": "Document title",
@@ -1096,7 +1094,13 @@
     "previewPaused": "The preview paused because you changed things quickly. Press Update now to continue.",
     "showPreview": "Show preview",
     "hidePreview": "Hide preview",
-    "termsGroup": "Payment and delivery terms (not used by this template)"
+    "termsGroup": "Payment and delivery terms (not used by this template)",
+    "sectionTemplate": "Template and title",
+    "sectionTemplateHelp": "How the document looks and what it is called.",
+    "sectionBrand": "Colour and logo",
+    "sectionBrandHelp": "The accent colour and the logo shown on documents.",
+    "forOrder": "For {{order}}",
+    "pdfPreviewOrder": "Preview of this document"
   },
   "legal": {
     "lastUpdated": "Last updated: {{date}}",

@@ -167,7 +167,8 @@ export const run = async () => {
     const wanted = [
       "Your business",
       "Customer details",
-      "Look",
+      "Template and title",
+      "Colour and logo",
       "Texts on the document",
       "Language and formats",
     ];
@@ -197,7 +198,9 @@ export const run = async () => {
       "a template that prints no terms folds payment and delivery terms away",
       await closed("Payment and delivery terms (not used by this template)"),
     );
-    await page.getByRole("radio", { name: /^Proforma/ }).click();
+    await page
+      .getByLabel("Template", { exact: true })
+      .selectOption("proforma");
     results.check(
       "choosing a template that prints terms shows them openly",
       (await page.getByLabel("Payment terms", { exact: true }).isVisible()) &&

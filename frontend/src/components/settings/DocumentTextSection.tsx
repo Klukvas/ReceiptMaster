@@ -16,10 +16,12 @@ export function DocumentTextSection({
   config,
   onChange,
   template,
+  defaultOpen,
 }: {
   config: DocumentConfig;
   onChange: (value: DocumentConfig) => void;
   template?: DocumentTemplate;
+  defaultOpen?: boolean;
 }) {
   const { t } = useTranslation();
   const termsUnsupported = template ? !template.capabilities.terms : false;
@@ -58,6 +60,7 @@ export function DocumentTextSection({
     <DocumentSection
       title={t("document.sectionText")}
       description={t("document.sectionTextHelp")}
+      defaultOpen={defaultOpen}
     >
       {field("footerTitle", t("document.footerTitleHelp"))}
       {field("footerSubtitle", t("document.footerSubtitleHelp"))}

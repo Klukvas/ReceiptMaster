@@ -111,7 +111,7 @@ async function check(name, operation) {
     );
     await tab("Discard changes");
     await field("Company Name").fill("Unsaved Studio");
-    await page.getByRole("radio", { name: /^Branded/ }).click();
+    await field("Template").selectOption("branded");
     await field("Closing line").fill("Draft footer");
     await openGroup("Payment and delivery terms (not used by this template)");
     await field("Payment terms").fill("Net 45 retained");

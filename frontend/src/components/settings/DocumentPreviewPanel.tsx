@@ -12,7 +12,13 @@ const WIDE_SCREEN = "(min-width: 1024px)";
  * on a phone (opened on demand, since a PDF render is wasted work if nobody looks).
  * While open it keeps itself up to date as the form changes.
  */
-export function DocumentPreviewPanel({ model }: { model: DocumentDraftModel }) {
+export function DocumentPreviewPanel({
+  model,
+  title,
+}: {
+  model: DocumentDraftModel;
+  title?: string;
+}) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(
     () =>
@@ -35,7 +41,7 @@ export function DocumentPreviewPanel({ model }: { model: DocumentDraftModel }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="document-preview-title" className="font-semibold text-content">
-          {t("document.pdfPreview")}
+          {title ?? t("document.pdfPreview")}
         </h3>
         <div className="flex items-center gap-2">
           {open && (
@@ -78,7 +84,7 @@ export function DocumentPreviewPanel({ model }: { model: DocumentDraftModel }) {
         {model.previewUrl ? (
           <>
             <iframe
-              title={t("document.pdfPreview")}
+              title={title ?? t("document.pdfPreview")}
               src={model.previewUrl}
               className="h-[420px] w-full rounded-lg border border-[var(--color-border)] lg:h-[620px]"
             />

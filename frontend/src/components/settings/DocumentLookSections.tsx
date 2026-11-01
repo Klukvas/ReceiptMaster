@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { ImageIcon, Lock } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import {
   contactFields,
   type DocumentConfig,
@@ -22,12 +22,12 @@ const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 type TemplateId = DocumentConfig["templateId"];
 
-export function DocumentLookSection({
+export function DocumentTemplateSection({
   model,
   config,
   templates,
-  template,
   onBrowseTemplates,
+  defaultOpen,
 }: {
   model: DocumentDraftModel;
   config: DocumentConfig;
@@ -36,47 +36,20 @@ export function DocumentLookSection({
     isError: boolean;
     refetch: () => unknown;
   };
-  template?: DocumentTemplate;
   onBrowseTemplates: () => void;
+  defaultOpen?: boolean;
 }) {
   const { t } = useTranslation();
-  const caps = template?.capabilities;
   const patch = (value: Partial<DocumentConfig>) =>
     model.update({ ...config, ...value });
-  const patchLogo = (value: Partial<DocumentConfig["logo"]>) =>
-    patch({ logo: { ...config.logo, ...value } });
-
-  // A picked file shows as a thumbnail until it is saved; the URL is released with it.
-  const stagedUrl = useMemo(
-    () => (model.file ? URL.createObjectURL(model.file) : ""),
-    [model.file],
-  );
-  useEffect(
-    () => () => {
-      if (stagedUrl) URL.revokeObjectURL(stagedUrl);
-    },
-    [stagedUrl],
-  );
-  const hasSavedLogo =
-    Boolean(config.logo.assetId) && model.logoAction !== "remove";
-  const hasLogo = Boolean(model.file) || hasSavedLogo;
-  const logoStatus = model.file
-    ? t("document.logoStaged", { name: model.file.name })
-    : model.logoAction === "remove"
-      ? t("document.logoRemoving")
-      : hasSavedLogo
-        ? t("document.logoSet")
-        : t("document.logoNone");
 
   return (
     <DocumentSection
-      title={t("document.sectionLook")}
-      description={t("document.sectionLookHelp")}
+      title={t("document.sectionTemplate")}
+      description={t("document.sectionTemplateHelp")}
+      defaultOpen={defaultOpen}
     >
-      <fieldset>
-        <legend className="mb-1 block text-sm font-medium text-content-secondary">
-          {t("document.template")}
-        </legend>
+      <div className="space-y-2">
         {templates.isError && (
           <Button
             type="button"
@@ -86,50 +59,34 @@ export function DocumentLookSection({
             {t("common.retry")}
           </Button>
         )}
-        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
-          {templates.data?.map((value) => {
-            const selected = value.id === config.templateId;
-            return (
-              <button
-                key={value.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                disabled={value.locked}
-                onClick={() => patch({ templateId: value.id as TemplateId })}
-                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  selected
-                    ? "border-accent-base bg-[var(--color-accent-light)] text-accent-base"
-                    : "border-[var(--color-border)] text-content hover:bg-surface-alt"
-                }`}
-              >
-                <span className="font-medium">{value.name}</span>
-                <span className="flex items-center gap-1 text-xs text-content-tertiary">
-                  {value.locked && (
-                    <>
-                      <Lock aria-hidden className="h-3 w-3" />
-                      {t("document.templateLocked")}
-                    </>
-                  )}
-                  {!value.locked &&
-                    value.capabilities.paper === "thermal" &&
-                    t("document.paperThermal")}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onBrowseTemplates}
-            disabled={!templates.data?.length}
-          >
-            {t("document.browseTemplates")}
-          </Button>
-        </div>
-      </fieldset>
+        <LabelledField label={t("document.template")}>
+          {(ids) => (
+            <select
+              {...ids}
+              className={selectClass}
+              value={config.templateId}
+              onChange={(event) =>
+                patch({ templateId: event.target.value as TemplateId })
+              }
+            >
+              {templates.data?.map((value) => (
+                <option key={value.id} value={value.id} disabled={value.locked}>
+                  {value.name}
+                  {value.locked ? ` 🔒 ${t("document.templateLocked")}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+        </LabelledField>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onBrowseTemplates}
+          disabled={!templates.data?.length}
+        >
+          {t("document.browseTemplates")}
+        </Button>
+      </div>
 
       <fieldset>
         <legend className="mb-1 block text-sm font-medium text-content-secondary">
@@ -184,7 +141,56 @@ export function DocumentLookSection({
           </div>
         )}
       </fieldset>
+    </DocumentSection>
+  );
+}
 
+export function DocumentBrandSection({
+  model,
+  config,
+  template,
+  defaultOpen,
+}: {
+  model: DocumentDraftModel;
+  config: DocumentConfig;
+  template?: DocumentTemplate;
+  defaultOpen?: boolean;
+}) {
+  const { t } = useTranslation();
+  const caps = template?.capabilities;
+  const patch = (value: Partial<DocumentConfig>) =>
+    model.update({ ...config, ...value });
+  const patchLogo = (value: Partial<DocumentConfig["logo"]>) =>
+    patch({ logo: { ...config.logo, ...value } });
+
+  // A picked file shows as a thumbnail until it is saved; the URL is released with it.
+  const stagedUrl = useMemo(
+    () => (model.file ? URL.createObjectURL(model.file) : ""),
+    [model.file],
+  );
+  useEffect(
+    () => () => {
+      if (stagedUrl) URL.revokeObjectURL(stagedUrl);
+    },
+    [stagedUrl],
+  );
+  const hasSavedLogo =
+    Boolean(config.logo.assetId) && model.logoAction !== "remove";
+  const hasLogo = Boolean(model.file) || hasSavedLogo;
+  const logoStatus = model.file
+    ? t("document.logoStaged", { name: model.file.name })
+    : model.logoAction === "remove"
+      ? t("document.logoRemoving")
+      : hasSavedLogo
+        ? t("document.logoSet")
+        : t("document.logoNone");
+
+  return (
+    <DocumentSection
+      title={t("document.sectionBrand")}
+      description={t("document.sectionBrandHelp")}
+      defaultOpen={defaultOpen}
+    >
       <LabelledField
         label={t("document.accent")}
         hint={
