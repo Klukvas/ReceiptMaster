@@ -6,7 +6,7 @@ import { refundPolicyRu } from "./legal/refund-policy.ru";
 import { refundPolicyUk } from "./legal/refund-policy.uk";
 import { pickLegalContent, resolveLegalLanguage } from "./legal/types";
 
-const lastUpdated = new Date("2026-03-01");
+const lastUpdated = new Date("2026-11-01");
 const content = { en: refundPolicyEn, ru: refundPolicyRu, uk: refundPolicyUk };
 
 export const RefundPolicyPage = () => {

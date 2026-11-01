@@ -6,7 +6,7 @@ import { termsRu } from "./legal/terms.ru";
 import { termsUk } from "./legal/terms.uk";
 import { pickLegalContent, resolveLegalLanguage } from "./legal/types";
 
-const lastUpdated = new Date("2026-03-01");
+const lastUpdated = new Date("2026-11-01");
 const content = { en: termsEn, ru: termsRu, uk: termsUk };
 
 export const TermsPage = () => {

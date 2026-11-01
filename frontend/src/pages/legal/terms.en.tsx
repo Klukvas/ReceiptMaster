@@ -200,9 +200,9 @@ export const termsEn: LegalContent = {
 
       <h2>14. Modifications to Terms</h2>
       <p>
-        We may update these Terms from time to time. We will notify you of
-        material changes by email or through the Service at least 30 days before
-        they take effect. Your continued use of the Service after changes become
+        We may update these Terms from time to time. We will announce
+        material changes by posting them on this page and, where possible, by
+        email at least 30 days before they take effect. Your continued use of the Service after changes become
         effective constitutes your acceptance of the revised Terms.
       </p>
 

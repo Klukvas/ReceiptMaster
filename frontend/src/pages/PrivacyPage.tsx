@@ -6,7 +6,7 @@ import { privacyRu } from "./legal/privacy.ru";
 import { privacyUk } from "./legal/privacy.uk";
 import { pickLegalContent, resolveLegalLanguage } from "./legal/types";
 
-const lastUpdated = new Date("2026-03-01");
+const lastUpdated = new Date("2026-11-01");
 const content = { en: privacyEn, ru: privacyRu, uk: privacyUk };
 
 export const PrivacyPage = () => {

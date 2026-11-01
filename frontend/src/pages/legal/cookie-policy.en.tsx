@@ -20,69 +20,18 @@ export const cookiePolicyEn: LegalContent = {
       </p>
 
       <h2>2. Cookies We Use</h2>
-
-      <h3>2.1 Strictly Necessary Cookies</h3>
       <p>
-        These cookies are essential for the Service to function and cannot be
-        disabled. They include:
+        ReceiptMaster itself does <strong>not</strong> set any cookies. Staying
+        signed in and remembering your preferences rely on your browser's local
+        storage instead (see section 3). The only cookies that may be set while
+        you use the Service come from our payment provider:
       </p>
-      <div className="overflow-x-auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Cookie</th>
-              <th>Purpose</th>
-              <th>Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>CSRF token</td>
-              <td>Prevents cross-site request forgery attacks</td>
-              <td>Session</td>
-            </tr>
-            <tr>
-              <td>Theme preference</td>
-              <td>Remembers your light/dark mode preference</td>
-              <td>1 year</td>
-            </tr>
-            <tr>
-              <td>Language preference</td>
-              <td>Remembers your selected language</td>
-              <td>1 year</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
 
-      <h3>2.2 Functional Cookies</h3>
-      <p>These cookies enable enhanced functionality and personalization:</p>
-      <div className="overflow-x-auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Cookie</th>
-              <th>Purpose</th>
-              <th>Duration</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>UI state</td>
-              <td>
-                Remembers sidebar state, table preferences, and filter settings
-              </td>
-              <td>1 year</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3>2.3 Third-Party Cookies</h3>
+      <h3>2.1 Third-Party Cookies</h3>
       <p>
-        When you interact with the Paddle checkout overlay, Paddle may set
-        cookies for payment processing and fraud prevention. These cookies are
-        governed by{" "}
+        When billing is enabled and you open the Paddle checkout overlay,
+        Paddle may set cookies for payment processing and fraud prevention.
+        These cookies are governed by{" "}
         <a
           href="https://www.paddle.com/legal/privacy"
           target="_blank"
@@ -93,18 +42,35 @@ export const cookiePolicyEn: LegalContent = {
         .
       </p>
 
-      <h2>3. Local Storage</h2>
-      <p>In addition to cookies, we use browser local storage to store:</p>
+      <h3>2.2 Third-Party Resources</h3>
+      <p>
+        Our pages load their fonts from Google Fonts (fonts.googleapis.com and
+        fonts.gstatic.com). When a page loads, Google receives your IP address
+        and browser details, as with any resource loaded from another server.
+      </p>
+
+      <h2>3. Browser Storage</h2>
+      <p>
+        We use your browser's local storage and session storage, which work
+        like cookies but are not sent to our servers with every request. They
+        hold:
+      </p>
       <ul>
         <li>
-          Authentication tokens (JWT) — keeps you signed in to your account
+          Sign-in tokens (an access token and a refresh token) — keep you
+          signed in to your account
         </li>
-        <li>User preferences (theme, language)</li>
-        <li>Cached application state for performance</li>
+        <li>Your theme (light/dark) and language choices</li>
+        <li>Table settings, such as rows per page and visible columns</li>
+        <li>
+          Short-lived session storage flags, for example a notice that your
+          session expired, and a guard that stops the page from reloading
+          repeatedly after an update; these disappear when you close the tab
+        </li>
       </ul>
       <p>
-        Local storage data remains on your device until you clear your browser
-        data or sign out of the Service.
+        Local storage data remains on your device until you sign out (which
+        removes the sign-in tokens) or clear your browser's site data.
       </p>
 
       <h2>4. We Do Not Use</h2>
@@ -129,9 +95,10 @@ export const cookiePolicyEn: LegalContent = {
         <li>Set preferences for specific websites</li>
       </ul>
       <p>
-        Please note that blocking strictly necessary cookies may prevent the
-        Service from functioning correctly (e.g., you will not be able to stay
-        signed in).
+        Because the Service sets no cookies of its own, blocking cookies does not
+        affect it, although blocking Paddle's cookies may prevent the checkout
+        from working. Clearing your browser's site data for receiptmaster.org
+        signs you out and resets your saved preferences.
       </p>
       <p>For instructions on managing cookies in your browser:</p>
       <ul>
