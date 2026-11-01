@@ -3,10 +3,12 @@ import { useTranslation } from '../../hooks/useTranslation';
 
 interface AnalyticsHeaderProps {
  onExportCsv: () => void;
+ /** False when the selected period has no rows; the export would be a header-only file. */
+ canExport: boolean;
  periodLabel: string;
 }
 
-export const AnalyticsHeader = ({ onExportCsv, periodLabel }: AnalyticsHeaderProps) => {
+export const AnalyticsHeader = ({ onExportCsv, canExport, periodLabel }: AnalyticsHeaderProps) => {
  const { t } = useTranslation();
 
  return (
@@ -26,7 +28,9 @@ export const AnalyticsHeader = ({ onExportCsv, periodLabel }: AnalyticsHeaderPro
  </span>
  <button
  onClick={onExportCsv}
- className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-[var(--color-border)] text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
+ disabled={!canExport}
+ title={canExport ? undefined : t('dashboard.exportEmpty', 'No data in this period to export')}
+ className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-[var(--color-border)] text-content-secondary bg-elevated hover:bg-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-elevated"
  >
  <Download className="h-4 w-4" />
  <span className="hidden sm:inline">{t('dashboard.exportCsv', 'Export CSV')}</span>

@@ -61,7 +61,7 @@ frontend/
 | `/recipients` | `RecipientsPage` | Yes | Layout | Manage buyers |
 | `/suppliers` | `SuppliersPage` | Yes | Layout | Manage suppliers |
 | `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders |
-| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics |
+| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas |
 | `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing |
 | `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
