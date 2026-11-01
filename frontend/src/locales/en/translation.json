@@ -542,111 +542,107 @@
       "line1": "Orders, Receipts",
       "line2": "Analytics",
       "line3": "in one place",
-      "subtitle": "The complete back-office for modern merchants. Manage products, customers, and orders — generate professional PDF invoices in seconds.",
+      "subtitle": "Manage products, customers and orders, and create PDF receipts in a few clicks.",
       "startFree": "Start for free",
-      "seeDemo": "See a demo →",
+      "seeDemo": "See features ↓",
       "welcomeBack": "Welcome back",
       "welcomeBackSubtitle": "Your dashboard is ready.",
       "goToDashboard": "Go to Dashboard"
     },
     "stats": {
-      "label": "Platform stats",
-      "receiptsValue": "10K+",
-      "receipts": "Receipts generated",
-      "ordersValue": "50K+",
-      "orders": "Orders processed",
-      "merchantsValue": "1K+",
-      "merchants": "Active merchants",
+      "label": "At a glance",
       "languagesValue": "EN / UK / RU",
       "languages": "Languages",
-      "uptimeValue": "99.9%",
-      "uptime": "Uptime SLA"
+      "templatesValue": "15",
+      "templates": "Receipt templates",
+      "botValue": "Telegram",
+      "bot": "Sales bot"
     },
     "grid": {
       "label": "Platform features",
-      "title": "Everything you need to run your business",
-      "subtitle": "From inventory and customer management to professional PDF receipts with digital integrity — built for modern merchants.",
+      "title": "Tools for running your sales",
+      "subtitle": "From products and customers to PDF receipts you can download, print or share.",
       "products": {
-        "title": "Product Management",
-        "description": "Full CRUD with purchase/sale prices, color-coded margin tracking, inventory alerts and stock badges. Bulk operations with row selection.",
+        "title": "Products",
+        "description": "Keep purchase and sale prices, see your margin at a glance, get low-stock alerts and delete several products at once.",
         "tag1": "margin %",
         "tag2": "low-stock alerts",
         "tag3": "bulk delete"
       },
       "customers": {
-        "title": "Customer CRM",
-        "description": "Manage recipients with full order history, total spend aggregation, Telegram integration badges and a slide-over detail drawer.",
+        "title": "Customers",
+        "description": "Keep a list of customers with their order history and total spend, and see which ones come from Telegram.",
         "tag1": "order history",
-        "tag2": "telegram badge",
+        "tag2": "Telegram badge",
         "tag3": "total spend"
       },
       "orders": {
-        "title": "Order Lifecycle",
-        "description": "DRAFT → CONFIRMED → CANCELLED workflow with payment status, soft-delete, order locking and idempotency keys for safe retries.",
-        "tag1": "status workflow",
+        "title": "Orders",
+        "description": "Move orders from draft to confirmed or cancelled, track payment status, and retry safely without creating duplicates.",
+        "tag1": "draft to confirmed",
         "tag2": "payment tracking",
-        "tag3": "idempotent"
+        "tag3": "no duplicates"
       },
       "receipts": {
-        "title": "PDF Receipt Generation",
-        "description": "Background PDF generation via BullMQ queue. 15 professional templates, SHA256 integrity hash, S3 storage and Playwright + Handlebars rendering.",
+        "title": "PDF receipts",
+        "description": "Receipts are made in the background as PDFs with your company details. Pick one of 15 templates, then download, print or share a link.",
         "tag1": "15 templates",
         "tag2": "SHA256 hash",
-        "tag3": "S3 storage"
+        "tag3": "public link"
       },
       "analytics": {
-        "title": "Analytics & Dashboard",
-        "description": "Revenue sparklines, order status donut, turnover by product and customer, CSV export with Redis-cached queries and date range presets.",
+        "title": "Analytics",
+        "description": "Revenue charts, an order status breakdown, turnover by product and customer, and CSV export for any date range.",
         "tag1": "revenue charts",
-        "tag2": "csv export",
-        "tag3": "redis cache"
+        "tag2": "CSV export",
+        "tag3": "date ranges"
       },
       "telegramBot": {
-        "title": "Telegram Bot",
-        "description": "Full shopping cart experience inside Telegram with inline buttons, quantity input, order confirmation and automatic customer creation.",
-        "tag1": "inline cart",
-        "tag2": "redis sessions",
-        "tag3": "auto-create"
+        "title": "Telegram bot",
+        "description": "Customers browse products, fill a cart and confirm an order inside Telegram. New customers are added to your list automatically.",
+        "tag1": "cart in chat",
+        "tag2": "stock check",
+        "tag3": "new customers added"
       }
     },
     "howItWorks": {
       "label": "How it works",
       "title": "Up and running in minutes",
-      "subtitle": "No complex setup. Register, configure your branding, and start creating orders and generating receipts right away.",
+      "subtitle": "Register, add your company details, and start creating orders and receipts right away.",
       "step1": {
-        "title": "Add your products & customers",
-        "description": "Import your catalog with prices and stock levels. Add customers manually or let the Telegram bot create them automatically on first order."
+        "title": "Add your products and customers",
+        "description": "Add products with prices and stock levels. Add customers by hand, or let the Telegram bot add them when they place their first order."
       },
       "step2": {
         "title": "Create and confirm orders",
-        "description": "Build multi-item orders with per-item pricing. Move through DRAFT → CONFIRMED. Track payment status and filter by date, status or amount."
+        "description": "Build orders with several items and their own prices. Confirm them, track payment, and filter by date, status or amount."
       },
       "step3": {
-        "title": "Generate & send receipts",
-        "description": "Click \"Generate Receipt\" — a professional PDF is created with your branding in the background. Download, print, or send directly."
+        "title": "Generate and share receipts",
+        "description": "Click \"Generate Receipt\" and a PDF with your company details is made in the background. Download it, print it or share a link."
       }
     },
     "telegram": {
       "label": "Telegram Bot",
       "title": "Sell directly inside Telegram",
-      "description": "Your customers browse products, add to cart and confirm orders without leaving Telegram. Sessions persist across restarts via Redis.",
+      "description": "Your customers browse products, add them to a cart and confirm orders without leaving Telegram.",
       "feat1": {
         "title": "Full cart experience",
-        "description": "Inline buttons, quantity input, stock validation, order review and confirmation flow."
+        "description": "Buttons in the chat, quantity input, stock checks, and an order review before confirming."
       },
       "feat2": {
         "title": "Automatic customer creation",
-        "description": "Find-or-create by Telegram user ID. Customer appears in your dashboard immediately."
+        "description": "A customer who writes to the bot is found by Telegram ID or created. They appear in your list right away."
       },
       "feat3": {
-        "title": "Redis-backed sessions (4h TTL)",
-        "description": "Cart state survives server restarts. Rate-limit retry handling built in."
+        "title": "Cart kept for 4 hours",
+        "description": "A customer can leave and come back later to finish the order, even if the server restarts in between."
       }
     },
     "pricing": {
       "label": "Pricing",
       "title": "Simple, transparent pricing",
-      "subtitle": "Start free, upgrade when you grow. No hidden fees, no surprises.",
+      "subtitle": "Start free and upgrade when you need higher limits.",
       "month": "mo",
       "popular": "Most popular",
       "free": {
@@ -656,7 +652,6 @@
         "feat1": "Up to 10 products",
         "feat2": "Up to 20 orders / month",
         "feat3": "4 basic templates",
-        "feat4": "SHA256 receipt verification",
         "cta": "Get started"
       },
       "pro": {
@@ -666,24 +661,22 @@
         "feat1": "Up to 100 products",
         "feat2": "Up to 500 orders / month",
         "feat3": "All 15 templates",
-        "feat4": "Priority support",
-        "cta": "Start free trial"
+        "cta": "Sign up for Pro"
       },
       "business": {
         "name": "Business",
         "price": "$49",
-        "description": "Unlimited scale for established businesses.",
+        "description": "No limits on products or orders.",
         "feat1": "Unlimited products",
         "feat2": "Unlimited orders",
-        "feat3": "All templates + custom branding",
-        "feat4": "API access & webhooks",
-        "cta": "Contact sales"
+        "feat3": "All 15 templates",
+        "cta": "Sign up for Business"
       }
     },
     "templates": {
       "label": "Receipt templates",
-      "title": "15+ professional templates",
-      "subtitle": "From minimal invoices to branded corporate receipts — choose the perfect look for your business. Every template supports 3 languages.",
+      "title": "15 receipt templates",
+      "subtitle": "From minimal invoices to branded corporate receipts. Every receipt can be issued in English, Russian or Ukrainian.",
       "modern": {
         "name": "Modern",
         "category": "Creative"
@@ -715,7 +708,7 @@
     },
     "cta": {
       "title": "Ready to streamline your business?",
-      "subtitle": "Join thousands of merchants using ReceiptMaster to manage orders, generate receipts, and grow with confidence.",
+      "subtitle": "Create orders, generate receipts and keep track of your sales in one place.",
       "startFree": "Create your free account",
       "welcomeBackTitle": "Ready to continue?",
       "welcomeBackSubtitle": "Your dashboard is waiting.",
@@ -1051,5 +1044,14 @@
     "retryFrozen": "Retry saved replacement",
     "option_numeric": "Numeric",
     "titleRequired": "Enter a title or select Automatic title"
+  },
+  "legal": {
+    "lastUpdated": "Last updated: {{date}}",
+    "nav": {
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "refund": "Refund Policy",
+      "cookie": "Cookie Policy"
+    }
   }
 }

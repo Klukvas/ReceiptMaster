@@ -106,15 +106,22 @@ const checkParity = (results, flat) => {
 const checkTemplateCount = (results, translations) => {
   const count = templateCount();
   for (const locale of LOCALES) {
-    const { description, tag1 } = translations[locale].landing.grid.receipts;
-    const numbers = [`${description} ${tag1}`.match(STANDALONE_NUMBER) ?? []]
-      .flat()
-      .map(Number);
-    results.check(
-      `${locale}: the landing template count matches TEMPLATE_METADATA (${count})`,
-      numbers.length === 2 && numbers.every((number) => number === count),
-      `${description} | ${tag1}`,
-    );
+    const { landing } = translations[locale];
+    const places = {
+      "grid.receipts": `${landing.grid.receipts.description} ${landing.grid.receipts.tag1}`,
+      "stats strip": landing.stats.templatesValue,
+      "templates title": landing.templates.title,
+      "pro plan": landing.pricing.pro.feat3,
+      "business plan": landing.pricing.business.feat3,
+    };
+    for (const [place, text] of Object.entries(places)) {
+      const numbers = (text.match(STANDALONE_NUMBER) ?? []).map(Number);
+      results.check(
+        `${locale}: the landing template count in ${place} matches TEMPLATE_METADATA (${count})`,
+        numbers.length >= 1 && numbers.every((number) => number === count),
+        text,
+      );
+    }
   }
 };
 
