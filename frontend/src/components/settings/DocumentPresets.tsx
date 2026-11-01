@@ -10,6 +10,7 @@ import {
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import { Disclosure } from "../ui/Disclosure";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { Input } from "../ui/Input";
 import { selectClass } from "./document-ui";
@@ -74,8 +75,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
     }
   };
   return (
-    <section className="space-y-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4">
-      <h3 className="font-semibold text-content">{t("document.presets")}</h3>
+    <Disclosure summary={t("document.presets")}>
       <p className="text-sm text-content-tertiary">
         {t("document.presetsHelp")}
       </p>
@@ -146,7 +146,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
           disabled={!loaded || model.busy}
           onClick={() => setIsConfirmingDelete(true)}
         >
-          {t("common.delete")}
+          {t("document.deletePreset")}
         </Button>
       </div>
       <ConfirmModal
@@ -160,6 +160,6 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
         message={t("document.deletePresetConfirm")}
         itemName={loaded?.name}
       />
-    </section>
+    </Disclosure>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
@@ -40,6 +41,10 @@ export function useDocumentDraft(orderId?: string) {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewVersion, setPreviewVersion] = useState(-1);
   const [refreshing, setRefreshing] = useState(false);
+  // Preview problems belong to the preview panel, not to the page-wide error: with an
+  // auto-updating preview, half-typed input must not flash a red banner over the form.
+  const [previewError, setPreviewError] = useState("");
+  const [previewPaused, setPreviewPaused] = useState(false);
   const version = useRef(0),
     sequence = useRef(0),
     controller = useRef<AbortController | null>(null);
@@ -57,6 +62,7 @@ export function useDocumentDraft(orderId?: string) {
     controller.current?.abort();
     setRefreshing(false);
     setError("");
+    setPreviewError("");
   };
   const update = (value: DocumentConfig) => {
     changed();
@@ -219,7 +225,7 @@ export function useDocumentDraft(orderId?: string) {
     const request = ++sequence.current,
       captured = version.current;
     setRefreshing(true);
-    setError("");
+    setPreviewError("");
     try {
       const response = await api.post(
         "/receipts/preview",
@@ -240,10 +246,15 @@ export function useDocumentDraft(orderId?: string) {
           ),
         );
         setPreviewVersion(captured);
+        setPreviewPaused(false);
       }
     } catch (value) {
-      if (!abort.signal.aborted && request === sequence.current)
-        setError(await documentError(value, fieldLabel));
+      if (!abort.signal.aborted && request === sequence.current) {
+        // Too many previews in a minute: stop updating on its own until asked again.
+        if (isAxiosError(value) && value.response?.status === 429)
+          setPreviewPaused(true);
+        else setPreviewError(await documentError(value, fieldLabel));
+      }
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }
@@ -269,6 +280,8 @@ export function useDocumentDraft(orderId?: string) {
     reloadSaved,
     refreshPreview,
     previewUrl,
+    previewError,
+    previewPaused,
     refreshing,
     stale: previewVersion !== version.current,
   };

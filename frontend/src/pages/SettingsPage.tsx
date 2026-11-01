@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Palette,
-  Globe,
   Wrench,
   Settings,
   CreditCard,
@@ -21,20 +20,20 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
 
-type SettingsTab =
-  | "company"
-  | "receipt"
-  | "language"
-  | "subscription"
-  | "advanced";
+type SettingsTab = "documents" | "subscription" | "advanced";
 
 const VALID_TABS: readonly SettingsTab[] = [
-  "company",
-  "receipt",
-  "language",
+  "documents",
   "subscription",
   "advanced",
 ] as const;
+
+// The three document tabs became one page; old links keep working.
+const LEGACY_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
+  company: "documents",
+  receipt: "documents",
+  language: "documents",
+};
 
 type PlanKey = "free" | "pro" | "business";
 
@@ -304,8 +303,9 @@ export const SettingsPage = () => {
   // H3: Validate tab query parameter against known values
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get("tab") as SettingsTab;
-    return VALID_TABS.includes(tabParam) ? tabParam : "company";
+    const tabParam = params.get("tab") ?? "";
+    const aliased = LEGACY_TAB_ALIASES[tabParam] ?? (tabParam as SettingsTab);
+    return VALID_TABS.includes(aliased) ? aliased : "documents";
   });
 
   const tabListRef = useRef<HTMLDivElement>(null);
@@ -337,19 +337,9 @@ export const SettingsPage = () => {
 
   const tabs: { key: SettingsTab; label: string; icon: typeof Building2 }[] = [
     {
-      key: "company",
-      label: t("settings.tabCompany", "Company Info"),
-      icon: Building2,
-    },
-    {
-      key: "receipt",
-      label: t("settings.tabReceipt", "Receipt Design"),
+      key: "documents",
+      label: t("settings.tabDocuments", "Documents"),
       icon: Palette,
-    },
-    {
-      key: "language",
-      label: t("settings.tabLanguage", "Language"),
-      icon: Globe,
     },
     {
       key: "subscription",
@@ -456,15 +446,8 @@ export const SettingsPage = () => {
         aria-labelledby={`settings-tab-${activeTab}`}
         className="space-y-5"
       >
-        <div hidden={!["company", "receipt", "language"].includes(activeTab)}>
-          <DocumentEditor
-            model={documentDraft}
-            section={
-              activeTab === "company" || activeTab === "language"
-                ? activeTab
-                : "receipt"
-            }
-          />
+        <div hidden={activeTab !== "documents"}>
+          <DocumentEditor model={documentDraft} />
         </div>
 
         {activeTab === "subscription" && <SubscriptionTab />}
