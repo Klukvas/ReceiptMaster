@@ -1044,5 +1044,14 @@
     "retryFrozen": "Retry saved replacement",
     "option_numeric": "Numeric",
     "titleRequired": "Enter a title or select Automatic title"
+  },
+  "legal": {
+    "lastUpdated": "Last updated: {{date}}",
+    "nav": {
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "refund": "Refund Policy",
+      "cookie": "Cookie Policy"
+    }
   }
 }
