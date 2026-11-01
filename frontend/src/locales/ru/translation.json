@@ -78,6 +78,9 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "replaceReceiptTitle": "Заменить самый старый чек?",
+    "replaceReceiptMessage": "В аккаунте хранятся {{limit}} последних чеков. Создание этого чека удалит чек {{number}}, а его публичная ссылка перестанет работать.",
+    "emptyPrerequisites": "Для заказа нужен хотя бы один товар и один получатель.",
     "activeFiltersCount_other": "{{count}} активных фильтров",
     "activeFiltersCount_many": "{{count}} активных фильтров",
     "activeFiltersCount_few": "{{count}} активных фильтра",
@@ -759,6 +762,10 @@
     "noOrders": "Заказов пока нет"
   },
   "dashboard": {
+    "topRecipientsByRevenue": "Топ получателей по прибыли",
+    "topRecipientsByTurnover": "Топ получателей по обороту",
+    "noSalesYet": "За этот период продаж пока нет.",
+    "noProductsYet": "Товаров пока нет.",
     "title": "Панель управления",
     "subtitle": "Аналитика прибыли и оборота по продуктам и клиентам",
     "revenue": "Прибыль",

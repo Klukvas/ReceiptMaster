@@ -317,7 +317,11 @@ const { user, token, isAuthenticated, isLoading, login, register, logout } = use
 - Applies class to `<html>` (`.dark` or removed)
 - Persists to `localStorage.theme`
 
-**Text colour tokens** (`index.css`): `--color-text-secondary` and `--color-text-tertiary` are chosen to keep at least 4.5:1 against the page and card backgrounds in both themes (light 4.5–7:1, dark 4.8–8.5:1). Do not lighten them; use `text-content-tertiary` for the faintest readable text only. Accent chips (`text-accent-base` on `--color-accent-light`) are still around 2.8:1 in the light theme.
+**First paint:** `index.html` carries a small inline script that adds the `dark` class and sets `<html lang>` from `localStorage` (`theme`, `i18nextLng`) before the bundle loads, so a dark theme does not flash white; keep it in sync with `getInitialTheme()` and `lib/i18n.ts`. Below 400 px the landing header hides the wordmark (icon only) so it cannot collide with the language switch.
+
+**Native widgets:** `color-scheme` is `light` on `:root` and `dark` on `.dark`, so browser scrollbars and form controls follow the theme. Logout clears the saved table preferences (`*_columns`, `*_itemsPerPage`, `lib/table-preferences.ts`) but keeps theme and language.
+
+**Text colour tokens** (`index.css`): `--color-text-secondary` and `--color-text-tertiary` are chosen to keep at least 4.5:1 against the page and card backgrounds in both themes (light 4.5–7:1, dark 4.8–8.5:1). Do not lighten them; use `text-content-tertiary` for the faintest readable text only. Status text uses its own tokens (`--color-text-accent|danger|success|warning`, applied through the `.text-*-base` classes in `index.css`): the fill tokens measured 2.6-4.3:1 as small text on their own tint, the text tokens keep at least 4.5:1 in both themes. Keep fills and text apart: change a fill via `--color-accent|danger|success|warning`, text via the `--color-text-*` ones. The dark accent fill is `#6064F0` so white text on it reaches 4.5:1.
 
 **useTheme hook** (`hooks/useTheme.ts`):
 ```typescript
@@ -547,7 +551,7 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 - `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus; when dialogs stack, only the topmost handles Escape and Tab)
 - `ConfirmModal.tsx` — yes/no dialog; `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
 - `Drawer.tsx` — side drawer (focus trap via `hooks/useFocusTrap.ts`)
-- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
+- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. While a query is in flight with no rows yet, the spinner shows instead of the "no data" empty state (so clearing a search does not flash "No suppliers yet"). `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
 - Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow

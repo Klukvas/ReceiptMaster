@@ -78,6 +78,9 @@
     "groupSystem": "System"
   },
   "orders": {
+    "replaceReceiptTitle": "Replace the oldest receipt?",
+    "replaceReceiptMessage": "Your account keeps the {{limit}} most recent receipts. Creating this one removes receipt {{number}}, and its public link stops working.",
+    "emptyPrerequisites": "An order needs at least one product and one recipient.",
     "activeFiltersCount_other": "{{count}} active filters",
     "activeFiltersCount_one": "{{count}} active filter",
     "mixedCurrencies": "All products in an order must use the same currency.",
@@ -757,6 +760,10 @@
     "noOrders": "No orders yet"
   },
   "dashboard": {
+    "topRecipientsByRevenue": "Top recipients by profit",
+    "topRecipientsByTurnover": "Top recipients by turnover",
+    "noSalesYet": "No sales in this period yet.",
+    "noProductsYet": "No products yet.",
     "title": "Dashboard",
     "subtitle": "Profit and turnover insights by product and customer",
     "revenue": "Profit",

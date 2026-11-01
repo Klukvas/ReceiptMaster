@@ -78,6 +78,9 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "replaceReceiptTitle": "Замінити найстаріший чек?",
+    "replaceReceiptMessage": "В акаунті зберігається {{limit}} останніх чеків. Створення цього чека видалить чек {{number}}, а його публічне посилання перестане працювати.",
+    "emptyPrerequisites": "Для замовлення потрібен хоча б один товар і один отримувач.",
     "activeFiltersCount_other": "{{count}} активних фільтрів",
     "activeFiltersCount_many": "{{count}} активних фільтрів",
     "activeFiltersCount_few": "{{count}} активні фільтри",
@@ -759,6 +762,10 @@
     "noOrders": "Замовлень поки немає"
   },
   "dashboard": {
+    "topRecipientsByRevenue": "Топ отримувачів за прибутком",
+    "topRecipientsByTurnover": "Топ отримувачів за оборотом",
+    "noSalesYet": "За цей період продажів поки немає.",
+    "noProductsYet": "Товарів поки немає.",
     "title": "Панель керування",
     "subtitle": "Аналітика прибутку та обороту по продуктах та клієнтах",
     "revenue": "Прибуток",

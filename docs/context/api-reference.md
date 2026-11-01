@@ -1006,6 +1006,22 @@ Paginated list of all user's generated receipts.
 }
 ```
 
+
+### Receipt Retention
+
+**GET** `/receipts/retention` (requires auth)
+
+How close the account is to the retention cap (10 generated receipts) and which receipt creating the next one would delete, so the UI can ask first. Declared before `GET /receipts/:id`.
+
+**Response** (200):
+```typescript
+{
+  limit: number,               // 10
+  count: number,               // generated receipts the account holds
+  replaces: { id: string, number: string, order_id: string } | null  // oldest receipt once count >= limit
+}
+```
+
 ---
 
 ### Get Receipt by ID
