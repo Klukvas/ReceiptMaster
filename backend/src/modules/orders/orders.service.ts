@@ -199,7 +199,7 @@ export class OrdersService {
         if (product.quantity < itemDto.qty) {
           throw ApiErrors.VALIDATION_ERROR(
             "quantity",
-            `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
+            `Not enough stock for "${product.name}". Available: ${product.quantity}, requested: ${itemDto.qty}`,
           );
         }
 
@@ -535,7 +535,7 @@ export class OrdersService {
           if (product.quantity < itemDto.qty) {
             throw ApiErrors.VALIDATION_ERROR(
               "quantity",
-              `Недостаточно товара "${product.name}". Доступно: ${product.quantity}, запрошено: ${itemDto.qty}`,
+              `Not enough stock for "${product.name}". Available: ${product.quantity}, requested: ${itemDto.qty}`,
             );
           }
 

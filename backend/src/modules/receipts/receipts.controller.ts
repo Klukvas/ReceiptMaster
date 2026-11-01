@@ -204,7 +204,7 @@ export class ReceiptsController {
         this.logger.error("File is not a valid PDF:", filename);
         return res
           .status(400)
-          .json({ error: "Файл не является корректным PDF" });
+          .json({ error: "The file is not a valid PDF" });
       }
 
       res.set({
@@ -220,7 +220,7 @@ export class ReceiptsController {
       this.logger.error("Error serving PDF:", error);
       if (error instanceof HttpException || error instanceof ApiErrorResponse)
         throw error;
-      res.status(500).json({ error: "Ошибка при получении PDF файла" });
+      res.status(500).json({ error: "Could not read the PDF file" });
     }
   }
 

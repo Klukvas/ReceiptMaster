@@ -163,7 +163,7 @@ Changes authenticated user's password.
 **Request Body:**
 ```typescript
 {
-  oldPassword: string,
+  currentPassword: string,
   newPassword: string,
   confirmPassword: string
 }
@@ -175,8 +175,8 @@ Changes authenticated user's password.
 ```
 
 **Errors:**
-- 400 `VALIDATION_ERROR` — Passwords don't match or don't meet requirements
-- 401 `UNAUTHORIZED` — Invalid JWT or old password incorrect
+- 400 `VALIDATION_ERROR` — with an English detail: "New password and confirmation do not match", "Current password is incorrect" (field `currentPassword`) or "New password must be different from the current one"
+- 401 `UNAUTHORIZED` — Invalid JWT
 
 ---
 

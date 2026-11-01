@@ -214,7 +214,7 @@ export class UsersService {
     if (newPassword !== confirmPassword) {
       throw ApiErrors.VALIDATION_ERROR(
         "password",
-        "Новый пароль и подтверждение не совпадают",
+        "New password and confirmation do not match",
       );
     }
 
@@ -233,7 +233,7 @@ export class UsersService {
     if (!isCurrentPasswordValid) {
       throw ApiErrors.VALIDATION_ERROR(
         "currentPassword",
-        "Текущий пароль неверен",
+        "Current password is incorrect",
       );
     }
 
@@ -241,7 +241,7 @@ export class UsersService {
     if (isSamePassword) {
       throw ApiErrors.VALIDATION_ERROR(
         "newPassword",
-        "Новый пароль должен отличаться от текущего",
+        "New password must be different from the current one",
       );
     }
 
