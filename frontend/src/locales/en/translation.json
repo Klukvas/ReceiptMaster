@@ -1,5 +1,9 @@
 {
   "common": {
+    "selectAll": "Select all rows",
+    "selectRow": "Select row",
+    "optional": "optional",
+    "loadError": "Failed to load",
     "loadMore": "Load more",
     "loading": "Loading...",
     "error": "Error",
@@ -41,6 +45,9 @@
     "email": "Email",
     "password": "Password",
     "confirmPassword": "Confirm Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "passwordRule": "At least 6 characters",
     "firstName": "First Name",
     "lastName": "Last Name",
     "loginTitle": "Sign in to your account",
@@ -177,6 +184,21 @@
     "creating": "Creating..."
   },
   "products": {
+    "updateError": "Error updating product",
+    "supplier": "Supplier",
+    "stock": "Stock",
+    "similarProducts": "Similar products:",
+    "selectSupplier": "Select supplier",
+    "recentOrders": "Recent Orders",
+    "pricing": "Pricing",
+    "pcs": "pcs",
+    "noOrders": "No orders with this product",
+    "margin": "Margin %",
+    "deleteSelected": "Delete Selected",
+    "createdAt": "Created",
+    "createError": "Error creating product",
+    "bulkDeletePartial": "Deleted {{deleted}}, skipped {{skipped}}",
+    "bulkDeleteMessage": "Are you sure you want to delete {{count}} products?",
     "title": "Products",
     "stockValueCost": "Stock value (cost)",
     "stockValueRetail": "Stock value (retail)",
@@ -204,6 +226,7 @@
     "purchasePriceMustBePositive": "Purchase price must be a positive number",
     "salePriceMustBePositive": "Sale price must be a positive number",
     "quantityMustBeNonNegative": "Quantity must be a non-negative number",
+    "quantityMustBeWhole": "Quantity must be a whole number",
     "deleteProduct": "Delete Product",
     "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone.",
     "searchPlaceholder": "Search products by name...",
@@ -220,6 +243,7 @@
     "marginTooltip": "Margin: (Sale - Purchase) / Sale × 100"
   },
   "recipients": {
+    "deleteRecipient": "Delete Recipient",
     "title": "Recipients",
     "subtitle": "Manage your customers and track their purchase activity",
     "createRecipient": "Create Recipient",
@@ -271,6 +295,7 @@
     "noActivity": "No activity yet"
   },
   "suppliers": {
+    "deleteSupplier": "Delete Supplier",
     "title": "Suppliers",
     "subtitle": "Manage your suppliers and linked products",
     "createSupplier": "Create Supplier",
@@ -288,6 +313,7 @@
     "saving": "Saving...",
     "update": "Update",
     "noSuppliers": "No suppliers yet",
+    "createFirstSupplier": "Create your first supplier",
     "supplierCreated": "Supplier created successfully",
     "supplierUpdated": "Supplier updated successfully",
     "supplierDeleted": "Supplier deleted successfully",
@@ -304,6 +330,7 @@
     "noActivity": "No activity yet"
   },
   "settings": {
+    "selectTemplate": "Select This Template",
     "title": "Settings",
     "subtitle": "System settings and document appearance management",
     "companyInformation": "Company Information",
@@ -450,6 +477,12 @@
     "poweredBy": "Powered by ReceiptMaster"
   },
   "profile": {
+    "unlimitedAccess": "Unlimited access",
+    "templates": "Templates",
+    "subscription": "Subscription",
+    "products": "Products",
+    "ordersPerMonth": "Orders / mo",
+    "currentPlan": "Plan",
     "title": "Profile",
     "subtitle": "Manage your account information and settings",
     "profileInformation": "Profile Information",
@@ -682,6 +715,7 @@
     }
   },
   "home": {
+    "order": "Order",
     "welcome": "Welcome to Receipt Master",
     "subtitle": "Manage products, orders and receipts in one place",
     "latestProducts": "Latest Products",
@@ -849,7 +883,7 @@
     "productAlreadyExists": "Product with this name already exists",
     "recipientNotFound": "Recipient not found",
     "recipientAlreadyExists": "Recipient with this email already exists",
-    "recipient_has_orders": "This recipient has orders and cannot be deleted.",
+    "recipientHasOrders": "This recipient has orders and cannot be deleted.",
     "settingsNotFound": "Settings not found",
     "invalidSettings": "Invalid settings",
     "fileNotFound": "File not found",
@@ -875,7 +909,7 @@
     "dateStyle": "Date style",
     "timeStyle": "Time style",
     "hourCycle": "Hour format",
-    "timeZone": "Time zone (IANA)",
+    "timeZone": "Time zone (e.g. Europe/Kyiv)",
     "invalidFormatting": "Enter a valid time zone to see an example.",
     "presets": "Named presets",
     "presetsHelp": "Choose a preset, then Use preset to copy it into your draft. Account defaults change only with Save changes. Maximum 20 presets.",
@@ -949,7 +983,7 @@
     "replacing": "Replacing document…",
     "replacementFailed": "Replacement failed. Your current PDF is available. Retry the same frozen replacement or prepare a new one.",
     "retryFrozen": "Retry saved replacement",
-    "option_numeric": "Numeric (legacy, four-digit year)",
+    "option_numeric": "Numeric",
     "titleRequired": "Enter a title or select Automatic title"
   }
 }

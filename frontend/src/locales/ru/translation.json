@@ -1,5 +1,9 @@
 {
   "common": {
+    "selectAll": "Выбрать все строки",
+    "selectRow": "Выбрать строку",
+    "optional": "необязательно",
+    "loadError": "Не удалось загрузить",
     "loadMore": "Загрузить ещё",
     "loading": "Загрузка...",
     "error": "Ошибка",
@@ -41,6 +45,9 @@
     "email": "Email",
     "password": "Пароль",
     "confirmPassword": "Подтвердите пароль",
+    "showPassword": "Показать пароль",
+    "hidePassword": "Скрыть пароль",
+    "passwordRule": "Не менее 6 символов",
     "firstName": "Имя",
     "lastName": "Фамилия",
     "loginTitle": "Вход в систему",
@@ -160,7 +167,7 @@
     "customer": "Клиент",
     "items": "Позиции",
     "summary": "Итоги",
-    "subtotal": "Подитого",
+    "subtotal": "Промежуточный итог",
     "orderId": "ID заказа",
     "copyId": "Копировать ID",
     "idCopied": "Скопировано!",
@@ -177,6 +184,21 @@
     "creating": "Создание..."
   },
   "products": {
+    "updateError": "Ошибка при обновлении товара",
+    "supplier": "Поставщик",
+    "stock": "На складе",
+    "similarProducts": "Похожие товары:",
+    "selectSupplier": "Выберите поставщика",
+    "recentOrders": "Последние заказы",
+    "pricing": "Цены",
+    "pcs": "шт.",
+    "noOrders": "Нет заказов с этим товаром",
+    "margin": "Маржа %",
+    "deleteSelected": "Удалить выбранные",
+    "createdAt": "Создан",
+    "createError": "Ошибка при создании товара",
+    "bulkDeletePartial": "Удалено: {{deleted}}, пропущено: {{skipped}}",
+    "bulkDeleteMessage": "Вы уверены, что хотите удалить выбранные товары ({{count}})?",
     "title": "Товары",
     "stockValueCost": "Стоимость склада (закупка)",
     "stockValueRetail": "Стоимость склада (продажа)",
@@ -204,6 +226,7 @@
     "purchasePriceMustBePositive": "Цена покупки должна быть положительным числом",
     "salePriceMustBePositive": "Цена продажи должна быть положительным числом",
     "quantityMustBeNonNegative": "Количество должно быть неотрицательным числом",
+    "quantityMustBeWhole": "Количество должно быть целым числом",
     "deleteProduct": "Удалить товар",
     "deleteProductMessage": "Вы уверены, что хотите удалить этот товар? Это действие нельзя отменить.",
     "searchPlaceholder": "Поиск товаров по названию...",
@@ -220,6 +243,7 @@
     "marginTooltip": "Маржа: (Продажа - Закупка) / Продажа × 100"
   },
   "recipients": {
+    "deleteRecipient": "Удалить получателя",
     "title": "Получатели",
     "subtitle": "Управление клиентами и отслеживание их покупок",
     "createRecipient": "Создать получателя",
@@ -271,6 +295,7 @@
     "noActivity": "Нет активности"
   },
   "suppliers": {
+    "deleteSupplier": "Удалить поставщика",
     "title": "Поставщики",
     "subtitle": "Управление поставщиками и привязанными товарами",
     "createSupplier": "Создать поставщика",
@@ -288,6 +313,7 @@
     "saving": "Сохранение...",
     "update": "Обновить",
     "noSuppliers": "Поставщиков пока нет",
+    "createFirstSupplier": "Создать первого поставщика",
     "supplierCreated": "Поставщик успешно создан",
     "supplierUpdated": "Поставщик успешно обновлён",
     "supplierDeleted": "Поставщик успешно удалён",
@@ -304,6 +330,7 @@
     "noActivity": "Нет активности"
   },
   "settings": {
+    "selectTemplate": "Выбрать этот шаблон",
     "title": "Настройки",
     "subtitle": "Управление настройками системы и внешним видом документов",
     "companyInformation": "Информация о компании",
@@ -450,6 +477,12 @@
     "poweredBy": "Работает на ReceiptMaster"
   },
   "profile": {
+    "unlimitedAccess": "Безлимитный доступ",
+    "templates": "Шаблонов",
+    "subscription": "Подписка",
+    "products": "Товаров",
+    "ordersPerMonth": "Заказов в мес.",
+    "currentPlan": "Тариф",
     "title": "Профиль",
     "subtitle": "Управление информацией аккаунта и настройками",
     "profileInformation": "Информация профиля",
@@ -682,6 +715,7 @@
     }
   },
   "home": {
+    "order": "Заказ",
     "welcome": "Добро пожаловать в Receipt Master",
     "subtitle": "Управляйте товарами, заказами и чеками в одном месте",
     "latestProducts": "Последние товары",
@@ -849,7 +883,7 @@
     "productAlreadyExists": "Товар с таким названием уже существует",
     "recipientNotFound": "Получатель не найден",
     "recipientAlreadyExists": "Получатель с таким email уже существует",
-    "recipient_has_orders": "Нельзя удалить получателя, у которого есть заказы.",
+    "recipientHasOrders": "Нельзя удалить получателя, у которого есть заказы.",
     "settingsNotFound": "Настройки не найдены",
     "invalidSettings": "Неверные настройки",
     "fileNotFound": "Файл не найден",
@@ -875,7 +909,7 @@
     "dateStyle": "Вид даты",
     "timeStyle": "Вид времени",
     "hourCycle": "Формат часов",
-    "timeZone": "Часовой пояс (IANA)",
+    "timeZone": "Часовой пояс (например, Europe/Kyiv)",
     "invalidFormatting": "Введите правильный часовой пояс для примера.",
     "presets": "Именованные наборы",
     "presetsHelp": "Выберите набор и нажмите «Использовать». Настройки аккаунта изменятся только после сохранения. Максимум 20 наборов.",
@@ -949,7 +983,7 @@
     "replacing": "Замена документа…",
     "replacementFailed": "Замена не удалась. Текущий PDF доступен. Повторите ту же замену или подготовьте новую.",
     "retryFrozen": "Повторить сохранённую замену",
-    "option_numeric": "Числовая дата (прежний формат, полный год)",
+    "option_numeric": "Числовой",
     "titleRequired": "Введите название или выберите автоматическое название"
   }
 }

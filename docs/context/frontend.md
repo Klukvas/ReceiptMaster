@@ -60,7 +60,7 @@ frontend/
 | `/products` | `ProductsPage` | Yes | Layout | Manage products |
 | `/recipients` | `RecipientsPage` | Yes | Layout | Manage buyers |
 | `/suppliers` | `SuppliersPage` | Yes | Layout | Manage suppliers |
-| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders |
+| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders. The status filter is kept in `?status=` (draft, confirmed or cancelled); clicking a row opens its details |
 | `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas |
 | `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing |
 | `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
@@ -129,7 +129,7 @@ frontend/
 - For generic codes (`VALIDATION_ERROR`, `BAD_REQUEST`, `HTTP_EXCEPTION`) the server's own detail (string or class-validator array, joined with `; `) wins over the generic translation
 - Falls back to legacy `{ message: string }`
 - Network errors → "Ошибка сети. Проверьте подключение..."
-- **i18n-aware**: translates error codes via `i18n.t('errors.${code.toLowerCase()}')`
+- **i18n-aware**: translates error codes via the camelCase key of the code, e.g. `USER_ALREADY_EXISTS` -> `errors.userAlreadyExists` (the locale files use camelCase; a snake_case key never matches). Forms show `parseApiError(error).message`, not a blanket "Bad request" or a hand-rolled `data.message` lookup: the API puts the text in `data.error`
 - Fallback to `ERROR_MESSAGES` constant if i18n not ready
 
 **ErrorCode enum** (lines 11–58):
@@ -288,6 +288,7 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `token: string | null` — access token from localStorage
 - `isLoading: boolean` — loading user profile on mount
 - `isAuthenticated: boolean` — derived (!!user && !!token)
+- `refreshProfile()` — re-reads `/auth/profile` into `user` without the loading screen (used after an email change; no page reload)
 - `hasProfileLoadError` / `retryLoadProfile()` — set when the startup profile request fails for a reason other than 401/403 (server down, 5xx). The tokens are kept, `ProtectedRoute` shows "Network error" with Retry instead of logging the user out
 
 **Methods:**
@@ -542,10 +543,10 @@ components/
 
 Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
-- `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus)
-- `ConfirmModal.tsx` — yes/no dialog
+- `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus; when dialogs stack, only the topmost handles Escape and Tab)
+- `ConfirmModal.tsx` — yes/no dialog; `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
 - `Drawer.tsx` — side drawer (focus trap via `hooks/useFocusTrap.ts`)
-- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state
+- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
 - Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow
