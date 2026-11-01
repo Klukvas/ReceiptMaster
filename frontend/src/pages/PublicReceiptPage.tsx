@@ -192,14 +192,15 @@ export const PublicReceiptPage = () => {
           </div>
 
           {/* Items */}
-          <div className="px-6 py-4 overflow-x-auto">
-            <table className="w-full min-w-[320px]">
+          <div className="px-4 py-4 sm:px-6">
+            {/* Fixed layout: a long item name wraps instead of pushing Total out of the card. */}
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="text-xs font-semibold uppercase tracking-wider text-content-tertiary border-b border-[var(--color-border-light)]">
                   <th className="text-left pb-2">Item</th>
-                  <th className="text-center pb-2 w-16">Qty</th>
+                  <th className="hidden sm:table-cell text-center pb-2 w-16">Qty</th>
                   {data.money !== false && (
-                    <th className="text-right pb-2 w-28">Price</th>
+                    <th className="hidden sm:table-cell text-right pb-2 w-28">Price</th>
                   )}
                   {data.money !== false && (
                     <th className="text-right pb-2 w-28">Total</th>
@@ -209,19 +210,25 @@ export const PublicReceiptPage = () => {
               <tbody className="divide-y divide-[var(--color-border-light)]">
                 {order.items.map((item, index) => (
                   <tr key={`${index}-${item.product_name}`}>
-                    <td className="py-3 text-sm text-content">
+                    <td className="py-3 pr-2 text-sm text-content [overflow-wrap:anywhere]">
                       {item.product_name}
+                      {/* Qty and Price columns are hidden on phones; fold them under the name. */}
+                      <span className="block sm:hidden text-xs text-content-tertiary tabular-nums">
+                        {data.money !== false
+                          ? `${item.qty} × ${formatCurrency(item.unit_price_cents, order.currency)}`
+                          : `× ${item.qty}`}
+                      </span>
                     </td>
-                    <td className="py-3 text-sm text-content-tertiary text-center">
+                    <td className="hidden sm:table-cell py-3 text-sm text-content-tertiary text-center">
                       {item.qty}
                     </td>
                     {data.money !== false && (
-                      <td className="py-3 text-sm text-content-tertiary text-right tabular-nums">
+                      <td className="hidden sm:table-cell py-3 text-sm text-content-tertiary text-right tabular-nums">
                         {formatCurrency(item.unit_price_cents, order.currency)}
                       </td>
                     )}
                     {data.money !== false && (
-                      <td className="py-3 text-sm font-medium text-content text-right tabular-nums">
+                      <td className="py-3 text-sm font-medium text-content text-right tabular-nums whitespace-nowrap">
                         {formatCurrency(item.line_total_cents, order.currency)}
                       </td>
                     )}

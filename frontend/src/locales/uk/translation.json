@@ -205,7 +205,7 @@
     "quantityMustBeNonNegative": "Кількість повинна бути невід'ємним числом",
     "deleteProduct": "Видалити товар",
     "deleteProductMessage": "Ви впевнені, що хочете видалити цей товар? Цю дію неможливо скасувати.",
-    "searchPlaceholder": "Пошук товарів за назвою, ціною, кількістю або валютою...",
+    "searchPlaceholder": "Пошук товарів за назвою...",
     "noProductsFound": "Товари не знайдено за вашим запитом",
     "productFound": "товар знайдено",
     "productsFound": "товарів знайдено",

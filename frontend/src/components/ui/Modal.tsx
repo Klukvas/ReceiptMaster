@@ -37,6 +37,9 @@ export const Modal: React.FC<ModalProps> = ({
     onOpenChange={(open) => {
       if (!open) onClose();
     }}
+    // Dialog's wrapper defaults to max-w-lg, so the size has to be set there too or
+    // "lg"/"xl" modals stay 512px wide and squeeze their content.
+    className={sizeClasses[size]}
   >
     <DialogContent
       className={cn(

@@ -94,9 +94,9 @@ export const ShareReceiptModal = ({
  {t("receipts.publicLink","Public link")}
  </label>
  <div className="flex items-center gap-2">
- <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-surface-alt rounded-lg border border-[var(--color-border)]">
+ <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-2 bg-surface-alt rounded-lg border border-[var(--color-border)]">
  <Link2 className="w-4 h-4 text-content-tertiary flex-shrink-0" />
- <span className="text-sm text-content-secondary truncate font-mono">
+ <span className="min-w-0 text-sm text-content-secondary truncate font-mono">
  {shareUrl}
  </span>
  </div>
