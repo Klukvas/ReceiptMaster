@@ -204,6 +204,7 @@ export class DocumentRenderService {
       caps.terms ? config.paymentTerms : undefined,
       caps.terms ? config.deliveryTerms : undefined,
       config.title.mode === "custom",
+      config.formatting,
     );
     // Automatic mode keeps the original template/shared print CSS geometry.
     // Corporate's original inline cap outranks the shared 120px rule.

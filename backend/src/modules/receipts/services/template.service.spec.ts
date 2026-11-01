@@ -1,3 +1,7 @@
+import {
+  DEFAULT_DOCUMENT_FORMATTING,
+  formatDocumentDate,
+} from "../../../common/utils/document-formatting.util";
 import { TemplateService, ReceiptTemplate } from "./template.service";
 import { MoneyUtil } from "../../../common/utils/money.util";
 
@@ -212,8 +216,10 @@ describe("TemplateService", () => {
         "en",
       );
 
-      const expectedDate = new Date("2025-01-15T10:00:00Z").toLocaleString(
-        "en-US",
+      const expectedDate = formatDocumentDate(
+        "2025-01-15T10:00:00Z",
+        "en",
+        DEFAULT_DOCUMENT_FORMATTING,
       );
       expect(result.orderDate).toBe(expectedDate);
     });
@@ -229,8 +235,10 @@ describe("TemplateService", () => {
         "ru",
       );
 
-      const expectedDate = new Date("2025-01-15T10:00:00Z").toLocaleString(
-        "ru-RU",
+      const expectedDate = formatDocumentDate(
+        "2025-01-15T10:00:00Z",
+        "ru",
+        DEFAULT_DOCUMENT_FORMATTING,
       );
       expect(result.orderDate).toBe(expectedDate);
     });
@@ -246,8 +254,10 @@ describe("TemplateService", () => {
         "uk",
       );
 
-      const expectedDate = new Date("2025-01-15T10:00:00Z").toLocaleString(
-        "uk-UA",
+      const expectedDate = formatDocumentDate(
+        "2025-01-15T10:00:00Z",
+        "uk",
+        DEFAULT_DOCUMENT_FORMATTING,
       );
       expect(result.orderDate).toBe(expectedDate);
     });
@@ -263,10 +273,42 @@ describe("TemplateService", () => {
         "fr",
       );
 
-      const expectedDate = new Date("2025-01-15T10:00:00Z").toLocaleString(
-        "en-US",
+      const expectedDate = formatDocumentDate(
+        "2025-01-15T10:00:00Z",
+        "en",
+        DEFAULT_DOCUMENT_FORMATTING,
       );
       expect(result.orderDate).toBe(expectedDate);
+    });
+
+    it("formats order date and generated-at in the supplied time zone", () => {
+      const result = service.prepareTemplateData(
+        mockOrder,
+        "2025-000001",
+        mockCompanyInfo,
+        false,
+        undefined,
+        "Invoice",
+        "en",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          ...DEFAULT_DOCUMENT_FORMATTING,
+          timeZone: "Pacific/Kiritimati",
+          dateStyle: "numeric",
+          timeStyle: "short",
+          hourCycle: "h23",
+        },
+      );
+
+      expect(result.orderDate).toBe("1/16/2025, 00:00");
+      expect(result.generatedAt).toMatch(
+        /^\d{1,2}\/\d{1,2}\/\d{4}, \d{2}:\d{2}$/,
+      );
     });
   });
 
