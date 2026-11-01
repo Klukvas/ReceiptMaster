@@ -85,6 +85,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
  <input
  type="email"
+ autoComplete="email"
  id="email"
  name="email"
  value={formData.email}
@@ -105,6 +106,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
  <input
  type={showPassword ? 'text' : 'password'}
+ autoComplete="current-password"
  id="password"
  name="password"
  value={formData.password}
@@ -115,6 +117,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
  />
  <button
  type="button"
+ aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+ aria-pressed={showPassword}
  onClick={() => setShowPassword(!showPassword)}
  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
  >

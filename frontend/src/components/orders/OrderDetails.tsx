@@ -49,7 +49,11 @@ export const OrderDetails = ({
  // Close on Escape
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
- if (e.key ==="Escape") onClose();
+ if (e.key !=="Escape") return;
+ // A dialog opened on top (e.g. Share Receipt) owns this Escape; closing both
+ // would throw away the order the user was looking at.
+ if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+ onClose();
  };
  document.addEventListener("keydown", handleKeyDown);
  return () => document.removeEventListener("keydown", handleKeyDown);

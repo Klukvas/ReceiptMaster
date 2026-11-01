@@ -9,6 +9,8 @@ interface ConfirmModalProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  /** Name of the thing being acted on, shown under the message so the user can check it. */
+  itemName?: string;
   confirmLabel?: string;
   dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
@@ -21,6 +23,7 @@ export const ConfirmModal = ({
   onConfirm,
   title,
   message,
+  itemName,
   confirmLabel,
   dismissLabel,
   variant = "danger",
@@ -46,7 +49,14 @@ export const ConfirmModal = ({
         >
           <AlertTriangle className="w-5 h-5" aria-hidden />
         </div>
-        <p className="text-sm text-content-secondary pt-2">{message}</p>
+        <div className="pt-2 min-w-0">
+          <p className="text-sm text-content-secondary">{message}</p>
+          {itemName && (
+            <p className="mt-2 truncate text-sm font-medium text-content">
+              {itemName}
+            </p>
+          )}
+        </div>
       </div>
       <div className="flex justify-end gap-3 mt-6">
         <Button variant="secondary" onClick={onClose} disabled={isLoading}>

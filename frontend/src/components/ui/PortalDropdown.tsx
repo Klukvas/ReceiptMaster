@@ -69,6 +69,8 @@ export const PortalDropdown = ({
  onClick={toggle}
  className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
  title={buttonTitle}
+ aria-label={buttonTitle}
+ aria-haspopup="menu"
  >
  <MoreHorizontal className="w-4 h-4" />
  </button>

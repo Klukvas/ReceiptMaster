@@ -124,6 +124,9 @@ export const ProductDrawer = ({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
+                aria-label={t("orders.moreActions")}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
                 className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors"
               >
                 <MoreVertical className="w-4 h-4" />

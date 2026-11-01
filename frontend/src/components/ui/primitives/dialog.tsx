@@ -14,6 +14,10 @@ interface DialogContextValue {
 
 const DialogContext = React.createContext<DialogContextValue | null>(null);
 
+// Dialogs can stack (Order Details with Share Receipt on top). Only the topmost one
+// may react to Escape and Tab, otherwise one keypress closes or traps them all.
+const openDialogStack: symbol[] = [];
+
 function useDialogContext() {
   return React.useContext(DialogContext);
 }
@@ -46,6 +50,11 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
     if (!open) return;
     if (typeof document === "undefined") return;
 
+    const dialogId = Symbol("dialog");
+    openDialogStack.push(dialogId);
+    const isTopmost = () =>
+      openDialogStack[openDialogStack.length - 1] === dialogId;
+
     previousFocusRef.current = document.activeElement as HTMLElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -62,6 +71,7 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isTopmost()) return;
       if (e.key === "Escape") {
         onOpenChangeRef.current(false);
         return;
@@ -100,6 +110,8 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
+      const position = openDialogStack.indexOf(dialogId);
+      if (position !== -1) openDialogStack.splice(position, 1);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();

@@ -90,10 +90,10 @@ export const FooterSection: React.FC = React.memo(() => {
         </span>
       </a>
       <div className="landing-footer-links">
-        <a href="#features">{t("landing.footer.features")}</a>
-        {billingEnabled && <a href="#pricing">{t("landing.footer.pricing")}</a>}
+        <a href="/#features">{t("landing.footer.features")}</a>
+        {billingEnabled && <a href="/#pricing">{t("landing.footer.pricing")}</a>}
         <Link to="/blog">{t("landing.nav.blog")}</Link>
-        <a href="/api/docs">{t("landing.footer.apiDocs")}</a>
+        <a href="/api/v1/docs">{t("landing.footer.apiDocs")}</a>
         <Link to="/privacy">{t("landing.footer.privacy")}</Link>
         <Link to="/terms">{t("landing.footer.terms")}</Link>
       </div>

@@ -94,6 +94,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
  <input
  type="email"
+ autoComplete="email"
  id="email"
  name="email"
  value={formData.email}
@@ -117,6 +118,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
  <input
  type={showPassword ?"text" :"password"}
+ autoComplete="new-password"
+ aria-describedby="password-rule"
  id="password"
  name="password"
  value={formData.password}
@@ -127,6 +130,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  />
  <button
  type="button"
+ aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+ aria-pressed={showPassword}
  onClick={() => setShowPassword(!showPassword)}
  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
  >
@@ -137,6 +142,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  )}
  </button>
  </div>
+ <p id="password-rule" className="mt-1 text-xs text-content-secondary">
+ {t("auth.passwordRule")}
+ </p>
  </div>
 
  {/* Confirm Password */}
@@ -151,6 +159,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
  <input
  type={showConfirmPassword ?"text" :"password"}
+ autoComplete="new-password"
  id="confirmPassword"
  name="confirmPassword"
  value={formData.confirmPassword}
@@ -161,6 +170,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  />
  <button
  type="button"
+ aria-label={showConfirmPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+ aria-pressed={showConfirmPassword}
  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
  >
