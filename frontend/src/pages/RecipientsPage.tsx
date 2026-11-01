@@ -141,6 +141,7 @@ export const RecipientsPage = () => {
  mutationFn: recipientsApi.delete,
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ["recipients"] });
+ toast.success(t("recipients.recipientDeleted"));
  setDeleteTarget(null);
  },
  onError: (error: unknown) => {

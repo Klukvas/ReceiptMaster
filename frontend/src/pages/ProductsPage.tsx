@@ -125,6 +125,7 @@ export const ProductsPage = () => {
     mutationFn: productsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setNotification({
         type: "success",
         message: t("products.productDeleted"),
@@ -144,6 +145,7 @@ export const ProductsPage = () => {
     mutationFn: (ids: string[]) => productsApi.bulkDelete(ids),
     onSuccess: (resp) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setSelectedKeys(new Set());
       setBulkDeleteConfirm(false);
       const { deleted, skipped } = resp.data;

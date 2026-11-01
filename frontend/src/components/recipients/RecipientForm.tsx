@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import toast from "react-hot-toast";
 import { recipientsApi, type Recipient } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -41,6 +42,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
     mutationFn: recipientsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
+      toast.success(t("recipients.recipientCreated"));
       onClose();
     },
   });
@@ -50,6 +52,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       recipientsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
+      toast.success(t("recipients.recipientUpdated"));
       onClose();
     },
   });

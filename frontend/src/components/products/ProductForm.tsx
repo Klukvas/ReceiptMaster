@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
+import toast from "react-hot-toast";
 import { productsApi, suppliersApi, type Product, amountToCents } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -39,6 +40,14 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
+
+  const purchasePrice = parseFloat(formData.purchase_price_cents);
+  const salePrice = parseFloat(formData.sale_price_cents);
+  // A warning, not an error: selling below cost is sometimes intentional.
+  const isBelowCost =
+    Number.isFinite(purchasePrice) &&
+    Number.isFinite(salePrice) &&
+    salePrice < purchasePrice;
 
   const similarNameQuery = useDebouncedValue(formData.name.trim(), 250);
   // The list endpoint caps page size at 100, so ask the server for matches instead of loading everything.
@@ -85,6 +94,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     mutationFn: productsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      // The header counter ("3/10") comes from the plan usage, not from the product list.
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      toast.success(t("products.productCreated"));
       onClose();
     },
     onError: (error: unknown) => {
@@ -97,6 +109,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       productsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success(t("products.productUpdated"));
       onClose();
     },
     onError: (error: unknown) => {
@@ -250,6 +263,11 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               error={errors.sale_price_cents}
             />
           </div>
+          {isBelowCost && (
+            <p role="status" className="-mt-2 text-xs text-warning-base">
+              {t("products.belowCostWarning")}
+            </p>
+          )}
 
           <Input
             label={t("products.quantity")}

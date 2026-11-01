@@ -111,7 +111,8 @@ export const PublicReceiptPage = () => {
             Receipt Not Found
           </h1>
           <p className="text-content-tertiary">
-            This receipt link is invalid or has been revoked.
+            This receipt is no longer available. Its link may have been revoked,
+            or the receipt was replaced by a newer one.
           </p>
         </div>
       </div>
