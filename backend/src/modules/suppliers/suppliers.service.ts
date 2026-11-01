@@ -8,6 +8,7 @@ import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 
 const SUPPLIER_SORTABLE_COLUMNS: Record<string, string> = {
   name: "supplier.name",
@@ -60,7 +61,7 @@ export class SuppliersService {
     if (search?.trim()) {
       queryBuilder.andWhere(
         "(supplier.name ILIKE :search OR supplier.email ILIKE :search OR supplier.contact_person ILIKE :search)",
-        { search: `%${search.trim()}%` },
+        { search: containsPattern(search) },
       );
     }
 

@@ -9,6 +9,7 @@ import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
 import { normalizeEmail } from "../../common/dto/normalized-email";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -86,7 +87,7 @@ export class RecipientsService {
     if (search && search.trim()) {
       queryBuilder.andWhere(
         "(recipient.name ILIKE :search OR recipient.email ILIKE :search OR recipient.phone ILIKE :search)",
-        { search: `%${search.trim()}%` },
+        { search: containsPattern(search) },
       );
     }
 

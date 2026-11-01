@@ -16,6 +16,7 @@ import { CacheService } from "../../common/services/cache.service";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { SettingsService } from "../settings/services/settings.service";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 
 const DASHBOARD_CACHE_TTL = 300; // 5 minutes
 
@@ -316,7 +317,7 @@ export class OrdersService {
 
     if (search && search.trim()) {
       queryBuilder.andWhere("recipient.name ILIKE :search", {
-        search: `%${search.trim()}%`,
+        search: containsPattern(search),
       });
     }
 
