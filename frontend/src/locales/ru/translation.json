@@ -49,7 +49,7 @@
     "confirmPassword": "Подтвердите пароль",
     "showPassword": "Показать пароль",
     "hidePassword": "Скрыть пароль",
-    "passwordRule": "Не менее 6 символов",
+    "passwordRule": "Не менее {{min}} символов",
     "firstName": "Имя",
     "lastName": "Фамилия",
     "loginTitle": "Вход в систему",
@@ -514,7 +514,7 @@
     "confirmPassword": "Подтвердите пароль",
     "passwordChanged": "Пароль успешно изменен",
     "passwordChangeFailed": "Не удалось изменить пароль",
-    "passwordMinLength": "Пароль должен содержать минимум 6 символов"
+    "passwordMinLength": "Пароль должен содержать минимум {{min}} символов"
   },
   "landing": {
     "welcome": "Добро пожаловать",
@@ -886,7 +886,7 @@
     "userNotFound": "Пользователь не найден",
     "invalidCredentials": "Неверный email или пароль",
     "passwordsDoNotMatch": "Пароли не совпадают",
-    "passwordTooShort": "Пароль должен содержать минимум 6 символов",
+    "passwordTooShort": "Пароль должен содержать минимум {{min}} символов",
     "orderNotFound": "Заказ не найден",
     "orderAlreadyConfirmed": "Заказ уже подтвержден",
     "orderAlreadyCancelled": "Заказ уже отменен",

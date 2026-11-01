@@ -5,6 +5,7 @@ import { useTranslation } from"../../hooks/useTranslation";
 import { Button } from"../ui/Button";
 import { Modal } from"../ui/Modal";
 import toast from"react-hot-toast";
+import { MIN_PASSWORD_LENGTH } from "../../lib/password-policy";
 
 interface RegisterModalProps {
  isOpen: boolean;
@@ -49,8 +50,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  return;
  }
 
- if (formData.password.length < 6) {
- toast.error(t("errors.passwordTooShort"));
+ if (formData.password.length < MIN_PASSWORD_LENGTH) {
+ toast.error(t("errors.passwordTooShort", { min: MIN_PASSWORD_LENGTH }));
  return;
  }
 
@@ -143,7 +144,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
  </button>
  </div>
  <p id="password-rule" className="mt-1 text-xs text-content-secondary">
- {t("auth.passwordRule")}
+ {t("auth.passwordRule", { min: MIN_PASSWORD_LENGTH })}
  </p>
  </div>
 

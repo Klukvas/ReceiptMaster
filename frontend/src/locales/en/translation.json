@@ -49,7 +49,7 @@
     "confirmPassword": "Confirm Password",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
-    "passwordRule": "At least 6 characters",
+    "passwordRule": "At least {{min}} characters",
     "firstName": "First Name",
     "lastName": "Last Name",
     "loginTitle": "Sign in to your account",
@@ -512,7 +512,7 @@
     "confirmPassword": "Confirm Password",
     "passwordChanged": "Password changed successfully",
     "passwordChangeFailed": "Failed to change password",
-    "passwordMinLength": "Password must be at least 6 characters long"
+    "passwordMinLength": "Password must be at least {{min}} characters long"
   },
   "landing": {
     "welcome": "Welcome",
@@ -884,7 +884,7 @@
     "userNotFound": "User not found",
     "invalidCredentials": "Invalid email or password",
     "passwordsDoNotMatch": "Passwords do not match",
-    "passwordTooShort": "Password must be at least 6 characters long",
+    "passwordTooShort": "Password must be at least {{min}} characters long",
     "orderNotFound": "Order not found",
     "orderAlreadyConfirmed": "Order is already confirmed",
     "orderAlreadyCancelled": "Order is already cancelled",

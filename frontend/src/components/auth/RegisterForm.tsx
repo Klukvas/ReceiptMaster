@@ -3,6 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { Link } from "react-router-dom";
 import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
+import { MIN_PASSWORD_LENGTH } from "../../lib/password-policy";
 
 export const RegisterForm: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -29,8 +30,8 @@ export const RegisterForm: React.FC = () => {
     }
 
     // Validate password length
-    if (password.length < 6) {
-      setError(t("errors.passwordTooShort"));
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(t("errors.passwordTooShort", { min: MIN_PASSWORD_LENGTH }));
       setIsLoading(false);
       return;
     }

@@ -23,7 +23,7 @@ Creates a new user account.
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | email | string | yes | Must be unique. Trimmed and lowercased before validation, so `A@x.com` and `a@x.com` are one account; login accepts any casing (also for older accounts stored with capitals). The same applies to `POST /auth/login` and profile email updates |
-| password | string | yes | Min 8 chars recommended |
+| password | string | yes | Min 8 characters (`MIN_PASSWORD_LENGTH`, `users/dto/password-policy.ts`). Login still accepts shorter input so accounts created under the old minimum of 6 can sign in; changing a password requires 8+ for the new one only |
 
 **Response** (201):
 ```typescript
@@ -1216,7 +1216,7 @@ Returns current plan and usage metrics.
   plan: "free" | "pro" | "business",
   usage: {
     productsCount: number,
-    ordersThisMonth: number
+    ordersThisMonth: number    // orders created this UTC month, excluding cancelled and deleted ones
   },
   limits: {
     maxProducts: number | null,       // null = unlimited

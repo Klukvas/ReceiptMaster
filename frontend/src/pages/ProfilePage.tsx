@@ -19,6 +19,7 @@ import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
 import { parseApiError } from "../lib/api-errors";
+import { MIN_PASSWORD_LENGTH } from "../lib/password-policy";
 
 const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
@@ -95,8 +96,8 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      toast.error(t("errors.passwordTooShort"));
+    if (passwordData.newPassword.length < MIN_PASSWORD_LENGTH) {
+      toast.error(t("errors.passwordTooShort", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
 
@@ -407,7 +408,7 @@ export const ProfilePage: React.FC = () => {
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-[var(--color-border)] rounded-md shadow-sm bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base"
                           placeholder={t("profile.newPassword")}
-                          minLength={6}
+                          minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
                         <button
@@ -430,7 +431,7 @@ export const ProfilePage: React.FC = () => {
                         </button>
                       </div>
                       <p className="mt-1 text-xs text-content-tertiary">
-                        {t("profile.passwordMinLength")}
+                        {t("profile.passwordMinLength", { min: MIN_PASSWORD_LENGTH })}
                       </p>
                     </div>
 
@@ -453,7 +454,7 @@ export const ProfilePage: React.FC = () => {
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-[var(--color-border)] rounded-md shadow-sm bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base"
                           placeholder={t("profile.confirmPassword")}
-                          minLength={6}
+                          minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
                         <button

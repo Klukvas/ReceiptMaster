@@ -49,7 +49,7 @@
     "confirmPassword": "Підтвердіть пароль",
     "showPassword": "Показати пароль",
     "hidePassword": "Приховати пароль",
-    "passwordRule": "Щонайменше 6 символів",
+    "passwordRule": "Щонайменше {{min}} символів",
     "firstName": "Ім'я",
     "lastName": "Прізвище",
     "loginTitle": "Вхід в систему",
@@ -514,7 +514,7 @@
     "confirmPassword": "Підтвердіть пароль",
     "passwordChanged": "Пароль успішно змінено",
     "passwordChangeFailed": "Не вдалося змінити пароль",
-    "passwordMinLength": "Пароль повинен містити мінімум 6 символів"
+    "passwordMinLength": "Пароль повинен містити мінімум {{min}} символів"
   },
   "landing": {
     "welcome": "Ласкаво просимо",
@@ -886,7 +886,7 @@
     "userNotFound": "Користувач не знайдений",
     "invalidCredentials": "Невірний email або пароль",
     "passwordsDoNotMatch": "Паролі не співпадають",
-    "passwordTooShort": "Пароль повинен містити мінімум 6 символів",
+    "passwordTooShort": "Пароль повинен містити мінімум {{min}} символів",
     "orderNotFound": "Замовлення не знайдено",
     "orderAlreadyConfirmed": "Замовлення вже підтверджено",
     "orderAlreadyCancelled": "Замовлення вже скасовано",
