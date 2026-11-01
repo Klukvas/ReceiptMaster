@@ -22,6 +22,9 @@ const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   email: "recipient.email",
   phone: "recipient.phone",
   created_at: "recipient.created_at",
+  // The aggregates the list already selects; they sort by their select aliases.
+  order_count: "order_count",
+  total_spent_cents: "total_spent_cents",
 };
 
 /** null clears these nullable contact columns; name is NOT NULL. */
@@ -128,7 +131,12 @@ export class RecipientsService {
     const sortColumn =
       RECIPIENT_SORTABLE_COLUMNS[sortBy] || "recipient.created_at";
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
-    queryBuilder.orderBy(sortColumn, direction);
+    // Many recipients tie on a count or a sum (most have none), so a stable tiebreak keeps
+    // pages from repeating or skipping rows.
+    queryBuilder
+      .orderBy(sortColumn, direction)
+      .addOrderBy("recipient.created_at", "DESC")
+      .addOrderBy("recipient.id", "ASC");
 
     const raw = await queryBuilder
       .offset(offset)

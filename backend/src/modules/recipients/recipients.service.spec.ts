@@ -29,6 +29,7 @@ describe("RecipientsService", () => {
       andWhere: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       getRawAndEntities: jest.fn().mockResolvedValue({
@@ -151,6 +152,12 @@ describe("RecipientsService", () => {
       );
 
       expect(qb.orderBy).toHaveBeenCalledWith("recipient.name", "ASC");
+      // Ties fall back to newest first, then id, so paging stays stable.
+      expect(qb.addOrderBy).toHaveBeenCalledWith(
+        "recipient.created_at",
+        "DESC",
+      );
+      expect(qb.addOrderBy).toHaveBeenCalledWith("recipient.id", "ASC");
     });
   });
 

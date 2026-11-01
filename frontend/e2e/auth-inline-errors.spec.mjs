@@ -382,6 +382,28 @@ const orderNumbers = async (results) => {
   });
 };
 
+const recipientSorting = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    page.setDefaultTimeout(6000);
+    const sorts = [];
+    await installApiMocks(page, createState());
+    await page.route("**/api/v1/recipients?*", (route) => {
+      sorts.push(new URL(route.request().url()).searchParams.get("sortBy"));
+      return route.fallback();
+    });
+    await page.goto(`${BASE_URL}/recipients`);
+    await page.getByRole("columnheader", { name: /orders/i }).first().click();
+    await page.getByRole("columnheader", { name: /total spent/i }).first().click();
+    await page.waitForFunction(() => true);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    results.check(
+      "recipients: the Orders and Total Spent headers sort by their aggregates",
+      sorts.includes("order_count") && sorts.includes("total_spent_cents"),
+      JSON.stringify(sorts),
+    );
+  });
+};
+
 export const run = async () => {
   const results = new Results("auth inline errors and public receipt language");
   await registerErrors(results);
@@ -394,5 +416,6 @@ export const run = async () => {
   await dashboardOnPhone(results);
   await touchTargets(results);
   await orderNumbers(results);
+  await recipientSorting(results);
   return results;
 };

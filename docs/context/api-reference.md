@@ -551,13 +551,13 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 
 Paginated list of user's recipients.
 
-**Query Params:** Same as Products (limit, offset, sort, sortOrder)
+**Query Params:** `limit`, `offset`, `search` (name, email or phone contains), `sortOrder`, and `sortBy`: `name`, `email`, `phone`, `created_at` (default), `order_count` or `total_spent_cents`. The last two sort by the aggregates every row carries (confirmed orders only). Ties fall back to newest first, then id, so paging is stable.
 
 **Response** (200):
 ```typescript
 {
-  data: Recipient[],
-  meta: { total: number, page: number, limit: number }
+  data: (Recipient & { order_count: number, total_spent_cents: number })[],
+  total: number, offset: number, limit: number
 }
 ```
 

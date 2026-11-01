@@ -59,8 +59,11 @@ export const run = async () => {
     );
 
     await page.getByRole("button", { name: "Delete", exact: true }).first().click();
-    await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
-    await page.waitForResponse("**/api/v1/orders/batch-delete");
+    // Listen before clicking: the mocked response can arrive before a later waiter is set up.
+    await Promise.all([
+      page.waitForResponse("**/api/v1/orders/batch-delete"),
+      page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click(),
+    ]);
     results.check(
       "deleting sends every matching id, not just the two on screen",
       seen.batchDeletes.length === 1 &&
