@@ -19,6 +19,8 @@ import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
 
+const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
+
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -506,14 +508,13 @@ export const ProfilePage: React.FC = () => {
                         {t("profile.deleteAccountDescription")}
                       </p>
                     </div>
-                    <button
-                      onClick={() =>
-                        toast.error(t("profile.deleteAccountNotImplemented"))
-                      }
-                      className="px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0"
+                    {/* Self-service deletion does not exist yet; the privacy policy promises a reply within 30 days. */}
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t("profile.deleteAccountEmailSubject"))}`}
+                      className="px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0 text-center"
                     >
-                      {t("profile.deleteAccount")}
-                    </button>
+                      {t("profile.requestAccountDeletion")}
+                    </a>
                   </div>
                 </div>
               </div>

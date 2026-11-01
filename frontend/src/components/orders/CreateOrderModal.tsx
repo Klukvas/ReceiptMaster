@@ -276,7 +276,8 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                       item={item}
                       index={index}
                       products={products}
-                      canRemove={items.length > 1}
+                      // An empty list is a valid state of this form (see the empty-state block above).
+                      canRemove
                       error={errors[`item-${index}-qty`]}
                       onUpdate={updateItem}
                       onRemove={removeItem}
