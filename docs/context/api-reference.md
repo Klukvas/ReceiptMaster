@@ -2046,7 +2046,7 @@ Emitted if generation fails:
 All routes require JWT auth. New read routes reject unknown query parameters; UUID paths, complete configs, partial overrides and write bodies use strict Zod validation. Complete V1 config includes company fields, template ID, document language, automatic/custom title (custom text must contain non-whitespace characters; literal `Invoice` stays custom), footer/accent/terms, tenant logo reference/layout, per-contact visibility and bounded Intl formatting. Unsupported values are retained. Logo bytes/storage keys are never config fields.
 
 - `GET /settings/document-config` → `{ data: { config, revision } }`, without creating a settings row.
-- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with reload/compare/discard UX.
+- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with `errorCode: "DOCUMENT_REVISION_CONFLICT"`; the UI shows the reload/compare/discard block only for that code, while other errors (validation, limits) appear next to the Save button.
 - `GET /settings/document-presets` → `{ data: [{ id, name, revision, updated_at }] }` summaries.
 - `GET /settings/document-presets/:id` → editable `{ data: { id, name, revision, config } }`.
 - `POST /settings/document-presets` → create with `name` and draft.

@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import {
   documentError,
   documentEnvelope,
+  isDocumentRevisionConflict,
   type ConfigVersion,
   type DocumentConfig,
   type DocumentDraft,
@@ -13,6 +14,11 @@ export const DOCUMENT_CONFIG_KEY = ["settings", "document-config"] as const;
 export function useDocumentDraft(orderId?: string) {
   const cache = useQueryClient();
   const { t } = useTranslation();
+  const fieldLabel = (field: string) => {
+    const key = `settings.${field}`;
+    const label = t(key);
+    return label === key ? undefined : label;
+  };
   const query = useQuery({
     queryKey: DOCUMENT_CONFIG_KEY,
     queryFn: async () =>
@@ -29,6 +35,7 @@ export function useDocumentDraft(orderId?: string) {
   const [file, setFile] = useState<File>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [isConflict, setIsConflict] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewVersion, setPreviewVersion] = useState(-1);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,6 +170,7 @@ export function useDocumentDraft(orderId?: string) {
     if (!config || !saved || busy) return;
     setBusy(true);
     setError("");
+    setIsConflict(false);
     try {
       const response = await api.put<{ data: ConfigVersion }>(
         "/settings/document-config",
@@ -181,7 +189,8 @@ export function useDocumentDraft(orderId?: string) {
         queryKey: ["settings", "receipt-design"],
       });
     } catch (value) {
-      setError(await documentError(value));
+      setIsConflict(isDocumentRevisionConflict(value));
+      setError(await documentError(value, fieldLabel));
     } finally {
       setBusy(false);
     }
@@ -190,9 +199,13 @@ export function useDocumentDraft(orderId?: string) {
     if (busy) return;
     try {
       const value = await query.refetch();
-      if (value.data) setBase(value.data);
+      if (value.data) {
+        setBase(value.data);
+        setError("");
+        setIsConflict(false);
+      }
     } catch (value) {
-      setError(await documentError(value));
+      setError(await documentError(value, fieldLabel));
     }
   };
   const refreshPreview = async () => {
@@ -227,7 +240,7 @@ export function useDocumentDraft(orderId?: string) {
       }
     } catch (value) {
       if (!abort.signal.aborted && request === sequence.current)
-        setError(await documentError(value));
+        setError(await documentError(value, fieldLabel));
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }
@@ -242,6 +255,7 @@ export function useDocumentDraft(orderId?: string) {
     busy,
     setBusy,
     error,
+    isConflict,
     setError,
     update,
     stageLogo,
