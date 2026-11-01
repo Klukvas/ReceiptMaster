@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Palette,
@@ -15,6 +15,7 @@ import {
 import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
+import { formatDateOnly } from "../lib/api";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
@@ -132,7 +133,7 @@ const SubscriptionTab = () => {
               "subscription.canceledNotice",
               "Your subscription will end on {{date}}",
               {
-                date: new Date(periodEnd).toLocaleDateString(),
+                date: formatDateOnly(periodEnd),
               },
             )}
           </p>
@@ -209,7 +210,7 @@ const SubscriptionTab = () => {
           paddleStatus === "active" && (
             <p className="mt-4 text-xs text-content-tertiary">
               {t("subscription.nextRenewal", "Next renewal")}:{""}
-              {new Date(periodEnd).toLocaleDateString()}
+              {formatDateOnly(periodEnd)}
             </p>
           )}
       </div>
@@ -307,6 +308,33 @@ export const SettingsPage = () => {
     return VALID_TABS.includes(tabParam) ? tabParam : "company";
   });
 
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
+
+  const updateHiddenTabs = useCallback(() => {
+    const list = tabListRef.current;
+    if (!list) return;
+    setHasHiddenTabs(list.scrollLeft + list.clientWidth < list.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const list = tabListRef.current;
+    updateHiddenTabs();
+    list?.addEventListener("scroll", updateHiddenTabs, { passive: true });
+    window.addEventListener("resize", updateHiddenTabs);
+    return () => {
+      list?.removeEventListener("scroll", updateHiddenTabs);
+      window.removeEventListener("resize", updateHiddenTabs);
+    };
+  }, [updateHiddenTabs]);
+
+  // Keep the selected tab visible, e.g. when opened through ?tab=advanced on a phone.
+  useEffect(() => {
+    document
+      .getElementById(`settings-tab-${activeTab}`)
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeTab]);
+
   const tabs: { key: SettingsTab; label: string; icon: typeof Building2 }[] = [
     {
       key: "company",
@@ -335,6 +363,26 @@ export const SettingsPage = () => {
     },
   ];
 
+  // Roving tabindex: arrows, Home and End move between tabs, as in the ARIA tabs pattern.
+  const handleTabKeyDown = (event: React.KeyboardEvent) => {
+    const keys = tabs.map((tab) => tab.key);
+    const current = keys.indexOf(activeTab);
+    const target =
+      event.key === "ArrowRight"
+        ? (current + 1) % keys.length
+        : event.key === "ArrowLeft"
+          ? (current - 1 + keys.length) % keys.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? keys.length - 1
+              : -1;
+    if (target === -1) return;
+    event.preventDefault();
+    setActiveTab(keys[target]);
+    document.getElementById(`settings-tab-${keys[target]}`)?.focus();
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -358,16 +406,25 @@ export const SettingsPage = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-[var(--color-border)]">
-        <nav
+      <div className="relative border-b border-[var(--color-border)]">
+        <div
+          ref={tabListRef}
+          role="tablist"
           className="-mb-px flex gap-1 overflow-x-auto scrollbar-hide"
-          aria-label="Settings tabs"
+          aria-label={t("settings.tabsLabel")}
+          onKeyDown={handleTabKeyDown}
         >
           {tabs.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
               <button
                 key={key}
+                id={`settings-tab-${key}`}
+                role="tab"
+                type="button"
+                aria-selected={isActive}
+                aria-controls="settings-tabpanel"
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(key)}
                 className={`group relative flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive
@@ -382,11 +439,23 @@ export const SettingsPage = () => {
               </button>
             );
           })}
-        </nav>
+        </div>
+        {/* Fade on the right edge while more tabs are scrolled out of view (narrow screens). */}
+        {hasHiddenTabs && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[var(--color-bg)] to-transparent"
+          />
+        )}
       </div>
 
       {/* Tab Content */}
-      <div className="space-y-5">
+      <div
+        id="settings-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeTab}`}
+        className="space-y-5"
+      >
         <div hidden={!["company", "receipt", "language"].includes(activeTab)}>
           <DocumentEditor
             model={documentDraft}

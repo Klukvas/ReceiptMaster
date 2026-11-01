@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
 import { api } from "../lib/api";
 import {
@@ -188,6 +189,8 @@ export function useDocumentDraft(orderId?: string) {
       await cache.invalidateQueries({
         queryKey: ["settings", "receipt-design"],
       });
+      // The save bar disappears once nothing is pending, so confirm the save here.
+      toast.success(t("document.saved"));
     } catch (value) {
       setIsConflict(isDocumentRevisionConflict(value));
       setError(await documentError(value, fieldLabel));

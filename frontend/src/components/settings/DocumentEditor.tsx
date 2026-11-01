@@ -480,42 +480,45 @@ export function DocumentEditor({
           )}
         </section>
       </fieldset>
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
-        {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
-        {model.error && !model.isConflict ? (
-          <span role="alert" className="text-sm text-danger-base">
-            {model.error}
-          </span>
-        ) : (
-          <span role="status" className="text-sm text-content-secondary">
-            {t(model.dirty ? "document.unsaved" : "document.saved")}
-          </span>
-        )}
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={model.discard}
-            disabled={model.busy || !model.dirty}
-          >
-            {t("document.discard")}
-          </Button>
-          <Button
-            type="submit"
-            disabled={model.busy || (!documentOnly && !model.dirty)}
-          >
-            {!model.busy && commitLabel
-              ? commitLabel
-              : t(
-                  model.busy
-                    ? "common.saving"
-                    : documentOnly
-                      ? "document.generateDocument"
-                      : "document.saveChanges",
-                )}
-          </Button>
+      {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
+      {(documentOnly || model.dirty || model.busy || model.error) && (
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+          {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
+          {model.error && !model.isConflict ? (
+            <span role="alert" className="text-sm text-danger-base">
+              {model.error}
+            </span>
+          ) : (
+            <span role="status" className="text-sm text-content-secondary">
+              {t(model.dirty ? "document.unsaved" : "document.saved")}
+            </span>
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={model.discard}
+              disabled={model.busy || !model.dirty}
+            >
+              {t("document.discard")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={model.busy || (!documentOnly && !model.dirty)}
+            >
+              {!model.busy && commitLabel
+                ? commitLabel
+                : t(
+                    model.busy
+                      ? "common.saving"
+                      : documentOnly
+                        ? "document.generateDocument"
+                        : "document.saveChanges",
+                  )}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
       <TemplateCarouselModal
         isOpen={gallery}
         language={config.documentLanguage}
