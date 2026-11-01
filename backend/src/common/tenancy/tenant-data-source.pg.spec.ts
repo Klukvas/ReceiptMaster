@@ -90,6 +90,7 @@ describeIsolatedPostgres(
           quantity: 10,
         });
         const order = await admin.getRepository(Order).save({
+          order_number: 1,
           user_id: userId,
           recipient_id: recipient.id,
           status: OrderStatus.CONFIRMED,
@@ -126,6 +127,7 @@ describeIsolatedPostgres(
         .getRepository(Recipient)
         .save({ user_id: a, name: "Unshared customer" });
       await admin.getRepository(Order).save({
+        order_number: 1,
         user_id: a,
         recipient_id: recipient.id,
         status: OrderStatus.DRAFT,
