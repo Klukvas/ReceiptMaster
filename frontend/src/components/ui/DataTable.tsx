@@ -306,7 +306,7 @@ export function DataTable<T>({
  </tr>
  </thead>
  <tbody>
- {isLoading && items.length === 0 ? (
+ {(isLoading || isFetching) && items.length === 0 ? (
  <tr>
  <td colSpan={colSpan} className="text-center py-16">
  <Loader2 className="w-5 h-5 animate-spin text-primary-500 mx-auto" />
@@ -384,7 +384,7 @@ export function DataTable<T>({
 
  {/* Mobile View */}
  <div className="lg:hidden">
- {isLoading && items.length === 0 ? (
+ {(isLoading || isFetching) && items.length === 0 ? (
  <div className="flex justify-center py-16">
  <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
  </div>

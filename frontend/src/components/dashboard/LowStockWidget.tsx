@@ -20,9 +20,16 @@ export const LowStockWidget = () => {
     queryFn: () => productsApi.getLowStock(10),
   });
 
-  if (isLoading) return <StatCardSkeleton />;
+  // "All well-stocked" is only true when there are products; a new account has none.
+  const { data: countData, isLoading: countLoading } = useQuery({
+    queryKey: ["products", "count"],
+    queryFn: () => productsApi.getAll({ limit: 1 }),
+  });
+
+  if (isLoading || countLoading) return <StatCardSkeleton />;
 
   const products = data?.data || [];
+  const hasNoProducts = (countData?.data?.total ?? 1) === 0;
 
   return (
     <Card>
@@ -34,7 +41,19 @@ export const LowStockWidget = () => {
       </div>
       {products.length === 0 ? (
         <div className="text-center py-6 text-sm text-content-tertiary">
-          {t("dashboard.allStocked", "All products are well-stocked")}
+          {hasNoProducts ? (
+            <>
+              {t("dashboard.noProductsYet")}{" "}
+              <Link
+                to="/products?create=1"
+                className="text-accent-base hover:underline"
+              >
+                {t("home.addProduct")}
+              </Link>
+            </>
+          ) : (
+            t("dashboard.allStocked", "All products are well-stocked")
+          )}
         </div>
       ) : (
         <div className="space-y-2">
