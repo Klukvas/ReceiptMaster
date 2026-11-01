@@ -11,7 +11,8 @@ import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { DocumentFormatting, selectClass } from "./DocumentFormatting";
+import { selectClass } from "./document-ui";
+import { DocumentFormatSection } from "./DocumentFormatSection";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 
@@ -145,7 +146,13 @@ export function DocumentEditor({
         className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
       >
         <div className="space-y-5 min-w-0">
-          <section className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4">
+          {section === "language" && (
+            <DocumentFormatSection config={config} onChange={model.update} />
+          )}
+          <section
+            hidden={section === "language"}
+            className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4"
+          >
             {section === "company" && (
               <>
                 <h3 className="font-semibold text-content">
@@ -438,9 +445,6 @@ export function DocumentEditor({
                   {t("document.resetDesign")}
                 </Button>
               </>
-            )}
-            {section === "language" && (
-              <DocumentFormatting config={config} onChange={model.update} />
             )}
           </section>
           <DocumentPresets model={model} />

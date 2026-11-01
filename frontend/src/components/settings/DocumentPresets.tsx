@@ -12,7 +12,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { Input } from "../ui/Input";
-import { selectClass } from "./DocumentFormatting";
+import { selectClass } from "./document-ui";
 export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState("");

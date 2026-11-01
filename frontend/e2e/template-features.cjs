@@ -190,9 +190,10 @@ async function check(name, operation) {
       ),
     );
     await tab("Language");
-    await field("Document language").selectOption("uk");
+    await page.getByRole("radio", { name: "Ukrainian" }).click();
+    await page.getByText("Fine-tune dates, time and currency").click();
     await field("Number format").selectOption("de-DE");
-    await field("Time zone (e.g. Europe/Kyiv)").fill("Europe/Kyiv");
+    await field("Time zone").fill("Europe/Kyiv");
     await check(
       "cross-tab draft retains company, terms and staged logo",
       async () => {
