@@ -281,6 +281,7 @@
     "contactPerson": "Contact Person",
     "notes": "Notes",
     "products": "Products",
+    "productsLinkHint": "To link a product to this supplier, choose the supplier in the product's form.",
     "productCount": "Products",
     "contact": "Contact",
     "saving": "Saving...",

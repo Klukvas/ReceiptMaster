@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from"react";
 import { useMutation, useQuery, useQueryClient } from"@tanstack/react-query";
-import { X, Check } from"lucide-react";
+import { X } from"lucide-react";
 import toast from"react-hot-toast";
 import {
  suppliersApi,
- productsApi,
  type Supplier,
- type Product,
 } from"../../lib/api";
 import { Button } from"../ui/Button";
 import { Input } from"../ui/Input";
@@ -32,10 +30,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  address:"",
  contactPerson:"",
  notes:"",
- productIds: [] as string[],
  });
-
- const [productSearch, setProductSearch] = useState("");
 
  // Fetch full supplier with products when editing
  const { data: fullSupplierData } = useQuery({
@@ -46,15 +41,8 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
 
  const fullSupplier = fullSupplierData?.data ?? supplier;
 
- const { data: productsData } = useQuery({
- queryKey: ["products","all-for-selector"],
- queryFn: () => productsApi.getAll({ limit: 100 }),
- });
-
- const products: Product[] = productsData?.data?.data || [];
- const filteredProducts = products.filter((p) =>
- p.name.toLowerCase().includes(productSearch.toLowerCase()),
- );
+ // Which products belong to a supplier is set on each product (its Supplier field).
+ const linkedProducts = fullSupplier?.products ?? [];
 
  useEffect(() => {
  if (fullSupplier) {
@@ -65,7 +53,6 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  address: fullSupplier.address ||"",
  contactPerson: fullSupplier.contact_person ||"",
  notes: fullSupplier.notes ||"",
- productIds: fullSupplier.products?.map((p) => p.id) || [],
  });
  }
  }, [fullSupplier]);
@@ -110,7 +97,6 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  address: formData.address || undefined,
  contactPerson: formData.contactPerson || undefined,
  notes: formData.notes || undefined,
- productIds: formData.productIds,
  };
 
  // A fast double click fires twice before the button re-renders as disabled.
@@ -129,15 +115,6 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  } finally {
  isSubmittingRef.current = false;
  }
- };
-
- const toggleProduct = (productId: string) => {
- setFormData((prev) => ({
- ...prev,
- productIds: prev.productIds.includes(productId)
- ? prev.productIds.filter((id) => id !== productId)
- : [...prev.productIds, productId],
- }));
  };
 
  const isLoading = createMutation.isPending || updateMutation.isPending;
@@ -227,57 +204,28 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  />
  </div>
 
- {/* Product multi-select */}
+ {/* Linked products: read-only, because the link lives on the product */}
  <div>
  <label className="block text-sm font-medium text-content-secondary mb-1">
  {t("suppliers.products")}
- {formData.productIds.length > 0 && (
+ {linkedProducts.length > 0 && (
  <span className="ml-2 text-xs text-accent-base">
- ({formData.productIds.length})
+ ({linkedProducts.length})
  </span>
  )}
  </label>
- <input
- type="text"
- placeholder={t("common.search")}
- value={productSearch}
- onChange={(e) => setProductSearch(e.target.value)}
- className="w-full px-3 py-2 mb-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200 text-sm"
- />
- <div className="max-h-[160px] overflow-y-auto border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border-light)]">
- {filteredProducts.length === 0 ? (
- <p className="text-xs text-content-tertiary text-center py-4">
- {t("common.noResults")}
- </p>
- ) : (
- filteredProducts.map((product) => {
- const selected = formData.productIds.includes(product.id);
- return (
- <button
- key={product.id}
- type="button"
- onClick={() => toggleProduct(product.id)}
- className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
- selected
- ?"bg-[var(--color-accent-light)] text-accent-base"
- :"text-content-secondary hover:bg-surface-alt"
- }`}
- >
- <div
- className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
- selected
- ?"bg-accent-base border-accent-base"
- :"border-[var(--color-border)]"
- }`}
- >
- {selected && <Check className="w-3 h-3 text-white" />}
- </div>
- <span className="truncate">{product.name}</span>
- </button>
- );
- })
+ {linkedProducts.length > 0 && (
+ <ul className="max-h-[120px] overflow-y-auto border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border-light)] text-sm text-content-secondary">
+ {linkedProducts.map((product) => (
+ <li key={product.id} className="truncate px-3 py-2">
+ {product.name}
+ </li>
+ ))}
+ </ul>
  )}
- </div>
+ <p className="mt-1 text-xs text-content-tertiary">
+ {t("suppliers.productsLinkHint")}
+ </p>
  </div>
 
  <div className="flex space-x-3 pt-4">

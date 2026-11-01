@@ -355,6 +355,8 @@ All endpoints require JWT auth. Scoped to authenticated user.
 
 File: `backend/src/modules/suppliers/suppliers.controller.ts` (5 endpoints)
 
+**Supplier ↔ product link.** A product has at most one supplier, stored in `products.supplier_id` (set via `POST/PATCH /products` with `supplier_id`). `Supplier.products` and `product_count` are that link read from the supplier's side; there is no `productIds` on the supplier endpoints (it is ignored if sent). The old `supplier_products` join table is no longer mapped; migration `BackfillProductSupplierFromJoinTable1792300000000` copied its rows into `supplier_id` (oldest supplier wins for a product linked to several) and left the table in place for a later cleanup migration.
+
 ### Create Supplier
 
 **POST** `/suppliers`
@@ -370,7 +372,6 @@ Creates a new supplier.
   address?: string,
   contactPerson?: string,     // max 255
   notes?: string,
-  productIds?: string[],      // UUIDs to link
 }
 ```
 

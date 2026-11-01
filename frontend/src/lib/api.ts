@@ -244,9 +244,7 @@ export const suppliersApi = {
     data: Omit<
       Supplier,
       "id" | "created_at" | "updated_at" | "products" | "product_count"
-    > & {
-      productIds?: string[];
-    },
+    >,
   ) => api.post<Supplier>("/suppliers", data),
 
   update: (
@@ -255,9 +253,7 @@ export const suppliersApi = {
       Omit<
         Supplier,
         "id" | "created_at" | "updated_at" | "products" | "product_count"
-      > & {
-        productIds?: string[];
-      }
+      >
     >,
   ) => api.patch<Supplier>(`/suppliers/${id}`, data),
 
