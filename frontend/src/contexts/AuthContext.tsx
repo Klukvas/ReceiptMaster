@@ -1,4 +1,5 @@
 import { postLoginPath } from '../lib/session-expiry';
+import { clearTablePreferences } from '../lib/table-preferences';
 import { isAxiosError } from 'axios';
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { authApi, type User } from '../lib/api';
@@ -95,6 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  }
  localStorage.removeItem('auth_token');
  localStorage.removeItem('refresh_token');
+ clearTablePreferences();
  setToken(null);
  setUser(null);
  window.location.href = '/';
