@@ -282,19 +282,60 @@ describe("OrdersService", () => {
   });
 
   describe("cancel", () => {
-    it("should cancel an order", async () => {
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+    const mockCancelTransaction = (order: Record<string, unknown>) => {
+      const manager = {
+        find: jest.fn().mockResolvedValue([
+          { product_id: "prod-1", qty: 2 },
+          { product_id: "prod-1", qty: 1 },
+        ]),
+        findOne: jest.fn().mockResolvedValue(order),
+        update: jest.fn(),
+        increment: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb(manager),
+      );
+      return manager;
+    };
 
-      const result = await service.cancel("order-1", mockUser);
-
-      expect(result.status).toBe(OrderStatus.CANCELLED);
-    });
-
-    it("should throw if order is already cancelled", async () => {
+    it("cancels the order and returns the reserved stock", async () => {
+      const manager = mockCancelTransaction({ ...mockOrder });
       ordersRepo.findOne.mockResolvedValue({
         ...mockOrder,
         status: OrderStatus.CANCELLED,
       });
+
+      const result = await service.cancel("order-1", mockUser);
+
+      expect(manager.increment).toHaveBeenCalledTimes(1);
+      expect(manager.increment).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: "prod-1", user_id: mockUser.id },
+        "quantity",
+        3,
+      );
+      expect(manager.update).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: "order-1", user_id: mockUser.id },
+        { status: OrderStatus.CANCELLED },
+      );
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+    });
+
+    it("throws and leaves stock alone if the order is already cancelled", async () => {
+      const manager = mockCancelTransaction({
+        ...mockOrder,
+        status: OrderStatus.CANCELLED,
+      });
+
+      await expect(service.cancel("order-1", mockUser)).rejects.toThrow(
+        ApiErrorResponse,
+      );
+      expect(manager.increment).not.toHaveBeenCalled();
+    });
+
+    it("throws if the order does not exist", async () => {
+      mockCancelTransaction(null as never);
 
       await expect(service.cancel("order-1", mockUser)).rejects.toThrow(
         ApiErrorResponse,
@@ -650,6 +691,25 @@ describe("OrdersService", () => {
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
+    it("does not restore stock a second time for an already cancelled order", async () => {
+      const manager = {
+        find: jest.fn().mockResolvedValue([{ product_id: "prod-1", qty: 2 }]),
+        findOne: jest
+          .fn()
+          .mockResolvedValue({ ...mockOrder, status: OrderStatus.CANCELLED }),
+        softDelete: jest.fn(),
+        increment: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb(manager),
+      );
+
+      await service.remove("order-1", mockUser);
+
+      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.softDelete).toHaveBeenCalled();
+    });
+
     it("should handle product not found during removal", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
@@ -690,6 +750,34 @@ describe("OrdersService", () => {
 
       expect(result.deleted).toBe(2);
       expect(cacheService.delByPattern).toHaveBeenCalled();
+    });
+
+    it("skips stock restoration for cancelled orders in a batch", async () => {
+      const manager = {
+        find: jest
+          .fn()
+          .mockResolvedValueOnce([
+            { id: "o1", status: OrderStatus.CONFIRMED },
+            { id: "o2", status: OrderStatus.CANCELLED },
+          ])
+          .mockResolvedValueOnce([{ product_id: "p1", qty: 1 }]),
+        softDelete: jest.fn(),
+        increment: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb(manager),
+      );
+
+      await service.deleteBatch(["o1", "o2"], mockUser);
+
+      expect(manager.find).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        expect.objectContaining({
+          where: expect.objectContaining({ order_id: expect.anything() }),
+        }),
+      );
+      expect(manager.increment).toHaveBeenCalledTimes(1);
     });
 
     it("should throw if some orders not found", async () => {

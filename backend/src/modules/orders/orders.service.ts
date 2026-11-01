@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, In } from "typeorm";
+import { Repository, DataSource, In, EntityManager } from "typeorm";
 import { Order, OrderStatus } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
 import { IdempotencyKey } from "./entities/idempotency-key.entity";
@@ -388,16 +388,57 @@ export class OrdersService {
   }
 
   async cancel(id: string, user: User): Promise<Order> {
-    const order = await this.findOne(id, user);
+    await this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id, user_id: user.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
 
-    if (order.status === OrderStatus.CANCELLED) {
-      throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
+      if (order.status === OrderStatus.CANCELLED) {
+        throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
+      }
+
+      // Stock is reserved when the order is created, so cancelling gives it back.
+      const orderItems = await manager.find(OrderItem, {
+        where: { order_id: id, user_id: user.id },
+      });
+      await this.restoreStock(manager, orderItems, user);
+
+      await manager.update(
+        Order,
+        { id, user_id: user.id },
+        { status: OrderStatus.CANCELLED },
+      );
+    });
+    await this.invalidateDashboardCache(user.id);
+    return this.findOne(id, user);
+  }
+
+  /** Returns reserved quantities to their products, summed per product in a stable lock order. */
+  private async restoreStock(
+    manager: EntityManager,
+    orderItems: OrderItem[],
+    user: User,
+  ): Promise<void> {
+    const qtyUpdates = new Map<string, number>();
+    for (const item of orderItems) {
+      qtyUpdates.set(
+        item.product_id,
+        (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
+      );
     }
 
-    order.status = OrderStatus.CANCELLED;
-    const saved = await this.ordersRepository.save(order);
-    await this.invalidateDashboardCache(user.id);
-    return saved;
+    for (const [productId, qty] of [...qtyUpdates.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      await manager.increment(
+        Product,
+        { id: productId, user_id: user.id },
+        "quantity",
+        qty,
+      );
+    }
   }
 
   async update(
@@ -566,29 +607,12 @@ export class OrdersService {
       });
       if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
 
-      const orderItems = await manager.find(OrderItem, {
-        where: { order_id: id, user_id: user.id },
-      });
-
-      // Aggregate quantity changes per product
-      const qtyUpdates = new Map<string, number>();
-      for (const item of orderItems) {
-        qtyUpdates.set(
-          item.product_id,
-          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
-        );
-      }
-
-      // Batch restore product quantities
-      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
-        ([a], [b]) => a.localeCompare(b),
-      )) {
-        await manager.increment(
-          Product,
-          { id: productId, user_id: user.id },
-          "quantity",
-          qty,
-        );
+      // A cancelled order already returned its stock in cancel().
+      if (order.status !== OrderStatus.CANCELLED) {
+        const orderItems = await manager.find(OrderItem, {
+          where: { order_id: id, user_id: user.id },
+        });
+        await this.restoreStock(manager, orderItems, user);
       }
 
       // Soft delete the order (sets deleted_at timestamp)
@@ -671,31 +695,16 @@ export class OrdersService {
         throw ApiErrors.ORDER_NOT_FOUND(missingIds.join(", "));
       }
 
-      // Batch load all order items for all orders at once
-      const allOrderItems = await manager.find(OrderItem, {
-        where: { order_id: In(uniqueIds), user_id: user.id },
-      });
-
-      // Aggregate quantity changes per product
-      const qtyUpdates = new Map<string, number>();
-      for (const item of allOrderItems) {
-        qtyUpdates.set(
-          item.product_id,
-          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
-        );
-      }
-
-      // Batch restore product quantities
-      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
-        ([a], [b]) => a.localeCompare(b),
-      )) {
-        await manager.increment(
-          Product,
-          { id: productId, user_id: user.id },
-          "quantity",
-          qty,
-        );
-      }
+      // Cancelled orders already returned their stock in cancel().
+      const restorableIds = orders
+        .filter((o) => o.status !== OrderStatus.CANCELLED)
+        .map((o) => o.id);
+      const allOrderItems = restorableIds.length
+        ? await manager.find(OrderItem, {
+            where: { order_id: In(restorableIds), user_id: user.id },
+          })
+        : [];
+      await this.restoreStock(manager, allOrderItems, user);
 
       await manager.softDelete(Order, { id: In(uniqueIds), user_id: user.id });
 
