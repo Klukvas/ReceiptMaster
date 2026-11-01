@@ -2,22 +2,19 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import {
-  contactFields,
   type DocumentConfig,
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { selectClass } from "./document-ui";
 import { DocumentCompanySection } from "./DocumentCompanySection";
+import { DocumentLookSection } from "./DocumentLookSection";
+import { DocumentTextSection } from "./DocumentTextSection";
 import { DocumentFormatSection } from "./DocumentFormatSection";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 
-const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
-const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export type EditorSection = "company" | "receipt" | "language";
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
@@ -61,36 +58,6 @@ export function DocumentEditor({
     );
   const template = templates.data?.find(
     (value) => value.id === config.templateId,
-  );
-  const caps = template?.capabilities;
-  const retained = (
-    <span className="block text-xs text-content-tertiary">
-      {t("document.retained")}
-    </span>
-  );
-  const patch = (value: Partial<typeof config>) =>
-    model.update({ ...config, ...value });
-  const text = (
-    field: "footerTitle" | "footerSubtitle" | "paymentTerms" | "deliveryTerms",
-  ) => (
-    <label className="block text-sm text-content-secondary">
-      {t(
-        `settings.${field === "paymentTerms" || field === "deliveryTerms" ? `${field}Label` : field}`,
-      )}
-      {(field === "paymentTerms" || field === "deliveryTerms") &&
-        !caps?.terms &&
-        retained}
-      <textarea
-        aria-label={t(
-          `settings.${field === "paymentTerms" || field === "deliveryTerms" ? `${field}Label` : field}`,
-        )}
-        className={selectClass}
-        rows={3}
-        maxLength={500}
-        value={config[field]}
-        onChange={(event) => patch({ [field]: event.target.value })}
-      />
-    </label>
   );
   return (
     <form
@@ -157,235 +124,22 @@ export function DocumentEditor({
           {section === "language" && (
             <DocumentFormatSection config={config} onChange={model.update} />
           )}
-          <section
-            hidden={section !== "receipt"}
-            className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4"
-          >
-            {section === "receipt" && (
-              <>
-                <h3 className="font-semibold text-content">
-                  {t("settings.tabReceipt")}
-                </h3>
-                {templates.isError && (
-                  <button type="button" onClick={() => templates.refetch()}>
-                    {t("common.retry")}
-                  </button>
-                )}
-                <label className="block text-sm">
-                  {t("document.template")}
-                  <select
-                    aria-label={t("document.template")}
-                    className={selectClass}
-                    value={config.templateId}
-                    onChange={(event) =>
-                      patch({ templateId: event.target.value as TemplateId })
-                    }
-                  >
-                    {templates.data?.map((value) => (
-                      <option
-                        key={value.id}
-                        value={value.id}
-                        disabled={value.locked}
-                      >
-                        {value.name}
-                        {value.locked ? " 🔒" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setGallery(true)}
-                  disabled={!templates.data?.length}
-                >
-                  {t("document.browseTemplates")}
-                </Button>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.title.mode === "automatic"}
-                    onChange={(event) =>
-                      patch({
-                        title: event.target.checked
-                          ? { mode: "automatic" }
-                          : { mode: "custom", text: "" },
-                      })
-                    }
-                  />{" "}
-                  {t("document.automaticTitle")}
-                </label>
-                {config.title.mode === "custom" && (
-                  <Input
-                    label={t("settings.receiptTitle")}
-                    value={config.title.text}
-                    required
-                    pattern={".*\\S.*"}
-                    title={t("document.titleRequired")}
-                    maxLength={200}
-                    onChange={(event) =>
-                      patch({
-                        title: { mode: "custom", text: event.target.value },
-                      })
-                    }
-                  />
-                )}
-                {text("footerTitle")}
-                {text("footerSubtitle")}
-                <label className="block text-sm">
-                  {t("document.accent")}
-                  {!caps?.accent && retained}
-                  <input
-                    aria-label={t("document.accent")}
-                    type="color"
-                    value={config.primaryColor}
-                    onChange={(event) =>
-                      patch({ primaryColor: event.target.value })
-                    }
-                  />
-                </label>
-                {text("paymentTerms")}
-                {text("deliveryTerms")}
-                <h4 className="font-medium">{t("document.logo")}</h4>
-                <label className="block text-sm">
-                  {t("document.replaceLogo")}
-                  <input
-                    type="file"
-                    accept={LOGO_TYPES.join(",")}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      // accept= only filters the picker; a dragged or renamed file still arrives here.
-                      if (file && !LOGO_TYPES.includes(file.type))
-                        model.setError(t("document.logoWrongType"));
-                      else if (file && file.size <= LOGO_MAX_BYTES)
-                        model.stageLogo("replace", file);
-                      else if (file) model.setError(t("document.logoTooLarge"));
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-                <p className="text-sm text-content-tertiary" role="status">
-                  {model.file?.name ||
-                    t(
-                      model.logoAction === "remove"
-                        ? "document.logoRemoved"
-                        : config.logo.assetId
-                          ? "document.logoSaved"
-                          : "document.logoAutomatic",
-                    )}
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => model.stageLogo("remove")}
-                >
-                  {t("document.removeLogo")}
-                </Button>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.logo.visible}
-                    onChange={(event) =>
-                      patch({
-                        logo: { ...config.logo, visible: event.target.checked },
-                      })
-                    }
-                  />{" "}
-                  {t("document.showLogo")}
-                </label>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.logo.size === "auto"}
-                    onChange={(event) =>
-                      patch({
-                        logo: {
-                          ...config.logo,
-                          size: event.target.checked
-                            ? "auto"
-                            : Math.min(100, caps?.logo.maxWidth || 200),
-                        },
-                      })
-                    }
-                  />{" "}
-                  {t("document.automaticSize")}
-                </label>
-                {config.logo.size !== "auto" && (
-                  <>
-                    <Input
-                      type="number"
-                      label={t("document.logoWidth")}
-                      min={24}
-                      max={200}
-                      value={String(config.logo.size)}
-                      onChange={(event) =>
-                        patch({
-                          logo: {
-                            ...config.logo,
-                            size: Number(event.target.value),
-                          },
-                        })
-                      }
-                    />
-                    {caps && config.logo.size > caps.logo.maxWidth && (
-                      <p className="text-xs">
-                        {t(
-                          "document.logoClamped",
-                          "This template uses a smaller logo; the saved width is retained.",
-                        )}
-                      </p>
-                    )}
-                  </>
-                )}
-                <label className="block text-sm">
-                  {t("document.logoAlignment")}
-                  <select
-                    aria-label={t("document.logoAlignment")}
-                    className={selectClass}
-                    value={config.logo.alignment}
-                    onChange={(event) =>
-                      patch({
-                        logo: {
-                          ...config.logo,
-                          alignment: event.target
-                            .value as typeof config.logo.alignment,
-                        },
-                      })
-                    }
-                  >
-                    {(caps?.logo.alignments || ["auto"]).map((value) => (
-                      <option key={value} value={value}>
-                        {t(`document.option_${value}`, value)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    patch({
-                      title: { mode: "automatic" },
-                      footerTitle: "",
-                      footerSubtitle: "",
-                      primaryColor: "#3B82F6",
-                      logo: {
-                        ...config.logo,
-                        visible: true,
-                        size: "auto",
-                        alignment: "auto",
-                      },
-                      visibility: Object.fromEntries(
-                        contactFields.map((field) => [field, true]),
-                      ) as typeof config.visibility,
-                    })
-                  }
-                >
-                  {t("document.resetDesign")}
-                </Button>
-              </>
-            )}
-          </section>
+          {section === "receipt" && (
+            <>
+              <DocumentLookSection
+                model={model}
+                config={config}
+                templates={templates}
+                template={template}
+                onBrowseTemplates={() => setGallery(true)}
+              />
+              <DocumentTextSection
+                config={config}
+                onChange={model.update}
+                template={template}
+              />
+            </>
+          )}
           <DocumentPresets model={model} />
         </div>
         <section className="rounded-xl border border-[var(--color-border)] bg-elevated p-4 min-w-0 self-start lg:sticky lg:top-4">
@@ -478,7 +232,7 @@ export function DocumentEditor({
         templates={templates.data?.filter((value) => !value.locked) || []}
         initialTemplateId={config.templateId}
         onSelectTemplate={(templateId) => {
-          patch({ templateId: templateId as TemplateId });
+          model.update({ ...config, templateId: templateId as TemplateId });
           setGallery(false);
         }}
       />
