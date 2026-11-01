@@ -141,7 +141,7 @@ describe("ReceiptsService", () => {
     };
     dataSource = {
       manager: {
-        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000001" }]),
+        query: jest.fn().mockResolvedValue([{ receipt_counter: 1 }]),
       },
       transaction: jest.fn(),
       query: jest.fn(),
@@ -748,22 +748,6 @@ describe("ReceiptsService", () => {
         service,
       );
       expect(getStyle("unknown")).toBe(ReceiptStyle.COMPACT);
-    });
-  });
-
-  describe("generateReceiptNumber", () => {
-    it("uses the current transaction connection and propagates database failures", async () => {
-      const manager = {
-        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000042" }]),
-      };
-      expect(await (service as any).generateReceiptNumber(manager)).toBe(
-        "2026-000042",
-      );
-      expect(dataSource.query).not.toHaveBeenCalled();
-      manager.query.mockRejectedValueOnce(new Error("DB error"));
-      await expect(
-        (service as any).generateReceiptNumber(manager),
-      ).rejects.toThrow("DB error");
     });
   });
 

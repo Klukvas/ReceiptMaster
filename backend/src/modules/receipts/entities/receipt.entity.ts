@@ -21,7 +21,7 @@ export enum ReceiptStatus {
 
 @Entity("receipts")
 @Index(["order_id"], { unique: true })
-@Index(["number"], { unique: true })
+@Index(["user_id", "number"], { unique: true })
 @Index(["user_id", "created_at"])
 export class Receipt {
   @ApiProperty()
@@ -33,7 +33,7 @@ export class Receipt {
   order_id: string;
 
   @ApiProperty()
-  @Column({ type: "varchar", length: 50, unique: true })
+  @Column({ type: "varchar", length: 50 })
   number: string;
 
   @ApiProperty({ required: false })
