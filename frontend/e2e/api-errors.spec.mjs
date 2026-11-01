@@ -20,6 +20,8 @@ const LOCALES = ["en", "ru", "uk"];
 const BACKEND_TEXT = "Product with name Widget already exists";
 // Every ErrorCode with a locale entry; well above zero so the loop cannot pass empty.
 const MIN_TRANSLATED_CODES = 20;
+// Say nothing specific on their own, so the server's detail is shown instead of the locale entry.
+const GENERIC_CODES = new Set(["VALIDATION_ERROR", "BAD_REQUEST", "HTTP_EXCEPTION"]);
 
 const readLocale = (locale) =>
   JSON.parse(
@@ -68,7 +70,7 @@ const unitChecks = async (results) => {
       const { byCode, unknown } = await parsedMessages(page, locale);
       const translated = Object.entries(errors)
         .map(([key, text]) => ({ key, text, code: errorCodeOf(key) }))
-        .filter(({ code }) => code in byCode);
+        .filter(({ code }) => code in byCode && !GENERIC_CODES.has(code));
       const wrong = translated.filter(
         ({ code, text }) => byCode[code] !== text,
       );
@@ -78,6 +80,11 @@ const unitChecks = async (results) => {
         `${translated.length} translated; wrong: ${wrong
           .map(({ code, key }) => `${code} (errors.${key}) → "${byCode[code]}"`)
           .join(", ")}`,
+      );
+      results.check(
+        `${locale}: generic codes show the server's own detail`,
+        [...GENERIC_CODES].every((code) => byCode[code] === BACKEND_TEXT),
+        JSON.stringify(Object.fromEntries([...GENERIC_CODES].map((c) => [c, byCode[c]]))),
       );
       results.check(
         `${locale}: PRODUCT_ALREADY_EXISTS reads errors.productAlreadyExists`,

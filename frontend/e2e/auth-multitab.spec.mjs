@@ -234,8 +234,9 @@ const genuineRejectionSignsOut = async (browser, results) => {
   try {
     await page.goto(`${BASE_URL}/products`);
     const redirected = await page
-      .waitForURL((url) => url.pathname === "/", { timeout: 10000 })
-      .then(() => true)
+      .locator("#email")
+      .waitFor({ timeout: 10000 })
+      .then(() => new URL(page.url()).pathname === "/products")
       .catch(() => false);
     const refreshes = log.filter((entry) => entry.path === "/auth/refresh");
     results.check(
@@ -250,7 +251,7 @@ const genuineRejectionSignsOut = async (browser, results) => {
       JSON.stringify(session),
     );
     results.check(
-      "genuine rejection: redirected to the landing page",
+      "genuine rejection: login form shown in place on the private page",
       redirected,
       page.url(),
     );
@@ -431,10 +432,9 @@ const transportFailureKeepsSession = async (browser, results, label, fail) => {
   try {
     await page.goto(`${BASE_URL}/products`);
     await refreshed.wait();
-    // Signed out for this render only: the protected page falls back to the
-    // login form once the interceptor has decided. A cleared session would
-    // also navigate to "/".
-    await page.locator("#email").waitFor();
+    // The profile could not be loaded, so the protected page offers a retry
+    // instead of a login form; a cleared session would reload to the login form.
+    await page.getByRole("alert").getByRole("button", { name: "Retry" }).waitFor();
     const session = await storedSession(page);
     results.check(
       `${label}: refresh was attempted once with R1`,

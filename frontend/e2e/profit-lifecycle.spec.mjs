@@ -148,7 +148,7 @@ const tooltipAt = async (page, card, position, expected) => {
 const unknownTotalIsADash = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, UNKNOWN_TOTAL);
-    const kpi = page.getByText("Total Revenue").locator("xpath=../..");
+    const kpi = page.getByText("Total Profit").locator("xpath=../..");
     await kpi.getByTestId("profit-unknown").waitFor();
     const text = await kpi.innerText();
     results.check(
@@ -173,7 +173,7 @@ const unknownTotalIsADash = async (results) => {
 const partialTotalHasABadge = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, PARTIAL_TOTAL);
-    const kpi = page.getByText("Total Revenue").locator("xpath=../..");
+    const kpi = page.getByText("Total Profit").locator("xpath=../..");
     const badge = kpi.getByTestId("profit-partial");
     await badge.waitFor();
     const title = (await badge.getAttribute("title")) || "";
@@ -194,7 +194,7 @@ const partialTotalHasABadge = async (results) => {
 const unknownBarHasATooltip = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, PARTIAL_TOTAL);
-    const card = chartCard(page, "Revenue by Product");
+    const card = chartCard(page, "Profit by Product");
     const label = await card.getByText("Cups", { exact: true }).boundingBox();
     const unknown = await tooltipAt(
       page,
@@ -237,7 +237,7 @@ const unknownBarHasATooltip = async (results) => {
 const allUnknownChartSaysSo = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, UNKNOWN_TOTAL, [BY_PRODUCT[1]]);
-    const card = chartCard(page, "Revenue by Product");
+    const card = chartCard(page, "Profit by Product");
     const message = card.getByTestId("chart-message");
     const shown = await message
       .waitFor()
@@ -290,7 +290,7 @@ const csvKeepsUnknownEmpty = async (results) => {
     results.check(
       "CSV adds completeness columns",
       header ===
-        "Product Name,Revenue,Quantity,Currency,Profit complete,Lines with unknown cost,Turnover with unknown cost",
+        "Product Name,Profit,Quantity,Currency,Profit complete,Lines with unknown cost,Turnover with unknown cost",
       header,
     );
     results.check(
@@ -313,7 +313,7 @@ const homeShowsPartialAndGaps = async (results) => {
     await installApiMocks(page, state);
     await mockDashboard(page, state);
     await page.goto(`${BASE_URL}/dashboard`);
-    const card = page.getByText("Revenue Over Time").locator("xpath=../../..");
+    const card = page.getByText("Profit Over Time").locator("xpath=../../..");
     await card.getByTestId("profit-partial").waitFor();
     results.check(
       "the revenue sparkline flags days with unknown cost",
@@ -346,7 +346,7 @@ const homeShowsPartialAndGaps = async (results) => {
     );
     results.check(
       "hovering the unknown day shows '—' for its profit next to its turnover",
-      /Revenue\s*:\s*—/.test(tooltip) && /Turnover\s*:\s*[^—\s]/.test(tooltip),
+      /Profit\s*:\s*—/.test(tooltip) && /Turnover\s*:\s*[^—\s]/.test(tooltip),
       JSON.stringify(tooltip),
     );
   });
@@ -366,7 +366,7 @@ const homeAllUnknownSaysCostUnknown = async (results) => {
     await installApiMocks(page, state);
     await mockDashboard(page, state);
     await page.goto(`${BASE_URL}/dashboard`);
-    const card = page.getByText("Revenue Over Time").locator("xpath=../../..");
+    const card = page.getByText("Profit Over Time").locator("xpath=../../..");
     const unknown = card.getByTestId("profit-unknown");
     const shown = await unknown
       .waitFor()
@@ -425,27 +425,27 @@ const cancelWarnsAndRefreshes = async (results) => {
 
     // Start on the home dashboard so its receipt and profit queries are cached.
     await page.goto(`${BASE_URL}/dashboard`);
-    await page.getByText("Revenue Over Time").waitFor();
+    await page.getByText("Profit Over Time").waitFor();
     await page.getByRole("link", { name: "Orders" }).first().click();
     const row = (name) => page.locator("tbody tr", { hasText: name });
 
     await row("Draft Buyer").getByRole("button", { name: /more/i }).click();
-    await page.getByRole("menuitem", { name: /^cancel$/i }).click();
+    await page.getByRole("menuitem", { name: /^cancel order$/i }).click();
     const draftDialog = await page.getByRole("dialog").innerText();
     results.check(
       "cancelling a draft asks without the confirmed-order warning",
       !draftDialog.includes("voids its receipt"),
       draftDialog,
     );
+    // The draft only checks the wording; keep it so the confirmed order is the one cancel.
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^cancel$/i })
-      .first()
+      .getByRole("button", { name: /^keep order$/i })
       .click();
     await page.getByRole("dialog").waitFor({ state: "detached" });
 
     await row("Confirmed Buyer").getByRole("button", { name: /more/i }).click();
-    await page.getByRole("menuitem", { name: /^cancel$/i }).click();
+    await page.getByRole("menuitem", { name: /^cancel order$/i }).click();
     const dialog = page.getByRole("dialog");
     const warning = await dialog.innerText();
     results.check(
@@ -457,7 +457,7 @@ const cancelWarnsAndRefreshes = async (results) => {
     );
     const before = state.requests.length;
     await dialog
-      .getByRole("button", { name: /^cancel$/i })
+      .getByRole("button", { name: /^cancel order$/i })
       .last()
       .click();
     await waitFor(() => cancels.length === 1, { label: "the cancel request" });
@@ -474,7 +474,7 @@ const cancelWarnsAndRefreshes = async (results) => {
 
     const afterCancel = state.requests.length;
     await page.getByRole("link", { name: "Dashboard" }).first().click();
-    await page.getByText("Revenue Over Time").waitFor();
+    await page.getByText("Profit Over Time").waitFor();
     await waitFor(
       () =>
         [

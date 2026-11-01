@@ -36,7 +36,12 @@ async function check(name, operation) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-  const tab = (name) => page.getByRole("button", { name, exact: true }).click();
+  // Settings sections are ARIA tabs; the action buttons keep the button role.
+  const tab = (name) =>
+    page
+      .getByRole("tab", { name, exact: true })
+      .or(page.getByRole("button", { name, exact: true }))
+      .click();
   const field = (name) => page.getByLabel(name, { exact: true });
   try {
     await page.goto(origin);
@@ -187,7 +192,7 @@ async function check(name, operation) {
     await tab("Language");
     await field("Document language").selectOption("uk");
     await field("Number format").selectOption("de-DE");
-    await field("Time zone (IANA)").fill("Europe/Kyiv");
+    await field("Time zone (e.g. Europe/Kyiv)").fill("Europe/Kyiv");
     await check(
       "cross-tab draft retains company, terms and staged logo",
       async () => {

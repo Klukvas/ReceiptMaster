@@ -75,7 +75,11 @@ const checkParity = (results, flat) => {
   for (const locale of LOCALES.filter((name) => name !== "en")) {
     const other = new Map(flat[locale]);
     const missing = [...reference.keys()].filter((key) => !other.has(key));
-    const extra = [...other.keys()].filter((key) => !reference.has(key));
+    // Russian and Ukrainian have plural forms English lacks (few/many).
+    const isExtraPluralForm = (key) => /_(few|many)$/.test(key);
+    const extra = [...other.keys()].filter(
+      (key) => !reference.has(key) && !isExtraPluralForm(key),
+    );
     results.check(
       `${locale}: same keys as en (${reference.size})`,
       missing.length === 0 && extra.length === 0,
