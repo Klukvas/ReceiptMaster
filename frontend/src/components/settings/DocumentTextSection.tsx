@@ -3,6 +3,7 @@ import type {
   DocumentTemplate,
 } from "../../lib/document-config";
 import { useTranslation } from "../../hooks/useTranslation";
+import { Disclosure } from "../ui/Disclosure";
 import { DocumentSection, LabelledField, selectClass } from "./document-ui";
 
 type TextField =
@@ -46,6 +47,13 @@ export function DocumentTextSection({
         })
       : help;
 
+  const terms = (
+    <>
+      {field("paymentTerms", termsHint(t("document.paymentTermsHelp")))}
+      {field("deliveryTerms", termsHint(t("document.deliveryTermsHelp")))}
+    </>
+  );
+
   return (
     <DocumentSection
       title={t("document.sectionText")}
@@ -53,8 +61,12 @@ export function DocumentTextSection({
     >
       {field("footerTitle", t("document.footerTitleHelp"))}
       {field("footerSubtitle", t("document.footerSubtitleHelp"))}
-      {field("paymentTerms", termsHint(t("document.paymentTermsHelp")))}
-      {field("deliveryTerms", termsHint(t("document.deliveryTermsHelp")))}
+      {/* A template that prints no terms keeps them out of the way, closed. */}
+      {termsUnsupported ? (
+        <Disclosure summary={t("document.termsGroup")}>{terms}</Disclosure>
+      ) : (
+        terms
+      )}
     </DocumentSection>
   );
 }

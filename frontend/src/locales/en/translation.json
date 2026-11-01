@@ -1095,7 +1095,8 @@
     "previewUpdating": "Updating the preview…",
     "previewPaused": "The preview paused because you changed things quickly. Press Update now to continue.",
     "showPreview": "Show preview",
-    "hidePreview": "Hide preview"
+    "hidePreview": "Hide preview",
+    "termsGroup": "Payment and delivery terms (not used by this template)"
   },
   "legal": {
     "lastUpdated": "Last updated: {{date}}",
