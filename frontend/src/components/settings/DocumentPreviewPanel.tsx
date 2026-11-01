@@ -15,14 +15,18 @@ const WIDE_SCREEN = "(min-width: 1024px)";
 export function DocumentPreviewPanel({
   model,
   title,
+  defaultOpen = false,
 }: {
   model: DocumentDraftModel;
   title?: string;
+  /** Open at once whatever the screen: the per-document dialog is about the document itself. */
+  defaultOpen?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(
     () =>
-      typeof window !== "undefined" && window.matchMedia(WIDE_SCREEN).matches,
+      defaultOpen ||
+      (typeof window !== "undefined" && window.matchMedia(WIDE_SCREEN).matches),
   );
   useAutoPreview(model, open);
 

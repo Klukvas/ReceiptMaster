@@ -70,7 +70,6 @@ export function DocumentEditor({
       config={config}
       templates={templates}
       onBrowseTemplates={() => setGallery(true)}
-      defaultOpen
     />
   );
   const brandGroup = (
@@ -87,7 +86,6 @@ export function DocumentEditor({
       config={config}
       onChange={model.update}
       template={template}
-      defaultOpen
     />
   );
   const formatGroup = (
@@ -95,7 +93,6 @@ export function DocumentEditor({
       key="format"
       config={config}
       onChange={model.update}
-      defaultOpen
     />
   );
   const businessGroup = (
@@ -108,8 +105,8 @@ export function DocumentEditor({
   );
   const presetsGroup = <DocumentPresets key="presets" model={model} />;
   // On the settings page the order is how a document reads, top to bottom. In the dialog for one
-  // order people mostly change the template, language and texts, so those lead and the account-wide
-  // details (business, colours and logo) are one click away.
+  // order every group starts closed and only the preview is open: the first thing to see is the
+  // document itself, and each group opens with one click. Template, language and texts lead.
   const groups = documentOnly
     ? [
         templateGroup,
@@ -164,6 +161,7 @@ export function DocumentEditor({
           <div className="order-first min-w-0 lg:order-none">
             <DocumentPreviewPanel
               model={model}
+              defaultOpen={documentOnly}
               title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
             />
           </div>

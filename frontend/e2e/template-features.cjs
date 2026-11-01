@@ -352,6 +352,8 @@ async function check(name, operation) {
       "Orders action opens the same editor in document-only scope",
       async () => assert.match(await dialog.innerText(), /this document only/i),
     );
+    // Every group in the dialog starts closed; only the preview is open.
+    await dialog.getByText("Texts on the document", { exact: true }).click();
     await dialog
       .getByLabel("Closing line", { exact: true })
       .fill("Only this document");
@@ -376,6 +378,9 @@ async function check(name, operation) {
     await page.getByRole("menuitem", { name: "Customize document" }).click();
     const replacementDialog = page.getByRole("dialog");
     await replacementDialog.waitFor();
+    await replacementDialog
+      .getByText("Texts on the document", { exact: true })
+      .click();
     await replacementDialog
       .getByLabel("Closing line", { exact: true })
       .fill("Explicit replacement");
