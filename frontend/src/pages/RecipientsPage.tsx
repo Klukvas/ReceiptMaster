@@ -7,6 +7,7 @@ import { recipientsApi, formatCurrency, type Recipient } from"../lib/api";
 import { Button } from"../components/ui/Button";
 import { DataTable } from"../components/ui/DataTable";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
+import { useCreateIntent } from"../hooks/useCreateIntent";
 import { RecipientForm } from"../components/recipients/RecipientForm";
 import { RecipientDrawer } from"../components/recipients/RecipientDrawer";
 import { RecipientAvatar } from"../components/recipients/RecipientAvatar";
@@ -19,6 +20,7 @@ import { useTranslation } from"../hooks/useTranslation";
 
 export const RecipientsPage = () => {
  const [showForm, setShowForm] = useState(false);
+ useCreateIntent(() => setShowForm(true));
  const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(
  null,
  );

@@ -25,6 +25,7 @@ import { useTranslation } from"../hooks/useTranslation";
 import { useSubscription } from"../hooks/useSubscription";
 import { isOrderLimitReached } from"../lib/subscriptionApi";
 import { UsageBar } from"../components/subscription/UsageBar";
+import { useCreateIntent } from"../hooks/useCreateIntent";
 import { UpgradeModal } from"../components/subscription/UpgradeModal";
 
 export const OrdersPage = () => {
@@ -65,6 +66,21 @@ export const OrdersPage = () => {
  isBatchApproving,
  isBatchDeleting,
  } = useOrders();
+
+ const [prefillRecipientId, setPrefillRecipientId] = useState<string>();
+ const openCreateOrder = (recipientId?: string) => {
+ if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
+ setUpgradeModalOpen(true);
+ return;
+ }
+ setPrefillRecipientId(recipientId);
+ setShowForm(true);
+ };
+ // Wait for the plan status so a deep link cannot skip the monthly order limit.
+ useCreateIntent(
+ ({ recipientId }) => openCreateOrder(recipientId),
+ subscriptionStatus !== undefined,
+ );
 
  const extraParams = useMemo(() => {
  const params: Record<string, string> = {};
@@ -327,15 +343,7 @@ export const OrdersPage = () => {
  <div className="space-y-5">
  <NotificationToast notifications={notifications} />
 
- <OrdersPageHeader
- onCreateOrder={() => {
- if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
- setUpgradeModalOpen(true);
- return;
- }
- setShowForm(true);
- }}
- />
+ <OrdersPageHeader onCreateOrder={() => openCreateOrder()} />
  {subscriptionStatus && (
  <UsageBar
  current={subscriptionStatus.usage.ordersThisMonth}
@@ -395,7 +403,12 @@ export const OrdersPage = () => {
  />
  )}
 
- {showForm && <CreateOrderModal onClose={() => setShowForm(false)} />}
+ {showForm && (
+ <CreateOrderModal
+ initialRecipientId={prefillRecipientId}
+ onClose={() => setShowForm(false)}
+ />
+ )}
 
  {editingOrder && (
  <EditOrderForm

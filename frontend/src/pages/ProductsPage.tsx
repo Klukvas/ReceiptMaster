@@ -20,6 +20,7 @@ import { useSubscription } from "../hooks/useSubscription";
 import { isProductLimitReached } from "../lib/subscriptionApi";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { UpgradeModal } from "../components/subscription/UpgradeModal";
+import { useCreateIntent } from "../hooks/useCreateIntent";
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);
@@ -188,6 +189,8 @@ export const ProductsPage = () => {
     }
     setShowForm(true);
   }, [subscriptionStatus]);
+  // Wait for the plan status so a deep link cannot skip the product limit.
+  useCreateIntent(handleCreateProduct, subscriptionStatus !== undefined);
 
   const handleFormClose = () => {
     setShowForm(false);

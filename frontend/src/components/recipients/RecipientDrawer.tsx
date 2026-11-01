@@ -169,7 +169,10 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  {/* ── Quick Actions Bar ── */}
  <div className="flex items-center gap-2 pt-4 pb-1">
  <button
- onClick={() => { navigate('/orders'); onClose(); }}
+ onClick={() => {
+ navigate(`/orders?create=1&recipientId=${encodeURIComponent(recipient.id)}`);
+ onClose();
+ }}
  className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-accent-base hover:bg-accent-base-hover text-white transition-colors shadow-sm"
  >
  <Plus className="w-3.5 h-3.5" />

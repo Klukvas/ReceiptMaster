@@ -58,7 +58,17 @@ export const DashboardHomePage = () => {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    queryClient.invalidateQueries({ queryKey: ["onboarding-status"] });
+    // The wizard created data behind the dashboard's back; without this the cards
+    // keep showing the zeros fetched before it ran until a full reload.
+    for (const queryKey of [
+      ["onboarding-status"],
+      ["products"],
+      ["recipients"],
+      ["subscription", "status"],
+      ["settings"],
+    ]) {
+      queryClient.invalidateQueries({ queryKey });
+    }
   };
 
   const { data: productsData, isLoading: productsLoading, isError: productsDataFailed } = useQuery({
@@ -353,7 +363,7 @@ export const DashboardHomePage = () => {
       {/* Quick actions */}
       <Card title={t("home.quickActions")}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link to="/products">
+          <Link to="/products?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -362,7 +372,7 @@ export const DashboardHomePage = () => {
               {t("home.addProduct")}
             </Button>
           </Link>
-          <Link to="/recipients">
+          <Link to="/recipients?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -371,7 +381,7 @@ export const DashboardHomePage = () => {
               {t("home.addRecipient")}
             </Button>
           </Link>
-          <Link to="/orders">
+          <Link to="/orders?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"

@@ -13,6 +13,8 @@ import { OrderSummary } from "./OrderSummary";
 
 interface CreateOrderModalProps {
   onClose: () => void;
+  /** Recipient to preselect, e.g. when opened from that recipient's drawer. */
+  initialRecipientId?: string;
 }
 
 interface OrderItem {
@@ -29,9 +31,12 @@ const createItem = (): OrderItem => ({
   qty: 1,
 });
 
-export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
+export const CreateOrderModal = ({
+  onClose,
+  initialRecipientId,
+}: CreateOrderModalProps) => {
   const dialogRef = useFocusTrap<HTMLDivElement>(true);
-  const [recipientId, setRecipientId] = useState("");
+  const [recipientId, setRecipientId] = useState(initialRecipientId ?? "");
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState("");
