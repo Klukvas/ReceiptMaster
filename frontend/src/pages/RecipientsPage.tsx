@@ -188,6 +188,7 @@ export const RecipientsPage = () => {
  isLoading={pagination.isLoading}
  isFetching={pagination.isFetching}
  error={pagination.error}
+ onRetry={() => pagination.queryResult.refetch()}
  currentPage={pagination.currentPage}
  totalPages={pagination.totalPages}
  itemsPerPage={pagination.itemsPerPage}

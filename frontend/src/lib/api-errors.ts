@@ -188,7 +188,9 @@ export function parseApiError(error: unknown): {
   // Network error
   if (isAxiosError(error) && !error.response) {
     return {
-      message: "Ошибка сети. Проверьте подключение к интернету",
+      message: i18n.t("errors.networkError", {
+        defaultValue: "Network error. Please check your internet connection",
+      }),
       code: ErrorCode.UNKNOWN_ERROR,
     };
   }

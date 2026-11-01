@@ -11,6 +11,7 @@ import { Card } from"./Card";
 import { Button } from"./Button";
 import { Pagination } from"./Pagination";
 import { useTranslation } from"../../hooks/useTranslation";
+import { parseApiError } from"../../lib/api-errors";
 import type { ColumnDef, SortOrder } from"../../hooks/useServerPagination";
 
 interface DataTableProps<T> {
@@ -19,6 +20,7 @@ interface DataTableProps<T> {
  isLoading: boolean;
  isFetching?: boolean;
  error: Error | null;
+ onRetry?: () => void;
 
  currentPage: number;
  totalPages: number;
@@ -67,6 +69,7 @@ export function DataTable<T>({
  isLoading,
  isFetching,
  error,
+ onRetry,
  currentPage,
  totalPages,
  itemsPerPage,
@@ -236,8 +239,16 @@ export function DataTable<T>({
  {/* Error state */}
  {error && (
  <Card>
- <div className="text-center py-8 text-danger-base">
- {error.message || t("common.error")}
+ <div
+ role="alert"
+ className="flex flex-col items-center gap-3 py-8 text-center text-danger-base"
+ >
+ <p>{parseApiError(error).message || t("common.error")}</p>
+ {onRetry && (
+ <Button variant="secondary" size="sm" onClick={onRetry}>
+ {t("common.retry")}
+ </Button>
+ )}
  </div>
  </Card>
  )}
@@ -297,7 +308,7 @@ export function DataTable<T>({
  <Loader2 className="w-5 h-5 animate-spin text-primary-500 mx-auto" />
  </td>
  </tr>
- ) : items.length === 0 ? (
+ ) : error && items.length === 0 ? null : items.length === 0 ? (
  <tr>
  <td colSpan={colSpan} className="px-6 py-16 text-center">
  <div className="flex flex-col items-center text-content-tertiary">
@@ -371,7 +382,7 @@ export function DataTable<T>({
  <div className="flex justify-center py-16">
  <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
  </div>
- ) : items.length === 0 ? (
+ ) : error && items.length === 0 ? null : items.length === 0 ? (
  <div className="flex flex-col items-center text-content-tertiary py-16">
  {emptyIcon}
  <p className="mt-3 text-sm">

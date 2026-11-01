@@ -61,35 +61,48 @@ export const DashboardHomePage = () => {
     queryClient.invalidateQueries({ queryKey: ["onboarding-status"] });
   };
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
+  const { data: productsData, isLoading: productsLoading, isError: productsDataFailed } = useQuery({
     queryKey: ["products"],
     queryFn: () => productsApi.getAll({ limit: 5 }),
   });
 
-  const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
+  const { data: recipientsData, isLoading: recipientsLoading, isError: recipientsDataFailed } = useQuery({
     queryKey: ["recipients"],
     queryFn: () => recipientsApi.getAll({ limit: 5 }),
   });
 
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading, isError: ordersDataFailed } = useQuery({
     queryKey: ["orders"],
     queryFn: () => ordersApi.getAll({ limit: 5 }),
   });
 
-  const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
+  const { data: receiptsData, isLoading: receiptsLoading, isError: receiptsDataFailed } = useQuery({
     queryKey: ["receipts", "dashboard"],
     queryFn: () => receiptsApi.getAll({ limit: 5 }),
   });
 
-  const { data: totalRevenue, isLoading: revenueLoading } = useQuery({
+  const { data: totalRevenue, isLoading: revenueLoading, isError: totalRevenueFailed } = useQuery({
     queryKey: ["totalRevenue"],
     queryFn: () => dashboardApi.getTotalRevenue(),
   });
 
-  const { data: totalTurnover, isLoading: turnoverLoading } = useQuery({
+  const { data: totalTurnover, isLoading: turnoverLoading, isError: totalTurnoverFailed } = useQuery({
     queryKey: ["totalTurnover"],
     queryFn: () => dashboardApi.getTotalTurnover(),
   });
+
+  const hasLoadError =
+    productsDataFailed ||
+    recipientsDataFailed ||
+    ordersDataFailed ||
+    receiptsDataFailed ||
+    totalRevenueFailed ||
+    totalTurnoverFailed;
+
+  const retryFailedQueries = () =>
+    queryClient.refetchQueries({
+      predicate: (query) => query.state.status === "error",
+    });
 
   const statsLoading =
     productsLoading || recipientsLoading || ordersLoading || receiptsLoading;
@@ -138,6 +151,22 @@ export const DashboardHomePage = () => {
         </h1>
         <p className="text-white/80 text-lg">{t("home.subtitle")}</p>
       </div>
+
+      {hasLoadError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-base bg-[var(--color-danger-light)] px-4 py-3 text-sm text-danger-base"
+        >
+          <span>{t("home.loadError")}</span>
+          <button
+            type="button"
+            onClick={retryFailedQueries}
+            className="font-medium underline hover:no-underline"
+          >
+            {t("common.retry")}
+          </button>
+        </div>
+      )}
 
       {/* Entity count cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -1,7 +1,13 @@
 import { postLoginPath } from '../lib/session-expiry';
+import { isAxiosError } from 'axios';
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { authApi, type User } from '../lib/api';
 import { AuthContext, type AuthContextType } from './AuthContext.types';
+
+const isSessionRejected = (error: unknown): boolean => {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+  return status === 401 || status === 403;
+};
 
 interface AuthProviderProps {
  children: ReactNode;
@@ -11,6 +17,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  const [user, setUser] = useState<User | null>(null);
  const [token, setToken] = useState<string | null>(null);
  const [isLoading, setIsLoading] = useState(true);
+ const [hasProfileLoadError, setHasProfileLoadError] = useState(false);
 
  // Check for existing token on mount
  useEffect(() => {
@@ -25,16 +32,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  }, []);
 
  const fetchUserProfile = async () => {
+ setHasProfileLoadError(false);
  try {
  const response = await authApi.getProfile();
  setUser(response.data);
- } catch {
+ } catch (error) {
+ // Only a rejected session ends it. A dead network or a 5xx must not log the user out.
+ if (isSessionRejected(error)) {
  localStorage.removeItem('auth_token');
  localStorage.removeItem('refresh_token');
  setToken(null);
+ } else {
+ setHasProfileLoadError(true);
+ }
  } finally {
  setIsLoading(false);
  }
+ };
+
+ const retryLoadProfile = async () => {
+ setIsLoading(true);
+ await fetchUserProfile();
  };
 
  const login = async (email: string, password: string) => {
@@ -85,6 +103,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  logout,
  isLoading,
  isAuthenticated: !!user && !!token,
+ hasProfileLoadError,
+ retryLoadProfile,
  };
 
  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
