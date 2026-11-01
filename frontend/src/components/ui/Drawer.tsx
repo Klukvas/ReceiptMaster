@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from "react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { X } from "lucide-react";
 import {
@@ -27,6 +28,7 @@ const DISMISS_PROJECTION_PX = 160;
 export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
   const reduceMotion = useReducedMotion();
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
+  useBackClosesDialog(open, onClose);
 
   useEffect(() => {
     if (!open) return;

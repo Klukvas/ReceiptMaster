@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
 import { X, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { clsx } from "clsx";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
@@ -33,6 +34,7 @@ export const TemplateCarouselModal = ({
   const previewAreaRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBackClosesDialog(isOpen, onClose);
 
   // Sync index when modal opens or initialTemplateId changes
   useEffect(() => {

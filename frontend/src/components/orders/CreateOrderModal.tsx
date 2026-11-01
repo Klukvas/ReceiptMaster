@@ -35,7 +35,7 @@ export const CreateOrderModal = ({
   onClose,
   initialRecipientId,
 }: CreateOrderModalProps) => {
-  const dialogRef = useFocusTrap<HTMLDivElement>(true);
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [recipientId, setRecipientId] = useState(initialRecipientId ?? "");
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,15 +74,6 @@ export const CreateOrderModal = ({
       document.body.style.overflow = "unset";
     };
   }, []);
-
-  // Escape key handler — only close modal if no inner dropdown caught it first
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
 
   const addItem = useCallback(() => {
     setItems((prev) => [...prev, createItem()]);

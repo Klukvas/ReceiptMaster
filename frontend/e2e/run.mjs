@@ -32,6 +32,7 @@ const SPECS = [
   { name: "api-errors", load: () => import("./api-errors.spec.mjs") },
   { name: "auth-inline-errors", load: () => import("./auth-inline-errors.spec.mjs") },
   { name: "orders-select-all", load: () => import("./orders-select-all.spec.mjs") },
+  { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

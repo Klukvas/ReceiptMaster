@@ -1,4 +1,5 @@
 import { useState, useEffect } from"react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
 import {
  X,
  Copy,
@@ -46,6 +47,7 @@ export const OrderDetails = ({
 }: OrderDetailsProps) => {
  const { t } = useTranslation();
  const [idCopied, setIdCopied] = useState(false);
+ useBackClosesDialog(true, onClose);
 
  // Close on Escape
  useEffect(() => {
