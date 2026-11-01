@@ -127,7 +127,7 @@ describeIsolatedPostgres(
         .getRepository(Recipient)
         .save({ user_id: a, name: "Unshared customer" });
       await admin.getRepository(Order).save({
-        order_number: 1,
+        order_number: 2, // user A already has order 1 from the fixtures above
         user_id: a,
         recipient_id: recipient.id,
         status: OrderStatus.DRAFT,
