@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "./cn";
+import { useBackClosesDialog } from "../../../hooks/useBackClosesDialog";
 
 /* ------------------------------------------------------------------ */
 /*  Dialog Context                                                      */
@@ -45,6 +46,8 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
   React.useLayoutEffect(() => {
     onOpenChangeRef.current = onOpenChange;
   }, [onOpenChange]);
+
+  useBackClosesDialog(open, () => onOpenChangeRef.current(false));
 
   React.useEffect(() => {
     if (!open) return;
