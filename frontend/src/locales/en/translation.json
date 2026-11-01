@@ -1032,7 +1032,7 @@
     "replacementFailed": "The last update did not finish. Your current PDF is still available.",
     "retryFrozen": "Try the same update again",
     "option_numeric": "Numeric",
-    "titleRequired": "Enter a title or select Automatic title",
+    "titleRequired": "Enter a title, or choose Automatic.",
     "sectionFormats": "Language and formats",
     "sectionFormatsHelp": "The language of the document and how numbers and dates are written.",
     "documentLanguageHelp": "The language of the labels and texts on the document.",
