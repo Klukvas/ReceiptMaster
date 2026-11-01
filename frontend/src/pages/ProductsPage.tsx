@@ -153,10 +153,10 @@ export const ProductsPage = () => {
         type: skipped.length > 0 ? "error" : "success",
         message:
           skipped.length > 0
-            ? t(
-                "products.bulkDeletePartial",
-                `Deleted ${deleted}, skipped ${skipped.length}`,
-              )
+            ? t("products.bulkDeletePartial", {
+                deleted,
+                skipped: skipped.length,
+              })
             : t("products.productDeleted"),
       });
     },
@@ -398,10 +398,9 @@ export const ProductsPage = () => {
         onClose={() => setBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
         title={t("products.deleteSelected", "Delete Selected")}
-        message={t(
-          "products.bulkDeleteMessage",
-          `Are you sure you want to delete ${selectedKeys.size} products?`,
-        )}
+        message={t("products.bulkDeleteMessage", {
+          count: selectedKeys.size,
+        })}
         isLoading={bulkDeleteMutation.isPending}
       />
 

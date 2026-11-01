@@ -48,6 +48,8 @@ interface DataTableProps<T> {
 
  emptyIcon?: React.ReactNode;
  emptyMessage?: string;
+ /** Call to action under the empty message (not shown while a search is active). */
+ emptyAction?: React.ReactNode;
  emptySearchMessage?: string;
 
  renderActions?: (item: T) => React.ReactNode;
@@ -91,6 +93,7 @@ export function DataTable<T>({
  rowClassName,
  emptyIcon,
  emptyMessage,
+ emptyAction,
  emptySearchMessage,
  renderActions,
  actionsHeader,
@@ -270,6 +273,7 @@ export function DataTable<T>({
  type="checkbox"
  checked={!!allSelected}
  onChange={toggleAll}
+ aria-label={t("common.selectAll")}
  className="rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]"
  />
  </th>
@@ -318,6 +322,7 @@ export function DataTable<T>({
  ? emptySearchMessage || t("common.noResults")
  : emptyMessage || t("common.noData")}
  </p>
+ {!searchQuery && emptyAction && <div className="mt-4">{emptyAction}</div>}
  </div>
  </td>
  </tr>
@@ -350,6 +355,7 @@ export function DataTable<T>({
  type="checkbox"
  checked={isSelected}
  onChange={() => toggleOne(key)}
+ aria-label={t("common.selectRow")}
  className="rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]"
  />
  </td>
@@ -390,6 +396,7 @@ export function DataTable<T>({
  ? emptySearchMessage || t("common.noResults")
  : emptyMessage || t("common.noData")}
  </p>
+ {!searchQuery && emptyAction && <div className="mt-4">{emptyAction}</div>}
  </div>
  ) : renderCard ? (
  <div className="space-y-3">

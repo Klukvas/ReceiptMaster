@@ -25,15 +25,38 @@ import { useTranslation } from"../hooks/useTranslation";
 import { useSubscription } from"../hooks/useSubscription";
 import { isOrderLimitReached } from"../lib/subscriptionApi";
 import { UsageBar } from"../components/subscription/UsageBar";
+import { useSearchParams } from"react-router-dom";
 import { useCreateIntent } from"../hooks/useCreateIntent";
 import { UpgradeModal } from"../components/subscription/UpgradeModal";
+
+const ORDER_STATUSES = ["draft", "confirmed", "cancelled"] as const;
 
 export const OrdersPage = () => {
  const { t } = useTranslation();
  const { status: subscriptionStatus } = useSubscription();
  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
  const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
- const [statusFilter, setStatusFilter] = useState("");
+ const [searchParams, setSearchParams] = useSearchParams();
+ // The status filter lives in the URL so a reload or a shared link keeps it.
+ const [statusFilter, setStatusFilterState] = useState(() => {
+ const fromUrl = searchParams.get("status") ?? "";
+ return (ORDER_STATUSES as readonly string[]).includes(fromUrl) ? fromUrl : "";
+ });
+ const setStatusFilter = useCallback(
+ (value: string) => {
+ setStatusFilterState(value);
+ setSearchParams(
+ (previous) => {
+ const next = new URLSearchParams(previous);
+ if (value) next.set("status", value);
+ else next.delete("status");
+ return next;
+ },
+ { replace: true },
+ );
+ },
+ [setSearchParams],
+ );
  const [startDate, setStartDate] = useState("");
  const [endDate, setEndDate] = useState("");
  const [minAmount, setMinAmount] = useState("");
@@ -100,7 +123,7 @@ export const OrdersPage = () => {
  setEndDate("");
  setMinAmount("");
  setMaxAmount("");
- }, []);
+ }, [setStatusFilter]);
 
  const columns: ColumnDef<Order>[] = useMemo(
  () => [
@@ -388,6 +411,7 @@ export const OrdersPage = () => {
  emptySearchMessage={t("orders.noOrdersFound")}
  renderActions={renderOrderActions}
  renderCard={renderOrderCard}
+ onRowClick={setSelectedOrder}
  />
 
  {/* Floating bulk toolbar */}

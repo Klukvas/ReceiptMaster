@@ -217,6 +217,11 @@ export const RecipientsPage = () => {
  </div>
  }
  emptyMessage={t("recipients.noRecipients")}
+ emptyAction={
+ <Button onClick={() => setShowForm(true)}>
+ {t("recipients.createFirstRecipient")}
+ </Button>
+ }
  emptySearchMessage={t("recipients.noRecipientsFound")}
  renderActions={(recipient) => (
  <RecipientActionsMenu
@@ -303,6 +308,7 @@ export const RecipientsPage = () => {
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  title={t("recipients.deleteRecipient","Delete Recipient")}
  message={t("recipients.deleteRecipientMessage")}
+ itemName={deleteTarget?.name}
  isLoading={deleteMutation.isPending}
  />
  </div>
