@@ -17,6 +17,7 @@ import {
   PdfGeneratorService,
   ReceiptStyle,
 } from "./services/pdf-generator.service";
+import { nextReceiptNumber } from "./receipt-number";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
@@ -160,7 +161,7 @@ export class ReceiptsService {
       });
     const number =
       prior?.number ||
-      (await this.generateReceiptNumber(this.dataSource.manager));
+      (await nextReceiptNumber(this.dataSource.manager, user.id));
     const prepared = retryFrozen
       ? undefined
       : await this.snapshots.prepare(
@@ -624,13 +625,6 @@ export class ReceiptsService {
     });
     void this.receiptOutbox.dispatch();
     return result;
-  }
-
-  private async generateReceiptNumber(manager: EntityManager): Promise<string> {
-    const result: Array<{ receipt_number: string }> = await manager.query(
-      "SELECT generate_receipt_number() as receipt_number",
-    );
-    return result[0].receipt_number;
   }
 
   /** Retire immutable keys transactionally; the scheduled collector handles storage after grace. */
