@@ -5,9 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  ManyToMany,
+  OneToMany,
   JoinColumn,
-  JoinTable,
 } from "typeorm";
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { User } from "../../users/entities/user.entity";
@@ -52,13 +51,9 @@ export class Supplier {
   @JoinColumn({ name: "user_id" })
   user: User;
 
+  // A product has one supplier (products.supplier_id); this is that link read from the supplier's side.
   @ApiProperty({ type: () => [Product] })
-  @ManyToMany(() => Product)
-  @JoinTable({
-    name: "supplier_products",
-    joinColumn: { name: "supplier_id", referencedColumnName: "id" },
-    inverseJoinColumn: { name: "product_id", referencedColumnName: "id" },
-  })
+  @OneToMany(() => Product, (product) => product.supplier)
   products: Product[];
 
   @ApiProperty()

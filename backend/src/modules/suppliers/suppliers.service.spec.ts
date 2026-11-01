@@ -2,7 +2,6 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { SuppliersService } from "./suppliers.service";
 import { Supplier } from "./entities/supplier.entity";
-import { Product } from "../products/entities/product.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
@@ -10,7 +9,6 @@ import { SortOrder } from "../../common/dto/pagination.dto";
 describe("SuppliersService", () => {
   let service: SuppliersService;
   let suppliersRepo: any;
-  let productsRepo: any;
   const mockUser = { id: "user-1" } as User;
 
   const mockSupplier: Partial<Supplier> = {
@@ -49,15 +47,10 @@ describe("SuppliersService", () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
-    productsRepo = {
-      findBy: jest.fn().mockResolvedValue([mockProduct]),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SuppliersService,
         { provide: getRepositoryToken(Supplier), useValue: suppliersRepo },
-        { provide: getRepositoryToken(Product), useValue: productsRepo },
       ],
     }).compile();
 
@@ -76,16 +69,14 @@ describe("SuppliersService", () => {
       expect(result).toBeDefined();
     });
 
-    it("should create a supplier with products", async () => {
-      const dto = {
-        name: "New Supplier",
-        productIds: ["prod-1"],
-      };
+    it("does not link products: a product's supplier is set on the product", async () => {
+      const dto = { name: "New Supplier", productIds: ["prod-1"] };
 
       await service.create(dto as any, mockUser);
 
-      expect(productsRepo.findBy).toHaveBeenCalled();
-      expect(suppliersRepo.save).toHaveBeenCalled();
+      expect(suppliersRepo.save).toHaveBeenCalledWith(
+        expect.not.objectContaining({ products: expect.anything() }),
+      );
     });
   });
 
@@ -152,22 +143,6 @@ describe("SuppliersService", () => {
 
       await service.update("sup-1", { name: "Updated" } as any, mockUser);
 
-      expect(suppliersRepo.save).toHaveBeenCalled();
-    });
-
-    it("should update supplier products", async () => {
-      suppliersRepo.findOne.mockResolvedValue({
-        ...mockSupplier,
-        products: [],
-      });
-
-      await service.update(
-        "sup-1",
-        { productIds: ["prod-1"] } as any,
-        mockUser,
-      );
-
-      expect(productsRepo.findBy).toHaveBeenCalled();
       expect(suppliersRepo.save).toHaveBeenCalled();
     });
 

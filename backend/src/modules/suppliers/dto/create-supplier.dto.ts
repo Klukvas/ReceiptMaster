@@ -5,8 +5,6 @@ import {
   IsOptional,
   IsNotEmpty,
   MaxLength,
-  IsArray,
-  IsUUID,
   Matches,
 } from "class-validator";
 import { NormalizedEmail } from "../../../common/dto/normalized-email";
@@ -69,13 +67,4 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsString()
   notes?: string;
-
-  @ApiPropertyOptional({
-    description: "ID продуктов для привязки",
-    type: [String],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsUUID("4", { each: true })
-  productIds?: string[];
 }
