@@ -180,6 +180,33 @@
         ]
       }
     },
+    "/products/stock-value": {
+      "get": {
+        "operationId": "ProductsController_getStockValue",
+        "summary": "Get total inventory value (cost & retail)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aggregate stock value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryValueDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "products"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/products/{id}": {
       "get": {
         "operationId": "ProductsController_findOne",
@@ -386,6 +413,20 @@
           {
             "bearer": []
           }
+        ]
+      }
+    },
+    "/billing/config": {
+      "get": {
+        "operationId": "PaddleController_getBillingConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "paddle"
         ]
       }
     },
@@ -790,6 +831,14 @@
             "required": false,
             "in": "query",
             "description": "Maximum order total in cents",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -1940,6 +1989,17 @@
         ]
       }
     },
+    "/receipts/preview": {
+      "post": {
+        "operationId": "DocumentPreviewController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/public/receipts/{token}": {
       "get": {
         "operationId": "PublicReceiptsController_getPublicReceipt",
@@ -2173,6 +2233,44 @@
     "/settings/onboarding-complete": {
       "post": {
         "operationId": "SettingsController_completeOnboarding",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/auto-receipt": {
+      "get": {
+        "operationId": "SettingsController_getAutoReceipt",
+        "summary": "Get auto-generate receipt on confirm flag",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "SettingsController_updateAutoReceipt",
+        "summary": "Toggle auto-generate receipt on confirm",
         "parameters": [],
         "responses": {
           "201": {
@@ -2426,6 +2524,25 @@
         ]
       }
     },
+    "/settings/footer": {
+      "post": {
+        "operationId": "SettingsController_updateFooter",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/settings/primary-color": {
       "get": {
         "operationId": "SettingsController_getPrimaryColor",
@@ -2578,6 +2695,102 @@
         ]
       }
     },
+    "/settings/document-config": {
+      "get": {
+        "operationId": "DocumentConfigController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "operationId": "DocumentConfigController_save",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/settings/document-presets": {
+      "get": {
+        "operationId": "DocumentConfigController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "DocumentConfigController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/settings/document-presets/{id}": {
+      "get": {
+        "operationId": "DocumentConfigController_preset",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "operationId": "DocumentConfigController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DocumentConfigController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/auth/register": {
       "post": {
         "operationId": "UsersController_register",
@@ -2656,6 +2869,16 @@
         "operationId": "UsersController_refresh",
         "summary": "Refresh access token using refresh token",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Tokens refreshed successfully",
@@ -2681,6 +2904,16 @@
         "operationId": "UsersController_logout",
         "summary": "Logout and revoke refresh token",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Logged out successfully"
@@ -3108,6 +3341,11 @@
               "UAH"
             ],
             "example": "UAH"
+          },
+          "supplier_id": {
+            "type": "string",
+            "description": "ID поставщика",
+            "example": "uuid"
           }
         },
         "required": [
@@ -3141,6 +3379,10 @@
             "enum": [
               "UAH"
             ]
+          },
+          "supplier_id": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "format": "date-time",
@@ -3188,6 +3430,40 @@
           "data"
         ]
       },
+      "InventoryValueDto": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UAH"
+            ]
+          },
+          "purchaseValueCents": {
+            "type": "number",
+            "description": "Stock value at purchase (cost) price, in cents"
+          },
+          "saleValueCents": {
+            "type": "number",
+            "description": "Stock value at sale (retail) price, in cents"
+          },
+          "totalUnits": {
+            "type": "number",
+            "description": "Total units in stock across all products"
+          },
+          "productCount": {
+            "type": "number",
+            "description": "Number of (non-deleted) products in stock"
+          }
+        },
+        "required": [
+          "currency",
+          "purchaseValueCents",
+          "saleValueCents",
+          "totalUnits",
+          "productCount"
+        ]
+      },
       "UpdateProductDto": {
         "type": "object",
         "properties": {
@@ -3218,6 +3494,11 @@
               "UAH"
             ],
             "example": "UAH"
+          },
+          "supplier_id": {
+            "type": "string",
+            "description": "ID поставщика",
+            "example": "uuid"
           }
         }
       },
@@ -3894,6 +4175,9 @@
           "receiptTitle": {
             "type": "string"
           },
+          "hasCustomReceiptTitle": {
+            "type": "boolean"
+          },
           "templateId": {
             "type": "string"
           },
@@ -3918,6 +4202,7 @@
         },
         "required": [
           "receiptTitle",
+          "hasCustomReceiptTitle",
           "templateId",
           "templateLanguage",
           "footerTitle",
@@ -4039,6 +4324,18 @@
         "type": "object",
         "properties": {}
       },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "description": "128-character hexadecimal refresh token"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
+      },
       "User": {
         "type": "object",
         "properties": {}
@@ -4106,13 +4403,6 @@
             "type": "string",
             "description": "Заметки",
             "example": "Основной поставщик"
-          },
-          "productIds": {
-            "description": "ID продуктов для привязки",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "required": [
@@ -4224,13 +4514,6 @@
             "type": "string",
             "description": "Заметки",
             "example": "Основной поставщик"
-          },
-          "productIds": {
-            "description": "ID продуктов для привязки",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       }
