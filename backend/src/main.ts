@@ -1,13 +1,19 @@
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
-import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { SwaggerModule } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import { IoAdapter } from "@nestjs/platform-socket.io";
+import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { EnvConfig } from "./config/env.schema";
+import { trustReverseProxy } from "./config/trusted-proxy";
+import { createOpenApiDocument } from "./openapi/openapi-document";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
+  trustReverseProxy(app);
 
   // WebSocket adapter (Socket.IO)
   app.useWebSocketAdapter(new IoAdapter(app));
@@ -59,22 +65,8 @@ async function bootstrap() {
     res.status(204).end();
   });
 
-  // Swagger documentation
-  const config = new DocumentBuilder()
-    .setTitle("ReceiptMaster API")
-    .setDescription(
-      "Multi-tenant SaaS API for managing products, recipients, orders, receipts, and analytics.",
-    )
-    .setVersion("1.0")
-    .addBearerAuth(
-      { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-      "bearer",
-    )
-    .addApiKey({ type: "apiKey", name: "X-API-Key", in: "header" }, "api-key")
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
+  // Swagger documentation (same definition as the committed backend/openapi.json)
+  SwaggerModule.setup(`${apiPrefix}/docs`, app, createOpenApiDocument(app));
 
   await app.listen(port);
 }

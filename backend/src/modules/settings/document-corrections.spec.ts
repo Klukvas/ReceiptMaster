@@ -13,6 +13,8 @@ import { DocumentPreset } from "./entities/document-preset.entity";
 import { DocumentArtifact } from "../receipts/entities/document-artifact.entity";
 import { Receipt, ReceiptStatus } from "../receipts/entities/receipt.entity";
 import { formatDocumentDate } from "../../common/utils/document-formatting.util";
+// Its types alias the gitignored api-types.generated.ts, so backend ts-jest skips
+// frontend diagnostics (package.json jest.transform); the frontend typecheck owns them.
 import { documentDate } from "../../../../frontend/src/lib/document-config";
 import { DocumentStorageMaintenanceService } from "../receipts/services/document-storage-maintenance.service";
 import { tenantStore } from "../../common/tenancy/tenant-context";

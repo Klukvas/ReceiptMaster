@@ -29,6 +29,7 @@ export const ErrorCode = {
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
   PRODUCT_ALREADY_EXISTS: "PRODUCT_ALREADY_EXISTS",
+  PRODUCT_QUANTITY_CONFLICT: "PRODUCT_QUANTITY_CONFLICT",
 
   // Recipient errors
   RECIPIENT_NOT_FOUND: "RECIPIENT_NOT_FOUND",
@@ -83,13 +84,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   // Product errors
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
   [ErrorCode.PRODUCT_ALREADY_EXISTS]: "Product with this name already exists",
+  [ErrorCode.PRODUCT_QUANTITY_CONFLICT]:
+    "Stock changed while you were editing; nothing was saved",
 
   // Recipient errors
   [ErrorCode.RECIPIENT_NOT_FOUND]: "Recipient not found",
   [ErrorCode.RECIPIENT_ALREADY_EXISTS]:
     "Recipient with this email already exists",
   [ErrorCode.RECIPIENT_HAS_ORDERS]:
-    "This recipient has orders and cannot be deleted",
+    "This recipient can't be deleted: it has orders, including deleted ones kept for history",
 
   // Settings errors
   [ErrorCode.SETTINGS_NOT_FOUND]: "Settings not found",
@@ -114,12 +117,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
 
-/** USER_ALREADY_EXISTS -> errors.userAlreadyExists (the locale files use camelCase keys). */
-const errorTranslationKey = (code: string): string =>
-  `errors.${code
-    .toLowerCase()
-    .replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())}`;
-
 // Codes that say nothing specific on their own; the server's detail is the useful part.
 const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
   ErrorCode.VALIDATION_ERROR,
@@ -136,6 +133,17 @@ function serverDetail(error: unknown): string | null {
     .filter(Boolean)
     .join("; ");
   return text || null;
+}
+
+/**
+ * Locale keys are camelCase while error codes are SCREAMING_SNAKE_CASE:
+ * PRODUCT_ALREADY_EXISTS → errors.productAlreadyExists.
+ */
+function errorTranslationKey(errorCode: string): string {
+  const camelCase = errorCode
+    .toLowerCase()
+    .replace(/_([a-z0-9])/g, (_, next: string) => next.toUpperCase());
+  return `errors.${camelCase}`;
 }
 
 /**

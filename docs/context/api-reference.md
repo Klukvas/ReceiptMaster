@@ -2,13 +2,15 @@
 
 **Last Updated:** 2026-11-01
 
-**Total Endpoints:** 92 across 12 controllers. This reference covers all controllers exhaustively.
+**Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
 **Base URL:** `http://localhost:3000/api/v1` (in development; configure via `API_PREFIX` env var)
 
 **API Docs:** `{BASE_URL}/docs` (interactive Swagger UI)
+
+**Contract:** `backend/openapi.json` is generated from the controllers (`yarn openapi:export` in `backend/`; paths there have no `API_PREFIX`). CI's `contract-test` job fails when the committed file differs from the code or a routed handler is undocumented, then generates the frontend types from it and type-checks the frontend. Zod-validated bodies, the JSON/multipart document draft envelope, success bodies and `{ error, errorCode }` failures are documented for the document-config, preset, preview and receipt create/regenerate routes; receipt list/get/void/share/revoke document their projected bodies. POST handlers without `@HttpCode` answer 201 (Nest's default) and are documented that way; only the Telegram and Paddle webhooks set 200 explicitly. These 13 routes were missing from the contract until 2026-10-29: `GET /products/stock-value`, `GET`/`POST /settings/auto-receipt`, `POST /settings/footer`, `GET`/`PUT /settings/document-config`, `GET`/`POST /settings/document-presets`, `GET`/`PUT`/`DELETE /settings/document-presets/:id`, `POST /receipts/preview`, `GET /billing/config`. The Telegram webhook (`tg/webhook`) stays documented as a regular operation.
 
 ---
 
@@ -52,7 +54,7 @@ Authenticates user and returns tokens. Rate-limited to 5 attempts per 60 seconds
 | email | string | yes |
 | password | string | yes |
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
   user: { id, email, createdAt },
@@ -76,6 +78,20 @@ Issues a new access token using a valid stored opaque refresh token. `refresh_to
 string of exactly 128 lowercase hexadecimal characters; malformed bodies return 400 before token
 lookup, and invalid/expired tokens return 401. Logout uses the same validated request body.
 
+A refresh token is **single use**. Redeeming it and storing its successor commit together: of
+concurrent requests with the same token exactly one gets 201 and the others get the same 401
+`UNAUTHORIZED` body as an unknown token; if storing the successor fails, nothing is redeemed and
+the old token still works. An expired token is rejected and left as it is, and so is the token of
+a deactivated user (`isActive = false`).
+
+**Reuse detection.** Every successor belongs to the rotation family its login started. A redeemed
+token presented again within 30 s of its redemption is treated as a lost race between tabs (or a
+retry) and only gets the 401; presented later, the 401 also revokes every live token of that family
+(the session that kept rotating has to log in again; other logins of the user are unaffected).
+
+Throttled to 20 requests per 60 s per client IP (429). Tokens issued from this release on are
+stored as SHA-256 only; tokens issued earlier keep their stored plaintext until they expire (30 days).
+
 **Request Body:**
 ```typescript
 { refresh_token: string }
@@ -92,7 +108,8 @@ lookup, and invalid/expired tokens return 401. Logout uses the same validated re
 
 **Errors:**
 - 400 — Malformed/missing refresh token
-- 401 `UNAUTHORIZED` — Invalid or expired refresh token
+- 401 `UNAUTHORIZED` — Unknown, expired, already redeemed or replayed refresh token, or inactive user
+- 429 — More than 20 refreshes in 60 s from this client IP
 
 ---
 
@@ -100,7 +117,8 @@ lookup, and invalid/expired tokens return 401. Logout uses the same validated re
 
 **POST** `/auth/logout` (requires auth)
 
-Revokes the refresh token.
+Revokes the refresh token. A logged-out token presented later gets a plain 401; only a token that
+a refresh already redeemed counts as a replay.
 
 **Response** (201):
 ```typescript
@@ -158,7 +176,8 @@ Updates user profile information.
 
 **POST** `/auth/change-password` (requires auth)
 
-Changes authenticated user's password.
+Changes authenticated user's password and, in the same transaction, revokes all of the user's
+refresh tokens — including the successor of a refresh that is committing at the same moment.
 
 **Request Body:**
 ```typescript
@@ -169,7 +188,7 @@ Changes authenticated user's password.
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { message: "Password changed successfully" }
 ```
@@ -190,11 +209,31 @@ File: `backend/src/modules/products/products.controller.ts` (8 endpoints)
 
 **POST** `/products` (requires auth)
 
-Creates a new product in user's catalog.
+Creates a new product in user's catalog. Supports idempotency via `Idempotency-Key`.
+
+**Headers:**
+
+| Header | Type | Optional | Notes |
+|--------|------|----------|-------|
+| Idempotency-Key | string | yes | 1–255 visible ASCII characters (400 `VALIDATION_ERROR` otherwise); valid for 24 hours |
+
+**Idempotency (since 2026-10-29):** within 24 hours a repeated key from the same user creates
+nothing and answers 201 with the first response's body plus `X-Idempotency-Replayed: true`, also
+when two requests with the key arrive at once (they are serialized on the key) and also once the
+plan's product limit has been reached (the key is checked before the quota). Only successful creates
+are stored: a refused or failed create is run again on retry. A repeated key with a *different* body
+still replays the first response — the client then PATCHes the difference. Without the header the
+route behaves as before. The key is stored as `product:` + SHA-256 of the key in `idempotency_keys`,
+so it never collides with an order or recipient key of the same value.
 
 **Errors:**
-- 402 `PRODUCT_LIMIT_EXCEEDED` — Free plan limit (10 products)
-- 409 `PRODUCT_ALREADY_EXISTS` — Duplicate name
+- 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
+- 402 `PRODUCT_LIMIT_EXCEEDED` — Plan product limit reached (free: 10, pro: 100). The count excludes
+  soft-deleted products and is taken in the insert's transaction under a per-tenant lock, so two
+  creates racing for the last slot get one 201 and one 402; a rolled-back create frees its slot.
+- 409 `PRODUCT_ALREADY_EXISTS` — Another live (not soft-deleted) product of this user has exactly
+  this name. The partial unique index decides, so of two racing creates one gets 201 and the other
+  409; a refused create stores no `Idempotency-Key` response, so a retry is checked again
 
 **Request Body:**
 ```typescript
@@ -267,11 +306,30 @@ Returns single product.
 
 **PATCH** `/products/:id`
 
-Updates product details.
+Updates only the fields present in the body (`UpdateProductDto`): `name`, `purchase_price_cents`,
+`sale_price_cents`, `currency`, `supplier_id` (`null` clears it), and stock as a precondition write.
+Absent fields are left untouched, so a rename never overwrites stock that orders changed meanwhile.
 
-**Request Body:** Same fields as Create (all optional)
+**Stock contract:** `quantity` must be sent together with `expectedQuantity` (integer ≥ 0, the stock
+the client last saw) and vice versa. The update is one conditional statement that applies only while
+the stored quantity still equals `expectedQuantity`; a request parked behind an order's row lock
+re-checks after that order commits. Nothing in the body is saved on a mismatch.
 
-**Response** (200): `Product`
+```typescript
+{ name: "Renamed" }                          // rename only, stock untouched
+{ quantity: 15, expectedQuantity: 8 }        // set stock to 15 if it is still 8
+```
+
+**Response** (200): the re-read `Product`; an empty body changes nothing and returns it.
+
+**Errors:**
+- 400 `VALIDATION_ERROR` — `quantity` without `expectedQuantity` or vice versa (class-validator
+  errors such as a negative or fractional `expectedQuantity` return 400 `HTTP_EXCEPTION`)
+- 404 `PRODUCT_NOT_FOUND` — Missing, soft-deleted or another tenant's product
+- 409 `PRODUCT_QUANTITY_CONFLICT` — Stock no longer equals `expectedQuantity`; reload with
+  `GET /products/:id` and resend against the current value. **Compatibility change (2026-10-29):**
+  a client sending `quantity` alone now gets 400 instead of a blind overwrite.
+- 409 `PRODUCT_ALREADY_EXISTS` — The new `name` belongs to another live product; nothing is saved
 
 ---
 
@@ -355,7 +413,7 @@ All endpoints require JWT auth. Scoped to authenticated user.
 
 File: `backend/src/modules/suppliers/suppliers.controller.ts` (5 endpoints)
 
-**Supplier ↔ product link.** A product has at most one supplier, stored in `products.supplier_id` (set via `POST/PATCH /products` with `supplier_id`). `Supplier.products` and `product_count` are that link read from the supplier's side; there is no `productIds` on the supplier endpoints (it is ignored if sent). The old `supplier_products` join table is no longer mapped; migration `BackfillProductSupplierFromJoinTable1792300000000` copied its rows into `supplier_id` (oldest supplier wins for a product linked to several) and left the table in place for a later cleanup migration.
+**Supplier ↔ product link.** A product has at most one supplier, stored in `products.supplier_id` (set via `POST/PATCH /products` with `supplier_id`). `Supplier.products` and `product_count` are that link read from the supplier's side; there is no `productIds` on the supplier endpoints (it is ignored if sent). The old `supplier_products` join table is no longer mapped; migration `BackfillProductSupplierFromJoinTable1792500000000` copied its rows into `supplier_id` (oldest supplier wins for a product linked to several) and left the table in place for a later cleanup migration.
 
 ### Create Supplier
 
@@ -452,7 +510,17 @@ File: `backend/src/modules/recipients/recipients.controller.ts` (5 endpoints)
 
 **POST** `/recipients`
 
-Adds new customer to user's recipient list.
+Adds new customer to user's recipient list. Supports idempotency via `Idempotency-Key`.
+
+**Headers:**
+
+| Header | Type | Optional | Notes |
+|--------|------|----------|-------|
+| Idempotency-Key | string | yes | 1–255 visible ASCII characters (400 `VALIDATION_ERROR` otherwise); valid for 24 hours |
+
+Same replay semantics as **Create Product** (24 hours, 201 + `X-Idempotency-Replayed: true`,
+concurrent repeats create one recipient, only successful creates are stored; stored key
+`recipient:` + SHA-256). Without the header the route behaves as before.
 
 **Request Body:**
 ```typescript
@@ -470,6 +538,7 @@ Adds new customer to user's recipient list.
 **Response** (201): `Recipient`
 
 **Errors:**
+- 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
 - 400 validation errors — blank name, over-long values, malformed phone or email
 
@@ -510,12 +579,16 @@ Paginated list of user's recipients.
 
 Updates recipient details.
 
-**Request Body:** Same fields and validation as Create (all optional)
+**Request Body:** Same fields as Create (all optional); `null` clears `email`, `phone` or `address`
+(the onboarding wizard sends only changed fields this way)
 
 **Response** (200): `Recipient`
 
 **Errors:**
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email belongs to another recipient of this user (saving a recipient's own email is fine)
+- 400 `VALIDATION_ERROR` — `name: null` (the name is required and cannot be cleared); nothing is
+  saved. Other class-validator failures return 400 `HTTP_EXCEPTION`
+- 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
 
 ---
 
@@ -523,9 +596,13 @@ Updates recipient details.
 
 **DELETE** `/recipients/:id`
 
-Soft-deletes recipient.
+Permanently deletes a recipient that has no orders. Recipients have no soft delete.
 
-**Response** (200): `{ ok: true }`
+**Response** (200): empty body
+
+**Errors:**
+- 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
+- 409 `RECIPIENT_HAS_ORDERS` — The recipient has an order, live or soft-deleted; nothing is deleted
 
 **Errors:**
 - 409 `RECIPIENT_HAS_ORDERS` — The recipient still has orders and cannot be deleted
@@ -580,6 +657,12 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 }
 ```
 
+`OrderItem` carries `unit_cost_cents: number | null` — the product's purchase cost frozen when the
+draft line was written. Lines created before cost snapshots hold an estimate: the product's cost when
+they were backfilled. Null = unknown, which now remains only for a negative product cost or a line
+whose product belongs to another tenant. It appears only in the owner's order/receipt JSON; frozen documents, PDFs and the public share page never include
+it. The internal `unit_cost_estimated` flag is never returned.
+
 **Special Response Header:**
 - `X-Idempotency-Replayed: true` — Returned from cache (original response status is reused)
 
@@ -614,8 +697,8 @@ Paginated list of user's orders.
 | minAmount | number | - | Min total in cents |
 | maxAmount | number | - | Max total in cents |
 | productId | string | - | Filter by product UUID |
-| startDate | string | - | ISO date (e.g., 2026-01-01) |
-| endDate | string | - | ISO date. A date-only value (`2026-11-01`) covers that whole day (UTC, up to 23:59:59.999); a full timestamp is used as given |
+| startDate | string | - | ISO date (e.g., 2026-01-01): from the start of that UTC day |
+| endDate | string | - | ISO date (e.g., 2026-01-31): includes that whole UTC day. A full timestamp is an exact upper bound |
 
 **Response** (200):
 ```typescript
@@ -655,7 +738,9 @@ Modifies draft order. Cannot update once confirmed.
 
 **Response** (200): `Order`
 
-Replaced items restore removed products' stock and reserve the new items atomically.
+Replaced items restore removed products' stock and reserve the new items atomically. A line with the
+same product and quantity as before keeps its `unit_cost_cents` (including null); any other line
+captures the product's current purchase cost.
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — Duplicate product IDs or mixed currencies
@@ -667,15 +752,16 @@ Replaced items restore removed products' stock and reserve the new items atomica
 
 **PATCH** `/orders/:id/confirm`
 
-Locks order, prevents further edits. Required before generating receipt.
+DRAFT → CONFIRMED under the order row lock; prevents further edits. Required before generating a
+receipt. A cancel that committed first wins (the confirm then gets 400). Line costs are not re-read.
 
 If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt on confirm](#auto-generate-receipt-on-confirm)), the default receipt is queued right after the status change, exactly as an empty-body `POST /receipts/orders/:orderId/receipt`. A generation failure is logged and never fails the confirm; the order stays confirmed and can be generated manually.
 
 **Response** (200): `Order` (status updated to `confirmed`)
 
 **Errors:**
-- 400 `ORDER_ALREADY_CONFIRMED` — Already confirmed
-- 400 `ORDER_CANNOT_BE_MODIFIED` — In cancelled state
+- 404 `ORDER_NOT_FOUND`
+- 400 `ORDER_CANNOT_BE_MODIFIED` — Not DRAFT (already confirmed or cancelled)
 
 ---
 
@@ -683,11 +769,20 @@ If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt
 
 **PATCH** `/orders/:id/cancel`
 
-Marks the order as cancelled and returns its reserved quantities to the products (once; deleting a cancelled order does not restore them again).
+Marks a DRAFT or CONFIRMED order `cancelled`. It is **not** a deletion: the order stays listed and
+keeps its stock reservation — only `DELETE /orders/:id` returns stock (exactly once).
 
-**Response** (200): `Order` (status updated to `cancelled`)
+Cancelling a CONFIRMED order, in the same transaction, voids every non-void receipt of the order
+(`status: void`, `void_reason: "order_cancelled"`, `voided_at`), revokes its public share link and
+drops any pending candidate/replacement, so a delayed worker can no longer promote it. The voided PDF
+stays downloadable by the owner as history; a receipt already voided by hand keeps its own reason.
+Afterwards generate/regenerate/share/void/repair on that receipt are rejected and the order can be
+neither confirmed nor edited.
+
+**Response** (200): `Order` (status `cancelled`, its receipts `void`)
 
 **Errors:**
+- 404 `ORDER_NOT_FOUND`
 - 400 `ORDER_ALREADY_CANCELLED` — Already cancelled
 
 ---
@@ -716,7 +811,8 @@ Deletes an order.
 
 **POST** `/orders/batch-approve`
 
-Confirms multiple draft orders in one call. With `autoGenerateReceipt` on, a default receipt is queued for each approved order after the transaction commits (sequentially, failures logged per order and never fail the response).
+Confirms multiple draft orders in one call. The orders are row-locked in id order and must all still
+be DRAFT under the lock (a concurrent cancel wins). With `autoGenerateReceipt` on, a default receipt is queued for each approved order after the transaction commits (sequentially, failures logged per order and never fail the response).
 
 **Request Body:**
 ```typescript
@@ -725,7 +821,7 @@ Confirms multiple draft orders in one call. With `autoGenerateReceipt` on, a def
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { approved: number }
 ```
@@ -748,7 +844,7 @@ Soft-deletes multiple orders.
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { deleted: number }
 ```
@@ -757,23 +853,45 @@ Soft-deletes multiple orders.
 
 ### Dashboard Metrics
 
-File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (7 of 17 total)
+File: `backend/src/modules/orders/orders.controller.ts` — dashboard routes (8 of 17 total), served by
+`OrdersDashboardService` (`orders-dashboard.service.ts`)
+
+"Revenue" in these routes is **profit**: Σ (unit price − `order_items.unit_cost_cents`) × qty over
+confirmed, non-deleted orders. It never reads the product's current purchase price, so changing a
+product's cost does not rewrite history. Lines from before cost snapshots count with their backfilled
+estimate, so they are included and not reported as unknown. Lines whose cost is unknown (NULL, now only
+a negative product cost or a line whose product belongs to another tenant) are left out of the sum and
+reported instead — an unknown cost is never
+counted as zero. Every profit payload carries:
+
+```typescript
+type ProfitCompleteness = {
+  unknown_cost_lines: number,          // lines excluded for unknown cost
+  unknown_cost_turnover_cents: number, // their line totals
+  profit_complete: boolean,            // unknown_cost_lines === 0
+}
+```
+
+The profit field is `number | null`: null when no line of the group has a known cost. Groups are
+sorted by profit `DESC NULLS LAST`. Turnover routes are unchanged and count every line.
 
 #### Daily Revenue (Sparkline Data)
 
 **GET** `/orders/dashboard/daily-revenue`
 
-Time-series revenue data for sparkline/chart (last N days).
+Time-series profit and turnover for sparkline/chart (last N days).
 
 **Query Params:**
-- `days` (number, optional) — Number of days to retrieve. Default: 7. Max: 365.
+- `days` (number, optional) — Number of days to retrieve. Default: 7.
 
 **Response** (200):
 ```typescript
 [
   {
-    date: string,          // ISO date, e.g., "2026-08-20"
-    revenue_cents: number
+    date: string,                // "2026-08-20"
+    revenue_cents: number | null, // 0 for a day without orders; null when every line that day has an unknown cost
+    turnover_cents: number,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -805,7 +923,7 @@ Revenue breakdown by product across all orders.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200):
 ```typescript
@@ -813,8 +931,10 @@ Revenue breakdown by product across all orders.
   {
     product_id: string,
     product_name: string,
-    revenue_cents: number,
-    order_count: number
+    total_revenue_cents: number | null,
+    total_quantity: number,
+    currency: string,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -829,7 +949,7 @@ Revenue breakdown by customer (recipient).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200):
 ```typescript
@@ -837,8 +957,10 @@ Revenue breakdown by customer (recipient).
   {
     recipient_id: string,
     recipient_name: string,
-    revenue_cents: number,
-    order_count: number
+    total_revenue_cents: number | null,
+    total_orders: number,
+    currency: string,
+    ...ProfitCompleteness
   }
 ]
 ```
@@ -853,13 +975,15 @@ All-time or date-range total revenue.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TotalRevenueDto
 ```typescript
 {
-  total_cents: number,
-  currency: string
+  total_revenue_cents: number | null, // 0 (complete) when there are no confirmed lines
+  total_orders: number,
+  currency: string,
+  ...ProfitCompleteness
 }
 ```
 
@@ -873,7 +997,7 @@ Product quantity/count breakdown (complement to revenue).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TurnoverByProductDto[]
 
@@ -887,7 +1011,7 @@ Order count breakdown by customer.
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TurnoverByRecipientDto[]
 
@@ -901,7 +1025,7 @@ Total order count (optionally date-filtered).
 
 **Query Params:**
 - `startDate` (string, ISO date, optional)
-- `endDate` (string, ISO date, optional)
+- `endDate` (string, ISO date, optional; a date includes that whole UTC day, a full timestamp is an exact upper bound)
 
 **Response** (200): See `backend/src/modules/orders/dto/dashboard-response.dto.ts` TotalTurnoverDto
 
@@ -922,23 +1046,24 @@ Generates a frozen PDF receipt/invoice for a confirmed order. Optional config/pr
 **Path Params:**
 - `orderId` (string, UUID) — Order to generate receipt for
 
-**Response** (201):
+**Response** (201): `ReceiptProjection`, e.g.
 ```typescript
 {
   id: string,
   order_id: string,
-  user_id: string,
   status: "processing",   // Durable intent committed; transitions to "generated" or "failed"
   pdf_url: null,          // Populated when generation completes
   progress: 0,            // 0-100
-  created_at: Date,
-  updated_at: Date
+  created_at: string,
+  active_revision: number,
+  replacement_status: null
+  // …plus number, hash, template_id/version, error_message, voided_at, void_reason, public_token, replacement_error
 }
 ```
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND` — Order doesn't exist or not confirmed
-- 409 `RECEIPT_ALREADY_EXISTS` — Receipt already generated for this order
+- 409 `RECEIPT_ALREADY_EXISTS` — Receipt already generated for this order; also 409 when the selected preset changed since `presetRevision`
 - 402 `TEMPLATE_PLAN_RESTRICTED` — Template not allowed on user's plan
 
 Receipt creation commits a durable outbox entry with the receipt before publishing to Redis.
@@ -958,7 +1083,7 @@ Forces compact template regardless of user's template setting.
 **Path Params:**
 - `orderId` (string, UUID)
 
-**Response** (201): `Receipt` (same shape as Create Receipt)
+**Response** (201): `ReceiptProjection` (same shape as Create Receipt)
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND`
@@ -976,7 +1101,7 @@ Forces standard template regardless of user's template setting.
 **Path Params:**
 - `orderId` (string, UUID)
 
-**Response** (201): `Receipt`
+**Response** (201): `ReceiptProjection`
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND`
@@ -996,13 +1121,15 @@ Paginated list of all user's generated receipts.
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
 | offset | number | 0 | |
-| limit | number | 10 | |
+| limit | number | 20 | At most 100 |
 
-**Response** (200):
+**Response** (200): `ReceiptListResponse`
 ```typescript
 {
-  data: Receipt[],
-  meta: { total: number, page: number, limit: number }
+  data: ReceiptProjection[],
+  total: number,
+  offset: number,
+  limit: number
 }
 ```
 
@@ -1033,7 +1160,7 @@ Retrieves receipt metadata and current status.
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200): `Receipt`
+**Response** (200): `ReceiptProjection`
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1071,7 +1198,7 @@ Sends generated receipt to physical printer.
 **Query Params:**
 - `printer` (string, optional) — Printer name; defaults to system default
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { ok: true }
 ```
@@ -1109,12 +1236,12 @@ Voids a receipt and unlocks its order for editing.
 **Path Params:**
 - `id` (string, UUID)
 
-**Request Body:**
+**Request Body** (optional, `ReceiptVoidRequest`):
 ```typescript
-{ reason: string }  // Required: reason for voiding
+{ reason?: string }  // Not validated; omitted leaves void_reason empty; at most 500 characters
 ```
 
-**Response** (200): `Receipt` (status updated)
+**Response** (201): `ReceiptProjection` (status updated)
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1130,7 +1257,9 @@ Empty body or `{ mode: "reproduce" }` queues reproduction from the frozen active
 
 Explicit replacement accepts `{ mode: "replace", expectedActiveRevision, config?, presetId?, presetRevision?, overrides?, logoAction?, confirmReconstruction? }` as JSON or the multipart draft envelope. Config and preset selection are mutually exclusive. Replacement of a legacy document without frozen transaction input requires `confirmReconstruction: true`; it does not assert historical fidelity. Reproduce rejects config/logo changes. A stale revision or running replacement returns 409.
 
-Returns a small receipt status projection. Generated status/PDF remain active until a successful guarded promotion. Poll `replacement_status` (`processing`/`failed`/null) and `active_revision`; a successful replacement changes the PDF served by existing share links. Failure never deletes the old PDF or restores revoked tokens/void status.
+**Response** (201): `ReceiptProjection`. Generated status/PDF remain active until a successful guarded promotion. Poll `replacement_status` (`processing`/`failed`/null) and `active_revision`; a successful replacement changes the PDF served by existing share links. Failure never deletes the old PDF or restores revoked tokens/void status.
+
+**Errors:** 400 invalid body or reproduce with new configuration; 402 `TEMPLATE_PLAN_RESTRICTED`; 404 `RECEIPT_NOT_FOUND`; 409 stale revision/preset, running replacement or `RECONSTRUCTION_REQUIRED`; 413 request above 6 MiB or logo above 5 MiB.
 
 ---
 
@@ -1140,7 +1269,7 @@ Returns a small receipt status projection. Generated status/PDF remain active un
 
 Generates a test PDF using current user's settings (no order required).
 
-**Response** (200): Binary PDF file
+**Response** (201): Binary PDF file
 - Content-Type: application/pdf
 - Inline preview of how receipts will look
 
@@ -1159,12 +1288,11 @@ the same winning token; a concurrent void cannot be overwritten by a late share 
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200):
+**Response** (201): `ReceiptShareResponse`
 ```typescript
 {
   token: string,           // Share token
-  public_url: string,      // Full public URL to view PDF
-  expires_at?: Date
+  url: string              // Full public URL (`<FRONTEND_URL>/r/<token>`)
 }
 ```
 
@@ -1183,7 +1311,7 @@ return 404. Voiding also clears the share token.
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (201): `Receipt` with `public_token: null`
+**Response** (201): `ReceiptProjection` with `public_token: null`
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
@@ -1958,7 +2086,7 @@ No auth required. Returns API status.
 
 ## Error Response Format
 
-All errors follow this shape:
+All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 
 ```typescript
 {
@@ -1966,6 +2094,8 @@ All errors follow this shape:
   errorCode: string   // Machine-readable code (e.g., "ORDER_NOT_FOUND", "PRODUCT_LIMIT_EXCEEDED")
 }
 ```
+
+`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
 
 Common HTTP status codes:
 
@@ -2011,7 +2141,11 @@ To fetch next page: `offset = current_offset + limit`
 
 - Global: 30 requests per 60 seconds per IP
 - Auth endpoints (login/register): 5 requests per 60 seconds per IP
+- `/auth/refresh`: 20 requests per 60 seconds per IP
 - Paddle webhook: 60 requests per 60 seconds (per webhook endpoint)
+
+"IP" is the client address the frontend nginx saw: the API trusts exactly one proxy hop
+(`X-Forwarded-For` entries a client writes itself are ignored).
 
 Returns 429 (Too Many Requests) when limit exceeded.
 
@@ -2062,7 +2196,7 @@ Emitted if generation fails:
 All routes require JWT auth. New read routes reject unknown query parameters; UUID paths, complete configs, partial overrides and write bodies use strict Zod validation. Complete V1 config includes company fields, template ID, document language, automatic/custom title (custom text must contain non-whitespace characters; literal `Invoice` stays custom), footer/accent/terms, tenant logo reference/layout, per-contact visibility and bounded Intl formatting. Unsupported values are retained. Logo bytes/storage keys are never config fields.
 
 - `GET /settings/document-config` → `{ data: { config, revision } }`, without creating a settings row.
-- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with `errorCode: "DOCUMENT_REVISION_CONFLICT"`; the UI shows the reload/compare/discard block only for that code, while other errors (validation, limits) appear next to the Save button.
+- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. A stale save returns 409 with `errorCode: "DOCUMENT_REVISION_CONFLICT"` (the current revision is not included, so clients reload it with `GET`); the UI shows the reload/compare/discard block only for that code, while other errors (validation, limits) appear next to the Save button. Preset update/delete and receipt regeneration report stale revisions as a plain 409 (`HTTP_EXCEPTION`).
 - `GET /settings/document-presets` → `{ data: [{ id, name, revision, updated_at }] }` summaries.
 - `GET /settings/document-presets/:id` → editable `{ data: { id, name, revision, config } }`.
 - `POST /settings/document-presets` → create with `name` and draft.

@@ -9,6 +9,10 @@ import {
 import { Response } from "express";
 import { ApiErrorResponse } from "../errors/ApiError";
 
+// The text of an unexpected error (SQL, driver detail, file paths) stays in the
+// log; the client only ever gets this.
+const INTERNAL_ERROR_MESSAGE = "Internal server error";
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -52,7 +56,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       // Обычные JavaScript ошибки
       errorResponse = {
-        error: exception.message || "Internal server error",
+        error: INTERNAL_ERROR_MESSAGE,
         errorCode: "INTERNAL_SERVER_ERROR",
       };
     } else {
@@ -67,6 +71,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: errorResponse.error,
       errorCode: errorResponse.errorCode,
       status,
+      detail: exception instanceof Error ? exception.message : exception,
       stack: exception instanceof Error ? exception.stack : undefined,
     });
 

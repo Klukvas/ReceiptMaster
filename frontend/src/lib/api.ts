@@ -1,6 +1,15 @@
 import { isProtectedPath, markSessionExpired } from "./session-expiry";
-import axios from "axios";
 import i18n from "./i18n";
+import axios, { type InternalAxiosRequestConfig } from "axios";
+import {
+  ACCESS_TOKEN_KEY,
+  type StoredSession,
+  clearStoredSession,
+  readStoredSession,
+  resolveRefreshFailure,
+  storeSession,
+} from "./auth-session";
+import type { components } from "./api-types.generated";
 
 export type {
   Product,
@@ -49,6 +58,21 @@ import type {
   User,
 } from "./api-types";
 
+type UpdateProductFields = Omit<
+  components["schemas"]["UpdateProductDto"],
+  "quantity" | "expectedQuantity"
+>;
+
+/**
+ * A partial product update. Stock is never sent alone: `quantity` travels with
+ * the `expectedQuantity` it replaces (409 when the stored stock moved).
+ */
+export type UpdateProductRequest = UpdateProductFields &
+  (
+    | { quantity?: never; expectedQuantity?: never }
+    | { quantity: number; expectedQuantity: number }
+  );
+
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
 const API_KEY = import.meta.env.VITE_API_KEY || "your-secret-key-here";
@@ -65,7 +89,7 @@ export const api = axios.create({
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("auth_token");
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -76,7 +100,13 @@ api.interceptors.request.use(
   },
 );
 
-// Add response interceptor to handle auth errors with refresh token retry
+// Response interceptor: one refresh per tab at a time, coordinated with other
+// tabs only through the shared token storage (see auth-session.ts).
+type RetriableRequest = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+  _sessionRetry?: boolean;
+};
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;
@@ -94,10 +124,10 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
+// The only place that ends a session on the client.
 const clearAuthAndRedirect = () => {
   document.cookie = "auth_token=; Max-Age=0; path=/; SameSite=Lax";
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("refresh_token");
+  clearStoredSession();
   delete api.defaults.headers.common["Authorization"];
   markSessionExpired();
   // On a private page, reload in place: the login screen appears there and
@@ -109,10 +139,55 @@ const clearAuthAndRedirect = () => {
   window.location.href = "/";
 };
 
+const bearerOf = (request: RetriableRequest): string | null => {
+  const header = request.headers?.Authorization;
+  return typeof header === "string" && header.startsWith("Bearer ")
+    ? header.slice("Bearer ".length)
+    : null;
+};
+
+const retryWith = (request: RetriableRequest, accessToken: string) => {
+  api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+  request.headers.Authorization = `Bearer ${accessToken}`;
+  return api(request);
+};
+
+const refreshAndRetry = async (
+  originalRequest: RetriableRequest,
+  sent: StoredSession & { refreshToken: string },
+) => {
+  originalRequest._retry = true;
+  isRefreshing = true;
+  try {
+    const response = await api.post<AuthResponse>("/auth/refresh", {
+      refresh_token: sent.refreshToken,
+    });
+    const { access_token, refresh_token } = response.data;
+    storeSession({ accessToken: access_token, refreshToken: refresh_token });
+    processQueue(null, access_token);
+    return retryWith(originalRequest, access_token);
+  } catch (refreshError) {
+    const status = axios.isAxiosError(refreshError)
+      ? refreshError.response?.status
+      : undefined;
+    const outcome = await resolveRefreshFailure(sent, status);
+    if (outcome.kind === "adopt") {
+      // Another tab won the rotation; its session is ours too.
+      processQueue(null, outcome.accessToken);
+      return retryWith(originalRequest, outcome.accessToken);
+    }
+    processQueue(refreshError, null);
+    if (outcome.kind === "signed-out") clearAuthAndRedirect();
+    return Promise.reject(refreshError);
+  } finally {
+    isRefreshing = false;
+  }
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as RetriableRequest | undefined;
     const status = error.response?.status;
     const url = originalRequest?.url || "";
     const isAuthEndpoint =
@@ -120,51 +195,53 @@ api.interceptors.response.use(
       url.includes("/auth/register") ||
       url.includes("/auth/refresh");
 
-    if (status === 401 && !isAuthEndpoint && !originalRequest._retry) {
-      const refreshToken = localStorage.getItem("refresh_token");
-
-      if (!refreshToken) {
-        clearAuthAndRedirect();
-        return Promise.reject(error);
-      }
-
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const response = await api.post<AuthResponse>("/auth/refresh", {
-          refresh_token: refreshToken,
-        });
-        const { access_token, refresh_token: newRefreshToken } = response.data;
-
-        localStorage.setItem("auth_token", access_token);
-        localStorage.setItem("refresh_token", newRefreshToken);
-        api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-        processQueue(null, access_token);
-        return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        clearAuthAndRedirect();
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    if (
+      status !== 401 ||
+      !originalRequest ||
+      isAuthEndpoint ||
+      originalRequest._retry
+    ) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    const stored = readStoredSession();
+    // Another tab (or an earlier refresh here) already stored a newer access
+    // token than the one this request carried: retry once with it, no refresh.
+    if (
+      !originalRequest._sessionRetry &&
+      stored.accessToken &&
+      stored.accessToken !== bearerOf(originalRequest)
+    ) {
+      originalRequest._sessionRetry = true;
+      return retryWith(originalRequest, stored.accessToken);
+    }
+
+    const { refreshToken } = stored;
+    if (!refreshToken) {
+      clearAuthAndRedirect();
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      }).then((token) => {
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return api(originalRequest);
+      });
+    }
+
+    return refreshAndRetry(originalRequest, { ...stored, refreshToken });
   },
 );
+
+type CreateOptions = { readonly idempotencyKey?: string };
+
+const idempotencyConfig = ({ idempotencyKey }: CreateOptions) =>
+  idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {};
+
+/** Changed fields only; `null` clears email, phone or address (UpdateRecipientDto). */
+export type UpdateRecipientRequest = components["schemas"]["UpdateRecipientDto"];
 
 // API methods
 export const authApi = {
@@ -197,13 +274,15 @@ export const productsApi = {
 
   getById: (id: string) => api.get<Product>(`/products/${id}`),
 
-  create: (data: Omit<Product, "id" | "created_at" | "updated_at">) =>
-    api.post<Product>("/products", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: Omit<Product, "id" | "created_at" | "updated_at">,
+    options: CreateOptions = {},
+  ) => api.post<Product>("/products", data, idempotencyConfig(options)),
 
-  update: (
-    id: string,
-    data: Partial<Omit<Product, "id" | "created_at" | "updated_at">>,
-  ) => api.patch<Product>(`/products/${id}`, data),
+  /** Send only changed fields; a quantity needs the expectedQuantity it replaces. */
+  update: (id: string, data: UpdateProductRequest) =>
+    api.patch<Product>(`/products/${id}`, data),
 
   delete: (id: string) => api.delete(`/products/${id}`),
 
@@ -224,13 +303,14 @@ export const recipientsApi = {
 
   getById: (id: string) => api.get<Recipient>(`/recipients/${id}`),
 
-  create: (data: Omit<Recipient, "id" | "created_at" | "updated_at">) =>
-    api.post<Recipient>("/recipients", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: Omit<Recipient, "id" | "created_at" | "updated_at">,
+    options: CreateOptions = {},
+  ) => api.post<Recipient>("/recipients", data, idempotencyConfig(options)),
 
-  update: (
-    id: string,
-    data: Partial<Omit<Recipient, "id" | "created_at" | "updated_at">>,
-  ) => api.patch<Recipient>(`/recipients/${id}`, data),
+  update: (id: string, data: UpdateRecipientRequest) =>
+    api.patch<Recipient>(`/recipients/${id}`, data),
 
   delete: (id: string) => api.delete(`/recipients/${id}`),
 };

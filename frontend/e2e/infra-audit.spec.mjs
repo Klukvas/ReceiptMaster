@@ -38,10 +38,14 @@ export const run = async () => {
   const verificationJobs = Object.entries(workflow.jobs).filter(
     ([name]) => !["build-and-deploy", "deploy-production"].includes(name),
   );
+  // No job installs from a private registry any more, so the workflow token
+  // needs no `packages` scope: every scope it grants must stay read-only.
   results.check(
-    "15: PR verification has read-only package access and no production secrets",
+    "15: PR verification has a read-only token and no production secrets",
     workflow.permissions.contents === "read" &&
-      workflow.permissions.packages === "read" &&
+      Object.values(workflow.permissions).every(
+        (access) => access === "read",
+      ) &&
       verificationJobs.every(([, job]) =>
         [...JSON.stringify(job).matchAll(/secrets\.([A-Z_]+)/g)].every(
           (match) => match[1] === "GITHUB_TOKEN",
@@ -102,11 +106,12 @@ export const run = async () => {
     ),
     "Missing Paddle build settings",
   );
+  // Dependencies come from the public registry only, so the build takes no
+  // package token at all (no build arg, secret mount or .npmrc).
   results.check(
-    "16: build context excludes local env files and package token uses secret mount",
+    "16: build context excludes local env files and the image build takes no package token",
     read("../.dockerignore").includes(".env.*") &&
-      dockerfile.includes("--mount=type=secret,id=github_token") &&
-      !dockerfile.includes("ARG GITHUB_TOKEN"),
+      !/github_token|\.npmrc/i.test(dockerfile),
     "Environment or package credentials can enter an image layer",
   );
   const compiled = ts.transpileModule(

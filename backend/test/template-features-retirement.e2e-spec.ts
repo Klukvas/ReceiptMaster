@@ -1,5 +1,6 @@
 import { DataSource, EntityManager, EntityTarget } from "typeorm";
 import { mkdirSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import {
   createTemplateFixture,
@@ -219,7 +220,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
   ) {
     const dir =
       process.env.TEMPLATE_EVIDENCE ||
-      "temp/template-features-20261015-225300/fix4";
+      join(tmpdir(), "receiptmaster-template-features", "fix4");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, `locks-${name}.json`),

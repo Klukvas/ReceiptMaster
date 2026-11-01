@@ -12,7 +12,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -35,7 +36,8 @@
     "docker:test:down": "docker-compose -f docker-compose.test.yml down",
     "docker:test:logs": "docker-compose -f docker-compose.test.yml logs -f",
     "dev": "yarn docker:up && yarn docker:init",
-    "openapi:export": "nest build && node dist/scripts/generate-openapi.js"
+    "openapi:export": "nest build && node dist/openapi/generate-openapi.js",
+    "openapi:check": "nest build && node dist/openapi/generate-openapi.js --check"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
@@ -116,7 +118,16 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)sx?$": "ts-jest"
+      "^.+\\.(t|j)sx?$": [
+        "ts-jest",
+        {
+          "diagnostics": {
+            "exclude": [
+              "**/frontend/src/**"
+            ]
+          }
+        }
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",

@@ -128,67 +128,60 @@ describe("SubscriptionService", () => {
     });
   });
 
-  // ─── assertCanCreateProduct ───
+  // ─── assertCanCreateProductInTx ───
 
-  describe("assertCanCreateProduct", () => {
-    it("should pass when under free limit", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("free"));
-      productRepo.count.mockResolvedValue(5);
+  describe("assertCanCreateProductInTx", () => {
+    const txManager = (plan: PlanName | null, count: number) =>
+      ({
+        query: jest.fn().mockResolvedValue([]),
+        findOne: jest
+          .fn()
+          .mockResolvedValue(plan ? makeSubscription(plan) : null),
+        count: jest.fn().mockResolvedValue(count),
+      }) as any;
+
+    it("takes the per-user product-quota lock before reading the plan", async () => {
+      const manager = txManager("free", 5);
 
       await expect(
-        service.assertCanCreateProduct(userId),
+        service.assertCanCreateProductInTx(manager, userId),
       ).resolves.toBeUndefined();
+
+      expect(manager.query).toHaveBeenCalledWith(
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+        ["product-quota", userId],
+      );
+      expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(
+        manager.findOne.mock.invocationCallOrder[0],
+      );
+      expect(manager.count).toHaveBeenCalledWith(Product, {
+        where: { user_id: userId },
+      });
     });
 
-    it("should throw when free limit reached (10)", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("free"));
-      productRepo.count.mockResolvedValue(10);
-
-      await expect(service.assertCanCreateProduct(userId)).rejects.toThrow(
-        ApiErrorResponse,
-      );
-
+    it("throws PRODUCT_LIMIT_EXCEEDED at the free limit", async () => {
       await expect(
-        service.assertCanCreateProduct(userId),
+        service.assertCanCreateProductInTx(txManager("free", 10), userId),
+      ).rejects.toMatchObject({
+        statusCode: 402,
+        errorCode: "PRODUCT_LIMIT_EXCEEDED",
+      });
+    });
+
+    it("treats a missing subscription row as free without creating one", async () => {
+      await expect(
+        service.assertCanCreateProductInTx(txManager(null, 10), userId),
       ).rejects.toMatchObject({ errorCode: "PRODUCT_LIMIT_EXCEEDED" });
+      expect(subscriptionRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it("should throw when free limit exceeded", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("free"));
-      productRepo.count.mockResolvedValue(15);
-
-      await expect(service.assertCanCreateProduct(userId)).rejects.toThrow(
-        ApiErrorResponse,
-      );
-    });
-
-    it("should pass when pro limit not reached", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("pro"));
-      productRepo.count.mockResolvedValue(50);
+    it("skips counting for the unlimited business plan", async () => {
+      const manager = txManager("business", 99999);
 
       await expect(
-        service.assertCanCreateProduct(userId),
+        service.assertCanCreateProductInTx(manager, userId),
       ).resolves.toBeUndefined();
-    });
-
-    it("should throw when pro limit reached (100)", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("pro"));
-      productRepo.count.mockResolvedValue(100);
-
-      await expect(service.assertCanCreateProduct(userId)).rejects.toThrow(
-        ApiErrorResponse,
-      );
-    });
-
-    it("should always pass for business plan (unlimited)", async () => {
-      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("business"));
-      productRepo.count.mockResolvedValue(99999);
-
-      await expect(
-        service.assertCanCreateProduct(userId),
-      ).resolves.toBeUndefined();
-      // count should not even be called when limit is null
-      expect(productRepo.count).not.toHaveBeenCalled();
+      expect(manager.count).not.toHaveBeenCalled();
     });
   });
 

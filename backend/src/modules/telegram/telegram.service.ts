@@ -16,6 +16,8 @@ import {
 import { UserSession, UserState } from "./interfaces/cart.interface";
 import { runWithTenant } from "../../common/tenancy/tenant-context";
 import { CacheService } from "../../common/services/cache.service";
+import { dashboardCachePattern } from "../orders/dashboard-cache";
+import { snapshotCost } from "../orders/order-item-cost";
 
 // Session TTL in seconds (4 hours) — Redis handles expiration
 const SESSION_TTL_SECONDS = 4 * 60 * 60;
@@ -309,9 +311,14 @@ export class TelegramService {
 
   /** Create order from Telegram with transaction and locking */
   async createOrderFromTelegram(dto: CreateTelegramOrderDto): Promise<Order> {
-    return runWithTenant(this.botOwnerUserId, () =>
+    const order = await runWithTenant(this.botOwnerUserId, () =>
       this.createOrderInTenant(dto),
     );
+    // Telegram orders are created confirmed, so they change the owner's dashboard.
+    await this.cacheService.delByPattern(
+      dashboardCachePattern(this.botOwnerUserId),
+    );
+    return order;
   }
 
   private async createOrderInTenant(
@@ -384,6 +391,7 @@ export class TelegramService {
           product_id: p.id,
           product_name: p.name,
           unit_price_cents: p.sale_price_cents,
+          unit_cost_cents: snapshotCost(p),
           qty: it.qty,
           line_total_cents: lineTotal,
           user_id: this.botOwnerUserId,

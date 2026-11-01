@@ -43,7 +43,11 @@ export class CreateProductDto {
   @IsEnum(Currency)
   currency: Currency;
 
-  @ApiPropertyOptional({ description: "ID поставщика", example: "uuid" })
+  @ApiPropertyOptional({
+    description: "ID поставщика (null снимает поставщика)",
+    example: "uuid",
+    nullable: true,
+  })
   @IsOptional()
   @IsUUID()
   supplier_id?: string | null;

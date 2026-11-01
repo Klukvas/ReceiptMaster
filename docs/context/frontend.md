@@ -13,7 +13,7 @@ Root: `/Users/andreypavlenko/Desktop/Projects/b2c/market`
 frontend/
 ├── e2e/                      # Browser regression suite — see frontend/e2e/README.md
 ├── src/
-│   ├── main.tsx              # App entry point (initializes React 19, loads i18n)
+│   ├── main.tsx              # App entry point (initializes React 19, loads i18n, error boundary)
 │   ├── App.tsx               # Provider setup + routing (React Router 7.8)
 │   ├── pages/                # Page components (lazy-loaded for code splitting)
 │   ├── components/           # Organized by feature (orders/, products/, ui/, etc.)
@@ -21,7 +21,7 @@ frontend/
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
 │   ├── providers/            # Context providers (PaddleProvider for billing)
-│   ├── lib/                  # Utilities (api.ts, api-errors.ts, i18n.ts)
+│   ├── lib/                  # Utilities (api.ts, api-errors.ts, chunk-load.ts, i18n.ts)
 │   └── locales/              # i18next translations (en, ru, uk)
 ├── package.json
 ├── vite.config.ts
@@ -35,6 +35,20 @@ frontend/
 - Renders React app into `#root`
 - Loads i18n (lines 4–5) **before** `<App />`
 - Strict mode on for dev
+- Wraps `<App />` in `AppErrorBoundary`, so nothing that throws while rendering leaves a blank page
+
+### Render failures: `components/common/AppErrorBoundary.tsx`
+
+The only error boundary, around the whole app (`App.tsx` itself has just `Suspense`). A tab left open
+across a deploy asks for a lazy-route chunk that no longer exists, and `React.lazy` rethrows that
+during render. `lib/chunk-load.ts` recognises the failure (`isChunkLoadError` knows the Chromium,
+Firefox, Safari and Vite preload wording). The boundary keeps `PageSpinner` up and reloads once,
+which works because nginx serves `index.html` with `no-cache` and so returns the new chunk names.
+`claimChunkReload` allows one reload per `CHUNK_RELOAD_GUARD_MS` (60 s, in `sessionStorage`), and
+refuses when storage is unavailable, since an unguarded reload could loop. A chunk still failing
+after that, or any other render error, shows `ErrorFallback` (`appError.*`) with a Reload button;
+the detail goes to `console.error` only. The fallback replaces the whole tree, so it has no links
+and a reload is the way out. Errors in event handlers and queries never reach it.
 
 ### App Structure: `App.tsx`
 **Provider stack (top→down):**
@@ -93,28 +107,42 @@ frontend/
 **Request interceptor** (lines 62–73):
 - Adds `Authorization: Bearer {auth_token}` from `localStorage.getItem('auth_token')`
 
-**Response interceptor** (lines 101–156):
-- Handles 401 (Unauthorized) with refresh-token flow:
-  - Gets `refresh_token` from localStorage
-  - Calls `POST /auth/refresh` with refresh token
-  - Retries original request with new access token
-  - Queues failed requests while refreshing to avoid race conditions
+**Response interceptor** (`api.ts` + `lib/auth-session.ts`):
+- Handles 401 (Unauthorized) on non-auth endpoints. Tokens live in `localStorage`, shared by all
+  tabs; there is no cross-tab lock (no Web Locks), so tabs coordinate only through storage. The
+  server redeems a refresh token once, so of two tabs refreshing with the same token one loses.
+  - **Pre-check:** if storage already holds a different access token than the request carried
+    (another tab or an earlier refresh rotated it), retry once with the stored token — no refresh
+  - Otherwise send the stored `refresh_token` once per tab (requests arriving meanwhile are
+    queued), store the new pair, retry the original request and release the queue
+  - **Refresh failed:** `resolveRefreshFailure` decides from storage alone, comparing it with the
+    session this tab sent. Storage holds a new pair → another tab won: adopt it and retry (the
+    queue too). A 401/403 with storage unchanged may be an early loser whose winner has not answered
+    yet: it waits for a `storage` event on `refresh_token` (written after the access token) for at
+    most 3 s, then re-reads. A half-changed read (the two `setItem` calls are separate) or an emptied
+    storage is re-read once after 300 ms. Still unchanged (or emptied by a logout) and 401/403 →
+    genuine rejection: `clearAuthAndRedirect` clears storage and goes to `/`. Network/5xx → reject,
+    keep storage. A rotation that keeps the access token and only changes the refresh token is
+    adopted too
+  - `clearAuthAndRedirect` is the only client code that ends a session on an API failure
   - On refresh failure clears auth and flags the session as expired (`lib/session-expiry.ts`). On a private page (`/dashboard`, `/orders`, ...) it reloads in place, so the inline login screen shows "Your session expired" on the same URL and `AuthContext.login` returns there via `postLoginPath`; elsewhere it goes to `/`
   - Deep link `/?auth=register` or `/?auth=login` makes `LandingShell` open that modal (used by the login screen's "Sign up here")
   - `?create=1` on `/products`, `/recipients` and `/orders` opens that page's create form (`hooks/useCreateIntent.ts`), then strips the parameter. `/orders?create=1&recipientId=<uuid>` preselects the recipient. Products and orders wait for the subscription status first so the plan limits still apply. The dashboard quick actions and the recipient drawer's "Create order" use it
-- Non-auth endpoints skip retry
 
 **API method groups** (lines 159–497):
 - `authApi.login()`, `register()`, `refresh()`, `logout()`, `getProfile()`, `updateProfile()`, `changePassword()`
 - `productsApi.getAll()`, `getById()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getLowStock()`
-- `recipientsApi.*` — same CRUD pattern
+- `recipientsApi.*` — same CRUD pattern; `recipientsApi.update` takes `UpdateRecipientRequest` (changed
+  fields only, `null` clears an optional field)
+- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` send
+  the optional `Idempotency-Key` header (see *Onboarding wizard*)
 - `suppliersApi.*` — same CRUD pattern
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`
 - `dashboardApi.*` — revenue & turnover analytics
 - `receiptsApi.getAll()`, `create()`, `getById()`, `getPdf()`, `getPrinters()`, `print()`, `regenerate()`, `void()`, `testPreview()`, `share()`, `revokeShare()`, `getTemplatePreviewHtml()`
 - `settingsApi.*` — logo upload, receipt design, templates, company info, payment/delivery terms, auto-receipt flag (`getAutoReceipt` / `updateAutoReceipt`)
 
-**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience.
+**Type exports**: All `api-types.ts` types (Product, Recipient, Order, Receipt, etc.) re-exported from `api.ts` for convenience. Wire types are derived from `api-types.generated.ts` (gitignored; `yarn openapi:generate` from `backend/openapi.json`) rather than hand-written: besides the entity types, `Receipt` (the `ReceiptProjection` the receipt routes return; `Order.receipts` reuses it), `InventoryValue` and the document types in `lib/document-config.ts` (`DocumentConfig`, `ConfigVersion`, `DocumentDraft`, `PresetSummary`, `Preset`) are aliases of `components["schemas"]`. `TemplateCapabilities`/`DocumentTemplate` stay hand-written. `templateId` is therefore the backend's template-ID union; values read from the templates list are narrowed at the call site.
 
 **Utilities** (lines 500–528):
 - `formatCurrency(cents, currency)` — e.g., `100` cents → "1.00 UAH"
@@ -124,16 +152,20 @@ frontend/
 
 ### Error Handling: `lib/api-errors.ts`
 
-**parseApiError(error)** (lines 117–183):
+**parseApiError(error)**:
 - Takes any error, returns `{ message: string; code: string }`
 - Checks Axios error response format: `{ error: string; errorCode: string }`
 - For generic codes (`VALIDATION_ERROR`, `BAD_REQUEST`, `HTTP_EXCEPTION`) the server's own detail (string or class-validator array, joined with `; `) wins over the generic translation
 - Falls back to legacy `{ message: string }`
 - Network errors → "Ошибка сети. Проверьте подключение..."
-- **i18n-aware**: translates error codes via the camelCase key of the code, e.g. `USER_ALREADY_EXISTS` -> `errors.userAlreadyExists` (the locale files use camelCase; a snake_case key never matches). Forms show `parseApiError(error).message`, not a blanket "Bad request" or a hand-rolled `data.message` lookup: the API puts the text in `data.error`
+- **i18n-aware**: translates error codes via the camelCase locale key —
+  `PRODUCT_ALREADY_EXISTS` → `i18n.t('errors.productAlreadyExists')` (until 2026-10-30 it looked up
+  a lower snake_case key that no locale has, so ru/uk always showed English). A code without a
+  locale entry falls back to `ERROR_MESSAGES` (English), then to the backend's `error` text.
+  Guarded by `frontend/e2e/api-errors.spec.mjs` Forms show `parseApiError(error).message`, not a blanket "Bad request" or a hand-rolled `data.message` lookup: the API puts the text in `data.error`.
 - Fallback to `ERROR_MESSAGES` constant if i18n not ready
 
-**ErrorCode enum** (lines 11–58):
+**ErrorCode enum**:
 - User: `USER_ALREADY_EXISTS`, `USER_NOT_FOUND`, `INVALID_CREDENTIALS`
 - Order: `ORDER_NOT_FOUND`, `ORDER_ALREADY_CONFIRMED`, `ORDER_ALREADY_CANCELLED`, `ORDER_CANNOT_BE_MODIFIED`
 - Receipt: `RECEIPT_NOT_FOUND`, `RECEIPT_ALREADY_EXISTS`, `RECEIPT_GENERATION_FAILED`, `RECEIPT_PRINT_FAILED`
@@ -215,6 +247,47 @@ export const useOrders = () => {
 - `['products']`, `['recipients']`, `['suppliers']` — entity lists
 
 Always invalidate after mutations (`onSuccess` callback) so UI refetches fresh data.
+Cancelling an order (`useOrders`) invalidates everything it changes on the server: `['orders']`,
+`['receipts']` (a confirmed order's document is voided) and every dashboard key — `['dashboard']`,
+`['totalRevenue']`, `['totalTurnover']`, `['dailyRevenue']`, `['orderStatusSummary']` (the default
+`staleTime` is 5 minutes, so without this the dashboards would keep pre-cancel figures).
+
+### Orders: cancel warning
+
+`OrdersPage` resolves the cancel target's status from the loaded list. Cancelling a confirmed order
+(or one not on the page) adds `orders.cancelConfirmedWarning` (en/ru/uk) to the confirmation: the
+receipt is voided, the public share link revoked, and stock is not returned — deleting the order
+returns it. A draft gets the plain question.
+
+### Dashboard: unknown and partial profit
+
+"Revenue" is profit from the cost frozen on each order line. Lines from before cost snapshots hold a
+backfilled estimate, which the API returns as an ordinary known cost, so history shows full figures
+with no badge. The states below now appear only for lines with no valid cost: a negative product cost,
+or a line whose product belongs to another tenant.
+Profit payloads carry
+`unknown_cost_lines`, `unknown_cost_turnover_cents` and `profit_complete`, and the profit may be null
+(`lib/profit.ts`: `formatProfit`, `profitChartValue`, `combineCompleteness`).
+`components/dashboard/ProfitStatus.tsx` renders nothing for complete figures, "Cost unknown"
+(`dashboard.profitUnknown`) next to "—" for a null profit, and a "Partial" badge
+(`dashboard.profitPartial`) whose tooltip (`dashboard.profitPartialTooltip`) names the excluded lines
+and turnover. It is used by the KPI card (`KPIPrimaryCard`/`StatCard` `footer`), the recipient list
+(`TopRecipientsList` accepts a null amount, sorted last, and a `status` node) and the sparkline
+header, which passes `combineProfit` of the charted days (`lib/profit.ts`: null when no day has a
+known-cost line, so all-unknown reads "Cost unknown" rather than "Partial"; empty days do not count). `RevenueChart` accepts null values (no bar) and its tooltip shows "—" with the row's note; when
+every row is null it shows `unknownMessage` (`dashboard.profitChartUnknown`) instead of an empty plot.
+The sparkline passes null days with `connectNulls={false}`, so an unknown day is a gap, not a zero,
+and its tooltip shows "—" for that day's profit. Both tooltips set `filterNull={false}`: the Recharts
+default drops null entries, and with them the whole bar tooltip. The analytics CSV leaves an
+unknown profit cell empty and adds `profit_complete`, `unknown_cost_lines` and
+`unknown_cost_turnover` columns (`dashboard.csv*` headers). Turnover views are unchanged.
+
+### Dashboard: period presets
+
+`DashboardPage` presets and the date inputs send date-only `startDate`/`endDate`, and the API reads
+them as whole UTC days, both ends included. Preset dates come from `toISOString`, so they are UTC
+calendar dates on purpose: that day always contains "now", so a fresh order is in every preset. A
+local date would trail the UTC day west of UTC and drop it. The orders list filters the same way.
 
 ### Server-Side Pagination: `useServerPagination`
 
@@ -293,10 +366,14 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `hasProfileLoadError` / `retryLoadProfile()` — set when the startup profile request fails for a reason other than 401/403 (server down, 5xx). The tokens are kept, `ProtectedRoute` shows "Network error" with Retry instead of logging the user out
 
 **Methods:**
-- `login(email, password)` — calls `authApi.login()`, stores tokens, redirects to `/dashboard`
+- `login(email, password)` — calls `authApi.login()`, stores tokens through `auth-session.ts`
+  `storeSession` (access token first, then refresh token — the key other tabs wait for), redirects
+  to `/dashboard`. AuthContext reads/clears storage only through `auth-session.ts` helpers
 - `register(email, password)` — same as login
 - `logout()` — calls `authApi.logout()`, clears localStorage, redirects to home
-- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`
+- `fetchUserProfile()` — called on mount if token exists; fetches `/auth/profile`. On failure it
+  only marks this render signed out; it never touches storage (the interceptor decides, so a tab
+  that lost a refresh race cannot wipe the session another tab just stored)
 
 **Token storage:**
 - Access token → `localStorage.auth_token` (short-lived, 15 min typical)
@@ -424,10 +501,11 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   frontend builds require the public client token and production environment; backend
   production validation requires complete Paddle settings and frontend URL. Example env
   files contain only empty values. Deployment preserves the existing secret environment.
-- `.dockerignore` excludes local `.env*` files from the frontend build context. Private
-  package authentication uses a BuildKit secret during the Yarn install; the token is
-  not persisted in a Docker layer. PR verification uses only the standard read-only
-  GitHub token; publish/deploy credentials are confined to main-push jobs.
+- `.dockerignore` excludes local `.env*` files from the frontend build context. Every
+  dependency comes from the public npm registry, so the image's `yarn install
+  --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
+  PR verification runs with a `contents: read` workflow token and no secrets;
+  publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
 - Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
   `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
@@ -543,6 +621,57 @@ components/
 ├── seo/               # SEO component wrappers
 └── ui/                # Primitives (Button, Modal, DataTable, Tabs, etc.)
 ```
+
+### Product form: stock edits (`components/products/ProductForm.tsx`)
+
+Editing sends only the fields that differ from the product as loaded (`product-update.ts`
+`buildProductUpdate`), so a rename is `PATCH { name }` and never carries a stale stock value. A
+changed quantity is sent as `{ quantity, expectedQuantity }`, where `expectedQuantity` is the
+baseline: the loaded stock, or the server's after a conflict. On 409 `PRODUCT_QUANTITY_CONFLICT`
+(parsed with `lib/api-errors.ts`) the form stays open with every typed value, reloads
+`GET /products/:id`, shows under the quantity field that stock is now N and the typed value was not
+saved (`products.quantityConflict`, en/ru/uk), moves the baseline to N and invalidates
+`["products"]`; saving again is an informed overwrite. A save with no changes just closes the form.
+`productsApi.update` takes `UpdateProductRequest`: the generated `UpdateProductDto` fields with the
+stock pair encoded as a union — either neither `quantity` nor `expectedQuantity`, or both.
+
+### Product form: similar products (`hooks/useSimilarProducts.ts`)
+
+The create form warns about products with a similar name while the user types. The hook sends a
+debounced `GET /products?search=<name>&limit=10` once the trimmed name has two characters, under
+`["products", "similar", term]`, so saving a product invalidates it. It searches on the server
+because `limit` is capped at 100 (`common/dto/pagination.dto.ts`): a client-side filter would see
+only the newest page of the catalog. The hint is advisory, so a failed search just shows nothing.
+
+### Recipients page: refused deletes (`pages/RecipientsPage.tsx`)
+
+A refused delete closes the confirmation and shows `parseApiError(...).message` as a toast, so 409
+`RECIPIENT_HAS_ORDERS` reads as `errors.recipientHasOrders` (en/ru/uk).
+
+### Onboarding wizard (`components/onboarding/OnboardingModal.tsx`)
+
+Four steps (company, template, first product, first customer); the parent keeps every step's input,
+so Back/Next never lose it. Company and template call idempotent settings endpoints on each Next.
+Product and customer steps keep an entity record in a ref (`onboarding-entities.ts`
+`saveEntityStep`): `id` and the server's copy (`saved`) after a create, or `pending` — the exact body
+and its `Idempotency-Key` (`crypto.randomUUID()`, one per create attempt) — while a create's outcome
+is unknown. Revisiting a saved step sends nothing when the form still matches `saved`, otherwise a
+PATCH with only the changed fields (products via `buildProductUpdate`: a changed quantity carries
+`expectedQuantity`; a 409 reloads the product, keeps the input and shows `products.quantityConflict`).
+A blank name never creates and never changes an existing entity.
+
+- **Single flight:** one `inFlight` ref covers Next, Back, Skip, Finish, Retry and closing (Escape/X);
+  Skip and Back are also disabled while saving, so a double click sends one request.
+- **Errors** keep the step and every value and show an inline alert: `parseApiError` text for a refused
+  request (the next attempt sends the current form with a new key); for no response or a 502/503/504,
+  `onboarding.saveUnconfirmed` with Retry, which resends the same body with the **same** key (the
+  server replays the create if it happened) and then PATCHes any edits made meanwhile.
+- **Completion:** Finish calls `onComplete()` only after `POST /settings/onboarding-complete`
+  succeeds; on failure the modal stays open with `onboarding.finishFailed` and Retry (saved steps are
+  not re-sent). A failed Skip closes the wizard for this visit with the `onboarding.skipFailed` toast
+  (offered again next time). The Finish button stays "Get started"; nothing here mentions a PDF.
+- **Limits:** the key lives only in memory — a reload or another tab during an unconfirmed save can
+  still create a duplicate.
 
 ### UI Primitives: `components/ui/`
 
@@ -681,7 +810,8 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 
 | File | Purpose |
 |------|---------|
-| `src/main.tsx` | App entry, loads i18n |
+| `src/main.tsx` | App entry, loads i18n, mounts the error boundary |
+| `src/components/common/AppErrorBoundary.tsx` | Chunk-load recovery and render-failure fallback |
 | `src/App.tsx` | Providers, routing, React Query config |
 | `src/lib/api.ts` | Axios instance, request/response interceptors, all API methods |
 | `src/lib/api-errors.ts` | Error parsing, error code enum, friendly messages |
@@ -690,6 +820,7 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/providers/PaddleProvider.tsx` | Paddle SDK init for billing |
 | `src/hooks/useOrders.ts` | Orders CRUD + mutations + UI state example |
 | `src/hooks/useServerPagination.ts` | Table pagination, sorting, filtering |
+| `src/hooks/useSimilarProducts.ts` | Debounced server search behind the product form's similar-name hint |
 | `src/hooks/useCheckout.ts` | Paddle checkout flow |
 | `src/hooks/useSubscription.ts` | Current plan + usage limits |
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |
@@ -719,7 +850,7 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 
 ## Common Gotchas
 
-1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic.
+1. **Token refresh logic** — already baked into Axios interceptor. Don't add your own refresh logic, and don't clear `auth_token`/`refresh_token` on an API error elsewhere — another tab may have just rotated them.
 2. **Query key consistency** — always invalidate the same key after mutations (e.g., `['orders']` after `deleteOrder`).
 3. **Image/asset paths** — public assets in `frontend/public/` (referenced as `/logo-icon.svg`).
 4. **Env vars** — prefix public client settings with `VITE_` for Vite to expose them. Check `frontend/env.example`; never put backend secrets in Vite settings.
@@ -771,6 +902,6 @@ The Orders action menu opens `CustomizeDocumentModal`, using the same editor wit
 
 `PublicReceiptPage` uses the frozen visible projection and formatting preferences. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
 
-Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract and evidence.
+Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage, and runs in CI as `browser-documents`; the other browser specs (`node frontend/e2e/run.mjs`) run as `browser-regression`. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract; it no longer matches the current SettingsPage and is not run in CI.
 
 Closing Orders customization through Escape, Close or successful generation/retry restores focus to the surviving More actions button. Cancelling unsaved-draft confirmation leaves focus trapped inside the open editor.

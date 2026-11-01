@@ -7,13 +7,20 @@ import { UsersService } from "./users.service";
 import { User } from "./entities/user.entity";
 import { RefreshToken } from "./entities/refresh-token.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
+import { hashRefreshToken } from "./refresh-tokens";
 
 jest.mock("bcrypt");
 
+// Token persistence and rotation run against PostgreSQL in
+// test/refresh-rotation.e2e-spec.ts and test/refresh-token-security.e2e-spec.ts;
+// these mocks only cover the service's own validation and wiring.
 describe("UsersService", () => {
   let service: UsersService;
   let userRepo: any;
   let refreshTokenRepo: any;
+  let tokenStore: any;
+  let txTokenRepo: any;
+  let txManager: any;
   let _jwtService: jest.Mocked<JwtService>;
 
   const mockUser: Partial<User> = {
@@ -24,18 +31,26 @@ describe("UsersService", () => {
   };
 
   beforeEach(async () => {
+    txTokenRepo = { update: jest.fn() };
+    txManager = {
+      update: jest.fn(),
+      getRepository: jest.fn().mockReturnValue(txTokenRepo),
+    };
     userRepo = {
       findOne: jest.fn(),
       create: jest.fn((data) => ({ ...data })),
       save: jest.fn((data) => Promise.resolve({ id: "user-1", ...data })),
       update: jest.fn(),
+      manager: { transaction: jest.fn((work) => work(txManager)) },
     };
-
+    tokenStore = { insert: jest.fn() };
     refreshTokenRepo = {
-      create: jest.fn((data) => ({ ...data })),
-      save: jest.fn((data) => Promise.resolve(data)),
-      findOne: jest.fn(),
       update: jest.fn(),
+      manager: {
+        transaction: jest.fn(),
+        getRepository: jest.fn().mockReturnValue(tokenStore),
+        createQueryBuilder: jest.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -72,10 +87,18 @@ describe("UsersService", () => {
       });
 
       expect(result.access_token).toBe("jwt-token");
-      expect(result.refresh_token).toBeDefined();
+      expect(result.refresh_token).toMatch(/^[a-f0-9]{128}$/);
       expect(result.user.email).toBe("new@test.com");
       expect(userRepo.create).toHaveBeenCalled();
       expect(userRepo.save).toHaveBeenCalled();
+      expect(tokenStore.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          token_hash: hashRefreshToken(result.refresh_token),
+          family_id: expect.any(String),
+        }),
+      );
+      expect(tokenStore.insert.mock.calls[0][0]).not.toHaveProperty("token");
     });
 
     it("should throw if user already exists", async () => {
@@ -130,65 +153,28 @@ describe("UsersService", () => {
   describe("refreshToken", () => {
     it.each([undefined, null, "", 1, {}, [], "x".repeat(128), "a".repeat(127)])(
       "rejects malformed token %p before querying",
-      async (token) => {
-        await expect(service.refreshToken(token as string)).rejects.toThrow(
+      async (malformed) => {
+        await expect(service.refreshToken(malformed as string)).rejects.toThrow(
           ApiErrorResponse,
         );
-        expect(refreshTokenRepo.findOne).not.toHaveBeenCalled();
-        expect(refreshTokenRepo.save).not.toHaveBeenCalled();
+        expect(refreshTokenRepo.manager.transaction).not.toHaveBeenCalled();
       },
     );
-    it("should rotate refresh token and return new tokens", async () => {
-      const existingToken = {
-        token: "a".repeat(128),
-        revoked: false,
-        expires_at: new Date(Date.now() + 86400000),
-        user: mockUser,
-      };
-      refreshTokenRepo.findOne.mockResolvedValue(existingToken);
-
-      const result = await service.refreshToken("a".repeat(128));
-
-      expect(result.access_token).toBe("jwt-token");
-      expect(existingToken.revoked).toBe(true);
-      expect(refreshTokenRepo.save).toHaveBeenCalled();
-    });
-
-    it("should throw if refresh token not found", async () => {
-      refreshTokenRepo.findOne.mockResolvedValue(null);
-
-      await expect(service.refreshToken("invalid")).rejects.toThrow(
-        ApiErrorResponse,
-      );
-    });
-
-    it("should throw if refresh token is expired", async () => {
-      refreshTokenRepo.findOne.mockResolvedValue({
-        token: "b".repeat(128),
-        revoked: false,
-        expires_at: new Date(Date.now() - 86400000),
-        user: mockUser,
-      });
-
-      await expect(service.refreshToken("b".repeat(128))).rejects.toThrow(
-        ApiErrorResponse,
-      );
-    });
   });
 
   describe("revokeRefreshToken", () => {
-    it("should revoke a specific refresh token", async () => {
-      await service.revokeRefreshToken("c".repeat(128));
-
-      expect(refreshTokenRepo.update).toHaveBeenCalledWith(
-        { token: "c".repeat(128) },
-        { revoked: true },
+    it("rejects a malformed token before querying", async () => {
+      await expect(service.revokeRefreshToken("x".repeat(128))).rejects.toThrow(
+        ApiErrorResponse,
       );
+      expect(
+        refreshTokenRepo.manager.createQueryBuilder,
+      ).not.toHaveBeenCalled();
     });
   });
 
   describe("revokeAllUserTokens", () => {
-    it("should revoke all user tokens", async () => {
+    it("revokes every live token of the user", async () => {
       await service.revokeAllUserTokens("user-1");
 
       expect(refreshTokenRepo.update).toHaveBeenCalledWith(
@@ -278,9 +264,16 @@ describe("UsersService", () => {
         confirmPassword: "new-pw",
       });
 
-      expect(userRepo.update).toHaveBeenCalledWith("user-1", {
+      expect(userRepo.manager.transaction).toHaveBeenCalledTimes(1);
+      expect(txManager.update).toHaveBeenCalledWith(User, "user-1", {
         password: "new-hashed-pw",
       });
+      expect(txManager.getRepository).toHaveBeenCalledWith(RefreshToken);
+      expect(txTokenRepo.update).toHaveBeenCalledWith(
+        { user_id: "user-1", revoked: false },
+        { revoked: true },
+      );
+      expect(userRepo.update).not.toHaveBeenCalled();
     });
 
     it("should throw if passwords do not match", async () => {

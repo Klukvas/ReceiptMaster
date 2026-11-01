@@ -21,6 +21,15 @@ const SPECS = [
   { name: "mobile-product-dropdown", load: () => import("./mobile-product-dropdown.spec.mjs") },
   { name: "receipt-socket-url", load: () => import("./receipt-socket-url.spec.mjs") },
   { name: "receipt-progress", load: () => import("./receipt-progress.spec.mjs") },
+  { name: "auth-multitab", load: () => import("./auth-multitab.spec.mjs") },
+  { name: "product-form-conflict", load: () => import("./product-form-conflict.spec.mjs") },
+  { name: "product-similar-hint", load: () => import("./product-similar-hint.spec.mjs") },
+  { name: "recipient-delete-conflict", load: () => import("./recipient-delete-conflict.spec.mjs") },
+  { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
+  { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
+  { name: "onboarding", load: () => import("./onboarding.spec.mjs") },
+  { name: "locale-parity", load: () => import("./locale-parity.spec.mjs") },
+  { name: "api-errors", load: () => import("./api-errors.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -65,16 +74,24 @@ const startDevServer = async () => {
 
 const main = async () => {
   const filter = process.argv[2];
+  const selected = SPECS.filter((spec) => !filter || spec.name.includes(filter));
+  // An empty selection or a spec that records nothing must not read as a pass.
+  if (selected.length === 0) {
+    const names = SPECS.map((spec) => spec.name).join(", ");
+    throw new Error(`No spec matches "${filter}". Available: ${names}`);
+  }
+
   const stopServer = (await isServerUp()) ? null : await startDevServer();
 
   let failed = 0;
   let total = 0;
+  const empty = [];
 
   try {
-    for (const spec of SPECS) {
-      if (filter && !spec.name.includes(filter)) continue;
+    for (const spec of selected) {
       process.stdout.write(`\n${spec.name}\n`);
       const results = await (await spec.load()).run();
+      if (results.cases.length === 0) empty.push(spec.name);
       total += results.cases.length;
       failed += results.failed.length;
     }
@@ -83,7 +100,10 @@ const main = async () => {
   }
 
   process.stdout.write(`\n${total - failed}/${total} checks passed\n`);
-  process.exit(failed === 0 ? 0 : 1);
+  if (empty.length > 0) {
+    process.stdout.write(`specs that recorded no checks: ${empty.join(", ")}\n`);
+  }
+  process.exit(failed === 0 && empty.length === 0 ? 0 : 1);
 };
 
 main().catch((error) => {

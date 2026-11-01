@@ -11,7 +11,7 @@ market/
 │   ├── test/               # E2E tests
 │   ├── scripts/            # Initialization scripts
 │   ├── package.json        # Backend dependencies
-│   └── Dockerfile          # Docker image for API
+│   └── Dockerfile.playwright # API image (production + compose); Dockerfile is legacy/unused
 ├── frontend/               # React application
 │   ├── src/                # Frontend source code
 │   ├── public/             # Static files
@@ -89,7 +89,6 @@ yarn frontend:dev   # Frontend on http://localhost:5173
 - **Frontend**: http://localhost:5173
 - **API**: http://localhost:3000
 - **Swagger Documentation**: http://localhost:3000/docs
-- **pgAdmin**: http://localhost:5050 (admin@market.com / admin)
 
 ## 📊 Features
 
@@ -206,38 +205,37 @@ http://localhost:3000/docs
 - ✅ **Containerization**: Docker for all services
 - ✅ **Documentation**: Complete API and UI documentation
 - ✅ **CI/CD**: Automated testing and deployment with GitHub Actions
-- ✅ **Registry**: Docker images published to GitHub Container Registry
+- ✅ **Registry**: Docker images published to Docker Hub
 
 ## 🔄 CI/CD Pipeline
 
-### Automated Workflows
+### Automated Workflow
 
-The project includes comprehensive GitHub Actions workflows:
+The project has one GitHub Actions workflow, `ci.yml`, which runs verification on pull requests and pushes to `main`:
 
-- **Testing**: Automated testing on pull requests and pushes
-- **Build & Deploy**: Automatic Docker image building and deployment
-  - Pull requests: Builds images with commit SHA tags
-  - Main branch: Builds images with both SHA and `latest` tags
+- Pull requests: Verification only, nothing is published or deployed
+- Main branch: After verification passes, publishes Docker images and deploys production, so merging a pull request releases it
 
 ### Docker Images
 
-Images are automatically built and pushed to GitHub Container Registry:
+A push to `main` builds both images and pushes them to Docker Hub under the full commit SHA:
 
-- **Frontend**: `ghcr.io/{owner}/{repo}/frontend:latest`
-- **Backend**: `ghcr.io/{owner}/{repo}/backend:latest`
+- **Frontend**: `klukvas/receiptmaster-frontend:{sha}`
+- **Backend**: `klukvas/receiptmaster-backend:{sha}`
+
+CI no longer updates the `latest` tag on Docker Hub, so it points at an old image.
 
 ### Usage
 
 ```bash
-# Pull latest production images
-docker pull ghcr.io/{owner}/{repo}/frontend:latest
-docker pull ghcr.io/{owner}/{repo}/backend:latest
-
-# Run with docker-compose
-docker-compose up -d
+# Pull the images of a released commit
+docker pull klukvas/receiptmaster-frontend:{sha}
+docker pull klukvas/receiptmaster-backend:{sha}
 ```
 
-For detailed CI/CD setup instructions, see [.github/README.md](.github/README.md).
+`docker-compose.yml` is for local development and does not use these images, see Quick Start.
+
+For workflow details and setup, see [.github/README.md](.github/README.md). The job list is in [PROJECT.md](PROJECT.md#cicd-github-actions), and the production release is described in [.github/DEPLOYMENT.md](.github/DEPLOYMENT.md).
 
 ## 📝 License
 

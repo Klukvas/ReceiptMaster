@@ -118,6 +118,12 @@ export const ApiErrors = {
       "PRODUCT_ALREADY_EXISTS",
       409,
     ),
+  PRODUCT_QUANTITY_CONFLICT: (id: string) =>
+    new ApiErrorResponse(
+      `Stock of product ${id} changed since it was loaded; nothing was saved`,
+      "PRODUCT_QUANTITY_CONFLICT",
+      409,
+    ),
 
   // Recipient errors
   RECIPIENT_NOT_FOUND: (id: string) =>
@@ -126,16 +132,16 @@ export const ApiErrors = {
       "RECIPIENT_NOT_FOUND",
       404,
     ),
-  RECIPIENT_HAS_ORDERS: () =>
-    new ApiErrorResponse(
-      "Recipient has orders and cannot be deleted",
-      "RECIPIENT_HAS_ORDERS",
-      409,
-    ),
   RECIPIENT_ALREADY_EXISTS: (email: string) =>
     new ApiErrorResponse(
       `Recipient with email ${email} already exists`,
       "RECIPIENT_ALREADY_EXISTS",
+      409,
+    ),
+  RECIPIENT_HAS_ORDERS: (id: string) =>
+    new ApiErrorResponse(
+      `Recipient ${id} cannot be deleted: it has orders, including any deleted ones kept for history`,
+      "RECIPIENT_HAS_ORDERS",
       409,
     ),
 

@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+// Customers open links built from this value. A wrong one raises no error on the server,
+// so production refuses to start with anything but the bare https origin they can reach.
+const isPublicOrigin = (value: string | undefined): boolean => {
+  if (!value || !URL.canParse(value)) return false;
+  const { protocol, hostname, origin } = new URL(value);
+  return protocol === "https:" && hostname !== "localhost" && origin === value;
+};
+
 export const envSchema = z
   .object({
     NODE_ENV: z
@@ -75,13 +83,19 @@ export const envSchema = z
     ),
   })
   .superRefine((config, context) => {
-    if (config.NODE_ENV !== "production" || !config.BILLING_ENABLED) return;
+    if (config.NODE_ENV !== "production") return;
+    if (!isPublicOrigin(config.FRONTEND_URL))
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["FRONTEND_URL"],
+        message: "Must be the public https origin in production",
+      });
+    if (!config.BILLING_ENABLED) return;
     for (const key of [
       "PADDLE_API_KEY",
       "PADDLE_WEBHOOK_SECRET",
       "PADDLE_PRO_PRICE_ID",
       "PADDLE_BUSINESS_PRICE_ID",
-      "FRONTEND_URL",
     ] as const) {
       if (!config[key]?.trim())
         context.addIssue({

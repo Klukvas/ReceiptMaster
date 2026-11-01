@@ -44,7 +44,6 @@
 | | Handlebars | latest |
 | **Object Storage** | Hetzner Object Storage | S3-compatible (AWS SDK v2) |
 | **Infrastructure** | Docker / Docker Compose | 3.8+ |
-| | Terraform (Hetzner Cloud) | ~1.0 |
 | | Nginx | Alpine |
 | | GitHub Actions | CI/CD |
 | **Telegram** | Telegram Bot API | via Axios |
@@ -106,7 +105,7 @@
 - PDF generation using Playwright (headless Chromium) + Handlebars templates
 - HTML snapshot stored alongside PDF for audit
 - Template ID and version tracked per receipt
-- 10 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate
+- 15 receipt templates: Standard, Compact, Classic, Modern, Elegant, Vintage, Tech, Wave, Minimal, Corporate, Thermal, Dark, Branded, Delivery, Proforma
 - Multi-language receipt rendering (EN, UK, RU)
 - Upload to Hetzner Object Storage (S3-compatible)
 - SHA256 hash for receipt integrity
@@ -274,7 +273,7 @@ All branding and configuration options organized into tabs.
 
 - **Tab 2 — Receipt Design**:
   - Receipt title customizer (main title text)
-  - Template selector — visual grid of 10 templates with preview
+  - Template selector — visual grid of 15 templates with preview
   - Footer customizer (footer title + subtitle)
   - Test receipt button — generates a sample PDF with current settings to preview
 
@@ -529,10 +528,13 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID | Primary key |
-| token | VARCHAR(500) | Indexed |
+| token | VARCHAR(500) | Nullable, indexed. Plaintext only on rows issued before hashing (they expire within 30 days) |
+| token_hash | VARCHAR(64) | Nullable, unique. Hex SHA-256 of the token; the only form stored for new tokens |
+| family_id | UUID | Nullable. Rotation chain of one login; partial index on live rows |
 | user_id | UUID | FK -> Users (cascade delete) |
-| expires_at | TIMESTAMP | 7-day expiry |
+| expires_at | TIMESTAMP | 30-day expiry |
 | revoked | BOOLEAN | Default: false |
+| redeemed_at | TIMESTAMPTZ | Nullable. Set only when a refresh rotated the token (replay detection) |
 | created_at | TIMESTAMP | |
 
 ### Idempotency Keys (`idempotency_keys`)
@@ -599,8 +601,8 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
       |
       v
 +--------------------------------------+
-|  App Server (Hetzner cx22)           |
-|  Public IP  .  Private: 10.0.1.10   |
+|  Production Server (Hetzner)         |
+|  One Compose project, one network    |
 |                                      |
 |  +--------------------------------+  |
 |  | Frontend (Nginx)  :80 / :443  |  |
@@ -627,13 +629,6 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 |  | - BullMQ job queue            |  |
 |  | - Telegram sessions (4h TTL)  |  |
 |  +--------------------------------+  |
-+----------------+---------------------+
-                 | Private network
-                 | 10.0.0.0/16
-                 v
-+--------------------------------------+
-|  DB Server (Hetzner cx22)            |
-|  Private: 10.0.1.20                  |
 |                                      |
 |  +--------------------------------+  |
 |  | PostgreSQL 15  :5432           |  |
@@ -641,8 +636,10 @@ Indexes: `(user_id, created_at DESC)`. RLS enabled.
 |  | - Composite indexes           |  |
 |  | - Advisory locks (migrations) |  |
 |  +--------------------------------+  |
+|                                      |
 |  +--------------------------------+  |
-|  | pgAdmin 4  :5050              |  |
+|  | DB backup                      |  |
+|  | - pg_dump to S3 every 4 days   |  |
 |  +--------------------------------+  |
 +--------------------------------------+
 
@@ -666,45 +663,40 @@ The backend is designed for horizontal scaling:
 - **RLS + tenant context** is per-request via `AsyncLocalStorage` (no shared state)
 - Scale with: `docker compose up --scale backend=N`
 
-### Hetzner Cloud (Terraform)
-
-- **Provider**: Hetzner Cloud (`hcloud ~> 1.0`)
-- **Location**: `nbg1` (Nuremberg, Germany)
-- **Network**: Private `10.0.0.0/16`, Subnet `10.0.1.0/24`
-- **App Server**: `cx22` (2 vCPU, 4 GB RAM, 40 GB SSD) -- IP `10.0.1.10`
-- **DB Server**: `cx22` (2 vCPU, 4 GB RAM, 40 GB SSD) -- IP `10.0.1.20`
-- **Firewall (App)**: SSH, HTTP, HTTPS, port 3000 -- open to `0.0.0.0/0`
-- **Firewall (DB)**: SSH open to `0.0.0.0/0`; PostgreSQL open only to `10.0.1.0/24`
-
 ### Docker Compose Files
 
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Local development (Postgres + Redis + Backend + Frontend with hot reload) |
-| `docker-compose.prod.yml` | Standalone production (all services, scalable backend) |
-| `docker-compose.application.yml` | Production app server (Backend + Frontend + Redis, connects to remote DB) |
-| `docker-compose.database.yml` | Production database server (PostgreSQL + pgAdmin) |
+| `docker-compose.prod.yml` | Self-built stack on `market-*:latest` images for `yarn docker:prod:*` (all services, scalable backend); not used by the production release |
+| `docker-compose.production.yml` | Production layout on one server (Postgres + Redis + Backend + Frontend + S3 backup). A release ships this file as a reference only: the server keeps its own copy (`.github/DEPLOYMENT.md`) |
 | `backend/docker-compose.test.yml` | Test database (Postgres on port 5433) |
 
 ### Dockerfiles
 
 | File | Base Image | Purpose |
 |---|---|---|
-| `backend/Dockerfile` | `node:20-alpine` + Chromium | Production backend |
-| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Dev/CI backend |
+| `backend/Dockerfile` | `node:20-alpine` + Chromium | Legacy; not used by CI or any compose file |
+| `backend/Dockerfile.playwright` | `mcr.microsoft.com/playwright:v1.57.0-jammy` | Production backend image (CI `build-and-deploy`) and local `docker-compose.yml` backend |
 | `frontend/Dockerfile` | `node:20-alpine` (build) -> `nginx:alpine` (serve) | Multi-stage frontend build with self-signed SSL |
+
+Images install with `yarn install --frozen-lockfile`. Their build contexts (`./backend`, `./frontend`) cannot see the root `yarn.lock`, so `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it; after any dependency change, copy the root lock over both (CI `test-backend` fails when they differ).
 
 ### CI/CD (GitHub Actions)
 
 **Main Pipeline** (`.github/workflows/ci.yml`) -- triggers on push/PR to `main`:
 
-1. **test-backend** -- lint, test, build
-2. **test-frontend** -- lint, build
-3. **build-and-deploy** -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
-4. **deploy-production** (main branch only) -- SSH to app server, pull images, write `.env`, start containers, health check
+1. **test-backend** -- lockfile copies match, lint, unit tests with coverage, build
+2. **test-frontend** -- lint, OpenAPI types, build
+3. **contract-test** -- `backend/openapi.json` matches the code; frontend type-checks against it
+4. **e2e-backend** -- API e2e tests against PostgreSQL 15, with `test/e2e` run once as the superuser and once as `rm_app` on a database converted with `backend/db/roles`, plus the isolated PostgreSQL integration suites (orders audit, document SQL/RLS, tenant RLS) under a restricted `NOSUPERUSER`/`NOBYPASSRLS` non-owner role, on the service cluster CI marks with the `receiptmaster_isolated_pg_sentinel` database; `REQUIRE_PG_SUITES=1` turns a missing opt-in into a failure
+5. **browser-regression** -- `node frontend/e2e/run.mjs` (all browser specs, Playwright Chromium, local nginx/openssl for proxy-audit)
+6. **browser-documents** -- `frontend/e2e/template-features.cjs` against the synthetic `backend/test/serve-template-features.ts` fixture; evidence uploaded on failure
+7. **test-release-gate** -- `python3 scripts/deploy-production.test.py` (fake Docker plus real `docker compose config` rendering); the job fails if the Compose CLI is missing, because those tests would otherwise skip
+8. **build-and-deploy** (push to `main` only, needs 1–7) -- build Docker images, push to Docker Hub (`klukvas/receiptmaster-frontend`, `klukvas/receiptmaster-backend`)
+9. **deploy-production** (push to `main` only) -- read-only precheck, transfer the allowlisted release bundle, back up, migrate (through a one-shot `migrate` service that uses `DB_OWNER_*` when set) and deploy the immutable image pair
 
-**Database Deployment** (`.github/workflows/deploy-database.yml`) -- manual trigger:
-- SSH to DB server, pull images, optional force-recreate
+Jobs 1–7 gate publication through `needs`. Making them required checks for pull requests is a GitHub branch-protection setting, configured outside this repository.
 
 ### Nginx
 
@@ -748,7 +740,10 @@ The backend is designed for horizontal scaling:
 |---|---|
 | `NODE_ENV` | development / production / test |
 | `PORT` | Backend port (default: 3000) |
-| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection (runtime role) |
+| `DB_OWNER_USERNAME`, `DB_OWNER_PASSWORD` | Migration role for production releases; falls back to the runtime role (`backend/db/roles/README.md`) |
+| `DB_BACKUP_USERNAME`, `DB_BACKUP_PASSWORD` | S3 backup role; falls back to the runtime role, which cannot dump RLS tables once it is `rm_app` |
+| `POSTGRES_BOOTSTRAP_USER`, `POSTGRES_BOOTSTRAP_PASSWORD` | Cluster superuser (default `postgres`); initializes a new volume and is the identity the release gate's socket `psql`/`pg_dump` use |
 | `REDIS_HOST`, `REDIS_PORT` | Redis connection (default: localhost:6379) |
 | `AUTO_RUN_MIGRATIONS` | Run migrations on startup with advisory lock (default: true) |
 | `API_PREFIX` | API route prefix (default: `api/v1`) |
@@ -756,7 +751,8 @@ The backend is designed for horizontal scaling:
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 | `JWT_SECRET` | Token signing key (min 32 chars) |
 | `JWT_EXPIRES_IN` | Access token TTL (default: `24h`) |
-| `RECEIPT_BASE_URL` | Base URL for receipt links |
+| `FRONTEND_URL` | Public origin for receipt share links and Paddle checkout. Production requires the bare `https` origin; the release sets it (`.github/DEPLOYMENT.md`). Development falls back to `http://localhost:5173` |
+| `RECEIPT_BASE_URL` | Accepted but not read by any service; receipt links come from `FRONTEND_URL` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials |
 | `AWS_REGION`, `S3_ENDPOINT` | S3 endpoint config |
 | `LOGOS_BUCKET`, `RECEIPTS_BUCKET`, `TEMP_BUCKET` | S3 bucket names |

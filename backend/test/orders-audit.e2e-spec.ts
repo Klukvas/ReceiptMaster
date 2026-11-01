@@ -4,6 +4,7 @@ import { join } from "path";
 import { DataSource } from "typeorm";
 import { Client } from "pg";
 import { OrdersService } from "../src/modules/orders/orders.service";
+import { OrdersDashboardService } from "../src/modules/orders/orders-dashboard.service";
 import { SettingsService } from "../src/modules/settings/services/settings.service";
 import { Order } from "../src/modules/orders/entities/order.entity";
 import { OrderItem } from "../src/modules/orders/entities/order-item.entity";
@@ -16,35 +17,34 @@ import { UserSubscription } from "../src/modules/subscription/entities/user-subs
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
 import { CacheService } from "../src/common/services/cache.service";
 import { PLAN_LIMITS } from "../src/modules/subscription/config/plans.config";
+import {
+  AUDIT_CLUSTER,
+  connectIsolatedAdmin,
+  describeIsolatedPostgres,
+  teardownIsolatedPostgres,
+  typeormCredentials,
+} from "./helpers/isolated-postgres";
 
 // Explicit opt-in; no dotenv, production ORM config, or shared cleanup helper.
-const describePg =
-  process.env.AUDIT_PG_PORT === "55439" ? describe : describe.skip;
-describePg(
+describeIsolatedPostgres(
   "orders audit: isolated PostgreSQL persistence and concurrency",
-  () => {
+  AUDIT_CLUSTER,
+  (connection) => {
     const database = `audit_orders_${process.pid}_${Date.now()}`;
-    const connection = {
-      host: "127.0.0.1",
-      port: 55439,
-      user: "andreypavlenko",
-    };
     let admin: Client;
     let db: DataSource;
     let service: OrdersService;
+    let dashboard: OrdersDashboardService;
     let user: User;
     let recipient: Recipient;
     const cache = new Map<string, unknown>();
 
     beforeAll(async () => {
-      admin = new Client({ ...connection, database: "postgres" });
-      await admin.connect();
+      admin = await connectIsolatedAdmin(connection);
       await admin.query(`CREATE DATABASE "${database}"`);
       db = new DataSource({
         type: "postgres",
-        host: connection.host,
-        port: connection.port,
-        username: connection.user,
+        ...typeormCredentials(connection),
         database,
         entities: [join(__dirname, "../src/**/*.entity.ts")],
         synchronize: true,
@@ -89,16 +89,16 @@ describePg(
           getAutoGenerateReceipt: async () => false,
         } as unknown as SettingsService,
       );
+      dashboard = new OrdersDashboardService(db, memoryCache);
     });
 
-    afterAll(async () => {
-      if (db?.isInitialized) await db.destroy();
-      if (admin) {
-        // Only the fresh database created by this suite; never stop the shared server.
-        await admin.query(`DROP DATABASE IF EXISTS "${database}"`);
-        await admin.end();
-      }
-    });
+    afterAll(() =>
+      teardownIsolatedPostgres({
+        dataSources: [db],
+        admin,
+        databases: [database],
+      }),
+    );
 
     beforeEach(async () => {
       cache.clear();
@@ -444,12 +444,12 @@ describePg(
         await service.confirm(order.id, user);
         const all = () =>
           Promise.all([
-            service.getRevenueByProducts(user),
-            service.getRevenueByRecipients(user),
-            service.getTotalRevenue(user),
-            service.getTurnoverByProducts(user),
-            service.getTurnoverByRecipients(user),
-            service.getTotalTurnover(user),
+            dashboard.getRevenueByProducts(user),
+            dashboard.getRevenueByRecipients(user),
+            dashboard.getTotalRevenue(user),
+            dashboard.getTurnoverByProducts(user),
+            dashboard.getTurnoverByRecipients(user),
+            dashboard.getTotalTurnover(user),
           ]);
         const before = await all();
         expect(before[2]).toMatchObject({
@@ -466,7 +466,14 @@ describePg(
         expect(after).toEqual([
           [],
           [],
-          { total_revenue_cents: 0, total_orders: 0, currency: "UAH" },
+          {
+            total_revenue_cents: 0,
+            total_orders: 0,
+            currency: "UAH",
+            unknown_cost_lines: 0,
+            unknown_cost_turnover_cents: 0,
+            profit_complete: true,
+          },
           [],
           [],
           { total_turnover_cents: 0, total_orders: 0, currency: "UAH" },

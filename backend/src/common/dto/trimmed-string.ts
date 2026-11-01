@@ -4,7 +4,8 @@ import { Transform } from "class-transformer";
 export const Trimmed = (): PropertyDecorator =>
   Transform(({ value }) => (typeof value === "string" ? value.trim() : value));
 
-export const PHONE_PATTERN = /^\+?[\d\s().-]{5,}$/;
+// Digits, spaces and + ( ) . - only; letters are what we reject, not short or partial numbers.
+export const PHONE_PATTERN = /^\+?[\d\s().-]{3,}$/;
 export const PHONE_PATTERN_MESSAGE =
   "phone must contain only digits, spaces and + ( ) . -";
 

@@ -1,12 +1,13 @@
 // Isolated actual React/Axios/Query UI, synthetic HTTP state, no real services.
 const http = require("node:http"),
   fs = require("node:fs"),
+  os = require("node:os"),
   path = require("node:path");
 const esbuild = require("esbuild");
 const project = path.resolve(__dirname, "../..");
 const output = path.resolve(
   process.env.SETTINGS_EVIDENCE ||
-    path.join(project, "backend/temp/template-settings-browser"),
+    path.join(os.tmpdir(), "receiptmaster-settings-regressions"),
 );
 const port = Number(process.env.SETTINGS_PORT || 4318);
 const baseline = process.env.SETTINGS_BASELINE;

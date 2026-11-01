@@ -34,7 +34,11 @@ describe("Suppliers (e2e)", () => {
 
   beforeEach(async () => {
     await cleanDatabase(app);
-    const auth = await registerUser(server, "suppliers@test.com", "password123");
+    const auth = await registerUser(
+      server,
+      "suppliers@test.com",
+      "password123",
+    );
     token = auth.access_token;
   });
 

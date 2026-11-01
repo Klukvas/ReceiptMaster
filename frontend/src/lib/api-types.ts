@@ -11,14 +11,12 @@ export type Product = components["schemas"]["Product"] & {
   supplier_id?: string | null;
 };
 export type OrderItem = components["schemas"]["OrderItem"];
+// Receipts nested under orders are entity rows whose private columns are
+// select:false; they carry every projected field, so they share the wire type.
 export type Order = Omit<components["schemas"]["Order"], "receipts"> & {
   receipts: Receipt[];
 };
-export type Receipt = components["schemas"]["Receipt"] & {
-  active_revision?: number;
-  replacement_status?: "processing" | "failed" | null;
-  replacement_error?: string | null;
-};
+export type Receipt = components["schemas"]["ReceiptProjection"];
 
 // Recipient & Supplier have server-computed fields not in the entity schema
 export type Recipient = components["schemas"]["Recipient"] & {
@@ -58,13 +56,7 @@ export interface PaginationParams {
 }
 
 /** Aggregate worth of everything in stock — from GET /products/stock-value. */
-export interface InventoryValue {
-  currency: string;
-  purchaseValueCents: number;
-  saleValueCents: number;
-  totalUnits: number;
-  productCount: number;
-}
+export type InventoryValue = components["schemas"]["InventoryValueDto"];
 
 export interface LoginRequest {
   email: string;

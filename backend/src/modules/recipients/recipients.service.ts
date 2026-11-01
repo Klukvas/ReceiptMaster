@@ -3,6 +3,7 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Raw, Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
+import { Order } from "../orders/entities/order.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
@@ -10,6 +11,11 @@ import { PaginatedResponse } from "../../common/interfaces/paginated-response.in
 import { User } from "../users/entities/user.entity";
 import { normalizeEmail } from "../../common/dto/normalized-email";
 import { containsPattern } from "../../common/utils/like-pattern.util";
+import {
+  IdempotentCreateResult,
+  createIdempotently,
+} from "../../common/idempotency/idempotent-create";
+import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -17,6 +23,13 @@ const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   phone: "recipient.phone",
   created_at: "recipient.created_at",
 };
+
+/** null clears these nullable contact columns; name is NOT NULL. */
+const CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
+  "email",
+  "phone",
+  "address",
+]);
 
 @Injectable()
 export class RecipientsService {
@@ -56,6 +69,27 @@ export class RecipientsService {
     if (duplicate && duplicate.id !== excludeRecipientId) {
       throw ApiErrors.RECIPIENT_ALREADY_EXISTS(email);
     }
+  }
+
+  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  async createWithIdempotencyKey(
+    createRecipientDto: CreateRecipientDto,
+    user: User,
+    idempotencyKey: string,
+  ): Promise<IdempotentCreateResult<Recipient>> {
+    return this.recipientsRepository.manager.transaction((manager) =>
+      createIdempotently(
+        manager,
+        { scope: "recipient", key: idempotencyKey, userId: user.id },
+        () =>
+          manager.save(
+            manager.create(Recipient, {
+              ...createRecipientDto,
+              user_id: user.id,
+            }),
+          ),
+      ),
+    );
   }
 
   async findAll(
@@ -126,6 +160,7 @@ export class RecipientsService {
     updateRecipientDto: UpdateRecipientDto,
     user: User,
   ): Promise<Recipient> {
+    assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
     await this.assertEmailAvailable(updateRecipientDto.email, user, id);
     Object.assign(recipient, updateRecipientDto);
@@ -135,16 +170,15 @@ export class RecipientsService {
   async remove(id: string, user: User): Promise<void> {
     const recipient = await this.findOne(id, user);
 
-    // Проверяем, есть ли у получателя заказы
-    const ordersCount = await this.recipientsRepository
-      .createQueryBuilder("recipient")
-      .leftJoin("recipient.orders", "order")
-      .where("recipient.id = :id", { id })
-      .andWhere("order.id IS NOT NULL")
-      .getCount();
+    // orders.recipient_id cascades, so a soft-deleted order counts too: deleting
+    // past it would purge kept history, or fail on its receipt's foreign key.
+    const hasOrders = await this.recipientsRepository.manager.exists(Order, {
+      where: { recipient_id: id, user_id: user.id },
+      withDeleted: true,
+    });
 
-    if (ordersCount > 0) {
-      throw ApiErrors.RECIPIENT_HAS_ORDERS();
+    if (hasOrders) {
+      throw ApiErrors.RECIPIENT_HAS_ORDERS(id);
     }
 
     await this.recipientsRepository.remove(recipient);

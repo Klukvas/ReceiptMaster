@@ -117,6 +117,26 @@ describe("ApiErrors", () => {
       expect(error.statusCode).toBe(409);
       expect(error.error).toContain("Widget");
     });
+
+    it("PRODUCT_QUANTITY_CONFLICT should return 409 with the standard body", () => {
+      const error = ApiErrors.PRODUCT_QUANTITY_CONFLICT("p-123");
+      expect(error.statusCode).toBe(409);
+      expect(error.toJSON()).toEqual({
+        error: expect.stringContaining("p-123"),
+        errorCode: "PRODUCT_QUANTITY_CONFLICT",
+      });
+    });
+  });
+
+  describe("Recipient errors", () => {
+    it("RECIPIENT_HAS_ORDERS should return 409 with the standard body", () => {
+      const error = ApiErrors.RECIPIENT_HAS_ORDERS("r-123");
+      expect(error.statusCode).toBe(409);
+      expect(error.toJSON()).toEqual({
+        error: expect.stringContaining("r-123"),
+        errorCode: "RECIPIENT_HAS_ORDERS",
+      });
+    });
   });
 
   describe("Settings errors", () => {

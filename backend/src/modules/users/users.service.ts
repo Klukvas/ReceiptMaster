@@ -1,12 +1,11 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Raw, Repository } from "typeorm";
+import { EntityManager, Raw, Repository } from "typeorm";
 import { normalizeEmail } from "../../common/dto/normalized-email";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
-import * as crypto from "crypto";
 import { User } from "./entities/user.entity";
 import { RefreshToken } from "./entities/refresh-token.entity";
 import { RegisterDto } from "./dto/register.dto";
@@ -16,8 +15,28 @@ import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
 import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
+import {
+  familyOf,
+  findPresentedToken,
+  isReplay,
+  issueRefreshToken,
+  redeemRefreshToken,
+  revokePresentedToken,
+  revokeRefreshTokenFamily,
+} from "./refresh-tokens";
 
-const REFRESH_TOKEN_EXPIRATION_DAYS = 30;
+/** Decided inside the rotation transaction; the 401 is thrown only after it commits. */
+type RefreshOutcome =
+  | { readonly kind: "rotated"; readonly response: AuthResponseDto }
+  | { readonly kind: "rejected" }
+  | {
+      readonly kind: "replayed";
+      readonly userId: string;
+      readonly familyId: string;
+      readonly revokedCount: number;
+    };
+
+const REJECTED: RefreshOutcome = { kind: "rejected" };
 
 // Accounts created before emails were normalised may still be stored with capitals.
 const emailEquals = (email: string) =>
@@ -27,6 +46,8 @@ const emailEquals = (email: string) =>
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -36,19 +57,8 @@ export class UsersService {
     private configService: ConfigService,
   ) {}
 
-  private async createRefreshToken(userId: string): Promise<string> {
-    const token = crypto.randomBytes(64).toString("hex");
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRATION_DAYS);
-
-    const refreshToken = this.refreshTokenRepository.create({
-      token,
-      user_id: userId,
-      expires_at: expiresAt,
-    });
-
-    await this.refreshTokenRepository.save(refreshToken);
-    return token;
+  private createRefreshToken(userId: string): Promise<string> {
+    return issueRefreshToken(this.refreshTokenRepository.manager, userId);
   }
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
@@ -116,30 +126,79 @@ export class UsersService {
     };
   }
 
+  /**
+   * Single-use rotation: redeeming the old token and inserting its successor
+   * commit together. Of concurrent refreshes with one token only the first
+   * conditional UPDATE matches; the rest re-check after it commits and get 401.
+   * A failed successor insert rolls the redemption back, so the token still works.
+   * A spent token presented after the replay grace window revokes its whole
+   * family; that revocation commits before the 401 is thrown.
+   */
   async refreshToken(token: string): Promise<AuthResponseDto> {
     this.assertRefreshToken(token);
-    const existing = await this.refreshTokenRepository.findOne({
-      where: { token, revoked: false },
-      relations: ["user"],
-    });
+    const outcome = await this.refreshTokenRepository.manager.transaction(
+      (manager) => this.rotateRefreshToken(manager, token),
+    );
+    if (outcome.kind === "rotated") {
+      return outcome.response;
+    }
+    if (outcome.kind === "replayed") {
+      this.logger.warn(
+        `Refresh token replay: revoked ${outcome.revokedCount} live token(s) of family ${outcome.familyId} (user ${outcome.userId})`,
+      );
+    }
+    throw ApiErrors.UNAUTHORIZED();
+  }
 
-    if (!existing || existing.expires_at < new Date()) {
-      throw ApiErrors.UNAUTHORIZED();
+  private async rotateRefreshToken(
+    manager: EntityManager,
+    token: string,
+  ): Promise<RefreshOutcome> {
+    const presented = await findPresentedToken(manager, token);
+    if (!presented) {
+      return REJECTED;
+    }
+    // Lock order users → refresh_tokens, as in changePassword. FOR NO KEY UPDATE
+    // serializes every rotation and password change of one user, so a family
+    // or password revocation always runs after (and sees) any successor a
+    // concurrent rotation inserted, or before it (and that redemption fails).
+    // Unlike FOR UPDATE it leaves the FK checks of inserts referencing the user free.
+    const user = await manager.findOne(User, {
+      where: { id: presented.user_id },
+      lock: { mode: "for_no_key_update" },
+    });
+    if (!user?.isActive) {
+      return REJECTED;
     }
 
-    // Revoke old token (rotation)
-    existing.revoked = true;
-    await this.refreshTokenRepository.save(existing);
+    const now = new Date();
+    if (await redeemRefreshToken(manager, presented.id, now)) {
+      return {
+        kind: "rotated",
+        response: await this.issueSuccessor(manager, user, familyOf(presented)),
+      };
+    }
 
-    // Issue new tokens
-    const user = existing.user;
+    // Expired, revoked, or redeemed — possibly by a rotation that committed while
+    // this one waited. This later statement sees that commit and its redeemed_at.
+    const current = await findPresentedToken(manager, token);
+    if (!current || !isReplay(current, now)) {
+      return REJECTED;
+    }
+    const familyId = familyOf(current);
+    const revokedCount = await revokeRefreshTokenFamily(manager, familyId);
+    return { kind: "replayed", userId: user.id, familyId, revokedCount };
+  }
+
+  private async issueSuccessor(
+    manager: EntityManager,
+    user: User,
+    familyId: string,
+  ): Promise<AuthResponseDto> {
     const payload = { sub: user.id, email: user.email };
-    const access_token = this.jwtService.sign(payload);
-    const refresh_token = await this.createRefreshToken(user.id);
-
     return {
-      access_token,
-      refresh_token,
+      access_token: this.jwtService.sign(payload),
+      refresh_token: await issueRefreshToken(manager, user.id, familyId),
       user: {
         id: user.id,
         email: user.email,
@@ -149,7 +208,7 @@ export class UsersService {
 
   async revokeRefreshToken(token: string): Promise<void> {
     this.assertRefreshToken(token);
-    await this.refreshTokenRepository.update({ token }, { revoked: true });
+    await revokePresentedToken(this.refreshTokenRepository.manager, token);
   }
 
   private assertRefreshToken(token: unknown): asserts token is string {
@@ -158,8 +217,14 @@ export class UsersService {
     }
   }
 
-  async revokeAllUserTokens(userId: string): Promise<void> {
-    await this.refreshTokenRepository.update(
+  /** Pass a transaction's manager to revoke within it. */
+  async revokeAllUserTokens(
+    userId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repository =
+      manager?.getRepository(RefreshToken) ?? this.refreshTokenRepository;
+    await repository.update(
       { user_id: userId, revoked: false },
       { revoked: true },
     );
@@ -248,9 +313,12 @@ export class UsersService {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    await this.userRepository.update(userId, { password: hashedPassword });
-
-    // Revoke all refresh tokens on password change
-    await this.revokeAllUserTokens(userId);
+    // One transaction, users row first (the lock order rotation uses): an
+    // in-flight rotation holds that row FOR NO KEY UPDATE, so this UPDATE waits
+    // for its successor to commit and the revocation, a later statement, sees it.
+    await this.userRepository.manager.transaction(async (manager) => {
+      await manager.update(User, userId, { password: hashedPassword });
+      await this.revokeAllUserTokens(userId, manager);
+    });
   }
 }

@@ -13,7 +13,7 @@ This document describes how the ReceiptMaster backend is structured, the pattern
 - **Validation:** class-validator, class-transformer, Zod (env)
 - **API Docs:** Swagger/OpenAPI on `/api/v1/docs`
 - **Node:** 20 LTS
-- **Package Manager:** Yarn (monorepo workspaces)
+- **Package Manager:** Yarn (monorepo workspaces). The root `yarn.lock` is authoritative; `backend/yarn.lock` and `frontend/yarn.lock` are byte-for-byte copies of it so each package's Docker build can run `yarn install --frozen-lockfile` — after any dependency change copy the root lock over both (CI fails on drift). `yarn lint` only checks; `yarn lint:fix` applies fixes.
 
 Entry points:
 - `backend/src/main.ts` — bootstraps NestJS, configures global pipes/CORS/Swagger
@@ -29,6 +29,7 @@ backend/src/modules/orders/
 ├── orders.module.ts        # DI container — imports entities, registers service/controller
 ├── orders.controller.ts    # HTTP routes — parse input, call service, return response
 ├── orders.service.ts       # Business logic — validates, queries DB, fires events
+├── orders-dashboard.service.ts  # Read-only cached dashboard aggregates (raw SQL)
 ├── idempotency-cleanup.service.ts  # Supporting service — called by scheduler
 ├── dto/                    # Request/Response DTOs — validate input shape, document API
 │   ├── create-order.dto.ts
@@ -50,7 +51,7 @@ backend/src/modules/orders/
     SubscriptionModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, IdempotencyCleanupService],
+  providers: [OrdersService, OrdersDashboardService, IdempotencyCleanupService],
   exports: [OrdersService],  // Let other modules inject OrdersService
 })
 export class OrdersModule {}
@@ -257,16 +258,18 @@ export class OrdersService {
     };
   }
 
-  // Cache expensive operations
-  private dashboardCacheKey(method: string, userId: string, ...args: unknown[]): string {
-    return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
-  }
-
+  // Every order write drops the tenant's cached dashboard entries (all key versions)
   private async invalidateDashboardCache(userId: string): Promise<void> {
-    await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+    await this.cacheService.delByPattern(dashboardCachePattern(userId));
   }
 }
 ```
+
+Dashboard reads are a separate provider: `orders-dashboard.service.ts` (`OrdersDashboardService`,
+injected with only `DataSource` + `CacheService`) holds the eight cached `get*` aggregates the
+`/orders/dashboard/*` routes call, each wrapped in its private `cachedDashboard(key, fn)` with keys
+from `dashboard-cache.ts` and profit SQL from `dashboard-profit.ts`. It never writes; invalidation
+stays with the writers (`OrdersService` above, and `TelegramService` for bot-created orders).
 
 **Conventions:**
 - Inject repositories via `@InjectRepository(Entity)` and the `DataSource` for transactions
@@ -279,8 +282,53 @@ export class OrdersService {
 - Soft deletion must be explicit in raw SQL aggregates (`o.deleted_at IS NULL`), since ORM defaults do not apply to raw queries
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
-- Cache expensive queries, invalidate on write
+- Cache expensive queries, invalidate on write (read side in `OrdersDashboardService`, invalidation in the writing service)
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
+- Never `save()` a whole entity loaded without a lock: write only the changed columns with a
+  conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
+  precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
+- Check a quota and insert in **one** transaction, after taking the tenant's quota lock
+- Idempotent creates go through `common/idempotency/idempotent-create.ts` (`createIdempotently`,
+  used by `POST /products` and `POST /recipients`; orders keep their own older implementation).
+  Inside the caller's transaction and before any other lock it validates the key (1–255 visible
+  ASCII, else 400 `VALIDATION_ERROR`), takes `pg_advisory_xact_lock(hashtext(scopedKey))`, replays an
+  unexpired `idempotency_keys` row for (scoped key, user) or deletes an expired one, runs the create
+  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (no migration: the
+  existing table, `order_id` NULL). `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
+  fits `varchar(255)` for every accepted key and never equals an order key, which is stored raw in
+  the same `(key, user_id)`-unique column. The controller sets `X-Idempotency-Replayed: true` on a
+  replay (`@Res({ passthrough: true })`, so interceptors still see the body); without the header the
+  original create path runs unchanged. Guarantee: within 24 h, retries with one key — concurrent
+  ones too — create at most one entity and get the first response. Not covered: a failed create
+  stores nothing (a retry runs it again), a repeated key with a different body replays the first
+  response, and the client must keep its key (the onboarding keeps it only in memory)
+
+#### Tenant advisory locks and lock ordering
+
+Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
+
+| Key | Taken by | Serializes |
+|---|---|---|
+| `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
+| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
+| `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
+| `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
+| `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel | receipts and document configuration |
+| `hashtextextended(userId, 2)` | document storage cleanup | storage sweeps |
+
+Migrations additionally hold a session-level `pg_advisory_lock` (`common/services/migration.service.ts`).
+
+**Ordering rule** (prevents lock-order deadlocks): a transaction takes at most one tenant advisory
+lock, and takes it first; row locks follow in ascending id order (`ORDER BY id … FOR UPDATE`). The
+only combinations of advisory locks in use start with an idempotency key lock, which is not a tenant
+lock and is always taken first: order create with a key takes key lock → order-quota lock → product
+rows; product create with a key takes key lock → `product-quota`; recipient create with a key takes
+only its key lock. Product create takes `product-quota` (never `hashtextextended(userId, 1)`); a
+product update takes no advisory lock and at most its own row lock. Order cancel takes `hashtextextended(userId, 1)` → order row → the order's receipt rows (id
+order) → logo asset rows, the same tenant → order → receipt order as generation and promotion.
+Confirm, `approveBatch` (id order), edit and delete take order row locks without a tenant lock;
+manual void and repair start at the order row too — none of them takes the tenant lock after a row
+lock.
 
 ### 4. DTO — Input/Output Validation
 
@@ -332,6 +380,7 @@ export class CreateOrderDto {
 - Use `@Type()` from class-transformer to cast types (e.g., string ID to UUID)
 - Use `@ApiProperty()` to document request/response in Swagger
 - The global `ValidationPipe` runs automatically on all controller inputs
+- Zod-validated bodies (`@Body() body: unknown`) are invisible to Swagger: register the schema in `src/openapi/api-components.ts` and document the route with `src/openapi/api-docs.decorators.ts` (`ApiJsonBody`, `ApiDocumentDraftBody` for the JSON/multipart draft envelope, `ApiDataResponse`, `ApiFailureResponses` for the shared `{ error, errorCode }` body)
 
 ### 5. Entity — Database Schema
 
@@ -457,7 +506,20 @@ export class OrdersController { ... }
 File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but standard Passport pattern)
 
 **Related files:**
-- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`
+- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`.
+  Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` it finds the token
+  by hash, locks the owner `FOR NO KEY UPDATE` (serializes one user's rotations and password
+  changes; lock order users → refresh_tokens, shared with `changePassword`), redeems with a conditional QueryBuilder
+  `UPDATE … WHERE id AND revoked = false AND expires_at > now RETURNING id` (read the rows from
+  `UpdateResult.raw`; `manager.query` would return the driver's `[rows, count]` tuple), then
+  `issueRefreshToken(manager, userId, familyId)` inserts the successor in the same transaction. The
+  transaction returns a `RefreshOutcome` (`rotated | rejected | replayed`) and the 401 is thrown after
+  commit, so a replay's family revocation is not rolled back. `refresh_tokens` has no RLS and refresh
+  runs without tenant context
+- `backend/src/modules/users/refresh-tokens.ts` — token hashing (SHA-256), lookup with the
+  plaintext fallback for pre-hashing rows, redemption, family revocation, the 30 s replay grace
+- `backend/src/config/trusted-proxy.ts` — `trustReverseProxy(app)` (`trust proxy` = 1 hop, the
+  frontend nginx), called from `main.ts`; per-IP throttles depend on it
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
 
 ### Middleware (Request Context)
@@ -495,11 +557,23 @@ The earlier pre-auth TenantMiddleware and write-only TenantContextSubscriber are
 Service predicates still filter by `user_id`; PostgreSQL RLS supplies a second boundary.
 
 RLS requires a runtime database role that is neither a table owner, superuser nor BYPASSRLS.
-The application does not provision or change production roles. Run migrations with a separate
-privileged connection, then set `AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
+The application does not provision or change production roles. `backend/db/roles/` holds the
+operator scripts and rollout runbook for `rm_owner` (migrations), `rm_app` (runtime) and `rm_backup`
+(S3 dumps). Run the release migrations through the gate's `migrate` service, and set
+`AUTO_RUN_MIGRATIONS=false` for the restricted runtime role.
 The switch parses the literal strings `true` and `false`; a typo fails startup validation.
 Tests use a disposable PostgreSQL cluster with a restricted non-owner role and a single pool
-connection; normal database defaults are never used by the opt-in audit suite.
+connection; normal database defaults are never used by the opt-in audit suite (parameters under
+*Tests* below). `test/db-roles.e2e-spec.ts` runs the production role scripts, with suite-owned role
+names, and CI repeats `test/e2e` as `rm_app` on a database converted with them. Neither is
+evidence of what is deployed; `scripts/deploy-production.sh` reports that from the backend's own
+connection on every release.
+
+Cross-tenant background work needs no role of its own. The outbox, storage sweep schedule,
+idempotency keys, Telegram update ids and subscriptions have no RLS and hold identifiers or billing
+state; anything touching tenant rows after them enters `runWithTenant`. `suppliers`,
+`supplier_products`, `user_settings`, `user_subscriptions`, `audit_logs`, `idempotency_keys` and
+`refresh_tokens` are tenant-owned but rely on application scoping only.
 
 Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
 recipients. A token grants access to exactly its generated receipt and related graph, not the
@@ -577,8 +651,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof Error) {
-      // Unexpected JS errors
-      this.logger.error("Unhandled error:", exception.stack);
+      // Unexpected errors, QueryFailedError included: the message never leaves the server
       return response.status(500).json({
         error: "Internal server error",
         errorCode: "INTERNAL_SERVER_ERROR",
@@ -587,12 +660,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     // Unknown error
     return response.status(500).json({
-      error: "Unknown error",
+      error: "Unknown error occurred",
       errorCode: "UNKNOWN_ERROR",
     });
   }
 }
 ```
+
+Only `ApiErrorResponse` and Nest `HttpException` messages reach the client — they are written for
+it, deliberate 5xx such as `RECEIPT_GENERATION_FAILED` included. Every other error gets the fixed
+body above (before 2026-10-30 its raw message was sent, leaking SQL from database errors). Each
+error is logged once with `error`, `errorCode`, `status`, `detail` (the original message) and
+`stack`, so the cause of a generic 500 lives in the log only.
 
 **Error Response Shape:**
 
@@ -674,6 +753,57 @@ Snapshot/HTML/pending-asset entity columns use `select: false`; internal service
 
 `DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded objects have a 24-hour grace. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving MAX_RECEIPTS = 10. Legacy local filesystem files are not processed by immutable object-storage cleanup.
 
+The additive `1792300000000-AddOrderItemUnitCost` migration adds nullable `order_items.unit_cost_cents`
+with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`) and no default; on its own it left
+legacy lines NULL. `ADD COLUMN … NULL` is metadata-only; the inline CHECK costs one scan of
+`order_items` under the ACCESS EXCLUSIVE lock that `ADD COLUMN` already holds. `NOT VALID` + `VALIDATE`
+would not shorten that lock because `scripts/deploy-production.sh` runs every pending migration in one
+transaction (`transaction: 'all'`, `lock_timeout` 30 s); the table is small for this product. The
+row-level `tenant_isolation_order_items` policy and table-level grants cover the new column unchanged.
+Rollout: the deploy script applies it with the new image before swapping containers (it is listed in
+`KNOWN_MIGRATIONS`/`EXPECTED_MIGRATIONS`); the old image ignores the column and its inserts store
+NULL; rolling back the image is safe; `down` drops captured costs and must not run in production.
+`test/order-item-cost-migration.e2e-spec.ts` runs the chain up to the previous release, seeds legacy
+lines, then up → CHECK → restricted-role write under RLS → down → up on a fresh database.
+
+`1792310000000-BackfillOrderItemUnitCost` adds `order_items.unit_cost_estimated` (boolean, NOT NULL,
+default false) and sets every NULL `unit_cost_cents` to the same tenant's product
+`purchase_price_cents` when that is ≥ 0, flagging those lines. It is an owner decision recorded in the
+file: the value is an estimate, and it deliberately supersedes the "no backfill" comment in the
+already-applied migration above, which stays unedited. Raw SQL so soft-deleted products are reached.
+One guard fails closed: `row_security_active()` must be false for both tables in `up` and `down`,
+because row security would narrow the writes and any verifying count alike (with no tenant set every
+row is hidden, so a zero-row UPDATE would look like success); the chain leaves both tables ENABLE
+without FORCE, so that holds for a superuser or the table owner. A line pointing at another tenant's
+product does not stop the release: it is not backfilled and stays unknown. After the UPDATE, the NULL
+lines whose product has a non-negative cost are exactly that set, and their count (never ids or tenant
+data) is logged through Nest's `Logger`, because TypeORM's logger is off in production. `run_migration`
+in the deploy script prints that one line; every other line of migration output stays unechoed. No
+trigger exists on either table. `down` nulls only flagged lines, then drops the flag. The entity maps the flag with
+`select: false` and `@ApiHideProperty()`, so it reaches no response, document or OpenAPI schema, and
+no application code writes it; lines rewritten by a draft edit take the default. Under the deploy
+script it runs in the same one-transaction path (`lock_timeout` 30 s, `statement_timeout` 180 s) with
+the backend stopped, so the UPDATE has no concurrent writers. To undo it, roll back to the old image
+before running `down`: TypeORM includes the defaulted column in INSERT … RETURNING, so the current
+entity cannot write order lines once the column is gone.
+`test/order-item-cost-backfill.e2e-spec.ts` seeds the previous release's state, then covers values and
+flags, profit against the pre-change formula, a later price change, restricted-role reads, the
+cross-tenant warning, the row-security refusal, and down → up.
+
+The additive `1792400000000-HashRefreshTokens` migration adds nullable `refresh_tokens.token_hash`
+(unique, `UQ_refresh_tokens_token_hash`), `family_id` (partial index on live rows) and `redeemed_at` (timestamptz, set only by a rotation),
+and drops NOT NULL from `token`. It backfills `token_hash = encode(sha256(convert_to(token,'UTF8')),'hex')`
+and `family_id = id`; `token` was never unique, so all but the newest copy of a duplicated plaintext
+lose both hash and plaintext (and are revoked) before the unique index is built. Rollout is
+expand-only: existing rows keep their plaintext so the previous image — which a failed release rolls
+back to with the migration retained — still redeems them, and its plaintext-only inserts still fit;
+the current code reads plaintext only where `token_hash IS NULL`. Tokens issued by the new image are
+hash-only, so after a rollback those sessions must log in again. Once no plaintext row can be live
+(30 days after release) a later release may drop `token` and the fallback. `down` deletes hash-only
+rows (ending those sessions) to restore NOT NULL. Listed in `KNOWN_MIGRATIONS`/`EXPECTED_MIGRATIONS`.
+`test/refresh-token-hash-migration.e2e-spec.ts` covers backfill, dedup, previous-image writes, the
+current service through a restricted role, down and re-apply.
+
 The additive `1792100000001-DocumentStorageLeases` migration adds tenant-RLS PDF leases, bounded-cleanup indexes and the operational sweep queue; existing logo tenants are queued without scanning customer content. No migration is applied by verification.
 
 The additive `1792100000000-DocumentConfiguration` migration adds config/revision/logo columns, tenant assets/presets, one active snapshot and one pending replacement. New tables have FORCE RLS with explicit USING/WITH CHECK and tenant-qualified asset foreign keys. A trigger validates the legacy varchar settings tenant against the asset owner. It deliberately does not retrofit unrelated settings RLS.
@@ -735,9 +865,41 @@ async generate(orderId: string, user: User): Promise<Receipt> {
 }
 ```
 
+### Map Known Constraint Violations in the Service
+
+When a database constraint is the rule (no racy pre-check), catch its violation where the write
+happens and throw the domain error; let everything else through. Match the constraint by name —
+for a unique *index* Postgres reports the index name:
+
+```typescript
+// Simplified: products.service.ts wraps this in rejectingDuplicateName(name, write),
+// used by create, createWithIdempotencyKey and the rename path of update.
+// IDX_products_user_name is the partial (user_id, name) index.
+try {
+  return await this.productsRepository.manager.transaction(/* insert */);
+} catch (error) {
+  if (isUniqueViolationOf(error, "IDX_products_user_name")) {
+    throw ApiErrors.PRODUCT_ALREADY_EXISTS(dto.name); // 409
+  }
+  throw error; // anything else → generic 500
+}
+```
+
+`isUniqueViolationOf` lives in `common/utils/unique-violation.util.ts` (SQLSTATE 23505 + constraint
+name). Catch outside `manager.transaction(...)`: the transaction has already rolled back.
+
+### Refuse null for NOT NULL Fields in PATCH Bodies
+
+`PartialType` adds `@IsOptional`, which lets `null` through class-validator. Services whose update
+DTO allows clearing some columns call `assertNoNullForRequiredFields(fields, clearableFields)`
+(`common/utils/null-fields.util.ts`) before touching the database: `null` for any other field is a
+400 `VALIDATION_ERROR` instead of a NOT NULL violation (products: only `supplier_id` is clearable;
+recipients: `email`, `phone`, `address`).
+
 ### Global Filter Handles the Rest
 
-Any unhandled error bubbles up and the `GlobalExceptionFilter` catches it, logging it and returning a 500.
+Any unhandled error bubbles up and the `GlobalExceptionFilter` catches it, logging its message and
+stack and returning a generic 500 (`Internal server error` / `INTERNAL_SERVER_ERROR`).
 
 ---
 
@@ -804,8 +966,11 @@ ConfigModule.forRoot({
 })
 ```
 
-Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
-`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, a valid `FRONTEND_URL`, and explicitly
+Production always requires `FRONTEND_URL` to be the bare `https` origin customers reach, with no
+path or trailing slash, whether billing is on or off. Public receipt links and the Paddle checkout URL are
+built from it, and both consumers keep a `http://localhost:5173` fallback that only development and
+test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`,
+`PADDLE_WEBHOOK_SECRET`, `PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
 `PADDLE_ENVIRONMENT=production`. Missing values or sandbox mode fail startup. Development/test
 may leave billing disabled. `.env.example` lists empty configuration keys; production image
 selection uses an explicit immutable `IMAGE_TAG`. Test-mode boot ignores `.env` files.
@@ -847,15 +1012,17 @@ export class PaginationDto {
 ```typescript
 export class DateRangeDto {
   @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
 
   // Parsed & validated versions (computed by getter)
   get startDateParsed(): Date | undefined { ... }
+  // A date-only value (YYYY-MM-DD) ends at 23:59:59.999Z of that UTC day;
+  // queries compare with `<=`, so the selected day is included.
   get endDateParsed(): Date | undefined { ... }
 }
 ```
@@ -911,32 +1078,78 @@ Use these instead of ad-hoc handling when a DTO or query touches the same kind o
 3. **Implement service method** (`backend/src/modules/[feature]/[feature].service.ts`)
    ```typescript
    async create(dto: CreateProductDto, user: User): Promise<Product> {
-     // Validate subscription limits
-     await this.subscriptionService.assertCanCreateProduct(user.id);
-
-     // Check for duplicates if needed
-     const existing = await this.productsRepository.findOne({
-       where: { user_id: user.id, name: dto.name },
+     // Quota check and insert commit together under the tenant's quota lock
+     return this.productsRepository.manager.transaction(async (manager) => {
+       await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
+       const product = manager.create(Product, { ...dto, user_id: user.id });
+       return manager.save(product);
      });
-     if (existing) throw ApiErrors.PRODUCT_ALREADY_EXISTS(dto.name);
-
-     // Create & save
-     const product = this.productsRepository.create({
-       user_id: user.id,
-       ...dto,
-     });
-     await this.productsRepository.save(product);
-
-     // Invalidate cache
-     await this.cacheService.invalidateUserCache(user.id);
-
-     return product;
    }
    ```
 
-4. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
+4. **Contract** — run `yarn openapi:export` in `backend/` and commit `backend/openapi.json`. CI (`contract-test`) runs `node dist/openapi/generate-openapi.js --check`, which fails when the code and the committed contract differ or when a routed handler is missing from the document, then regenerates the frontend types and type-checks them. The exporter boots Nest in preview mode with forced test env (`NODE_ENV=test`, no migrations, billing off, `.invalid` DB/Redis hosts): no provider, queue, cron, migration, webhook or storage client runs, so it needs no services.
+
+5. **Tests** — See `*.spec.ts` files for patterns. Minimal expectations:
    - Unhappy path: test that the error is thrown with correct HTTP status
    - Happy path: test that the entity is saved & returned
+
+   **API e2e** (`yarn test:e2e`, `test/e2e/*`) truncates every table. `test/helpers/test-app.ts`
+   refuses to compile the app unless `NODE_ENV=test` and `DB_NAME` ends in `_test`.
+
+   **Isolated PostgreSQL suites** — `src/common/tenancy/tenant-data-source.pg.spec.ts` (tenant
+   RLS, connection-context reset, transactions, and — on a fully migrated database — delayed
+   explicit/repair regeneration that cannot restore a revoked share token or undo a concurrent
+   void), `test/orders-audit.e2e-spec.ts`, `test/template-features-sql.e2e-spec.ts`,
+   `test/products-concurrency.e2e-spec.ts` (stock precondition writes, lock-parked conflicts,
+   product-quota races and rollback), `test/refresh-rotation.e2e-spec.ts` (single-use rotation
+   under concurrency, hash-only successors, successor-insert rollback, expiry),
+   `test/refresh-token-security.e2e-spec.ts` (inactive users, replay inside/after the grace window
+   and family revocation, plaintext rows of a rolled-back image, logout, a password change racing a
+   rotation parked on an advisory lock), `test/refresh-token-hash-migration.e2e-spec.ts`,
+   `test/order-lifecycle.e2e-spec.ts`
+   (confirm/approve/cancel races, cancel voiding documents and links, delayed workers after a
+   cancel, rejected follow-ups), `test/order-profit-snapshot.e2e-spec.ts` (cost capture, profit from
+   snapshots, unknown vs zero cost, daily gaps, sort order, cache versions),
+   `test/idempotent-create.e2e-spec.ts` (product/recipient replay, concurrent same-key requests parked
+   on the key lock, order/product/recipient keys of one value kept apart, replay at the product quota,
+   refused creates not stored, expiry, other tenants, unchanged keyless create),
+   `test/order-item-cost-migration.e2e-spec.ts`, `test/order-item-cost-backfill.e2e-spec.ts` and
+   `test/db-roles.e2e-spec.ts` (the production role scripts: idempotency, drift detection, escalation
+   denial, `pg_dump` per role, restore, the migration chain as the owner, and the gate's own SQL) —
+   create and drop their own uniquely named
+   databases and a `NOSUPERUSER NOBYPASSRLS` login role. Most of them run services as that role
+   through the production tenant query context — `test/helpers/restricted-app-database.ts`
+   (entity-synchronized schema plus the RLS policy migration) or `test/helpers/migrated-app-database.ts`
+   (the full migration chain: functions, FORCE RLS policies, outbox and storage tables), both granted
+   through the production `03-grants.sql` — and park concurrent calls on real row/table/advisory
+   locks, polling `pg_stat_activity` instead of sleeping.
+   Teardown goes through `teardownIsolatedPostgres` /
+   `destroyDataSources`: every data source is settled independently, each database is dropped
+   `WITH (FORCE)`, each role is dropped and the maintenance client is closed even when an earlier
+   step fails; all failures are rethrown together. `test/helpers/isolated-postgres.ts` gates them:
+
+   | Variable | Meaning |
+   |---|---|
+   | `AUDIT_PG_PORT=55439` / `TEMPLATE_PG_PORT=55447` | Opt-in; must be exactly that port. The host is always `127.0.0.1` |
+   | `ISOLATED_PG_USER` (alias `TEMPLATE_PG_USER`) | Required admin user of the disposable cluster; there is no OS-username fallback |
+   | `ISOLATED_PG_PASSWORD` | Optional admin password |
+   | `REQUIRE_PG_SUITES=1` | A missing opt-in fails instead of skipping (CI `e2e-backend` sets it) |
+   | Sentinel database `receiptmaster_isolated_pg_sentinel` | Must exist in the cluster; it marks the cluster as disposable (CI creates it before the suites) |
+
+   Without an opt-in the suites skip; an incomplete or wrong opt-in fails with the reason. Each
+   suite connects to the `postgres` maintenance database first and, before creating anything,
+   refuses a cluster that lacks the sentinel database or contains `market_db` — so another
+   project's cluster on the same port is refused too. Locally, in a cluster started only for these
+   suites, for example:
+   `docker run -d --rm --name pg-isolated -p 127.0.0.1:55439:5432 -p 127.0.0.1:55447:5432 -e POSTGRES_PASSWORD=postgres postgres:15-alpine`
+   (check first that nothing else listens on those ports; the cluster must be PostgreSQL 13 or newer
+   because teardown uses `DROP DATABASE … WITH (FORCE)`), then
+   `docker exec pg-isolated psql -U postgres -c "CREATE DATABASE receiptmaster_isolated_pg_sentinel"`,
+   then from `backend/`: `ISOLATED_PG_USER=postgres ISOLATED_PG_PASSWORD=postgres AUDIT_PG_PORT=55439 TEMPLATE_PG_PORT=55447 REQUIRE_PG_SUITES=1 yarn jest src/common/tenancy/tenant-data-source.pg.spec.ts`
+   and `yarn jest --config test/jest-e2e.json --runInBand orders-audit template-features-sql products-concurrency refresh-rotation refresh-token-security refresh-token-hash-migration order-lifecycle order-profit-snapshot order-item-cost-migration order-item-cost-backfill idempotent-create`.
+   `test/isolated-postgres-teardown.e2e-spec.ts` checks the failure-safe teardown with fakes and needs
+   no database.
+   Evidence written by the template e2e specs defaults to `os.tmpdir()`; set `TEMPLATE_EVIDENCE` to move it.
 
 ---
 
@@ -962,12 +1175,39 @@ Use these instead of ad-hoc handling when a DTO or query touches the same kind o
 
 `BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
 defaulting to false. Empty optional Paddle settings are accepted while OFF; ON production
-requires complete keys, prices, frontend URL and explicit production environment.
+requires complete keys, prices and explicit production environment.
 `PaddleService` guards SDK construction, payment creation/portal, signature verification,
 direct webhook handling and scheduled subscription downgrades. Stored entitlements and
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
+
+The server's Compose file and `.env` are not updated by releases, so anything the new backend needs
+from them belongs in `release_override()` in that script. `FRONTEND_URL` is set there as the literal
+`PUBLIC_ORIGIN`, the same way as `BILLING_ENABLED`; credentials stay `${...}` placeholders. A new
+required backend setting has to ship in the same change as its override entry, because the image and
+the script deploy together and a backend that fails validation rolls the release back.
+
+After `DEPLOY PASS`, still under the deploy lock, the gate removes old application images so the
+root disk does not fill up. It never runs in the precheck phase or on a failure or rollback path. It
+keeps the last `RETAINED_RELEASES` (3) releases, counted from the `release.override.json` entries in
+the Compose override chain because a rolled-back release leaves only a `rollback.override.json` there,
+plus the old pair the current run captured. Images are kept whole, so every tag of a retained image
+survives. Removal is `docker rmi` without force, on exact
+`<registry>/receiptmaster-{backend,frontend}:<sha>` and
+`receiptmaster-rollback-{backend,frontend}:<run>-<attempt>` tags only. `postgres`, `redis`,
+`market-db-backup` and any other tag, including `latest`, are out of reach. Cleanup stops after
+`IMAGE_CLEANUP_SECONDS`, and every failure only prints a `WARNING`, so a live release stays complete
+and the next verified release retries. A server already below the precheck's free-space floor never
+gets that far, so it needs one manual `docker rmi` of old tags first. Keep every
+`/opt/market/releases/*` directory: precheck requires each override in the chain to exist, though
+Compose resolves only the newest override's images, so removing old images does not affect the chain.
+
+CI's `test-release-gate` job runs `python3 scripts/deploy-production.test.py` on pull requests and
+pushes, and `build-and-deploy` needs it, so a failing gate test stops publication and deployment. The
+real-Compose tests skip without `docker`, so the job checks for the Compose CLI first and fails
+instead. Run the file locally before pushing a gate change; it needs `python3`, `node` and
+`docker compose`, and it never contacts production.
 
 ## Settings writes and logo images
 

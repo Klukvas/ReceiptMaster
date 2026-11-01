@@ -71,7 +71,10 @@ describe("OrdersService", () => {
       query: jest.fn(),
     };
 
-    receiptsService = { generateReceipt: jest.fn() };
+    receiptsService = {
+      generateReceipt: jest.fn(),
+      voidForCancellation: jest.fn().mockResolvedValue(0),
+    };
     settingsService = {
       getAutoGenerateReceipt: jest.fn().mockResolvedValue(false),
     };
@@ -108,6 +111,21 @@ describe("OrdersService", () => {
 
     service = module.get<OrdersService>(OrdersService);
   });
+
+  /** A transaction whose locked order row is `locked`; returns the manager. */
+  const lockedOrderTransaction = (locked: Partial<Order> | null) => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(locked && { ...locked }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOneOrFail: jest.fn().mockImplementation(async () => ({
+        ...locked,
+        status: manager.update.mock.calls.at(-1)?.[2]?.status,
+      })),
+    };
+    dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+    return manager;
+  };
 
   describe("findAll", () => {
     it("should return paginated orders", async () => {
@@ -150,6 +168,31 @@ describe("OrdersService", () => {
 
       expect(qb.andWhere).toHaveBeenCalled();
     });
+
+    it("findAll should apply search filter", async () => {
+      const qb = ordersRepo.createQueryBuilder();
+
+      await service.findAll({ limit: 10, offset: 0, search: "John" }, mockUser);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        "recipient.name ILIKE :search",
+        expect.objectContaining({ search: "%John%" }),
+      );
+    });
+
+    it("findAll should apply sort by column", async () => {
+      const qb = ordersRepo.createQueryBuilder();
+
+      await service.findAll(
+        { limit: 10, offset: 0, sortBy: "total_cents" },
+        mockUser,
+      );
+
+      expect(qb.orderBy).toHaveBeenCalledWith(
+        "order.total_cents",
+        expect.any(String),
+      );
+    });
   });
 
   describe("findOne", () => {
@@ -175,21 +218,50 @@ describe("OrdersService", () => {
   });
 
   describe("confirm", () => {
-    it("should confirm a draft order", async () => {
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+    it("locks the order and fences the update on the DRAFT it saw", async () => {
+      const manager = lockedOrderTransaction(mockOrder);
 
       const result = await service.confirm("order-1", mockUser);
 
       expect(result.status).toBe(OrderStatus.CONFIRMED);
-      expect(ordersRepo.save).toHaveBeenCalled();
+      expect(manager.findOne).toHaveBeenCalledWith(Order, {
+        where: { id: "order-1", user_id: "user-1" },
+        lock: { mode: "pessimistic_write" },
+      });
+      expect(manager.update).toHaveBeenCalledWith(
+        Order,
+        { id: "order-1", user_id: "user-1", status: OrderStatus.DRAFT },
+        { status: OrderStatus.CONFIRMED },
+      );
+      expect(ordersRepo.save).not.toHaveBeenCalled();
+      expect(cacheService.delByPattern).toHaveBeenCalledWith(
+        "dashboard:*:user-1:*",
+      );
     });
 
     it("should throw if order is not in draft status", async () => {
-      ordersRepo.findOne.mockResolvedValue(mockConfirmedOrder);
+      const manager = lockedOrderTransaction(mockConfirmedOrder);
 
       await expect(service.confirm("order-1", mockUser)).rejects.toThrow(
         ApiErrorResponse,
       );
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects an order cancelled before the lock was granted", async () => {
+      lockedOrderTransaction({ ...mockOrder, status: OrderStatus.CANCELLED });
+
+      await expect(service.confirm("order-1", mockUser)).rejects.toMatchObject({
+        errorCode: "ORDER_CANNOT_BE_MODIFIED",
+      });
+    });
+
+    it("returns 404 for a missing order", async () => {
+      lockedOrderTransaction(null);
+
+      await expect(service.confirm("order-1", mockUser)).rejects.toMatchObject({
+        errorCode: "ORDER_NOT_FOUND",
+      });
     });
   });
 
@@ -207,7 +279,7 @@ describe("OrdersService", () => {
       );
 
     it("does not generate a receipt when the setting is off", async () => {
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+      lockedOrderTransaction(mockOrder);
 
       await service.confirm("order-1", mockUser);
 
@@ -216,7 +288,7 @@ describe("OrdersService", () => {
 
     it("queues a receipt after confirm when the setting is on", async () => {
       settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+      lockedOrderTransaction(mockOrder);
 
       await service.confirm("order-1", mockUser);
 
@@ -229,7 +301,7 @@ describe("OrdersService", () => {
     it("still confirms the order when receipt generation fails", async () => {
       settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
       receiptsService.generateReceipt.mockRejectedValue(new Error("limit"));
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+      lockedOrderTransaction(mockOrder);
 
       const result = await service.confirm("order-1", mockUser);
 
@@ -240,7 +312,7 @@ describe("OrdersService", () => {
       settingsService.getAutoGenerateReceipt.mockRejectedValue(
         new Error("redis down"),
       );
-      ordersRepo.findOne.mockResolvedValue({ ...mockOrder });
+      lockedOrderTransaction(mockOrder);
 
       const result = await service.confirm("order-1", mockUser);
 
@@ -282,24 +354,8 @@ describe("OrdersService", () => {
   });
 
   describe("cancel", () => {
-    const mockCancelTransaction = (order: Record<string, unknown>) => {
-      const manager = {
-        find: jest.fn().mockResolvedValue([
-          { product_id: "prod-1", qty: 2 },
-          { product_id: "prod-1", qty: 1 },
-        ]),
-        findOne: jest.fn().mockResolvedValue(order),
-        update: jest.fn(),
-        increment: jest.fn(),
-      };
-      dataSource.transaction.mockImplementation(async (cb: any) =>
-        cb(manager),
-      );
-      return manager;
-    };
-
-    it("cancels the order and returns the reserved stock", async () => {
-      const manager = mockCancelTransaction({ ...mockOrder });
+    it("cancels a draft without touching documents", async () => {
+      const manager = lockedOrderTransaction(mockOrder);
       ordersRepo.findOne.mockResolvedValue({
         ...mockOrder,
         status: OrderStatus.CANCELLED,
@@ -307,39 +363,71 @@ describe("OrdersService", () => {
 
       const result = await service.cancel("order-1", mockUser);
 
-      expect(manager.increment).toHaveBeenCalledTimes(1);
-      expect(manager.increment).toHaveBeenCalledWith(
-        expect.anything(),
-        { id: "prod-1", user_id: mockUser.id },
-        "quantity",
-        3,
-      );
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(receiptsService.voidForCancellation).not.toHaveBeenCalled();
       expect(manager.update).toHaveBeenCalledWith(
-        expect.anything(),
-        { id: "order-1", user_id: mockUser.id },
+        Order,
+        { id: "order-1", user_id: "user-1", status: OrderStatus.DRAFT },
         { status: OrderStatus.CANCELLED },
       );
-      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(cacheService.delByPattern).toHaveBeenCalledWith(
+        "dashboard:*:user-1:*",
+      );
     });
 
-    it("throws and leaves stock alone if the order is already cancelled", async () => {
-      const manager = mockCancelTransaction({
+    it("takes the tenant lock first, then voids a confirmed order's documents", async () => {
+      const manager = lockedOrderTransaction(mockConfirmedOrder);
+      ordersRepo.findOne.mockResolvedValue({
         ...mockOrder,
         status: OrderStatus.CANCELLED,
       });
 
-      await expect(service.cancel("order-1", mockUser)).rejects.toThrow(
-        ApiErrorResponse,
+      await service.cancel("order-1", mockUser);
+
+      expect(manager.query).toHaveBeenCalledWith(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
+        ["user-1"],
       );
-      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(
+        manager.findOne.mock.invocationCallOrder[0],
+      );
+      expect(receiptsService.voidForCancellation).toHaveBeenCalledWith(
+        manager,
+        "order-1",
+        "user-1",
+      );
+      expect(manager.update).toHaveBeenCalledWith(
+        Order,
+        { id: "order-1", user_id: "user-1", status: OrderStatus.CONFIRMED },
+        { status: OrderStatus.CANCELLED },
+      );
     });
 
-    it("throws if the order does not exist", async () => {
-      mockCancelTransaction(null as never);
+    it("should throw if order is already cancelled", async () => {
+      const manager = lockedOrderTransaction({
+        ...mockOrder,
+        status: OrderStatus.CANCELLED,
+      });
 
-      await expect(service.cancel("order-1", mockUser)).rejects.toThrow(
-        ApiErrorResponse,
-      );
+      await expect(service.cancel("order-1", mockUser)).rejects.toMatchObject({
+        errorCode: "ORDER_ALREADY_CANCELLED",
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+      expect(receiptsService.voidForCancellation).not.toHaveBeenCalled();
+    });
+
+    it("never changes product stock", async () => {
+      const manager = lockedOrderTransaction(mockConfirmedOrder);
+      ordersRepo.findOne.mockResolvedValue({
+        ...mockOrder,
+        status: OrderStatus.CANCELLED,
+      });
+
+      await service.cancel("order-1", mockUser);
+
+      expect(
+        manager.update.mock.calls.every(([entity]) => entity === Order),
+      ).toBe(true);
     });
   });
 
@@ -413,20 +501,31 @@ describe("OrdersService", () => {
 
   describe("approveBatch", () => {
     it("should approve batch of draft orders", async () => {
-      dataSource.transaction.mockImplementation(async (cb: any) => {
-        const manager = {
-          find: jest.fn().mockResolvedValue([
-            { id: "o1", status: OrderStatus.DRAFT },
-            { id: "o2", status: OrderStatus.DRAFT },
-          ]),
-          update: jest.fn(),
-        };
-        return cb(manager);
-      });
+      const manager = {
+        find: jest.fn().mockResolvedValue([
+          { id: "o1", status: OrderStatus.DRAFT },
+          { id: "o2", status: OrderStatus.DRAFT },
+        ]),
+        update: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
 
-      const result = await service.approveBatch(["o1", "o2"], mockUser);
+      const result = await service.approveBatch(["o2", "o1"], mockUser);
 
       expect(result.approved).toBe(2);
+      expect(manager.find).toHaveBeenCalledWith(Order, {
+        where: { id: expect.anything(), user_id: "user-1" },
+        order: { id: "ASC" },
+        lock: { mode: "pessimistic_write" },
+      });
+      expect(manager.find.mock.calls[0][1].where.id.value).toEqual([
+        "o1",
+        "o2",
+      ]);
+      expect(manager.update.mock.calls[0][1]).toMatchObject({
+        user_id: "user-1",
+        status: OrderStatus.DRAFT,
+      });
     });
 
     it("should throw when some orders are not found", async () => {
@@ -691,25 +790,6 @@ describe("OrdersService", () => {
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
-    it("does not restore stock a second time for an already cancelled order", async () => {
-      const manager = {
-        find: jest.fn().mockResolvedValue([{ product_id: "prod-1", qty: 2 }]),
-        findOne: jest
-          .fn()
-          .mockResolvedValue({ ...mockOrder, status: OrderStatus.CANCELLED }),
-        softDelete: jest.fn(),
-        increment: jest.fn(),
-      };
-      dataSource.transaction.mockImplementation(async (cb: any) =>
-        cb(manager),
-      );
-
-      await service.remove("order-1", mockUser);
-
-      expect(manager.increment).not.toHaveBeenCalled();
-      expect(manager.softDelete).toHaveBeenCalled();
-    });
-
     it("should handle product not found during removal", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
@@ -750,34 +830,6 @@ describe("OrdersService", () => {
 
       expect(result.deleted).toBe(2);
       expect(cacheService.delByPattern).toHaveBeenCalled();
-    });
-
-    it("skips stock restoration for cancelled orders in a batch", async () => {
-      const manager = {
-        find: jest
-          .fn()
-          .mockResolvedValueOnce([
-            { id: "o1", status: OrderStatus.CONFIRMED },
-            { id: "o2", status: OrderStatus.CANCELLED },
-          ])
-          .mockResolvedValueOnce([{ product_id: "p1", qty: 1 }]),
-        softDelete: jest.fn(),
-        increment: jest.fn(),
-      };
-      dataSource.transaction.mockImplementation(async (cb: any) =>
-        cb(manager),
-      );
-
-      await service.deleteBatch(["o1", "o2"], mockUser);
-
-      expect(manager.find).toHaveBeenNthCalledWith(
-        2,
-        expect.anything(),
-        expect.objectContaining({
-          where: expect.objectContaining({ order_id: expect.anything() }),
-        }),
-      );
-      expect(manager.increment).toHaveBeenCalledTimes(1);
     });
 
     it("should throw if some orders not found", async () => {
@@ -968,273 +1020,6 @@ describe("OrdersService", () => {
       );
 
       expect(savedTotal).toBe(5000);
-    });
-  });
-
-  describe("dashboard methods", () => {
-    it("getOrderStatusSummary should return status counts", async () => {
-      dataSource.query.mockResolvedValue([
-        { status: "draft", count: 5 },
-        { status: "confirmed", count: 10 },
-        { status: "cancelled", count: 2 },
-      ]);
-
-      const result = await service.getOrderStatusSummary(mockUser);
-
-      expect(result).toEqual({ draft: 5, confirmed: 10, cancelled: 2 });
-    });
-
-    it("getOrderStatusSummary should return zeros when no data", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      const result = await service.getOrderStatusSummary(mockUser);
-
-      expect(result).toEqual({ draft: 0, confirmed: 0, cancelled: 0 });
-    });
-
-    it("getTotalRevenue should return revenue data", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          total_revenue_cents: "150000",
-          total_orders: "15",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getTotalRevenue(mockUser);
-
-      expect(result.total_revenue_cents).toBe(150000);
-      expect(result.total_orders).toBe(15);
-      expect(result.currency).toBe("UAH");
-    });
-
-    it("getTotalRevenue should return defaults when no data", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      const result = await service.getTotalRevenue(mockUser);
-
-      expect(result.total_revenue_cents).toBe(0);
-      expect(result.total_orders).toBe(0);
-      expect(result.currency).toBe("UAH");
-    });
-
-    it("getTotalTurnover should return turnover data", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          total_turnover_cents: "200000",
-          total_orders: "20",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getTotalTurnover(mockUser);
-
-      expect(result.total_turnover_cents).toBe(200000);
-      expect(result.total_orders).toBe(20);
-    });
-
-    it("getDailyRevenue should return daily data", async () => {
-      dataSource.query.mockResolvedValue([
-        { date: "2025-01-01", revenue_cents: "5000", turnover_cents: "10000" },
-      ]);
-
-      const result = await service.getDailyRevenue(mockUser, 7);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].revenue_cents).toBe(5000);
-      expect(result[0].turnover_cents).toBe(10000);
-    });
-
-    it("should use cache for dashboard methods", async () => {
-      cacheService.get.mockResolvedValue({
-        draft: 1,
-        confirmed: 2,
-        cancelled: 0,
-      });
-
-      const result = await service.getOrderStatusSummary(mockUser);
-
-      expect(result).toEqual({ draft: 1, confirmed: 2, cancelled: 0 });
-      expect(dataSource.query).not.toHaveBeenCalled();
-    });
-
-    it("getRevenueByProducts should return product revenue", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          product_id: "p1",
-          product_name: "Widget",
-          total_revenue_cents: "5000",
-          total_quantity: "10",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getRevenueByProducts(mockUser);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].product_name).toBe("Widget");
-      expect(result[0].total_revenue_cents).toBe(5000);
-    });
-
-    it("getRevenueByRecipients should return recipient revenue", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          recipient_id: "r1",
-          recipient_name: "John",
-          total_revenue_cents: "8000",
-          total_orders: "3",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getRevenueByRecipients(mockUser);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].recipient_name).toBe("John");
-    });
-
-    it("getTurnoverByProducts should return product turnover", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          product_id: "p1",
-          product_name: "Widget",
-          total_turnover_cents: "15000",
-          total_quantity: "10",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getTurnoverByProducts(mockUser);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].total_turnover_cents).toBe(15000);
-    });
-
-    it("getTurnoverByRecipients should return recipient turnover", async () => {
-      dataSource.query.mockResolvedValue([
-        {
-          recipient_id: "r1",
-          recipient_name: "John",
-          total_turnover_cents: "20000",
-          total_orders: "5",
-          currency: "UAH",
-        },
-      ]);
-
-      const result = await service.getTurnoverByRecipients(mockUser);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].total_turnover_cents).toBe(20000);
-    });
-
-    it("getRevenueByProducts should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-      const start = new Date("2025-01-01");
-      const end = new Date("2025-12-31");
-
-      await service.getRevenueByProducts(mockUser, start, end);
-
-      expect(dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining("created_at >="),
-        expect.arrayContaining([start, end]),
-      );
-    });
-
-    it("getRevenueByRecipients should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      await service.getRevenueByRecipients(
-        mockUser,
-        new Date("2025-01-01"),
-        new Date("2025-12-31"),
-      );
-
-      expect(dataSource.query).toHaveBeenCalled();
-    });
-
-    it("getTotalRevenue should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      await service.getTotalRevenue(
-        mockUser,
-        new Date("2025-01-01"),
-        new Date("2025-12-31"),
-      );
-
-      expect(dataSource.query).toHaveBeenCalled();
-    });
-
-    it("getTurnoverByProducts should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      await service.getTurnoverByProducts(
-        mockUser,
-        new Date("2025-01-01"),
-        new Date("2025-12-31"),
-      );
-
-      expect(dataSource.query).toHaveBeenCalled();
-    });
-
-    it("getTurnoverByRecipients should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      await service.getTurnoverByRecipients(
-        mockUser,
-        new Date("2025-01-01"),
-        new Date("2025-12-31"),
-      );
-
-      expect(dataSource.query).toHaveBeenCalled();
-    });
-
-    it("getTotalTurnover should pass date filters", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      await service.getTotalTurnover(
-        mockUser,
-        new Date("2025-01-01"),
-        new Date("2025-12-31"),
-      );
-
-      expect(dataSource.query).toHaveBeenCalled();
-    });
-
-    it("getTotalTurnover should return defaults when no data", async () => {
-      dataSource.query.mockResolvedValue([]);
-
-      const result = await service.getTotalTurnover(mockUser);
-
-      expect(result).toEqual({
-        total_turnover_cents: 0,
-        total_orders: 0,
-        currency: "UAH",
-      });
-    });
-
-    it("findAll should apply search filter", async () => {
-      const qb = ordersRepo.createQueryBuilder();
-
-      await service.findAll({ limit: 10, offset: 0, search: "John" }, mockUser);
-
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        "recipient.name ILIKE :search",
-        expect.objectContaining({ search: "%John%" }),
-      );
-    });
-
-    it("findAll should apply sort by column", async () => {
-      const qb = ordersRepo.createQueryBuilder();
-
-      await service.findAll(
-        { limit: 10, offset: 0, sortBy: "total_cents" },
-        mockUser,
-      );
-
-      expect(qb.orderBy).toHaveBeenCalledWith(
-        "order.total_cents",
-        expect.any(String),
-      );
     });
   });
 });

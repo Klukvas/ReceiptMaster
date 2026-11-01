@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, In, EntityManager } from "typeorm";
+import { Repository, DataSource, EntityManager, In } from "typeorm";
 import { Order, OrderStatus } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
 import { IdempotencyKey } from "./entities/idempotency-key.entity";
@@ -17,8 +17,8 @@ import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { SettingsService } from "../settings/services/settings.service";
 import { containsPattern } from "../../common/utils/like-pattern.util";
-
-const DASHBOARD_CACHE_TTL = 300; // 5 minutes
+import { dashboardCachePattern } from "./dashboard-cache";
+import { draftLineCost, snapshotCost } from "./order-item-cost";
 
 const ORDER_SORTABLE_COLUMNS: Record<string, string> = {
   created_at: "order.created_at",
@@ -60,7 +60,36 @@ export class OrdersService {
   ) {}
 
   private async invalidateDashboardCache(userId: string): Promise<void> {
-    await this.cacheService.delByPattern(`dashboard:*:${userId}:*`);
+    await this.cacheService.delByPattern(dashboardCachePattern(userId));
+  }
+
+  /** Row lock on a live order; every lifecycle transition starts here. */
+  private async lockOrder(
+    manager: EntityManager,
+    id: string,
+    userId: string,
+  ): Promise<Order> {
+    const order = await manager.findOne(Order, {
+      where: { id, user_id: userId },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
+    return order;
+  }
+
+  /** Status change fenced by the status observed under the row lock. */
+  private async transition(
+    manager: EntityManager,
+    order: Order,
+    status: OrderStatus,
+  ): Promise<void> {
+    const result = await manager.update(
+      Order,
+      { id: order.id, user_id: order.user_id, status: order.status },
+      { status },
+    );
+    if (result.affected !== 1)
+      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(order.id);
   }
 
   /**
@@ -95,14 +124,6 @@ export class OrdersService {
         );
       }
     }
-  }
-
-  private dashboardCacheKey(
-    method: string,
-    userId: string,
-    ...args: unknown[]
-  ): string {
-    return `dashboard:${method}:${userId}:${JSON.stringify(args)}`;
   }
 
   private validateItems(items: CreateOrderDto["items"]): void {
@@ -237,6 +258,7 @@ export class OrdersService {
           product_id: product.id,
           product_name: product.name,
           unit_price_cents: unitPriceCents,
+          unit_cost_cents: snapshotCost(product),
           qty: itemDto.qty,
           line_total_cents: lineTotalCents,
           user_id: user.id,
@@ -374,72 +396,53 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * DRAFT → CONFIRMED under the order row lock, so a cancel that committed first
+   * is seen and wins. Line costs are not touched: they were frozen when the draft
+   * lines were written. Auto-generation runs only after the commit.
+   */
   async confirm(id: string, user: User): Promise<Order> {
-    const order = await this.findOne(id, user);
-
-    if (order.status !== OrderStatus.DRAFT) {
-      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
-    }
-
-    order.status = OrderStatus.CONFIRMED;
-    const saved = await this.ordersRepository.save(order);
+    const confirmed = await this.dataSource.transaction(async (manager) => {
+      const order = await this.lockOrder(manager, id, user.id);
+      if (order.status !== OrderStatus.DRAFT) {
+        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(id);
+      }
+      await this.transition(manager, order, OrderStatus.CONFIRMED);
+      return manager.findOneOrFail(Order, {
+        where: { id, user_id: user.id },
+        relations: ["recipient", "items", "receipts"],
+      });
+    });
     await this.invalidateDashboardCache(user.id);
-    await this.autoGenerateReceipts([saved.id], user);
-    return saved;
+    await this.autoGenerateReceipts([confirmed.id], user);
+    return confirmed;
   }
 
+  /**
+   * DRAFT or CONFIRMED → CANCELLED in one transaction, taking the tenant receipt
+   * lock first and then the order row (the same tenant → order → receipt order as
+   * generation and promotion). Cancelling a confirmed order voids its active
+   * document and pending candidate and revokes the share link; voided documents
+   * stay as history. Stock is not returned here — only deleting the order does
+   * that, exactly once.
+   */
   async cancel(id: string, user: User): Promise<Order> {
     await this.dataSource.transaction(async (manager) => {
-      const order = await manager.findOne(Order, {
-        where: { id, user_id: user.id },
-        lock: { mode: "pessimistic_write" },
-      });
-      if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
-
+      await manager.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
+        [user.id],
+      );
+      const order = await this.lockOrder(manager, id, user.id);
       if (order.status === OrderStatus.CANCELLED) {
         throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
       }
-
-      // Stock is reserved when the order is created, so cancelling gives it back.
-      const orderItems = await manager.find(OrderItem, {
-        where: { order_id: id, user_id: user.id },
-      });
-      await this.restoreStock(manager, orderItems, user);
-
-      await manager.update(
-        Order,
-        { id, user_id: user.id },
-        { status: OrderStatus.CANCELLED },
-      );
+      if (order.status === OrderStatus.CONFIRMED) {
+        await this.receiptsService.voidForCancellation(manager, id, user.id);
+      }
+      await this.transition(manager, order, OrderStatus.CANCELLED);
     });
     await this.invalidateDashboardCache(user.id);
     return this.findOne(id, user);
-  }
-
-  /** Returns reserved quantities to their products, summed per product in a stable lock order. */
-  private async restoreStock(
-    manager: EntityManager,
-    orderItems: OrderItem[],
-    user: User,
-  ): Promise<void> {
-    const qtyUpdates = new Map<string, number>();
-    for (const item of orderItems) {
-      qtyUpdates.set(
-        item.product_id,
-        (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
-      );
-    }
-
-    for (const [productId, qty] of [...qtyUpdates.entries()].sort(([a], [b]) =>
-      a.localeCompare(b),
-    )) {
-      await manager.increment(
-        Product,
-        { id: productId, user_id: user.id },
-        "quantity",
-        qty,
-      );
-    }
   }
 
   async update(
@@ -552,6 +555,11 @@ export class OrdersService {
         order.total_cents = subtotalCents;
         order.currency = currency;
 
+        // Unchanged lines keep their frozen cost; see draftLineCost.
+        const previousLines = new Map(
+          existingOrderItems.map((item) => [item.product_id, item]),
+        );
+
         // First delete all existing order items
         await manager.delete(OrderItem, { order_id: id });
 
@@ -568,6 +576,11 @@ export class OrdersService {
             product_id: product.id,
             product_name: product.name,
             unit_price_cents: unitPriceCents,
+            unit_cost_cents: draftLineCost(
+              previousLines.get(product.id),
+              itemDto.qty,
+              product,
+            ),
             qty: itemDto.qty,
             line_total_cents: lineTotalCents,
             user_id: user.id,
@@ -608,12 +621,29 @@ export class OrdersService {
       });
       if (!order) throw ApiErrors.ORDER_NOT_FOUND(id);
 
-      // A cancelled order already returned its stock in cancel().
-      if (order.status !== OrderStatus.CANCELLED) {
-        const orderItems = await manager.find(OrderItem, {
-          where: { order_id: id, user_id: user.id },
-        });
-        await this.restoreStock(manager, orderItems, user);
+      const orderItems = await manager.find(OrderItem, {
+        where: { order_id: id, user_id: user.id },
+      });
+
+      // Aggregate quantity changes per product
+      const qtyUpdates = new Map<string, number>();
+      for (const item of orderItems) {
+        qtyUpdates.set(
+          item.product_id,
+          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
+        );
+      }
+
+      // Batch restore product quantities
+      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await manager.increment(
+          Product,
+          { id: productId, user_id: user.id },
+          "quantity",
+          qty,
+        );
       }
 
       // Soft delete the order (sets deleted_at timestamp)
@@ -640,12 +670,16 @@ export class OrdersService {
     orderIds: string[],
     user: User,
   ): Promise<{ approved: number }> {
-    // Deduplicate IDs
+    // Deduplicate IDs; keep request order for auto-generation, lock in id order.
     const uniqueIds = [...new Set(orderIds)];
+    const lockOrderIds = [...uniqueIds].sort();
 
     const result = await this.dataSource.transaction(async (manager) => {
+      // Same deterministic row-lock order as deleteBatch; DRAFT is checked under it.
       const orders = await manager.find(Order, {
-        where: { id: In(uniqueIds), user_id: user.id },
+        where: { id: In(lockOrderIds), user_id: user.id },
+        order: { id: "ASC" },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (orders.length !== uniqueIds.length) {
@@ -665,7 +699,7 @@ export class OrdersService {
 
       await manager.update(
         Order,
-        { id: In(uniqueIds), user_id: user.id },
+        { id: In(lockOrderIds), user_id: user.id, status: OrderStatus.DRAFT },
         { status: OrderStatus.CONFIRMED },
       );
 
@@ -696,16 +730,31 @@ export class OrdersService {
         throw ApiErrors.ORDER_NOT_FOUND(missingIds.join(", "));
       }
 
-      // Cancelled orders already returned their stock in cancel().
-      const restorableIds = orders
-        .filter((o) => o.status !== OrderStatus.CANCELLED)
-        .map((o) => o.id);
-      const allOrderItems = restorableIds.length
-        ? await manager.find(OrderItem, {
-            where: { order_id: In(restorableIds), user_id: user.id },
-          })
-        : [];
-      await this.restoreStock(manager, allOrderItems, user);
+      // Batch load all order items for all orders at once
+      const allOrderItems = await manager.find(OrderItem, {
+        where: { order_id: In(uniqueIds), user_id: user.id },
+      });
+
+      // Aggregate quantity changes per product
+      const qtyUpdates = new Map<string, number>();
+      for (const item of allOrderItems) {
+        qtyUpdates.set(
+          item.product_id,
+          (qtyUpdates.get(item.product_id) ?? 0) + item.qty,
+        );
+      }
+
+      // Batch restore product quantities
+      for (const [productId, qty] of [...qtyUpdates.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await manager.increment(
+          Product,
+          { id: productId, user_id: user.id },
+          "quantity",
+          qty,
+        );
+      }
 
       await manager.softDelete(Order, { id: In(uniqueIds), user_id: user.id });
 
@@ -714,456 +763,5 @@ export class OrdersService {
 
     await this.invalidateDashboardCache(user.id);
     return result;
-  }
-
-  private async cachedDashboard<T>(
-    key: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const cached = await this.cacheService.get<T>(key);
-    if (cached) return cached;
-    const result = await fn();
-    await this.cacheService.set(key, result, DASHBOARD_CACHE_TTL);
-    return result;
-  }
-
-  // Dashboard methods
-  async getRevenueByProducts(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<
-    Array<{
-      product_id: string;
-      product_name: string;
-      total_revenue_cents: number;
-      total_quantity: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
-      "revenueByProducts",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        oi.product_id,
-        oi.product_name,
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
-        SUM(oi.qty) as total_quantity,
-        o.currency
-      FROM order_items oi
-      INNER JOIN orders o ON o.id = oi.order_id
-      INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += `
-      GROUP BY oi.product_id, oi.product_name, o.currency
-      ORDER BY total_revenue_cents DESC
-    `;
-
-      const results = await this.dataSource.query(query, params);
-
-      return results.map((row) => ({
-        product_id: row.product_id,
-        product_name: row.product_name,
-        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
-        total_quantity: parseInt(row.total_quantity) || 0,
-        currency: row.currency,
-      }));
-    });
-  }
-
-  async getRevenueByRecipients(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<
-    Array<{
-      recipient_id: string;
-      recipient_name: string;
-      total_revenue_cents: number;
-      total_orders: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
-      "revenueByRecipients",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        o.recipient_id,
-        r.name as recipient_name,
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
-        COUNT(DISTINCT o.id) as total_orders,
-        o.currency
-      FROM orders o
-      INNER JOIN recipients r ON r.id = o.recipient_id
-      INNER JOIN order_items oi ON oi.order_id = o.id
-      INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += `
-      GROUP BY o.recipient_id, r.name, o.currency
-      ORDER BY total_revenue_cents DESC
-    `;
-
-      const results = await this.dataSource.query(query, params);
-
-      return results.map((row) => ({
-        recipient_id: row.recipient_id,
-        recipient_name: row.recipient_name,
-        total_revenue_cents: parseInt(row.total_revenue_cents) || 0,
-        total_orders: parseInt(row.total_orders) || 0,
-        currency: row.currency,
-      }));
-    });
-  }
-
-  async getTotalRevenue(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<{
-    total_revenue_cents: number;
-    total_orders: number;
-    currency: string;
-  }> {
-    const cacheKey = this.dashboardCacheKey(
-      "totalRevenue",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty) as total_revenue_cents,
-        COUNT(DISTINCT o.id) as total_orders,
-        o.currency
-      FROM orders o
-      INNER JOIN order_items oi ON oi.order_id = o.id
-      INNER JOIN products p ON p.id = oi.product_id
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += ` GROUP BY o.currency`;
-
-      const results = await this.dataSource.query(query, params);
-      const result = results[0];
-
-      return {
-        total_revenue_cents: result
-          ? parseInt(result.total_revenue_cents) || 0
-          : 0,
-        total_orders: result ? parseInt(result.total_orders) || 0 : 0,
-        currency: result?.currency || "UAH",
-      };
-    });
-  }
-
-  // Методы для общего оборота (общая выручка без вычета себестоимости)
-  async getTurnoverByProducts(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<
-    Array<{
-      product_id: string;
-      product_name: string;
-      total_turnover_cents: number;
-      total_quantity: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
-      "turnoverByProducts",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        oi.product_id,
-        oi.product_name,
-        SUM(oi.line_total_cents) as total_turnover_cents,
-        SUM(oi.qty) as total_quantity,
-        o.currency
-      FROM order_items oi
-      INNER JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += `
-      GROUP BY oi.product_id, oi.product_name, o.currency
-      ORDER BY total_turnover_cents DESC
-    `;
-
-      const results = await this.dataSource.query(query, params);
-
-      return results.map((row) => ({
-        product_id: row.product_id,
-        product_name: row.product_name,
-        total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
-        total_quantity: parseInt(row.total_quantity) || 0,
-        currency: row.currency,
-      }));
-    });
-  }
-
-  async getTurnoverByRecipients(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<
-    Array<{
-      recipient_id: string;
-      recipient_name: string;
-      total_turnover_cents: number;
-      total_orders: number;
-      currency: string;
-    }>
-  > {
-    const cacheKey = this.dashboardCacheKey(
-      "turnoverByRecipients",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        o.recipient_id,
-        r.name as recipient_name,
-        SUM(o.total_cents) as total_turnover_cents,
-        COUNT(o.id) as total_orders,
-        o.currency
-      FROM orders o
-      INNER JOIN recipients r ON r.id = o.recipient_id
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += `
-      GROUP BY o.recipient_id, r.name, o.currency
-      ORDER BY total_turnover_cents DESC
-    `;
-
-      const results = await this.dataSource.query(query, params);
-
-      return results.map((row) => ({
-        recipient_id: row.recipient_id,
-        recipient_name: row.recipient_name,
-        total_turnover_cents: parseInt(row.total_turnover_cents) || 0,
-        total_orders: parseInt(row.total_orders) || 0,
-        currency: row.currency,
-      }));
-    });
-  }
-
-  async getTotalTurnover(
-    user: User,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<{
-    total_turnover_cents: number;
-    total_orders: number;
-    currency: string;
-  }> {
-    const cacheKey = this.dashboardCacheKey(
-      "totalTurnover",
-      user.id,
-      startDate,
-      endDate,
-    );
-    return this.cachedDashboard(cacheKey, async () => {
-      let query = `
-      SELECT
-        SUM(o.total_cents) as total_turnover_cents,
-        COUNT(o.id) as total_orders,
-        o.currency
-      FROM orders o
-      WHERE o.status = $1 AND o.user_id = $2 AND o.deleted_at IS NULL
-    `;
-
-      const params: any[] = [OrderStatus.CONFIRMED, user.id];
-      let paramIndex = 3;
-
-      if (startDate) {
-        query += ` AND o.created_at >= $${paramIndex}`;
-        params.push(startDate);
-        paramIndex++;
-      }
-
-      if (endDate) {
-        query += ` AND o.created_at <= $${paramIndex}`;
-        params.push(endDate);
-        paramIndex++;
-      }
-
-      query += ` GROUP BY o.currency`;
-
-      const results = await this.dataSource.query(query, params);
-      const result = results[0];
-
-      return {
-        total_turnover_cents: result
-          ? parseInt(result.total_turnover_cents) || 0
-          : 0,
-        total_orders: result ? parseInt(result.total_orders) || 0 : 0,
-        currency: result?.currency || "UAH",
-      };
-    });
-  }
-
-  async getDailyRevenue(
-    user: User,
-    days: number = 7,
-  ): Promise<
-    Array<{ date: string; revenue_cents: number; turnover_cents: number }>
-  > {
-    const cacheKey = this.dashboardCacheKey("dailyRevenue", user.id, days);
-    return this.cachedDashboard(cacheKey, async () => {
-      const results = await this.dataSource.query(
-        `
-      SELECT
-        d.date::text as date,
-        COALESCE(SUM((oi.unit_price_cents - p.purchase_price_cents) * oi.qty), 0)::integer as revenue_cents,
-        COALESCE(SUM(oi.line_total_cents), 0)::integer as turnover_cents
-      FROM generate_series(
-        CURRENT_DATE - ($1 - 1) * INTERVAL '1 day',
-        CURRENT_DATE,
-        '1 day'
-      ) AS d(date)
-      LEFT JOIN orders o ON DATE(o.created_at) = d.date
-        AND o.status = 'confirmed'
-        AND o.user_id = $2
-        AND o.deleted_at IS NULL
-      LEFT JOIN order_items oi ON oi.order_id = o.id
-      LEFT JOIN products p ON p.id = oi.product_id
-      GROUP BY d.date
-      ORDER BY d.date ASC
-      `,
-        [days, user.id],
-      );
-
-      return results.map((row) => ({
-        date: row.date,
-        revenue_cents: parseInt(row.revenue_cents) || 0,
-        turnover_cents: parseInt(row.turnover_cents) || 0,
-      }));
-    });
-  }
-
-  async getOrderStatusSummary(
-    user: User,
-  ): Promise<{ draft: number; confirmed: number; cancelled: number }> {
-    const cacheKey = this.dashboardCacheKey("statusSummary", user.id);
-    return this.cachedDashboard(cacheKey, async () => {
-      const results = await this.dataSource.query(
-        `
-      SELECT
-        status,
-        COUNT(*)::integer as count
-      FROM orders
-      WHERE user_id = $1 AND deleted_at IS NULL
-      GROUP BY status
-      `,
-        [user.id],
-      );
-
-      const summary = { draft: 0, confirmed: 0, cancelled: 0 };
-      for (const row of results) {
-        if (row.status in summary) {
-          summary[row.status as keyof typeof summary] =
-            parseInt(row.count) || 0;
-        }
-      }
-      return summary;
-    });
   }
 }

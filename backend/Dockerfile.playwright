@@ -1,22 +1,36 @@
-# Use Playwright's official image as base (matching package.json version)
+# Use Playwright's official image as base. Its tag must equal the exact
+# `playwright` version pinned in package.json and resolved in yarn.lock, so the
+# preinstalled browsers match the locked library (enforced by the check below).
 FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
 # Set working directory
 WORKDIR /app
 
-# Install yarn and PostgreSQL client
-RUN npm install -g yarn && \
+# Install a pinned Yarn 1 and the PostgreSQL client
+RUN npm install -g yarn@1.22.22 && \
     apt-get update && \
     apt-get install -y postgresql-client && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy package files
-COPY package.json ./
+# Copy package files. The build context is ./backend, so the workspace root
+# yarn.lock is out of reach; backend/yarn.lock is a byte-for-byte copy of it.
+COPY package.json yarn.lock ./
 
-# Install dependencies (without lockfile requirement).
+# Install exactly the locked dependency tree and fail instead of re-resolving.
 # This includes the @nestjs/cli devDependency, so `yarn build` below resolves
 # `nest` from node_modules/.bin -- no global CLI install needed.
-RUN yarn install
+RUN yarn install --frozen-lockfile
+
+# Fail the build when the locked Playwright cannot launch this image's Chromium.
+# Launch options mirror PlaywrightPdfGenerator: the container runs as root,
+# where Chromium's sandbox cannot start.
+RUN node -e "require('playwright').chromium \
+      .launch({ chromiumSandbox: false, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote', '--disable-gpu'] }) \
+      .then(async (browser) => { \
+        console.log('playwright ' + require('playwright/package.json').version + ' launched Chromium ' + browser.version()); \
+        await browser.close(); \
+      }) \
+      .catch((error) => { console.error(error); process.exit(1); })"
 
 # Copy source code
 COPY . .

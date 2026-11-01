@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { OrdersService } from "./orders.service";
+import { OrdersDashboardService } from "./orders-dashboard.service";
 import { OrdersController } from "./orders.controller";
 import { IdempotencyCleanupService } from "./idempotency-cleanup.service";
 import { Order } from "./entities/order.entity";
@@ -26,7 +27,7 @@ import { SettingsModule } from "../settings/settings.module";
     SettingsModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, IdempotencyCleanupService],
+  providers: [OrdersService, OrdersDashboardService, IdempotencyCleanupService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

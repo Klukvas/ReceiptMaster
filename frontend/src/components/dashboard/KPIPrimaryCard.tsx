@@ -5,6 +5,8 @@ interface KPIPrimaryCardProps {
   value: string;
   icon: ReactNode;
   accentColor: "green" | "indigo" | "purple";
+  /** Optional note under the value, e.g. profit completeness. */
+  footer?: ReactNode;
 }
 
 const accents = {
@@ -37,6 +39,7 @@ export const KPIPrimaryCard = ({
   value,
   icon,
   accentColor,
+  footer,
 }: KPIPrimaryCardProps) => {
   const a = accents[accentColor];
 
@@ -61,6 +64,7 @@ export const KPIPrimaryCard = ({
         <p className="text-3xl sm:text-4xl font-bold tracking-tight text-content tabular-nums">
           {value}
         </p>
+        {footer && <div className="mt-2">{footer}</div>}
       </div>
     </div>
   );

@@ -11,10 +11,12 @@ import { DocumentConfiguration1792100000000 } from "../src/config/migrations/179
 import { DocumentStorageLeases1792100000001 } from "../src/config/migrations/1792100000001-DocumentStorageLeases";
 import { DocumentUploadFencing1792100000002 } from "../src/config/migrations/1792100000002-DocumentUploadFencing";
 import { mkdirSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 const EVIDENCE_DIR =
   process.env.TEMPLATE_EVIDENCE ||
-  "temp/template-features-20261015-225300/fix3";
+  join(tmpdir(), "receiptmaster-template-features", "fix3");
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 
 function seam(failAt?: string, override?: number) {

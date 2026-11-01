@@ -188,6 +188,27 @@ describe("Auth (e2e)", () => {
         .send({ refresh_token: "f".repeat(128) })
         .expect(401);
     });
+
+    it("redeems a refresh token once; the second use gets the standard 401 body", async () => {
+      const auth = await registerUser(
+        server,
+        "single-use@example.com",
+        "password123",
+      );
+      await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: auth.refresh_token })
+        .expect(201);
+
+      const reused = await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: auth.refresh_token })
+        .expect(401);
+      expect(reused.body).toEqual({
+        error: "Unauthorized access",
+        errorCode: "UNAUTHORIZED",
+      });
+    });
   });
 
   describe("POST /api/v1/auth/logout", () => {

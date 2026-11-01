@@ -1,21 +1,19 @@
 import { HttpException } from "@nestjs/common";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { ParseUUIDPipe, UseInterceptors, UploadedFile } from "@nestjs/common";
-import { z } from "zod";
 import { selectionSchema } from "../settings/document-config";
 import {
   DocumentMultipart,
   documentPayload,
 } from "../settings/document-multipart";
 import { receiptProjection } from "./services/receipt-projection";
-const regenerationSchema = selectionSchema
-  .innerType()
-  .extend({
-    mode: z.enum(["reproduce", "replace"]).default("reproduce"),
-    expectedActiveRevision: z.number().int().min(0).max(2147483646).optional(),
-    confirmReconstruction: z.boolean().optional(),
-  })
-  .strict();
+import { regenerationSchema } from "./document-schemas";
+import {
+  ApiDataResponse,
+  ApiDocumentDraftBody,
+  ApiFailureResponses,
+  ApiJsonBody,
+} from "../../openapi/api-docs.decorators";
 import {
   Controller,
   Get,
@@ -37,10 +35,8 @@ import {
 } from "@nestjs/swagger";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
-import { PaginatedReceiptResponse } from "../../common/dto/paginated-response.dto";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
-import { Receipt } from "./entities/receipt.entity";
 
 @ApiTags("receipts")
 @ApiBearerAuth("bearer")
@@ -60,14 +56,15 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt")
   @ApiOperation({ summary: "Создать чек для заказа" })
-  @ApiResponse({
-    status: 201,
-    description: "Чек успешно создан",
-    type: Receipt,
+  @ApiDocumentDraftBody("DocumentSelectionRequest", { required: false })
+  @ApiDataResponse(201, "ReceiptProjection", "Чек успешно создан")
+  @ApiFailureResponses({
+    400: "Невозможно создать чек",
+    402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+    404: "Заказ не найден",
+    409: "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+    413: "Request above 6 MiB or logo above 5 MiB",
   })
-  @ApiResponse({ status: 400, description: "Невозможно создать чек" })
-  @ApiResponse({ status: 404, description: "Заказ не найден" })
-  @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
   @UseInterceptors(DocumentMultipart())
   async createReceipt(
     @Param("orderId", ParseUUIDPipe) orderId: string,
@@ -87,14 +84,15 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt/compact")
   @ApiOperation({ summary: "Создать компактный чек для заказа" })
-  @ApiResponse({
-    status: 201,
-    description: "Компактный чек успешно создан",
-    type: Receipt,
+  @ApiDocumentDraftBody("DocumentSelectionRequest", { required: false })
+  @ApiDataResponse(201, "ReceiptProjection", "Компактный чек успешно создан")
+  @ApiFailureResponses({
+    400: "Невозможно создать чек",
+    402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+    404: "Заказ не найден",
+    409: "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+    413: "Request above 6 MiB or logo above 5 MiB",
   })
-  @ApiResponse({ status: 400, description: "Невозможно создать чек" })
-  @ApiResponse({ status: 404, description: "Заказ не найден" })
-  @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
   @UseInterceptors(DocumentMultipart())
   async createCompactReceipt(
     @Param("orderId", ParseUUIDPipe) orderId: string,
@@ -114,14 +112,15 @@ export class ReceiptsController {
 
   @Post("orders/:orderId/receipt/standard")
   @ApiOperation({ summary: "Создать стандартный чек для заказа" })
-  @ApiResponse({
-    status: 201,
-    description: "Стандартный чек успешно создан",
-    type: Receipt,
+  @ApiDocumentDraftBody("DocumentSelectionRequest", { required: false })
+  @ApiDataResponse(201, "ReceiptProjection", "Стандартный чек успешно создан")
+  @ApiFailureResponses({
+    400: "Невозможно создать чек",
+    402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+    404: "Заказ не найден",
+    409: "Чек для заказа уже существует, or the selected preset changed since presetRevision",
+    413: "Request above 6 MiB or logo above 5 MiB",
   })
-  @ApiResponse({ status: 400, description: "Невозможно создать чек" })
-  @ApiResponse({ status: 404, description: "Заказ не найден" })
-  @ApiResponse({ status: 409, description: "Чек для заказа уже существует" })
   @UseInterceptors(DocumentMultipart())
   async createStandardReceipt(
     @Param("orderId", ParseUUIDPipe) orderId: string,
@@ -141,11 +140,7 @@ export class ReceiptsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список всех чеков" })
-  @ApiResponse({
-    status: 200,
-    description: "Список чеков получен",
-    type: PaginatedReceiptResponse,
-  })
+  @ApiDataResponse(200, "ReceiptListResponse", "Список чеков получен")
   @ApiQuery({ name: "offset", required: false, description: "Offset" })
   @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
   async findAll(
@@ -179,11 +174,7 @@ export class ReceiptsController {
 
   @Get(":id")
   @ApiOperation({ summary: "Получить метаданные чека" })
-  @ApiResponse({
-    status: 200,
-    description: "Метаданные чека получены",
-    type: Receipt,
-  })
+  @ApiDataResponse(200, "ReceiptProjection", "Метаданные чека получены")
   @ApiResponse({ status: 404, description: "Чек не найден" })
   async findOne(
     @Param("id", ParseUUIDPipe) id: string,
@@ -238,7 +229,7 @@ export class ReceiptsController {
     required: false,
     description: "Имя принтера (по умолчанию системный)",
   })
-  @ApiResponse({ status: 200, description: "Чек отправлен на печать" })
+  @ApiResponse({ status: 201, description: "Чек отправлен на печать" })
   @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при печати" })
   async printReceipt(
@@ -251,11 +242,8 @@ export class ReceiptsController {
 
   @Post(":id/void")
   @ApiOperation({ summary: "Void a receipt and unlock the order" })
-  @ApiResponse({
-    status: 200,
-    description: "Receipt voided successfully",
-    type: Receipt,
-  })
+  @ApiJsonBody("ReceiptVoidRequest", { required: false })
+  @ApiDataResponse(201, "ReceiptProjection", "Receipt voided successfully")
   @ApiResponse({ status: 400, description: "Receipt is already voided" })
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async voidReceipt(
@@ -272,7 +260,7 @@ export class ReceiptsController {
   @ApiOperation({
     summary: "Generate a test receipt PDF preview using current user settings",
   })
-  @ApiResponse({ status: 200, description: "Test PDF generated" })
+  @ApiResponse({ status: 201, description: "Test PDF generated" })
   async testPreview(@Request() req: { user: User }, @Res() res: Response) {
     try {
       const pdfBuffer = await this.receiptsService.generateTestReceipt(
@@ -291,12 +279,15 @@ export class ReceiptsController {
 
   @Post(":id/regenerate")
   @ApiOperation({ summary: "Принудительно регенерировать PDF чек" })
-  @ApiResponse({
-    status: 200,
-    description: "PDF чек успешно регенерирован",
-    type: Receipt,
+  @ApiDocumentDraftBody("ReceiptRegenerationRequest", { required: false })
+  @ApiDataResponse(201, "ReceiptProjection", "PDF чек успешно регенерирован")
+  @ApiFailureResponses({
+    400: "Invalid body, or reproduce combined with new configuration",
+    402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+    404: "Чек не найден",
+    409: "Stale expectedActiveRevision or preset revision, replacement already running, or reconstruction required",
+    413: "Request above 6 MiB or logo above 5 MiB",
   })
-  @ApiResponse({ status: 404, description: "Чек не найден" })
   @ApiResponse({ status: 500, description: "Ошибка при регенерации PDF" })
   @UseInterceptors(DocumentMultipart())
   async regenerateReceiptPdf(
@@ -334,10 +325,7 @@ export class ReceiptsController {
 
   @Post(":id/share")
   @ApiOperation({ summary: "Generate a public share link for a receipt" })
-  @ApiResponse({
-    status: 200,
-    description: "Public link generated",
-  })
+  @ApiDataResponse(201, "ReceiptShareResponse", "Public link generated")
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async shareReceipt(
     @Param("id", ParseUUIDPipe) id: string,
@@ -348,7 +336,7 @@ export class ReceiptsController {
 
   @Post(":id/share/revoke")
   @ApiOperation({ summary: "Revoke public share link for a receipt" })
-  @ApiResponse({ status: 200, description: "Public link revoked" })
+  @ApiDataResponse(201, "ReceiptProjection", "Public link revoked")
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async revokeShareReceipt(
     @Param("id", ParseUUIDPipe) id: string,

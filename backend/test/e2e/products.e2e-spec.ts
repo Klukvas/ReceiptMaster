@@ -66,6 +66,127 @@ describe("Products (e2e)", () => {
     });
   });
 
+  describe("POST /api/v1/products with Idempotency-Key", () => {
+    const post = (key: string) =>
+      request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .set("Idempotency-Key", key)
+        .send(validProduct);
+
+    it("a repeated key creates one product and replays the first 201", async () => {
+      const first = await post("onboarding-key-1").expect(201);
+      const second = await post("onboarding-key-1").expect(201);
+
+      expect(first.headers["x-idempotency-replayed"]).toBeUndefined();
+      expect(second.headers["x-idempotency-replayed"]).toBe("true");
+      expect(second.body).toEqual(first.body);
+
+      const list = await request(server)
+        .get("/api/v1/products")
+        .set(authHeader(token))
+        .expect(200);
+      expect(list.body.data.map((row: { id: string }) => row.id)).toEqual([
+        first.body.id,
+      ]);
+    });
+
+    it("rejects an invalid key with 400 and creates nothing", async () => {
+      const res = await post("two words").expect(400);
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      await post("k".repeat(256)).expect(400);
+
+      const list = await request(server)
+        .get("/api/v1/products")
+        .set(authHeader(token))
+        .expect(200);
+      expect(list.body.data).toHaveLength(0);
+    });
+  });
+
+  describe("duplicate live names (IDX_products_user_name)", () => {
+    const create = (body = validProduct) =>
+      request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(body);
+    const listNames = async () =>
+      (
+        await request(server)
+          .get("/api/v1/products")
+          .set(authHeader(token))
+          .expect(200)
+      ).body.data.map((row: { name: string }) => row.name);
+
+    it("a second create with the same name is 409 PRODUCT_ALREADY_EXISTS", async () => {
+      await create().expect(201);
+
+      const res = await create().expect(409);
+
+      expect(res.body).toEqual({
+        error: `Product with name ${validProduct.name} already exists`,
+        errorCode: "PRODUCT_ALREADY_EXISTS",
+      });
+      expect(await listNames()).toEqual([validProduct.name]);
+    });
+
+    it("an Idempotency-Key create with a taken name is 409 and stores nothing to replay", async () => {
+      await create().expect(201);
+      const post = () =>
+        request(server)
+          .post("/api/v1/products")
+          .set(authHeader(token))
+          .set("Idempotency-Key", "duplicate-name-key")
+          .send(validProduct);
+
+      const first = await post().expect(409);
+      const retry = await post().expect(409);
+
+      expect(first.body.errorCode).toBe("PRODUCT_ALREADY_EXISTS");
+      expect(retry.headers["x-idempotency-replayed"]).toBeUndefined();
+      expect(await listNames()).toEqual([validProduct.name]);
+    });
+
+    it("a soft-deleted product's name can be used again", async () => {
+      const original = await create().expect(201);
+      await request(server)
+        .delete(`/api/v1/products/${original.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+
+      await create().expect(201);
+    });
+
+    it("renaming onto another live product's name is 409 and changes nothing", async () => {
+      await create().expect(201);
+      const other = await create({ ...validProduct, name: "Other" }).expect(
+        201,
+      );
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${other.body.id}`)
+        .set(authHeader(token))
+        .send({ name: validProduct.name })
+        .expect(409);
+
+      expect(res.body.errorCode).toBe("PRODUCT_ALREADY_EXISTS");
+      expect((await listNames()).sort()).toEqual(
+        ["Other", validProduct.name].sort(),
+      );
+    });
+
+    it("the same name in another tenant is allowed", async () => {
+      await create().expect(201);
+      const other = await registerUser(server, "other@test.com", "password123");
+
+      await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(other.access_token))
+        .send(validProduct)
+        .expect(201);
+    });
+  });
+
   describe("GET /api/v1/products", () => {
     it("should return paginated products", async () => {
       // Create 3 products
@@ -145,6 +266,107 @@ describe("Products (e2e)", () => {
         .expect(200);
 
       expect(res.body.name).toBe("Updated Product");
+      expect(res.body.quantity).toBe(validProduct.quantity);
+    });
+
+    it("rejects a quantity without expectedQuantity and leaves stock alone", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ name: "Stale form", quantity: 7 })
+        .expect(400);
+
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      const current = await request(server)
+        .get(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+      expect(current.body).toMatchObject({
+        name: validProduct.name,
+        quantity: validProduct.quantity,
+      });
+    });
+
+    it("applies a quantity only against the expected stock", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+      const url = `/api/v1/products/${created.body.id}`;
+
+      const conflict = await request(server)
+        .patch(url)
+        .set(authHeader(token))
+        .send({ quantity: 7, expectedQuantity: validProduct.quantity + 1 })
+        .expect(409);
+      expect(conflict.body).toEqual({
+        error: expect.any(String),
+        errorCode: "PRODUCT_QUANTITY_CONFLICT",
+      });
+
+      const applied = await request(server)
+        .patch(url)
+        .set(authHeader(token))
+        .send({ quantity: 7, expectedQuantity: validProduct.quantity })
+        .expect(200);
+      expect(applied.body.quantity).toBe(7);
+    });
+  });
+
+  describe("PATCH /api/v1/products/:id with null", () => {
+    it.each([
+      [{ name: null }],
+      [{ purchase_price_cents: null }],
+      [{ sale_price_cents: null }],
+      [{ currency: null }],
+      [{ quantity: null, expectedQuantity: 10 }],
+    ])("rejects %p with 400 and changes nothing", async (body) => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send(body)
+        .expect(400);
+
+      expect(res.body.errorCode).toBe("VALIDATION_ERROR");
+      const current = await request(server)
+        .get(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .expect(200);
+      expect(current.body).toMatchObject({
+        name: validProduct.name,
+        purchase_price_cents: validProduct.purchase_price_cents,
+        sale_price_cents: validProduct.sale_price_cents,
+        quantity: validProduct.quantity,
+      });
+    });
+
+    it("still clears supplier_id with null", async () => {
+      const created = await request(server)
+        .post("/api/v1/products")
+        .set(authHeader(token))
+        .send(validProduct)
+        .expect(201);
+
+      const res = await request(server)
+        .patch(`/api/v1/products/${created.body.id}`)
+        .set(authHeader(token))
+        .send({ supplier_id: null })
+        .expect(200);
+
+      expect(res.body.supplier_id).toBeNull();
     });
   });
 

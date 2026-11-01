@@ -18,6 +18,20 @@ const RECEIPT_POLL_INTERVAL_MS = 4000;
 // Mirrors the backend cap: creating receipt number 11 retires the oldest one.
 const RECEIPT_RETENTION_LIMIT = 10;
 
+/**
+ * Everything a cancel changes on the server: the order, its voided document,
+ * and every dashboard figure (status counts, profit, turnover).
+ */
+const CANCEL_AFFECTED_QUERIES = [
+  ["orders"],
+  ["receipts"],
+  ["dashboard"],
+  ["totalRevenue"],
+  ["totalTurnover"],
+  ["dailyRevenue"],
+  ["orderStatusSummary"],
+] as const;
+
 const hasGeneratingReceipt = (orders: Order[]): boolean =>
   orders.some((order) =>
     order.receipts?.some(
@@ -119,8 +133,8 @@ export const useOrders = () => {
     mutationFn: (id: string) => orderService.cancelOrder(id),
     onSuccess: () => {
       toast.success(t("orders.orderCancelled"));
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      for (const queryKey of CANCEL_AFFECTED_QUERIES)
+        queryClient.invalidateQueries({ queryKey: [...queryKey] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
   });

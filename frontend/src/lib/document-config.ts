@@ -1,4 +1,5 @@
 import { isAxiosError } from "axios";
+import type { components } from "./api-types.generated";
 export const companyFields = [
   "companyName",
   "companyAddress",
@@ -31,46 +32,12 @@ export const documentLocales = [
   "fr-FR",
 ] as const;
 export type DocumentLocale = (typeof documentLocales)[number];
-export type DocumentConfig = {
-  schemaVersion: 1;
-  company: Record<(typeof companyFields)[number], string>;
-  templateId: string;
-  documentLanguage: "en" | "ru" | "uk";
-  title: { mode: "automatic" } | { mode: "custom"; text: string };
-  footerTitle: string;
-  footerSubtitle: string;
-  primaryColor: string;
-  paymentTerms: string;
-  deliveryTerms: string;
-  logo: {
-    assetId: string | null;
-    visible: boolean;
-    size: "auto" | number;
-    alignment: "auto" | "left" | "center" | "right";
-  };
-  visibility: Record<(typeof contactFields)[number], boolean>;
-  formatting: {
-    numberLocale: DocumentLocale;
-    currencyDisplay: "symbol" | "narrowSymbol" | "code";
-    dateLocale: "document" | DocumentLocale;
-    dateStyle: "numeric" | "short" | "medium" | "long";
-    timeStyle: "none" | "short" | "medium";
-    hourCycle: "h12" | "h23";
-    timeZone: string;
-  };
-};
-export type ConfigVersion = { config: DocumentConfig; revision: number };
-export type DocumentDraft = {
-  config: DocumentConfig;
-  logoAction: "keep" | "replace" | "remove";
-};
-export type PresetSummary = {
-  id: string;
-  name: string;
-  revision: number;
-  updated_at: string;
-};
-export type Preset = PresetSummary & { config: DocumentConfig };
+// Wire types come from the backend contract (yarn openapi:generate).
+export type DocumentConfig = components["schemas"]["DocumentConfig"];
+export type ConfigVersion = components["schemas"]["DocumentConfigVersion"];
+export type DocumentDraft = components["schemas"]["DocumentDraft"];
+export type PresetSummary = components["schemas"]["DocumentPresetSummary"];
+export type Preset = components["schemas"]["DocumentPreset"];
 export type TemplateCapabilities = {
   revision: number;
   companyFields: string[];

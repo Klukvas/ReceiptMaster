@@ -13,7 +13,10 @@ import { SkeletonChart } from "../ui/Skeleton";
 
 interface ChartItem {
   name: string;
-  value: number;
+  /** Null when the amount is unknown: no bar is drawn, the tooltip says why. */
+  value: number | null;
+  /** Extra tooltip line, e.g. which part of a profit is missing. */
+  note?: string;
 }
 
 interface RevenueChartProps {
@@ -22,6 +25,8 @@ interface RevenueChartProps {
   isLoading?: boolean;
   color?: string;
   emptyMessage?: string;
+  /** Replaces the plot when every row is unknown and no bar could be drawn. */
+  unknownMessage?: string;
 }
 
 const CustomTooltip = ({
@@ -30,18 +35,23 @@ const CustomTooltip = ({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number }>;
+  payload?: Array<{ value: number | null; payload?: ChartItem }>;
   label?: string;
 }) => {
   if (!active || !payload?.length) return null;
+  const { value } = payload[0];
+  const note = payload[0].payload?.note;
   return (
     <div className="rounded-lg bg-surface border border-[var(--color-border)] px-3 py-2 shadow-xl">
       <p className="text-xs text-content-tertiary mb-0.5 truncate max-w-[180px]">
         {label}
       </p>
       <p className="text-sm font-semibold text-content tabular-nums">
-        {formatCurrency(payload[0].value * 100)}
+        {typeof value === "number" ? formatCurrency(value * 100) : "—"}
       </p>
+      {note && (
+        <p className="text-xs text-warning-base mt-0.5 max-w-[220px]">{note}</p>
+      )}
     </div>
   );
 };
@@ -52,17 +62,22 @@ export const RevenueChart = ({
   isLoading,
   color = "#4F46E5",
   emptyMessage = "No data",
+  unknownMessage = "Cost unknown",
 }: RevenueChartProps) => {
   if (isLoading) return <SkeletonChart height="h-72" />;
 
   const chartHeight = Math.max(250, data.length * 40);
+  const hasBars = data.some((item) => item.value !== null);
 
   return (
     <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
       <h3 className="text-sm font-semibold text-content mb-5">{title}</h3>
-      {data.length === 0 ? (
-        <div className="flex items-center justify-center h-[250px] text-sm text-content-tertiary">
-          {emptyMessage}
+      {!hasBars ? (
+        <div
+          className="flex items-center justify-center h-[250px] px-6 text-center text-sm text-content-tertiary"
+          data-testid="chart-message"
+        >
+          {data.length === 0 ? emptyMessage : unknownMessage}
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
@@ -93,7 +108,9 @@ export const RevenueChart = ({
               tickLine={false}
               width={90}
             />
+            {/* filterNull would drop an unknown row and with it the tooltip. */}
             <Tooltip
+              filterNull={false}
               content={<CustomTooltip />}
               cursor={{ fill: "currentColor", opacity: 0.04 }}
             />

@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { Product, Currency } from "./entities/product.entity";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
@@ -11,6 +11,12 @@ import { PaginatedResponse } from "../../common/interfaces/paginated-response.in
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { containsPattern } from "../../common/utils/like-pattern.util";
+import {
+  IdempotentCreateResult,
+  createIdempotently,
+} from "../../common/idempotency/idempotent-create";
+import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
+import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
 
 const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "product.name",
@@ -20,6 +26,57 @@ const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   created_at: "product.created_at",
 };
 
+type ProductChanges = Omit<UpdateProductDto, "expectedQuantity">;
+
+/** Stock is never written blind: quantity and expectedQuantity travel together. */
+function assertStockPrecondition(
+  quantity: number | undefined,
+  expectedQuantity: number | undefined,
+): void {
+  if (quantity === undefined && expectedQuantity === undefined) return;
+  if (typeof quantity !== "number" || typeof expectedQuantity !== "number") {
+    throw ApiErrors.VALIDATION_ERROR(
+      "expectedQuantity",
+      "quantity and expectedQuantity must be sent together",
+    );
+  }
+}
+
+/** Every column except supplier_id is NOT NULL, so only it may be cleared. */
+const CLEARABLE_FIELDS: ReadonlySet<string> = new Set(["supplier_id"]);
+
+/** Partial unique index on (user_id, name) WHERE deleted_at IS NULL. */
+const PRODUCT_NAME_UNIQUE_INDEX = "IDX_products_user_name";
+
+/**
+ * The index is the only duplicate-name check, so it also settles racing
+ * creates and renames; its violation becomes the documented 409. A write
+ * without a name cannot hit the index, so its errors pass through untouched.
+ */
+async function rejectingDuplicateName<T>(
+  name: string | undefined,
+  write: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (
+      name !== undefined &&
+      isUniqueViolationOf(error, PRODUCT_NAME_UNIQUE_INDEX)
+    ) {
+      throw ApiErrors.PRODUCT_ALREADY_EXISTS(name);
+    }
+    throw error;
+  }
+}
+
+/** Absent fields are left alone; an explicit null (supplier_id only) is kept. */
+function presentFields(fields: ProductChanges): Partial<Product> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  ) as Partial<Product>;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -28,17 +85,54 @@ export class ProductsService {
     private subscriptionService: SubscriptionService,
   ) {}
 
+  /**
+   * The quota check and the insert commit together. The transaction takes only
+   * the tenant's product-quota advisory lock, so it cannot deadlock with order
+   * or receipt transactions that hold other tenant locks.
+   */
   async create(
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
-    await this.subscriptionService.assertCanCreateProduct(user.id);
+    return rejectingDuplicateName(createProductDto.name, () =>
+      this.productsRepository.manager.transaction((manager) =>
+        this.insertWithinQuota(manager, createProductDto, user),
+      ),
+    );
+  }
 
-    const product = this.productsRepository.create({
+  /**
+   * A repeated Idempotency-Key replays the first create instead of adding a
+   * duplicate. The key lock comes before the product-quota lock (as for order
+   * create), so a replay still succeeds once the plan limit is reached.
+   */
+  async createWithIdempotencyKey(
+    createProductDto: CreateProductDto,
+    user: User,
+    idempotencyKey: string,
+  ): Promise<IdempotentCreateResult<Product>> {
+    return rejectingDuplicateName(createProductDto.name, () =>
+      this.productsRepository.manager.transaction((manager) =>
+        createIdempotently(
+          manager,
+          { scope: "product", key: idempotencyKey, userId: user.id },
+          () => this.insertWithinQuota(manager, createProductDto, user),
+        ),
+      ),
+    );
+  }
+
+  private async insertWithinQuota(
+    manager: EntityManager,
+    createProductDto: CreateProductDto,
+    user: User,
+  ): Promise<Product> {
+    await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
+    const product = manager.create(Product, {
       ...createProductDto,
       user_id: user.id,
     });
-    return this.productsRepository.save(product);
+    return manager.save(product);
   }
 
   async findAll(
@@ -85,14 +179,42 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * Writes only the columns present in the body in one conditional UPDATE, so a
+   * stale form cannot replay a full entity over stock changed by orders. A sent
+   * quantity applies only while the stored stock still equals expectedQuantity;
+   * an UPDATE parked behind an order's row lock re-checks after that commit.
+   */
   async update(
     id: string,
     updateProductDto: UpdateProductDto,
     user: User,
   ): Promise<Product> {
-    const product = await this.findOne(id, user);
-    Object.assign(product, updateProductDto);
-    return this.productsRepository.save(product);
+    const { expectedQuantity, ...fields } = updateProductDto;
+    assertNoNullForRequiredFields(fields, CLEARABLE_FIELDS);
+    assertStockPrecondition(fields.quantity, expectedQuantity);
+    const changes = presentFields(fields);
+    if (Object.keys(changes).length === 0) return this.findOne(id, user);
+
+    const query = this.productsRepository
+      .createQueryBuilder()
+      .update(Product)
+      .set(changes)
+      .where("id = :id", { id })
+      .andWhere("user_id = :userId", { userId: user.id })
+      .andWhere("deleted_at IS NULL");
+    if (expectedQuantity !== undefined) {
+      query.andWhere("quantity = :expectedQuantity", { expectedQuantity });
+    }
+    const { affected } = await rejectingDuplicateName(fields.name, () =>
+      query.execute(),
+    );
+    if (!affected) {
+      // A missing or soft-deleted row is a 404; an existing one lost the race.
+      await this.findOne(id, user);
+      throw ApiErrors.PRODUCT_QUANTITY_CONFLICT(id);
+    }
+    return this.findOne(id, user);
   }
 
   async remove(id: string, user: User): Promise<void> {

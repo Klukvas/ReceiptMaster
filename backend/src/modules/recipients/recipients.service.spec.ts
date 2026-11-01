@@ -2,9 +2,11 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { RecipientsService } from "./recipients.service";
 import { Recipient } from "./entities/recipient.entity";
+import { Order } from "../orders/entities/order.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
+import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 
 describe("RecipientsService", () => {
   let service: RecipientsService;
@@ -67,6 +69,61 @@ describe("RecipientsService", () => {
     });
   });
 
+  describe("createWithIdempotencyKey", () => {
+    const transactionManager = (stored: unknown) => ({
+      queryRunner: { isTransactionActive: true },
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(stored),
+      delete: jest.fn(),
+      insert: jest.fn().mockResolvedValue({}),
+      create: jest.fn((_entity, data) => ({ ...data })),
+      save: jest.fn((data) => Promise.resolve({ id: "rec-new", ...data })),
+    });
+
+    it("creates the recipient and stores the response under the recipient scope", async () => {
+      const manager = transactionManager(null);
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: false,
+        data: { id: "rec-new", name: "Jane", user_id: "user-1" },
+      });
+      expect(manager.query.mock.calls[0][1][0]).toMatch(/^recipient:/);
+      expect(manager.insert).toHaveBeenCalledTimes(1);
+    });
+
+    it("replays a stored response without saving a second recipient", async () => {
+      const manager = transactionManager({
+        id: "row-1",
+        response: { id: "rec-1", name: "Jane" },
+        expires_at: new Date(Date.now() + 60_000),
+      });
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: true,
+        data: { id: "rec-1", name: "Jane" },
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findAll", () => {
     it("should return paginated recipients with aggregated data", async () => {
       const result = await service.findAll({ limit: 10, offset: 0 }, mockUser);
@@ -120,7 +177,10 @@ describe("RecipientsService", () => {
       recipientsRepo.findOne.mockResolvedValue({ ...mockRecipient });
 
       await expect(
-        service.create({ name: "Jane", email: "JOHN@test.com" } as any, mockUser),
+        service.create(
+          { name: "Jane", email: "JOHN@test.com" } as any,
+          mockUser,
+        ),
       ).rejects.toThrow(ApiErrorResponse);
       expect(recipientsRepo.save).not.toHaveBeenCalled();
     });
@@ -171,39 +231,74 @@ describe("RecipientsService", () => {
         service.update("unknown", { name: "Test" } as any, mockUser),
       ).rejects.toThrow(ApiErrorResponse);
     });
+
+    it("rejects a null name with 400 before touching the database", async () => {
+      await expect(
+        service.update(
+          "rec-1",
+          { name: null } as unknown as UpdateRecipientDto,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: "VALIDATION_ERROR",
+        error: "Validation error for name: name cannot be null",
+      });
+      expect(recipientsRepo.findOne).not.toHaveBeenCalled();
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it.each(["email", "phone", "address"])(
+      "still clears %s with null",
+      async (field) => {
+        recipientsRepo.findOne.mockResolvedValue({ ...mockRecipient });
+
+        await service.update(
+          "rec-1",
+          { [field]: null } as UpdateRecipientDto,
+          mockUser,
+        );
+
+        expect(recipientsRepo.save).toHaveBeenCalledWith(
+          expect.objectContaining({ [field]: null, name: "John Doe" }),
+        );
+      },
+    );
   });
 
   describe("remove", () => {
-    it("should delete recipient without orders", async () => {
+    beforeEach(() => {
       recipientsRepo.findOne.mockResolvedValue(mockRecipient);
+      recipientsRepo.manager = { exists: jest.fn() };
+    });
 
-      const deleteQb = {
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(0),
-      };
-      recipientsRepo.createQueryBuilder.mockReturnValue(deleteQb);
+    it("should delete recipient without orders", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(false);
 
       await service.remove("rec-1", mockUser);
 
       expect(recipientsRepo.remove).toHaveBeenCalledWith(mockRecipient);
     });
 
-    it("should throw if recipient has orders", async () => {
-      recipientsRepo.findOne.mockResolvedValue(mockRecipient);
+    it("looks for orders of this recipient including soft-deleted ones", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(false);
 
-      const deleteQb = {
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(5),
-      };
-      recipientsRepo.createQueryBuilder.mockReturnValue(deleteQb);
+      await service.remove("rec-1", mockUser);
 
-      await expect(service.remove("rec-1", mockUser)).rejects.toThrow(
-        ApiErrorResponse,
-      );
+      expect(recipientsRepo.manager.exists).toHaveBeenCalledWith(Order, {
+        where: { recipient_id: "rec-1", user_id: "user-1" },
+        withDeleted: true,
+      });
+    });
+
+    it("refuses a recipient with orders with 409 and deletes nothing", async () => {
+      recipientsRepo.manager.exists.mockResolvedValue(true);
+
+      await expect(service.remove("rec-1", mockUser)).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_HAS_ORDERS",
+      });
+      expect(recipientsRepo.remove).not.toHaveBeenCalled();
     });
   });
 });

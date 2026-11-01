@@ -10,12 +10,10 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { z } from "zod";
 import { Response } from "express";
 import { Order } from "../orders/entities/order.entity";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { DocumentConfigService } from "../settings/services/document-config.service";
-import { draftSchema } from "../settings/document-config";
 import {
   DocumentMultipart,
   documentPayload,
@@ -25,9 +23,15 @@ import {
   sampleOrder,
 } from "./services/document-render.service";
 import { ApiErrors } from "../../common/errors/ApiError";
-const previewSchema = draftSchema
-  .extend({ orderId: z.string().uuid().optional() })
-  .strict();
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  ApiDocumentDraftBody,
+  ApiFailureResponses,
+  ApiPdfResponse,
+} from "../../openapi/api-docs.decorators";
+import { previewSchema } from "./document-schemas";
+@ApiTags("receipts")
+@ApiBearerAuth("bearer")
 @Controller("receipts")
 @UseGuards(JwtAuthGuard)
 export class DocumentPreviewController {
@@ -38,6 +42,16 @@ export class DocumentPreviewController {
   ) {}
   @Post("preview")
   @UseInterceptors(DocumentMultipart())
+  @ApiOperation({ summary: "Render an unsaved document draft as a PDF" })
+  @ApiDocumentDraftBody("DocumentPreviewRequest")
+  @ApiPdfResponse(201, "Rendered PDF (private, no-store); nothing is persisted")
+  @ApiFailureResponses({
+    400: "Invalid draft, envelope or logo",
+    402: "Template not available on the current plan",
+    404: "Order not found",
+    413: "Request above 6 MiB or logo above 5 MiB",
+    429: "Two previews are already rendering; retry shortly",
+  })
   async preview(
     @Request() req: { user: { id: string } },
     @Body() body: unknown,
