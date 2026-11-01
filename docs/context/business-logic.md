@@ -491,7 +491,9 @@ Dashboard metrics are expensive (aggregations, date grouping). Solutions:
 
 **Metrics Provided:**
 
-- Total Revenue (all-time, selected period)
+Naming: the code and API call the profit metrics "revenue" (`SUM((unit_price - purchase_price) * qty)`), while "turnover" is the sales amount. The UI labels (en/ru/uk) say Profit / Прибыль / Прибуток for the revenue metrics and Turnover for sales; the translation keys keep the `revenue` names.
+
+- Total Revenue (profit; all-time, selected period)
 - Daily Revenue (time series)
 - Revenue by Product (breakdown)
 - Revenue by Recipient (breakdown)
