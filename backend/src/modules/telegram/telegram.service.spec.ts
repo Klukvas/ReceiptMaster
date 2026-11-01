@@ -2,6 +2,11 @@ import { TelegramService } from "./telegram.service";
 import { UserState } from "./interfaces/cart.interface";
 import { OrderStatus as _OrderStatus } from "../orders/entities/order.entity";
 
+// Numbering has its own spec; here the order simply gets the next number.
+jest.mock("../orders/order-number", () => ({
+  nextOrderNumber: jest.fn().mockResolvedValue(7),
+}));
+
 // Mock axios with proper default export
 const mockHttpPost = jest.fn().mockResolvedValue({
   data: { ok: true, result: {} },

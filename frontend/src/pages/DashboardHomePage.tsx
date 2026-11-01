@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatOrderNumber } from "../lib/order-number";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package,
@@ -181,7 +182,7 @@ export const DashboardHomePage = () => {
       )}
 
       {/* Entity count cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {statsLoading
           ? Array.from({ length: 4 }).map((_, i) => (
               <StatCardSkeleton key={i} />
@@ -340,7 +341,7 @@ export const DashboardHomePage = () => {
               >
                 <div>
                   <p className="font-medium text-content">
-                    {t("home.order", "Order")} #{order.id.slice(-8)}
+                    {t("home.order", "Order")} {formatOrderNumber(order)}
                   </p>
                   <p className="text-sm text-content-tertiary">
                     {formatDateOnly(order.created_at)}
@@ -377,7 +378,7 @@ export const DashboardHomePage = () => {
 
       {/* Quick actions */}
       <Card title={t("home.quickActions")}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Link to="/products?create=1">
             <Button
               variant="outline"

@@ -1,6 +1,9 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsArray, IsUUID, ArrayMinSize, ArrayMaxSize } from "class-validator";
 
+/** One batch request carries at most this many orders; "select all" stops here too. */
+export const MAX_BATCH_ORDERS = 500;
+
 export class BatchOrderIdsDto {
   @ApiProperty({
     description: "Array of order UUIDs",
@@ -9,7 +12,9 @@ export class BatchOrderIdsDto {
   })
   @IsArray()
   @ArrayMinSize(1, { message: "At least one order ID is required" })
-  @ArrayMaxSize(500, { message: "Maximum 500 orders per batch" })
+  @ArrayMaxSize(MAX_BATCH_ORDERS, {
+    message: `Maximum ${MAX_BATCH_ORDERS} orders per batch`,
+  })
   @IsUUID("4", { each: true })
   orderIds: string[];
 }

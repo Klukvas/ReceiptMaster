@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { formatOrderNumber } from "../../lib/order-number";
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -59,6 +60,9 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  }, [recipient?.address, t]);
 
  if (!recipient) return null;
+
+ // Orders are searched by recipient name, so the list opens already narrowed to this person.
+ const ordersPath = `/orders?search=${encodeURIComponent(recipient.name)}`;
 
  const orders = ordersData?.data?.data || [];
  const orderCount = recipient.order_count ?? 0;
@@ -125,7 +129,7 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  )}
  <button
  onClick={() => {
- navigate('/orders');
+ navigate(ordersPath);
  setMenuOpen(false);
  onClose();
  }}
@@ -185,7 +189,7 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  {t('recipients.createOrder')}
  </button>
  <button
- onClick={() => { navigate('/orders'); onClose(); }}
+ onClick={() => { navigate(ordersPath); onClose(); }}
  className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-surface-alt hover:bg-surface-alt text-content-secondary transition-colors"
  >
  <ExternalLink className="w-3.5 h-3.5" />
@@ -359,7 +363,7 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  </div>
  <div className="min-w-0">
  <p className="text-sm font-medium text-content">
- #{order.id.slice(-8)}
+ {formatOrderNumber(order)}
  </p>
  <p className="text-xs text-content-tertiary">
  {formatDate(order.created_at)}
@@ -388,7 +392,7 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  {/* View All Orders link */}
  {orders.length > 0 && (
  <button
- onClick={() => { navigate('/orders'); onClose(); }}
+ onClick={() => { navigate(ordersPath); onClose(); }}
  className="w-full mt-3 py-2.5 text-xs font-medium text-accent-base hover:text-accent-base hover:bg-[var(--color-accent-light)] rounded-lg transition-colors flex items-center justify-center gap-1.5"
  >
  {t('recipients.viewAllOrders')}

@@ -27,10 +27,18 @@ export enum OrderStatus {
 @Index(["created_at"])
 @Index(["user_id", "status"])
 @Index(["user_id", "created_at"])
+@Index(["user_id", "order_number"], { unique: true })
 export class Order {
   @ApiProperty()
   @PrimaryGeneratedColumn("uuid")
   id: string;
+
+  @ApiProperty({
+    description:
+      "Short number within the account (1, 2, 3, ...), never reused, for people to quote",
+  })
+  @Column({ type: "integer" })
+  order_number: number;
 
   @ApiProperty()
   @Column({ type: "uuid" })

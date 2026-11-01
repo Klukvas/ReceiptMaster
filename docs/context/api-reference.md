@@ -253,10 +253,11 @@ so it never collides with an order or recipient key of the same value.
   id: string,
   user_id: string,
   name: string,
-  price_cents: number,
+  purchase_price_cents: number,
+  sale_price_cents: number,
+  quantity: number,
   currency: string,
-  sku?: string,
-  stock_quantity?: number,
+  supplier_id: string | null,
   created_at: Date,
   updated_at: Date
 }
@@ -276,7 +277,7 @@ Paginated list of user's products.
 |-------|------|---------|-------|
 | limit | number | 10 | Max 1000 |
 | offset | number | 0 | For pagination |
-| sort | string | - | Sortable: `created_at`, `price_cents`, `name` |
+| sortBy | string | `created_at` | Sortable: `name`, `purchase_price_cents`, `sale_price_cents`, `quantity`, `created_at` |
 | sortOrder | enum | DESC | ASC or DESC |
 
 **Response** (200):
@@ -645,6 +646,7 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 ```typescript
 {
   id: string,
+  order_number: number,   // per account: 1, 2, 3, ... never reused (soft-deleted orders keep theirs)
   user_id: string,
   recipient_id: string,
   status: "draft",
@@ -691,7 +693,8 @@ Paginated list of user's orders.
 |-------|------|---------|-------|
 | limit | number | 10 | |
 | offset | number | 0 | |
-| sort | string | - | Sortable: `created_at`, `total_cents`, `status`, `recipient_name` |
+| search | string | - | Recipient name contains the text; a bare number or `#17` also matches that `order_number` |
+| sortBy | string | `created_at` | Sortable: `created_at`, `order_number`, `total_cents`, `status`, `recipient_name` |
 | sortOrder | enum | DESC | ASC or DESC |
 | status | enum | - | Filter: `draft`, `confirmed`, `cancelled` |
 | minAmount | number | - | Min total in cents |
@@ -711,6 +714,18 @@ Paginated list of user's orders.
 ---
 
 ### Get Order by ID
+
+**GET** `/orders/ids`
+
+Ids of every order the list would show for the same filters (`search`, `status`, `minAmount`, `maxAmount`, `productId`, `startDate`, `endDate`), newest first, for "select all N" in the UI. Declared before `GET /orders/:id`.
+
+**Response** (200):
+```typescript
+{
+  ids: string[],   // at most 500 (one batch)
+  total: number    // how many orders match in all; total > ids.length means ids is only the newest part
+}
+```
 
 **GET** `/orders/:id`
 

@@ -740,6 +740,7 @@ Files:
 ## Invariants & Business Rules
 
 1. **Order Creation:**
+   - Every order gets `order_number`, a per-account counter (1, 2, 3, ...) that people quote instead of the UUID. It is taken inside the creating transaction (`orders/order-number.ts`, under a per-account advisory lock) and counts soft-deleted orders, so a number is never reused. The unique index `(user_id, order_number)` backs it, and a `BEFORE INSERT` trigger numbers any row inserted without one (seed scripts, manual SQL) under the same lock. Existing orders were numbered in creation order by migration `AddOrderNumber1792600000000`
    - Subscription limits must not be exceeded
    - Recipient must exist and belong to user
    - Products in OrderItems must exist and belong to user

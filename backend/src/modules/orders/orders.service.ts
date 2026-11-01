@@ -1,7 +1,14 @@
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, EntityManager, In } from "typeorm";
+import {
+  Repository,
+  DataSource,
+  EntityManager,
+  In,
+  SelectQueryBuilder,
+} from "typeorm";
+import { MAX_BATCH_ORDERS } from "./dto/batch-orders.dto";
 import { Order, OrderStatus } from "./entities/order.entity";
 import { OrderItem } from "./entities/order-item.entity";
 import { IdempotencyKey } from "./entities/idempotency-key.entity";
@@ -19,9 +26,19 @@ import { SettingsService } from "../settings/services/settings.service";
 import { containsPattern } from "../../common/utils/like-pattern.util";
 import { dashboardCachePattern } from "./dashboard-cache";
 import { draftLineCost, snapshotCost } from "./order-item-cost";
+import { nextOrderNumber } from "./order-number";
+
+export interface OrderListFilters {
+  startDate?: Date;
+  endDate?: Date;
+  minAmount?: number;
+  maxAmount?: number;
+  productId?: string;
+}
 
 const ORDER_SORTABLE_COLUMNS: Record<string, string> = {
   created_at: "order.created_at",
+  order_number: "order.order_number",
   total_cents: "order.total_cents",
   status: "order.status",
   recipient_name: "recipient.name",
@@ -234,6 +251,7 @@ export class OrdersService {
 
       // Create order with calculated amounts
       const newOrder = manager.create(Order, {
+        order_number: await nextOrderNumber(manager, user.id),
         recipient_id: createOrderDto.recipientId,
         status: OrderStatus.DRAFT,
         currency: currency,
@@ -306,41 +324,29 @@ export class OrdersService {
     return result;
   }
 
-  async findAll(
-    paginationDto: PaginationDto,
-    user: User,
-    status?: OrderStatus,
-    filters?: {
-      startDate?: Date;
-      endDate?: Date;
-      minAmount?: number;
-      maxAmount?: number;
-      productId?: string;
-    },
-  ): Promise<PaginatedResponse<Order>> {
-    const {
-      offset = 0,
-      limit = 10,
-      search,
-      sortBy,
-      sortOrder = SortOrder.DESC,
-    } = paginationDto;
-
-    const queryBuilder = this.ordersRepository
-      .createQueryBuilder("order")
-      .leftJoinAndSelect("order.recipient", "recipient")
-      .leftJoinAndSelect("order.items", "items")
-      .leftJoinAndSelect("order.receipts", "receipts")
-      .where("order.user_id = :userId", { userId: user.id });
-
+  /** Narrows an orders query by the list's search box, status and filters. */
+  private applyListFilters(
+    queryBuilder: SelectQueryBuilder<Order>,
+    search: string | undefined,
+    status: OrderStatus | undefined,
+    filters: OrderListFilters | undefined,
+  ): void {
     if (status) {
       queryBuilder.andWhere("order.status = :status", { status });
     }
 
     if (search && search.trim()) {
-      queryBuilder.andWhere("recipient.name ILIKE :search", {
-        search: containsPattern(search),
-      });
+      // "17" or "#17" finds order 17 as well as recipients with 17 in their name.
+      const orderNumber = /^#?(\d{1,9})$/.exec(search.trim())?.[1];
+      queryBuilder.andWhere(
+        orderNumber
+          ? "(recipient.name ILIKE :search OR order.order_number = :orderNumber)"
+          : "recipient.name ILIKE :search",
+        {
+          search: containsPattern(search),
+          ...(orderNumber && { orderNumber: Number(orderNumber) }),
+        },
+      );
     }
 
     if (filters?.startDate) {
@@ -372,6 +378,30 @@ export class OrdersService {
         maxAmount: filters.maxAmount,
       });
     }
+  }
+
+  async findAll(
+    paginationDto: PaginationDto,
+    user: User,
+    status?: OrderStatus,
+    filters?: OrderListFilters,
+  ): Promise<PaginatedResponse<Order>> {
+    const {
+      offset = 0,
+      limit = 10,
+      search,
+      sortBy,
+      sortOrder = SortOrder.DESC,
+    } = paginationDto;
+
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder("order")
+      .leftJoinAndSelect("order.recipient", "recipient")
+      .leftJoinAndSelect("order.items", "items")
+      .leftJoinAndSelect("order.receipts", "receipts")
+      .where("order.user_id = :userId", { userId: user.id });
+
+    this.applyListFilters(queryBuilder, search, status, filters);
 
     const sortColumn = ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
@@ -383,6 +413,42 @@ export class OrdersService {
       .getManyAndCount();
 
     return { data, total, offset, limit };
+  }
+
+  /**
+   * The ids of every order the list would show for these filters (newest first), for
+   * "select all N". It stops at one batch: `total` is the full match count, so the
+   * caller can tell when the ids are only the first part.
+   */
+  async findMatchingIds(
+    paginationDto: PaginationDto,
+    user: User,
+    status?: OrderStatus,
+    filters?: OrderListFilters,
+  ): Promise<{ ids: string[]; total: number }> {
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder("order")
+      .leftJoin("order.recipient", "recipient")
+      .leftJoin("order.items", "items")
+      .where("order.user_id = :userId", { userId: user.id });
+
+    this.applyListFilters(queryBuilder, paginationDto.search, status, filters);
+
+    const total = await queryBuilder
+      .clone()
+      .select("COUNT(DISTINCT order.id)", "count")
+      .getRawOne<{ count: string }>()
+      .then((row) => Number(row?.count ?? 0));
+
+    const rows = await queryBuilder
+      .select("order.id", "id")
+      .addSelect("order.created_at", "created_at")
+      .distinct(true)
+      .orderBy("order.created_at", "DESC")
+      .limit(MAX_BATCH_ORDERS)
+      .getRawMany<{ id: string }>();
+
+    return { ids: rows.map((row) => row.id), total };
   }
 
   async findOne(id: string, user: User): Promise<Order> {

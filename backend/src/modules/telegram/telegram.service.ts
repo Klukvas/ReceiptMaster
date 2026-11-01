@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { nextOrderNumber } from "../orders/order-number";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
@@ -371,6 +372,7 @@ export class TelegramService {
 
       // 4) Create order linked to bot owner
       const order = manager.getRepository(Order).create({
+        order_number: await nextOrderNumber(manager, this.botOwnerUserId),
         recipient_id: recipient.id,
         status: OrderStatus.CONFIRMED,
         currency,
@@ -984,7 +986,7 @@ export class TelegramService {
       await this.sendMessage(
         chatId,
         `🎉 *Заказ создан успешно!*\n\n` +
-          `📋 Номер заказа: ${order.id}\n` +
+          `📋 Номер заказа: ${order.order_number}\n` +
           `💰 Сумма: ${(order.total_cents / 100).toFixed(2)} грн\n` +
           `📅 Дата: ${new Date(order.created_at).toLocaleString("ru-RU")}\n\n` +
           `Спасибо за заказ! 🛍️`,

@@ -353,6 +353,16 @@ export const ordersApi = {
     },
   ) => api.get<PaginatedResponse<Order>>("/orders", { params }),
 
+  /** Ids of every order the list would show for these filters (at most one batch of 500). */
+  getMatchingIds: (params: {
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    minAmount?: number;
+    maxAmount?: number;
+  }) => api.get<{ ids: string[]; total: number }>("/orders/ids", { params }),
+
   getById: (id: string) => api.get<Order>(`/orders/${id}`),
 
   create: (data: {

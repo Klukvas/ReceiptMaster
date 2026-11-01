@@ -25,6 +25,8 @@ export interface UseServerPaginationOptions<T> {
   extraParams?: Record<string, string>;
   debounceMs?: number;
   storageKeyPrefix?: string;
+  /** Search text to start with, e.g. from a deep link. */
+  initialSearch?: string;
 }
 
 export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
@@ -38,6 +40,7 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     extraParams = {},
     debounceMs = 400,
     storageKeyPrefix,
+    initialSearch = '',
   } = options;
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,8 +51,8 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     }
     return defaultItemsPerPage;
   });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [sortBy, setSortBy] = useState<string | null>(defaultSortBy);
   const [sortOrder, setSortOrder] = useState<SortOrder>(defaultSortOrder);
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {

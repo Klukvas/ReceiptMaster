@@ -1,4 +1,6 @@
-import { useState, useMemo, useCallback, useEffect } from"react";
+import { useState, useMemo, useCallback, useEffect, useRef } from"react";
+import toast from"react-hot-toast";
+import { parseApiError } from"../lib/api-errors";
 import { ShoppingCart, Lock } from"lucide-react";
 import { ordersApi, formatCurrency, formatDate, type Order } from"../lib/api";
 import { DataTable } from"../components/ui/DataTable";
@@ -28,6 +30,7 @@ import { UsageBar } from"../components/subscription/UsageBar";
 import { Button } from"../components/ui/Button";
 import { Link, useSearchParams } from"react-router-dom";
 import { useCreateIntent } from"../hooks/useCreateIntent";
+import { formatOrderNumber } from"../lib/order-number";
 import { UpgradeModal } from"../components/subscription/UpgradeModal";
 
 const ORDER_STATUSES = ["draft", "confirmed", "cancelled"] as const;
@@ -38,6 +41,21 @@ export const OrdersPage = () => {
  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
  const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
  const [searchParams, setSearchParams] = useSearchParams();
+ // A deep link (e.g. from a recipient) can open the list already searched; the param is
+ // dropped right away so a later reload does not bring the old search back.
+ const [initialSearch] = useState(() => searchParams.get("search") ?? "");
+ useEffect(() => {
+ if (!searchParams.has("search")) return;
+ setSearchParams(
+ (previous) => {
+ const next = new URLSearchParams(previous);
+ next.delete("search");
+ return next;
+ },
+ { replace: true },
+ );
+ // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first render's param matters
+ }, []);
  // The status filter lives in the URL so a reload or a shared link keeps it.
  const [statusFilter, setStatusFilterState] = useState(() => {
  const fromUrl = searchParams.get("status") ?? "";
@@ -132,6 +150,17 @@ export const OrdersPage = () => {
  const columns: ColumnDef<Order>[] = useMemo(
  () => [
  {
+ key:"order_number",
+ header: t("orders.numberColumn"),
+ sortable: true,
+ sortKey:"order_number",
+ render: (o) => (
+ <span className="text-sm font-medium tabular-nums text-content-secondary">
+ {formatOrderNumber(o)}
+ </span>
+ ),
+ },
+ {
  key:"recipient_name",
  header: t("orders.recipient"),
  sortable: true,
@@ -184,11 +213,8 @@ export const OrdersPage = () => {
  [t],
  );
 
- const pagination = useServerPagination<Order>({
- queryKey:"orders",
- queryFn: (params) =>
- ordersApi.getAll({
- ...params,
+ // The filters the list is narrowed by, shared by the page query and "select all".
+ const listFilterParams = () => ({
  ...(statusFilter ? { status: statusFilter } : {}),
  ...(startDate ? { startDate } : {}),
  ...(endDate ? { endDate } : {}),
@@ -198,6 +224,15 @@ export const OrdersPage = () => {
  ...(maxAmount
  ? { maxAmount: Math.round(parseFloat(maxAmount) * 100) }
  : {}),
+ });
+
+ const pagination = useServerPagination<Order>({
+ queryKey:"orders",
+ initialSearch,
+ queryFn: (params) =>
+ ordersApi.getAll({
+ ...params,
+ ...listFilterParams(),
  }),
  columns,
  defaultSortBy:"created_at",
@@ -215,20 +250,48 @@ export const OrdersPage = () => {
    pagination.sortBy, pagination.sortOrder, statusFilter, startDate, endDate, minAmount, maxAmount,
  ]);
  const [selectedScope, setSelectedScope] = useState(selectionScope);
+ // "Select all N": every order matching the filters, not only this page. It lives only as
+ // long as the view it was chosen in (any filter, sort or page change drops it).
+ const [allMatching, setAllMatching] = useState<{ ids: string[]; total: number } | null>(null);
+ const [isSelectingAll, setIsSelectingAll] = useState(false);
+ const currentScopeRef = useRef(selectionScope);
+ currentScopeRef.current = selectionScope;
  const selectionReady = selectedScope === selectionScope && !pagination.isFetching && !pagination.isSearchPending && !pagination.error;
  const validSelectedKeys = useMemo(() => new Set(
    selectionReady ? pagination.items.filter(order => selectedKeys.has(order.id)).map(order => order.id) : [],
  ), [selectionReady, pagination.items, selectedKeys]);
  useEffect(() => {
    setSelectedKeys(new Set());
+   setAllMatching(null);
    setSelectedScope(selectionScope);
    handleCloseConfirm();
  // handleCloseConfirm is an inline hook callback; only scope changes should close the modal.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [selectionScope, setSelectedKeys]);
  useEffect(() => {
-   if (pagination.isFetching) setSelectedKeys(new Set());
+   if (pagination.isFetching) {
+     setSelectedKeys(new Set());
+     setAllMatching(null);
+   }
  }, [pagination.isFetching, setSelectedKeys]);
+ const bulkIds = allMatching ? allMatching.ids : [...validSelectedKeys];
+ const bulkCount = bulkIds.length;
+ const selectAllMatching = async () => {
+   const scopeAtClick = selectionScope;
+   setIsSelectingAll(true);
+   try {
+     const { data } = await ordersApi.getMatchingIds({
+       ...listFilterParams(),
+       ...(pagination.searchQuery.trim() ? { search: pagination.searchQuery.trim() } : {}),
+     });
+     // The view changed while the ids were loading: they no longer match what is on screen.
+     if (currentScopeRef.current === scopeAtClick) setAllMatching(data);
+   } catch (error) {
+     toast.error(parseApiError(error).message);
+   } finally {
+     setIsSelectingAll(false);
+   }
+ };
  const changeSelection = (keys: Set<string>) => {
    if (!selectionReady) return;
    setSelectedKeys(new Set(pagination.items.filter(order => keys.has(order.id)).map(order => order.id)));
@@ -237,8 +300,13 @@ export const OrdersPage = () => {
  // page) gets the warning that its document is voided and stock stays out.
  const cancelTargetIsDraft = confirmAction.type === 'cancel' && pagination.items
    .some(order => order.id === confirmAction.order?.id && order.status === 'draft');
- const allSelectedAreDraft = validSelectedKeys.size > 0 && pagination.items
-   .filter(order => validSelectedKeys.has(order.id)).every(order => order.status === 'draft');
+ // Ids chosen through "select all" carry no status, so only a drafts-only filter proves they can be approved.
+ const allSelectedAreDraft = allMatching
+   ? statusFilter === 'draft'
+   : validSelectedKeys.size > 0 && pagination.items
+       .filter(order => validSelectedKeys.has(order.id)).every(order => order.status === 'draft');
+ const showSelectAllBanner = selectionReady && !allMatching && validSelectedKeys.size > 0
+   && validSelectedKeys.size === pagination.items.length && pagination.total > pagination.items.length;
 
  const renderOrderActions = useCallback(
  (order: Order) => (
@@ -280,6 +348,7 @@ export const OrdersPage = () => {
  <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
  )}
  <h3 className="text-base font-semibold text-content truncate">
+ <span className="tabular-nums text-content-tertiary">{formatOrderNumber(order)}</span>{""}
  {order.recipient?.name ||"-"}
  </h3>
  </div>
@@ -313,7 +382,7 @@ export const OrdersPage = () => {
  </span>
  <button
  onClick={() => setSelectedOrder(order)}
- className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
+ className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors pointer-coarse:py-3 pointer-coarse:px-2"
  >
  {t("orders.view")}
  </button>
@@ -385,6 +454,32 @@ export const OrdersPage = () => {
 
  {filterBar}
 
+ {(showSelectAllBanner || allMatching) && (
+ <div
+ role="status"
+ className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg bg-[var(--color-accent-light)] px-4 py-2 text-sm text-accent-base"
+ >
+ {allMatching ? (
+ <span>
+ {allMatching.total > allMatching.ids.length
+ ? t("orders.allMatchingCapped", { count: allMatching.ids.length, total: allMatching.total })
+ : t("orders.allMatchingSelected", { count: allMatching.total })}
+ </span>
+ ) : (
+ <>
+ <span>{t("orders.selectAllOnPage", { count: validSelectedKeys.size })}</span>
+ <button
+ type="button"
+ onClick={() => void selectAllMatching()}
+ disabled={isSelectingAll}
+ className="font-semibold underline underline-offset-2 disabled:opacity-60"
+ >
+ {isSelectingAll ? t("common.loading") : t("orders.selectAllMatching", { total: pagination.total })}
+ </button>
+ </>
+ )}
+ </div>
+ )}
  <DataTable<Order>
  items={pagination.items}
  total={pagination.total}
@@ -441,13 +536,16 @@ export const OrdersPage = () => {
  />
 
  {/* Floating bulk toolbar */}
- {validSelectedKeys.size > 0 && (
+ {bulkCount > 0 && (
  <OrderBulkToolbar
- selectedCount={validSelectedKeys.size}
+ selectedCount={bulkCount}
  allSelectedAreDraft={allSelectedAreDraft}
- onBatchApprove={() => { if (allSelectedAreDraft) handleBatchApprove([...validSelectedKeys]); }}
- onBatchDelete={() => { if (validSelectedKeys.size > 0) handleBulkDeleteConfirm(); }}
- onClearSelection={clearSelection}
+ onBatchApprove={() => { if (allSelectedAreDraft) handleBatchApprove(bulkIds); }}
+ onBatchDelete={() => { if (bulkCount > 0) handleBulkDeleteConfirm(); }}
+ onClearSelection={() => {
+ clearSelection();
+ setAllMatching(null);
+ }}
  isApproving={isBatchApproving}
  isDeleting={isBatchDeleting}
  />
@@ -499,10 +597,10 @@ export const OrdersPage = () => {
  isOpen={
  confirmAction.isOpen &&
  ((confirmAction.type !== "bulkDelete" && confirmAction.type !== "bulkApprove") ||
- validSelectedKeys.size > 0)
+ bulkCount > 0)
  }
  onClose={handleCloseConfirm}
- onConfirm={() => handleConfirmAction([...validSelectedKeys])}
+ onConfirm={() => handleConfirmAction(bulkIds)}
  title={
  confirmAction.type ==="cancel"
  ? t("orders.cancelOrder","Cancel Order")
@@ -527,9 +625,9 @@ export const OrdersPage = () => {
 "This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it.",
  )}`
  : confirmAction.type ==="bulkDelete"
- ? t("orders.batchDeleteMessage", { count: validSelectedKeys.size })
+ ? t("orders.batchDeleteMessage", { count: bulkCount })
  : confirmAction.type ==="bulkApprove"
- ? t("orders.batchApproveMessage", { count: validSelectedKeys.size })
+ ? t("orders.batchApproveMessage", { count: bulkCount })
  : t("orders.deleteOrderMessage")
  }
  confirmLabel={
@@ -542,6 +640,11 @@ export const OrdersPage = () => {
  dismissLabel={
  confirmAction.type ==="cancel"
  ? t("orders.keepOrder","Keep order")
+ : undefined
+ }
+ itemName={
+ confirmAction.order
+ ? `${formatOrderNumber(confirmAction.order)} · ${confirmAction.order.recipient?.name ?? t("orders.unknownRecipient", "Unknown recipient")} · ${formatCurrency(confirmAction.order.total_cents, confirmAction.order.currency)}`
  : undefined
  }
  variant={
