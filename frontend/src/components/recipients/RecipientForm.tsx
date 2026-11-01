@@ -5,6 +5,7 @@ import { recipientsApi, type Recipient } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "../../hooks/useTranslation";
 
 interface RecipientFormProps {
@@ -15,6 +16,7 @@ interface RecipientFormProps {
 export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   const { t } = useTranslation();
   const isSubmittingRef = useRef(false);
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -81,7 +83,14 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={recipient ? t("recipients.editRecipient") : t("recipients.createRecipient")}
+      tabIndex={-1}
+      className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 outline-none"
+    >
       <Card className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-content">

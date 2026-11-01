@@ -76,10 +76,11 @@ export const ProductDrawer = ({
 
   if (!product) return null;
 
+  // Same definition as ProductMarginBadge: (sale - purchase) / sale.
   const margin =
-    product.purchase_price_cents > 0
+    product.sale_price_cents > 0
       ? ((product.sale_price_cents - product.purchase_price_cents) /
-          product.purchase_price_cents) *
+          product.sale_price_cents) *
         100
       : 0;
 

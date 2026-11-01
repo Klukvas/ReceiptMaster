@@ -287,6 +287,7 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `token: string | null` — access token from localStorage
 - `isLoading: boolean` — loading user profile on mount
 - `isAuthenticated: boolean` — derived (!!user && !!token)
+- `hasProfileLoadError` / `retryLoadProfile()` — set when the startup profile request fails for a reason other than 401/403 (server down, 5xx). The tokens are kept, `ProtectedRoute` shows "Network error" with Retry instead of logging the user out
 
 **Methods:**
 - `login(email, password)` — calls `authApi.login()`, stores tokens, redirects to `/dashboard`
@@ -538,10 +539,11 @@ components/
 
 Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
-- `Modal.tsx` — centered overlay modal
+- `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus)
 - `ConfirmModal.tsx` — yes/no dialog
-- `Drawer.tsx` — mobile side drawer
-- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`)
+- `Drawer.tsx` — side drawer (focus trap via `hooks/useFocusTrap.ts`)
+- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state
+- Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow
 - `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus

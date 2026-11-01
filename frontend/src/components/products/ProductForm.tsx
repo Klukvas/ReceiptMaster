@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { Combobox } from "../ui/Combobox";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 
@@ -37,6 +38,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   const similarNameQuery = useDebouncedValue(formData.name.trim(), 250);
   // The list endpoint caps page size at 100, so ask the server for matches instead of loading everything.
@@ -148,7 +150,14 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50">
+    <div
+ ref={dialogRef}
+ role="dialog"
+ aria-modal="true"
+ aria-label={product ? t("products.editProduct") : t("products.createProduct")}
+ tabIndex={-1}
+ className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 outline-none"
+ >
       <Card className="w-full max-w-md mx-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-content">

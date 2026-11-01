@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { OrderRecipientSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "../../hooks/useTranslation";
 import { OrderLineItem } from "./OrderLineItem";
 import { OrderSummary } from "./OrderSummary";
@@ -29,6 +30,7 @@ const createItem = (): OrderItem => ({
 });
 
 export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
+  const dialogRef = useFocusTrap<HTMLDivElement>(true);
   const [recipientId, setRecipientId] = useState("");
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -173,7 +175,9 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 overflow-y-auto outline-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-order-title"
