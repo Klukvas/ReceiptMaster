@@ -69,7 +69,13 @@ const knownTimeZones = (): string[] => {
   try {
     return Intl.supportedValuesOf("timeZone");
   } catch {
-    return ["Europe/Kyiv", "Europe/London", "Europe/Berlin", "America/New_York", "UTC"];
+    return [
+      "Europe/Kyiv",
+      "Europe/London",
+      "Europe/Berlin",
+      "America/New_York",
+      "UTC",
+    ];
   }
 };
 
@@ -161,7 +167,9 @@ export function DocumentFormatSection({
             }}
           >
             {region === CUSTOM_REGION && (
-              <option value={CUSTOM_REGION}>{t("document.regionCustom")}</option>
+              <option value={CUSTOM_REGION}>
+                {t("document.regionCustom")}
+              </option>
             )}
             {REGIONS.map((value) => (
               <option key={value.code} value={value.code}>
@@ -237,7 +245,9 @@ export function DocumentFormatSection({
                   })
                 }
               >
-                <option value="document">{t("document.dateLocaleDocument")}</option>
+                <option value="document">
+                  {t("document.dateLocaleDocument")}
+                </option>
                 {documentLocales.map((value) => (
                   <option key={value} value={value}>
                     {displayName(value, "language", currentLanguage)}
@@ -318,7 +328,9 @@ export function DocumentFormatSection({
         <LabelledField
           label={t("document.timeZone")}
           hint={
-            zoneIsValid ? t("document.timeZoneHelp") : t("document.timeZoneInvalid")
+            zoneIsValid
+              ? t("document.timeZoneHelp")
+              : t("document.timeZoneInvalid")
           }
         >
           {(ids) => (

@@ -59,7 +59,10 @@ export const LabelledField = ({
   const hintId = hint ? `${id}-hint` : undefined;
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium text-content-secondary">
+      <label
+        htmlFor={id}
+        className="block text-sm font-medium text-content-secondary"
+      >
         {label}
       </label>
       {children({ id, "aria-describedby": hintId })}
@@ -70,12 +73,15 @@ export const LabelledField = ({
 
 export const CheckField = ({
   label,
+  ariaLabel,
   hint,
   checked,
   onChange,
   disabled,
 }: {
   label: string;
+  /** When the visible label repeats (e.g. "Show on document" under every field), a full name for screen readers. */
+  ariaLabel?: string;
   hint?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -91,6 +97,7 @@ export const CheckField = ({
           className="mt-0.5 h-4 w-4"
           checked={checked}
           disabled={disabled}
+          aria-label={ariaLabel}
           aria-describedby={hintId}
           onChange={(event) => onChange(event.target.checked)}
         />

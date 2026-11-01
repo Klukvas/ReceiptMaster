@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import {
-  companyFields,
   contactFields,
   type DocumentConfig,
   type DocumentTemplate,
@@ -12,6 +11,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { selectClass } from "./document-ui";
+import { DocumentCompanySection } from "./DocumentCompanySection";
 import { DocumentFormatSection } from "./DocumentFormatSection";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
@@ -59,9 +59,10 @@ export function DocumentEditor({
         )}
       </div>
     );
-  const caps = templates.data?.find(
+  const template = templates.data?.find(
     (value) => value.id === config.templateId,
-  )?.capabilities;
+  );
+  const caps = template?.capabilities;
   const retained = (
     <span className="block text-xs text-content-tertiary">
       {t("document.retained")}
@@ -146,82 +147,20 @@ export function DocumentEditor({
         className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
       >
         <div className="space-y-5 min-w-0">
+          {section === "company" && (
+            <DocumentCompanySection
+              config={config}
+              onChange={model.update}
+              template={template}
+            />
+          )}
           {section === "language" && (
             <DocumentFormatSection config={config} onChange={model.update} />
           )}
           <section
-            hidden={section === "language"}
+            hidden={section !== "receipt"}
             className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4"
           >
-            {section === "company" && (
-              <>
-                <h3 className="font-semibold text-content">
-                  {t("settings.tabCompany")}
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {companyFields.map((field) => (
-                    <div key={field}>
-                      <Input
-                        label={t(`settings.${field}`)}
-                        value={config.company[field]}
-                        type={field === "companyEmail" ? "email" : "text"}
-                        maxLength={
-                          field === "companyName"
-                            ? 200
-                            : field === "companyEmail"
-                              ? 254
-                              : [
-                                    "companyAddress",
-                                    "companyWebsite",
-                                    "companyTagline",
-                                  ].includes(field)
-                                ? 500
-                                : 100
-                        }
-                        onChange={(event) =>
-                          patch({
-                            company: {
-                              ...config.company,
-                              [field]: event.target.value,
-                            },
-                          })
-                        }
-                      />
-                      {caps && !caps.companyFields.includes(field) && retained}
-                    </div>
-                  ))}
-                </div>
-                <h4 className="font-medium">{t("document.contacts")}</h4>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {contactFields.map((field) => (
-                    <label
-                      key={field}
-                      className="text-sm text-content-secondary"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={config.visibility[field]}
-                        onChange={(event) =>
-                          patch({
-                            visibility: {
-                              ...config.visibility,
-                              [field]: event.target.checked,
-                            },
-                          })
-                        }
-                      />{" "}
-                      {t(`document.${field}`, t(`settings.${field}`, field))}
-                      {caps &&
-                        ![
-                          ...caps.companyFields,
-                          ...caps.recipientFields,
-                        ].includes(field) &&
-                        retained}
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
             {section === "receipt" && (
               <>
                 <h3 className="font-semibold text-content">
