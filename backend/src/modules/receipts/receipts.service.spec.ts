@@ -141,7 +141,7 @@ describe("ReceiptsService", () => {
     };
     dataSource = {
       manager: {
-        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000001" }]),
+        query: jest.fn().mockResolvedValue([{ receipt_counter: 1 }]),
       },
       transaction: jest.fn(),
       query: jest.fn(),
@@ -201,6 +201,43 @@ describe("ReceiptsService", () => {
     }).compile();
 
     service = module.get<ReceiptsService>(ReceiptsService);
+  });
+
+  describe("getRetention", () => {
+    it("reports the count without a replaced receipt while under the cap", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(4);
+
+      const result = await service.getRetention(mockUser);
+
+      expect(result).toEqual({ limit: 10, count: 4, replaces: null });
+      expect(receiptsRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it("names the oldest generated receipt once the account is at the cap", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(10);
+      receiptsRepo.findOne.mockResolvedValue({
+        id: "rec-oldest",
+        number: "2026-000004",
+        order_id: "order-old",
+      });
+
+      const result = await service.getRetention(mockUser);
+
+      expect(result).toEqual({
+        limit: 10,
+        count: 10,
+        replaces: {
+          id: "rec-oldest",
+          number: "2026-000004",
+          order_id: "order-old",
+        },
+      });
+      expect(receiptsRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: { created_at: "ASC", id: "ASC" },
+        }),
+      );
+    });
   });
 
   describe("findAll", () => {
@@ -711,22 +748,6 @@ describe("ReceiptsService", () => {
         service,
       );
       expect(getStyle("unknown")).toBe(ReceiptStyle.COMPACT);
-    });
-  });
-
-  describe("generateReceiptNumber", () => {
-    it("uses the current transaction connection and propagates database failures", async () => {
-      const manager = {
-        query: jest.fn().mockResolvedValue([{ receipt_number: "2026-000042" }]),
-      };
-      expect(await (service as any).generateReceiptNumber(manager)).toBe(
-        "2026-000042",
-      );
-      expect(dataSource.query).not.toHaveBeenCalled();
-      manager.query.mockRejectedValueOnce(new Error("DB error"));
-      await expect(
-        (service as any).generateReceiptNumber(manager),
-      ).rejects.toThrow("DB error");
     });
   });
 

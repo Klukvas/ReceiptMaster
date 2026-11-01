@@ -1,14 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { Supplier } from "./entities/supplier.entity";
-import { Product } from "../products/entities/product.entity";
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 
 const SUPPLIER_SORTABLE_COLUMNS: Record<string, string> = {
   name: "supplier.name",
@@ -22,28 +22,19 @@ export class SuppliersService {
   constructor(
     @InjectRepository(Supplier)
     private suppliersRepository: Repository<Supplier>,
-    @InjectRepository(Product)
-    private productsRepository: Repository<Product>,
   ) {}
 
   async create(
     createSupplierDto: CreateSupplierDto,
     user: User,
   ): Promise<Supplier> {
-    const { productIds, contactPerson, ...rest } = createSupplierDto;
+    const { contactPerson, ...rest } = createSupplierDto;
 
     const supplier = this.suppliersRepository.create({
       ...rest,
       contact_person: contactPerson,
       user_id: user.id,
     });
-
-    if (productIds?.length) {
-      supplier.products = await this.productsRepository.findBy({
-        id: In(productIds),
-        user_id: user.id,
-      });
-    }
 
     return this.suppliersRepository.save(supplier);
   }
@@ -70,7 +61,7 @@ export class SuppliersService {
     if (search?.trim()) {
       queryBuilder.andWhere(
         "(supplier.name ILIKE :search OR supplier.email ILIKE :search OR supplier.contact_person ILIKE :search)",
-        { search: `%${search.trim()}%` },
+        { search: containsPattern(search) },
       );
     }
 
@@ -113,21 +104,12 @@ export class SuppliersService {
     user: User,
   ): Promise<Supplier> {
     const supplier = await this.findOne(id, user);
-    const { productIds, contactPerson, ...rest } = updateSupplierDto;
+    const { contactPerson, ...rest } = updateSupplierDto;
 
     Object.assign(supplier, rest);
 
     if (contactPerson !== undefined) {
       supplier.contact_person = contactPerson;
-    }
-
-    if (productIds !== undefined) {
-      supplier.products = productIds.length
-        ? await this.productsRepository.findBy({
-            id: In(productIds),
-            user_id: user.id,
-          })
-        : [];
     }
 
     return this.suppliersRepository.save(supplier);

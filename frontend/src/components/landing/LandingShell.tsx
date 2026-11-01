@@ -1,6 +1,7 @@
 import { usePaddle } from "../../providers/PaddleProvider";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Moon, Sun, Menu, X } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { LoginModal } from "../auth/LoginModal";
 import { RegisterModal } from "../auth/RegisterModal";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -20,6 +21,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const { billingEnabled } = usePaddle();
   const { isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -83,6 +85,16 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     setIsLoginModalOpen(false);
     setIsRegisterModalOpen(false);
   }, []);
+
+  // Deep links such as the login screen's "Sign up here" open the modal directly.
+  useEffect(() => {
+    const authIntent = searchParams.get("auth");
+    if (authIntent === "register") openRegisterModal();
+    if (authIntent === "login") openLoginModal();
+    if (authIntent) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, openRegisterModal, openLoginModal]);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   return (

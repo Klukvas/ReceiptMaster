@@ -54,6 +54,7 @@ export const FirstProductStep = ({ data, onChange }: FirstProductStepProps) => {
  placeholder="0"
  type="number"
  min="0"
+ step="1"
  value={data.quantity}
  onChange={(e) => handleChange('quantity', e.target.value)}
  />

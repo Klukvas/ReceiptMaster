@@ -9,6 +9,11 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /** A stored session could not be verified because the server was unreachable; the tokens are kept. */
+  hasProfileLoadError: boolean;
+  retryLoadProfile: () => Promise<void>;
+  /** Re-reads the profile (e.g. after an email change) without the loading screen. */
+  refreshProfile: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

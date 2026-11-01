@@ -387,6 +387,13 @@ const SelectedProductCard = ({
     item.unitPriceCents !== undefined,
   );
 
+  // The product search card is replaced by this card on selection, which would drop focus
+  // to <body>; continue with the quantity so keyboard users can keep typing.
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    qtyInputRef.current?.focus();
+  }, []);
+
   const availableQty = product.quantity;
   const isOutOfStock = item.qty > availableQty;
   const unitPrice = item.unitPriceCents ?? product.sale_price_cents;
@@ -441,6 +448,7 @@ const SelectedProductCard = ({
               <Minus className="w-3 h-3" />
             </button>
             <input
+              ref={qtyInputRef}
               type="number"
               min="1"
               value={item.qty}

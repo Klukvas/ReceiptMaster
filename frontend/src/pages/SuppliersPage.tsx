@@ -170,6 +170,7 @@ export const SuppliersPage = () => {
  isLoading={pagination.isLoading}
  isFetching={pagination.isFetching}
  error={pagination.error}
+ onRetry={() => pagination.queryResult.refetch()}
  currentPage={pagination.currentPage}
  totalPages={pagination.totalPages}
  itemsPerPage={pagination.itemsPerPage}
@@ -196,6 +197,11 @@ export const SuppliersPage = () => {
  </div>
  }
  emptyMessage={t("suppliers.noSuppliers")}
+ emptyAction={
+ <Button onClick={() => setShowForm(true)}>
+ {t("suppliers.createFirstSupplier")}
+ </Button>
+ }
  emptySearchMessage={t("suppliers.noSuppliersFound")}
  renderActions={(supplier) => (
  <SupplierActionsMenu
@@ -285,6 +291,7 @@ export const SuppliersPage = () => {
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  title={t("suppliers.deleteSupplier","Delete Supplier")}
  message={t("suppliers.deleteSupplierMessage")}
+ itemName={deleteTarget?.name}
  isLoading={deleteMutation.isPending}
  />
  </div>

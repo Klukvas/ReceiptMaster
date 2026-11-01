@@ -40,13 +40,21 @@ export const DashboardPage = () => {
  setActivePreset(days);
  };
 
+ // ISO dates compare correctly as strings. Moving one end past the other drags the
+ // other end along instead of leaving a reversed range that silently shows zeros.
  const handleStartDateChange = (value: string) => {
- setDateRange((prev) => ({ ...prev, startDate: value }));
+ setDateRange((prev) => ({
+ startDate: value,
+ endDate: value && prev.endDate && value > prev.endDate ? value : prev.endDate,
+ }));
  setActivePreset(null);
  };
 
  const handleEndDateChange = (value: string) => {
- setDateRange((prev) => ({ ...prev, endDate: value }));
+ setDateRange((prev) => ({
+ startDate: value && prev.startDate && value < prev.startDate ? value : prev.startDate,
+ endDate: value,
+ }));
  setActivePreset(null);
  };
 
@@ -55,9 +63,15 @@ export const DashboardPage = () => {
  setActivePreset(null);
  };
 
+ // One end alone still filters the data (the API accepts a single bound), so the label must not say "All time".
+ const formatDay = (value: string) => new Date(value).toLocaleDateString();
  const periodLabel =
  dateRange.startDate && dateRange.endDate
- ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
+ ? `${formatDay(dateRange.startDate)} — ${formatDay(dateRange.endDate)}`
+ : dateRange.startDate
+ ? t('dashboard.periodFrom', { date: formatDay(dateRange.startDate) })
+ : dateRange.endDate
+ ? t('dashboard.periodUntil', { date: formatDay(dateRange.endDate) })
  : t('dashboard.allTime', 'All time');
 
  // CSV export data
@@ -75,6 +89,9 @@ export const DashboardPage = () => {
  queryKey: ['dashboard', 'turnover-by-products', dateRange.startDate, dateRange.endDate],
  queryFn: () => dashboardApi.getTurnoverByProducts(params),
  });
+
+ const exportRows = activeTab === 'revenue' ? revenueByProducts?.data : turnoverByProducts?.data;
+ const canExport = (exportRows?.length ?? 0) > 0;
 
  const handleExportCsv = () => {
  if (activeTab === 'revenue' && revenueByProducts?.data) {
@@ -123,7 +140,11 @@ export const DashboardPage = () => {
  return (
  <div className="space-y-5">
  {/* Header */}
- <AnalyticsHeader onExportCsv={handleExportCsv} periodLabel={periodLabel} />
+ <AnalyticsHeader
+ onExportCsv={handleExportCsv}
+ canExport={canExport}
+ periodLabel={periodLabel}
+ />
 
  {/* Filter bar */}
  <AnalyticsFilterBar

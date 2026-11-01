@@ -99,7 +99,14 @@ export const TemplatePreviewIframe = ({
       style={{ height }}
     >
       {html === undefined && !isError && (
-        <div className="absolute inset-0 bg-surface-alt animate-pulse rounded-lg" />
+        <div
+          role="status"
+          className="absolute inset-0 flex items-center justify-center bg-surface-alt animate-pulse rounded-lg"
+        >
+          <span className="text-xs text-content-tertiary">
+            {t("settings.templateLoading")}
+          </span>
+        </div>
       )}
       {isError && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-alt rounded-lg">

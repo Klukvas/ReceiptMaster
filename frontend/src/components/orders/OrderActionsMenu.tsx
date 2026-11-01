@@ -302,8 +302,10 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="p-1.5 rounded-lg hover:bg-surface-alt transition-colors"
+        className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors"
         title={t("orders.moreActions")}
+        aria-label={t("orders.moreActions")}
+        aria-haspopup="menu"
       >
         <MoreVertical className="w-4 h-4 text-content-tertiary" />
       </button>

@@ -57,6 +57,7 @@ export const AnalyticsFilterBar = ({
         <input
           type="date"
           value={startDate}
+          max={endDate || undefined}
           onChange={(e) => onStartDateChange(e.target.value)}
           className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
         />
@@ -64,6 +65,7 @@ export const AnalyticsFilterBar = ({
         <input
           type="date"
           value={endDate}
+          min={startDate || undefined}
           onChange={(e) => onEndDateChange(e.target.value)}
           className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
         />

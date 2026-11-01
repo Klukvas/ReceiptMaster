@@ -18,9 +18,13 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
+import { parseApiError } from "../lib/api-errors";
+import { MIN_PASSWORD_LENGTH } from "../lib/password-policy";
+
+const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { t } = useTranslation();
   const { status: subscription, isLoading: subLoading } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
@@ -57,12 +61,11 @@ export const ProfilePage: React.FC = () => {
     setIsLoading(true);
     try {
       await authApi.updateProfile(formData);
+      await refreshProfile();
       toast.success(t("profile.profileUpdated"));
       setIsEditing(false);
-      // The auth context will need to be updated with the new user data
-      window.location.reload(); // Simple refresh for now
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || t("profile.updateFailed"));
+    } catch (error: unknown) {
+      toast.error(parseApiError(error).message || t("profile.updateFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -93,8 +96,8 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      toast.error(t("errors.passwordTooShort"));
+    if (passwordData.newPassword.length < MIN_PASSWORD_LENGTH) {
+      toast.error(t("errors.passwordTooShort", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
 
@@ -113,12 +116,10 @@ export const ProfilePage: React.FC = () => {
         newPassword: "",
         confirmPassword: "",
       });
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        t("profile.passwordChangeFailed");
-      toast.error(errorMessage);
+    } catch (error: unknown) {
+      toast.error(
+        parseApiError(error).message || t("profile.passwordChangeFailed"),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +163,11 @@ export const ProfilePage: React.FC = () => {
 
               <div className="mt-6 space-y-4">
                 <button
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    // One form at a time: editing the profile closes the password form.
+                    handleCancelPasswordChange();
+                    setIsEditing(true);
+                  }}
                   className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
                   <Edit3 className="w-4 h-4 mr-2" />
@@ -170,7 +175,10 @@ export const ProfilePage: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setIsChangingPassword(true)}
+                  onClick={() => {
+                    handleCancel();
+                    setIsChangingPassword(true);
+                  }}
                   className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
                   <Lock className="w-4 h-4 mr-2" />
@@ -351,6 +359,7 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.current ? "text" : "password"}
+                          autoComplete="current-password"
                           id="currentPassword"
                           name="currentPassword"
                           value={passwordData.currentPassword}
@@ -361,6 +370,8 @@ export const ProfilePage: React.FC = () => {
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.current ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.current}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
@@ -390,17 +401,20 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.new ? "text" : "password"}
+                          autoComplete="new-password"
                           id="newPassword"
                           name="newPassword"
                           value={passwordData.newPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-[var(--color-border)] rounded-md shadow-sm bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base"
                           placeholder={t("profile.newPassword")}
-                          minLength={6}
+                          minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.new ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.new}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
@@ -417,7 +431,7 @@ export const ProfilePage: React.FC = () => {
                         </button>
                       </div>
                       <p className="mt-1 text-xs text-content-tertiary">
-                        {t("profile.passwordMinLength")}
+                        {t("profile.passwordMinLength", { min: MIN_PASSWORD_LENGTH })}
                       </p>
                     </div>
 
@@ -433,17 +447,20 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.confirm ? "text" : "password"}
+                          autoComplete="new-password"
                           id="confirmPassword"
                           name="confirmPassword"
                           value={passwordData.confirmPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-[var(--color-border)] rounded-md shadow-sm bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base"
                           placeholder={t("profile.confirmPassword")}
-                          minLength={6}
+                          minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.confirm ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.confirm}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
@@ -506,14 +523,13 @@ export const ProfilePage: React.FC = () => {
                         {t("profile.deleteAccountDescription")}
                       </p>
                     </div>
-                    <button
-                      onClick={() =>
-                        toast.error(t("profile.deleteAccountNotImplemented"))
-                      }
-                      className="px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0"
+                    {/* Self-service deletion does not exist yet; the privacy policy promises a reply within 30 days. */}
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t("profile.deleteAccountEmailSubject"))}`}
+                      className="px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0 text-center"
                     >
-                      {t("profile.deleteAccount")}
-                    </button>
+                      {t("profile.requestAccountDeletion")}
+                    </a>
                   </div>
                 </div>
               </div>

@@ -86,7 +86,7 @@ export const Sidebar = ({
           // Mobile always expanded
           "w-[280px]",
         )}
-        aria-label="Sidebar"
+        aria-label={t("common.sidebar")}
       >
         {/* Header / Brand */}
         <div
@@ -103,8 +103,8 @@ export const Sidebar = ({
               <button
                 onClick={onToggle}
                 className="hidden lg:flex p-1.5 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
-                title="Expand sidebar"
-                aria-label="Expand sidebar"
+                title={t("common.expandSidebar")}
+                aria-label={t("common.expandSidebar")}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -115,7 +115,7 @@ export const Sidebar = ({
                 <span className="text-lg font-semibold text-content tracking-tight">
                   receiptmaster
                 </span>
-                <span className="text-[10px] text-content-tertiary -mt-0.5">
+                <span className="text-[11px] text-content-tertiary -mt-0.5">
                   receiptmaster.org
                 </span>
               </div>
@@ -123,15 +123,15 @@ export const Sidebar = ({
                 <button
                   onClick={onToggle}
                   className="hidden lg:flex p-1.5 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
-                  title="Collapse sidebar"
-                  aria-label="Collapse sidebar"
+                  title={t("common.collapseSidebar")}
+                  aria-label={t("common.collapseSidebar")}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <button
                   onClick={onClose}
-                  className="lg:hidden p-1.5 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
-                  aria-label="Close sidebar"
+                  className="lg:hidden p-1.5 pointer-coarse:p-3.5 rounded-md text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
+                  aria-label={t("common.closeSidebar")}
                 >
                   <X className="h-4 w-4" />
                 </button>

@@ -29,6 +29,7 @@ describe("RecipientsService", () => {
       andWhere: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       getRawAndEntities: jest.fn().mockResolvedValue({
@@ -151,6 +152,12 @@ describe("RecipientsService", () => {
       );
 
       expect(qb.orderBy).toHaveBeenCalledWith("recipient.name", "ASC");
+      // Ties fall back to newest first, then id, so paging stays stable.
+      expect(qb.addOrderBy).toHaveBeenCalledWith(
+        "recipient.created_at",
+        "DESC",
+      );
+      expect(qb.addOrderBy).toHaveBeenCalledWith("recipient.id", "ASC");
     });
   });
 
@@ -169,6 +176,45 @@ describe("RecipientsService", () => {
       await expect(service.findOne("unknown", mockUser)).rejects.toThrow(
         ApiErrorResponse,
       );
+    });
+  });
+
+  describe("duplicate email", () => {
+    it("rejects creating a recipient whose email is already used by the same user", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...mockRecipient });
+
+      await expect(
+        service.create(
+          { name: "Jane", email: "JOHN@test.com" } as any,
+          mockUser,
+        ),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("rejects updating a recipient to an email owned by another recipient", async () => {
+      recipientsRepo.findOne
+        .mockResolvedValueOnce({ ...mockRecipient })
+        .mockResolvedValueOnce({ ...mockRecipient, id: "rec-other" });
+
+      await expect(
+        service.update("rec-1", { email: "john@test.com" } as any, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("allows saving a recipient with its own unchanged email", async () => {
+      recipientsRepo.findOne
+        .mockResolvedValueOnce({ ...mockRecipient })
+        .mockResolvedValueOnce({ ...mockRecipient });
+
+      await service.update(
+        "rec-1",
+        { email: mockRecipient.email } as any,
+        mockUser,
+      );
+
+      expect(recipientsRepo.save).toHaveBeenCalled();
     });
   });
 

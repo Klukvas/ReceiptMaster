@@ -245,8 +245,8 @@ export class MemoryDatabase {
       this.repository(entity).delete(filter as never),
     query: async (sql: string, params: unknown[] = []) => {
       this.queries.push(sql);
-      if (/generate_receipt_number/.test(sql))
-        return [{ receipt_number: `2026-${++this.counter}` }];
+      if (/receipt_counter/.test(sql))
+        return [{ receipt_counter: ++this.counter }];
       const userId = String(params[0]);
       const logoUsed = (id: unknown) =>
         this.rows(UserSettings).some(

@@ -71,6 +71,12 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
     },
   });
 
+  // What the user can actually pick comes first; locked ones follow (the sort is stable).
+  const orderedTemplates = [...(templates ?? [])].sort(
+    (a, b) => Number(a.locked === true) - Number(b.locked === true),
+  );
+  const lockedCount = orderedTemplates.filter((tpl) => tpl.locked).length;
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-3">
@@ -109,9 +115,18 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
         </div>
       </div>
 
+      {lockedCount > 0 && (
+        <p className="text-xs text-content-secondary">
+          {t("onboarding.templatesAvailable", {
+            available: orderedTemplates.length - lockedCount,
+            total: orderedTemplates.length,
+          })}
+        </p>
+      )}
+
       {/* Template grid */}
       <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto pr-1">
-        {templates?.map((template) => {
+        {orderedTemplates.map((template) => {
           const isSelected = data.templateId === template.id;
           const isLocked = template.locked === true;
           const category =
@@ -129,27 +144,12 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               }}
               className={`group relative rounded-xl border-2 p-3 cursor-pointer transition-all duration-200 ${
                 isLocked
-                  ? "border-[var(--color-border)] opacity-75"
+                  ? "border-[var(--color-border)] opacity-70"
                   : isSelected
                     ? "border-accent-base bg-[var(--color-accent-light)]"
                     : "border-[var(--color-border)] hover:border-[var(--color-border)]"
               }`}
             >
-              {/* Lock overlay */}
-              {isLocked && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--color-overlay)]">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-base text-white text-xs font-medium shadow-lg">
-                    <Crown className="h-3 w-3" />
-                    {billingEnabled
-                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
-                      : t(
-                          "subscription.planUnavailable",
-                          "Not included in your current plan",
-                        )}
-                  </div>
-                </div>
-              )}
-
               {/* Lock indicator */}
               {isLocked && (
                 <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-warning-base text-white z-20">
@@ -174,6 +174,17 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               <h3 className="font-medium text-content text-xs truncate">
                 {template.name}
               </h3>
+              {/* The card stays readable; the plan note sits under the name instead of covering it. */}
+              {isLocked && (
+                <p className="mt-0.5 flex items-center gap-1 text-[11px] text-content-secondary">
+                  <Crown className="h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {billingEnabled
+                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
+                      : t("subscription.templateNotInPlan", "Not in your plan")}
+                  </span>
+                </p>
+              )}
 
               <div className="flex items-center gap-1.5 mt-1">
                 <span

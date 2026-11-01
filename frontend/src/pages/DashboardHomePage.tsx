@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatOrderNumber } from "../lib/order-number";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package,
@@ -7,7 +8,6 @@ import {
   Receipt,
   TrendingUp,
   DollarSign,
-  Calendar,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ import {
   dashboardApi,
   settingsApi,
   formatCurrency,
+  formatDateOnly,
 } from "../lib/api";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -60,38 +61,61 @@ export const DashboardHomePage = () => {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    queryClient.invalidateQueries({ queryKey: ["onboarding-status"] });
+    // The wizard created data behind the dashboard's back; without this the cards
+    // keep showing the zeros fetched before it ran until a full reload.
+    for (const queryKey of [
+      ["onboarding-status"],
+      ["products"],
+      ["recipients"],
+      ["subscription", "status"],
+      ["settings"],
+    ]) {
+      queryClient.invalidateQueries({ queryKey });
+    }
   };
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
+  const { data: productsData, isLoading: productsLoading, isError: productsDataFailed } = useQuery({
     queryKey: ["products"],
     queryFn: () => productsApi.getAll({ limit: 5 }),
   });
 
-  const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
+  const { data: recipientsData, isLoading: recipientsLoading, isError: recipientsDataFailed } = useQuery({
     queryKey: ["recipients"],
     queryFn: () => recipientsApi.getAll({ limit: 5 }),
   });
 
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading, isError: ordersDataFailed } = useQuery({
     queryKey: ["orders"],
     queryFn: () => ordersApi.getAll({ limit: 5 }),
   });
 
-  const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
+  const { data: receiptsData, isLoading: receiptsLoading, isError: receiptsDataFailed } = useQuery({
     queryKey: ["receipts", "dashboard"],
     queryFn: () => receiptsApi.getAll({ limit: 5 }),
   });
 
-  const { data: totalRevenue, isLoading: revenueLoading } = useQuery({
+  const { data: totalRevenue, isLoading: revenueLoading, isError: totalRevenueFailed } = useQuery({
     queryKey: ["totalRevenue"],
     queryFn: () => dashboardApi.getTotalRevenue(),
   });
 
-  const { data: totalTurnover, isLoading: turnoverLoading } = useQuery({
+  const { data: totalTurnover, isLoading: turnoverLoading, isError: totalTurnoverFailed } = useQuery({
     queryKey: ["totalTurnover"],
     queryFn: () => dashboardApi.getTotalTurnover(),
   });
+
+  const hasLoadError =
+    productsDataFailed ||
+    recipientsDataFailed ||
+    ordersDataFailed ||
+    receiptsDataFailed ||
+    totalRevenueFailed ||
+    totalTurnoverFailed;
+
+  const retryFailedQueries = () =>
+    queryClient.refetchQueries({
+      predicate: (query) => query.state.status === "error",
+    });
 
   const statsLoading =
     productsLoading || recipientsLoading || ordersLoading || receiptsLoading;
@@ -125,7 +149,7 @@ export const DashboardHomePage = () => {
       name: t("home.receipts"),
       value: receiptsData?.data?.total || 0,
       icon: Receipt,
-      href: "/receipts",
+      href: "/orders",
       color: "text-warning-base",
       bgColor: "bg-[var(--color-warning-light)]",
     },
@@ -141,8 +165,24 @@ export const DashboardHomePage = () => {
         <p className="text-white/80 text-lg">{t("home.subtitle")}</p>
       </div>
 
+      {hasLoadError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-base bg-[var(--color-danger-light)] px-4 py-3 text-sm text-danger-base"
+        >
+          <span>{t("home.loadError")}</span>
+          <button
+            type="button"
+            onClick={retryFailedQueries}
+            className="font-medium underline hover:no-underline"
+          >
+            {t("common.retry")}
+          </button>
+        </div>
+      )}
+
       {/* Entity count cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {statsLoading
           ? Array.from({ length: 4 }).map((_, i) => (
               <StatCardSkeleton key={i} />
@@ -301,10 +341,10 @@ export const DashboardHomePage = () => {
               >
                 <div>
                   <p className="font-medium text-content">
-                    {t("home.order", "Order")} #{order.id.slice(-8)}
+                    {t("home.order", "Order")} {formatOrderNumber(order)}
                   </p>
                   <p className="text-sm text-content-tertiary">
-                    {new Date(order.created_at).toLocaleDateString()}
+                    {formatDateOnly(order.created_at)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -312,7 +352,7 @@ export const DashboardHomePage = () => {
                     {formatCurrency(order.total_cents)}
                   </p>
                   <p className="text-sm text-content-tertiary">
-                    {order.status}
+                    {t(`orders.${order.status}`, order.status)}
                   </p>
                 </div>
               </div>
@@ -338,8 +378,8 @@ export const DashboardHomePage = () => {
 
       {/* Quick actions */}
       <Card title={t("home.quickActions")}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link to="/products">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Link to="/products?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -348,7 +388,7 @@ export const DashboardHomePage = () => {
               {t("home.addProduct")}
             </Button>
           </Link>
-          <Link to="/recipients">
+          <Link to="/recipients?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -357,7 +397,7 @@ export const DashboardHomePage = () => {
               {t("home.addRecipient")}
             </Button>
           </Link>
-          <Link to="/orders">
+          <Link to="/orders?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -366,13 +406,13 @@ export const DashboardHomePage = () => {
               {t("home.createOrder")}
             </Button>
           </Link>
-          <Link to="/dashboard">
+          <Link to="/analytics">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
             >
-              <Calendar className="h-6 w-6 mb-2" />
-              {t("home.viewDashboard")}
+              <TrendingUp className="h-6 w-6 mb-2" />
+              {t("navigation.analytics")}
             </Button>
           </Link>
         </div>

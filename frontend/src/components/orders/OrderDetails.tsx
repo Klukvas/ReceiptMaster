@@ -1,4 +1,5 @@
 import { useState, useEffect } from"react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
 import {
  X,
  Copy,
@@ -19,6 +20,7 @@ import { formatCurrency, formatDate, type Order } from"../../lib/api";
 import { Button } from"../ui/Button";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
+import { formatOrderNumber } from"../../lib/order-number";
 
 interface OrderDetailsProps {
  order: Order;
@@ -45,11 +47,16 @@ export const OrderDetails = ({
 }: OrderDetailsProps) => {
  const { t } = useTranslation();
  const [idCopied, setIdCopied] = useState(false);
+ useBackClosesDialog(true, onClose);
 
  // Close on Escape
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
- if (e.key ==="Escape") onClose();
+ if (e.key !=="Escape") return;
+ // A dialog opened on top (e.g. Share Receipt) owns this Escape; closing both
+ // would throw away the order the user was looking at.
+ if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+ onClose();
  };
  document.addEventListener("keydown", handleKeyDown);
  return () => document.removeEventListener("keydown", handleKeyDown);
@@ -95,7 +102,7 @@ export const OrderDetails = ({
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-3 mb-2">
  <h2 className="text-lg font-semibold text-content">
- {t("orders.orderDetails")}
+ {t("orders.orderDetails")} {formatOrderNumber(order)}
  </h2>
  <OrderStatusBadge order={order} />
  </div>

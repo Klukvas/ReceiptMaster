@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-01
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -57,6 +57,7 @@ export enum OrderStatus {
    - Acquire a transaction-scoped advisory lock per user before counting monthly orders
    - This serializes creates across different products, including accounts with no subscription row
    - Reject an additional order beyond the plan limit with `ORDER_MONTHLY_LIMIT_EXCEEDED`
+   - Cancelled and deleted orders do not count toward the month, so cancelling frees a place (as it also returns the stock)
    - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreateOrderInTx()`
 
 3. **Validate References**
@@ -137,6 +138,12 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 ---
 
 ### 2. Receipt & Invoice PDF Generation
+
+**Retention cap:** an account keeps its 10 most recent generated receipts (`ReceiptsService.MAX_RECEIPTS`). Generating number 11 retires the oldest one and its public link stops working. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
+
+**Receipt numbers** (`"2026-000007"`) are per account: `receipts/receipt-number.ts::nextReceiptNumber()` bumps `users.receipt_counter` in one statement (row lock, so concurrent generations never collide; a number is never reused, even after the retention cap evicts its receipt, and a failed generation leaves a gap). Uniqueness is `(user_id, number)`; nothing looks a receipt up by number alone (public links use `public_token`, the API uses ids). Migration `PerAccountReceiptNumbers1792700000000` kept every existing number and started each account's counter at the highest number it already holds, so the first new receipt of an older account continues above its own history; the old global `generate_receipt_number()` function and sequence remain in the database, unused.
+
+**Dates in documents:** the live render path (`DocumentRenderService.prepare`) formats order date and "generated at" with `formatDocumentDate` and the saved document formatting (language, locale, style, hour cycle, one time zone for both). `TemplateService.prepareTemplateData` takes the same `Formatting` (default `DEFAULT_DOCUMENT_FORMATTING`, UTC) so the dev `pdf-test` endpoints and legacy `PdfGeneratorService` cannot drift to the server's locale/time zone. The old React-PDF `standard`/`compact` templates were unreachable and are deleted. The Telegram bot's order confirmation is Russian-only by design (`ru-RU`).
 
 **Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
 receipt can later be `VOID`. There is at most **one receipt row per order** (unique
@@ -640,7 +647,9 @@ Profit is Σ (`unit_price_cents` − `unit_cost_cents`) × `qty` over the order'
 
 **Metrics Provided:**
 
-- Total Revenue (all-time, selected period). A selected period is a range of UTC days with both ends
+Naming: the code and API call the profit metrics "revenue" (`SUM((unit_price - purchase_price) * qty)`), while "turnover" is the sales amount. The UI labels (en/ru/uk) say Profit / Прибыль / Прибуток for the revenue metrics and Turnover for sales; the translation keys keep the `revenue` names.
+
+- Total Revenue (profit; all-time, selected period). A selected period is a range of UTC days with both ends
   included (`DateRangeDto`), the same days `daily-revenue` groups by
 - Daily Revenue (time series)
 - Revenue by Product (breakdown)
@@ -735,6 +744,7 @@ Files:
 ## Invariants & Business Rules
 
 1. **Order Creation:**
+   - Every order gets `order_number`, a per-account counter (1, 2, 3, ...) that people quote instead of the UUID. It is taken inside the creating transaction (`orders/order-number.ts`, under a per-account advisory lock) and counts soft-deleted orders, so a number is never reused. The unique index `(user_id, order_number)` backs it, and a `BEFORE INSERT` trigger numbers any row inserted without one (seed scripts, manual SQL) under the same lock. Existing orders were numbered in creation order by migration `AddOrderNumber1792600000000`
    - Subscription limits must not be exceeded
    - Recipient must exist and belong to user
    - Products in OrderItems must exist and belong to user

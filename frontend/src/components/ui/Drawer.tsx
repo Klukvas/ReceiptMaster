@@ -1,4 +1,6 @@
 import { type ReactNode, useEffect } from "react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { X } from "lucide-react";
 import {
   AnimatePresence,
@@ -25,6 +27,8 @@ const DISMISS_PROJECTION_PX = 160;
 
 export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
   const reduceMotion = useReducedMotion();
+  const dialogRef = useFocusTrap<HTMLDivElement>(open);
+  useBackClosesDialog(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +79,15 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div key="drawer" className="fixed inset-0 z-50 flex justify-end">
+        <motion.div
+          key="drawer"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex justify-end outline-none"
+        >
           <motion.div
             className="absolute inset-0 bg-black/40"
             onClick={onClose}

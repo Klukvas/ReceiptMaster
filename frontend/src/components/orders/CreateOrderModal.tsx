@@ -6,12 +6,15 @@ import { Button } from "../ui/Button";
 import { OrderRecipientSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "../../hooks/useTranslation";
 import { OrderLineItem } from "./OrderLineItem";
 import { OrderSummary } from "./OrderSummary";
 
 interface CreateOrderModalProps {
   onClose: () => void;
+  /** Recipient to preselect, e.g. when opened from that recipient's drawer. */
+  initialRecipientId?: string;
 }
 
 interface OrderItem {
@@ -28,8 +31,12 @@ const createItem = (): OrderItem => ({
   qty: 1,
 });
 
-export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
-  const [recipientId, setRecipientId] = useState("");
+export const CreateOrderModal = ({
+  onClose,
+  initialRecipientId,
+}: CreateOrderModalProps) => {
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
+  const [recipientId, setRecipientId] = useState(initialRecipientId ?? "");
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState("");
@@ -67,15 +74,6 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
       document.body.style.overflow = "unset";
     };
   }, []);
-
-  // Escape key handler — only close modal if no inner dropdown caught it first
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
 
   const addItem = useCallback(() => {
     setItems((prev) => [...prev, createItem()]);
@@ -173,7 +171,9 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 overflow-y-auto outline-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-order-title"
@@ -203,7 +203,7 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
               type="button"
               onClick={onClose}
               className="rounded-lg p-2 text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <X className="w-5 h-5" />
             </button>
@@ -272,7 +272,8 @@ export const CreateOrderModal = ({ onClose }: CreateOrderModalProps) => {
                       item={item}
                       index={index}
                       products={products}
-                      canRemove={items.length > 1}
+                      // An empty list is a valid state of this form (see the empty-state block above).
+                      canRemove
                       error={errors[`item-${index}-qty`]}
                       onUpdate={updateItem}
                       onRemove={removeItem}

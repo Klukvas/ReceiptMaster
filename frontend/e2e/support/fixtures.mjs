@@ -105,8 +105,10 @@ export const makeOrder = ({
   receiptStatus,
   recipientName,
   receiptNumber = "R-0001",
+  orderNumber = 1,
 }) => ({
   id,
+  order_number: orderNumber,
   user_id: USER.id,
   recipient_id: RECIPIENTS[0].id,
   recipient: { ...RECIPIENTS[0], name: recipientName },

@@ -367,8 +367,8 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
         </div>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
+      {/* Footer: sticks to the bottom of the scrolling dialog so Skip/Next stay reachable in a short window. */}
+      <div className="sticky bottom-0 z-10 -mx-6 -mb-4 mt-6 flex items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-elevated)] px-6 pb-4 pt-4">
         <button
           type="button"
           onClick={handleSkip}

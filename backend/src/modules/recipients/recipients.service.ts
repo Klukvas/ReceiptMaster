@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Raw, Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
 import { Order } from "../orders/entities/order.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
@@ -9,6 +9,8 @@ import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import { normalizeEmail } from "../../common/dto/normalized-email";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 import {
   IdempotentCreateResult,
   createIdempotently,
@@ -20,6 +22,9 @@ const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   email: "recipient.email",
   phone: "recipient.phone",
   created_at: "recipient.created_at",
+  // The aggregates the list already selects; they sort by their select aliases.
+  order_count: "order_count",
+  total_spent_cents: "total_spent_cents",
 };
 
 /** null clears these nullable contact columns; name is NOT NULL. */
@@ -40,11 +45,33 @@ export class RecipientsService {
     createRecipientDto: CreateRecipientDto,
     user: User,
   ): Promise<Recipient> {
+    await this.assertEmailAvailable(createRecipientDto.email, user);
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
       user_id: user.id,
     });
     return this.recipientsRepository.save(recipient);
+  }
+
+  private async assertEmailAvailable(
+    email: string | undefined,
+    user: User,
+    excludeRecipientId?: string,
+  ): Promise<void> {
+    if (!email) return;
+
+    const duplicate = await this.recipientsRepository.findOne({
+      where: {
+        user_id: user.id,
+        email: Raw((alias) => `LOWER(${alias}) = :email`, {
+          email: normalizeEmail(email),
+        }),
+      },
+    });
+
+    if (duplicate && duplicate.id !== excludeRecipientId) {
+      throw ApiErrors.RECIPIENT_ALREADY_EXISTS(email);
+    }
   }
 
   /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
@@ -97,14 +124,19 @@ export class RecipientsService {
     if (search && search.trim()) {
       queryBuilder.andWhere(
         "(recipient.name ILIKE :search OR recipient.email ILIKE :search OR recipient.phone ILIKE :search)",
-        { search: `%${search.trim()}%` },
+        { search: containsPattern(search) },
       );
     }
 
     const sortColumn =
       RECIPIENT_SORTABLE_COLUMNS[sortBy] || "recipient.created_at";
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
-    queryBuilder.orderBy(sortColumn, direction);
+    // Many recipients tie on a count or a sum (most have none), so a stable tiebreak keeps
+    // pages from repeating or skipping rows.
+    queryBuilder
+      .orderBy(sortColumn, direction)
+      .addOrderBy("recipient.created_at", "DESC")
+      .addOrderBy("recipient.id", "ASC");
 
     const raw = await queryBuilder
       .offset(offset)
@@ -138,6 +170,7 @@ export class RecipientsService {
   ): Promise<Recipient> {
     assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
+    await this.assertEmailAvailable(updateRecipientDto.email, user, id);
     Object.assign(recipient, updateRecipientDto);
     return this.recipientsRepository.save(recipient);
   }

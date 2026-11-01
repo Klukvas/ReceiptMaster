@@ -191,6 +191,8 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
  onClick={handleToggle}
  className="p-1 rounded-md hover:bg-surface-alt transition-colors"
  title={t('orders.moreActions', 'More actions')}
+ aria-label={t('orders.moreActions', 'More actions')}
+ aria-haspopup="menu"
  >
  <MoreVertical className="w-4 h-4 text-content-tertiary" />
  </button>

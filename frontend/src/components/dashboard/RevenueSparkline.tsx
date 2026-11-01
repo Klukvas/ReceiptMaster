@@ -52,6 +52,10 @@ export const RevenueSparkline = () => {
       revenue: profitChartValue(d.revenue_cents),
       turnover: d.turnover_cents / 100,
     })) || [];
+  // Profit can be null (cost unknown), so look at turnover too before calling a period empty.
+  const hasSales = chartData.some(
+    (d) => (d.revenue ?? 0) !== 0 || d.turnover !== 0,
+  );
   const completeness = combineCompleteness(data?.data ?? []);
   // Null when every charted line lacks a cost: "Cost unknown", not "Partial".
   const chartProfit = combineProfit(data?.data ?? []);
@@ -82,58 +86,77 @@ export const RevenueSparkline = () => {
           ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={chartData}>
-          <defs>
-            <linearGradient id={revenueGradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id={turnoverGradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
-            stroke="var(--color-text-tertiary)"
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
-            stroke="var(--color-text-tertiary)"
-            width={60}
-          />
-          {/* filterNull would hide the profit row of an unknown day. */}
-          <Tooltip
-            filterNull={false}
-            formatter={(value) =>
-              typeof value === "number" ? formatCurrency(value * 100) : "—"
-            }
-            contentStyle={{
-              backgroundColor: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "8px",
-              color: "var(--color-text)",
-            }}
-          />
-          <Area
-            type="monotone"
-            dataKey="turnover"
-            stroke="#10b981"
-            fill={`url(#${turnoverGradientId})`}
-            name={t("dashboard.turnover", "Turnover")}
-          />
-          <Area
-            type="monotone"
-            dataKey="revenue"
-            connectNulls={false}
-            stroke="#4F46E5"
-            fill={`url(#${revenueGradientId})`}
-            name={t("dashboard.revenue", "Revenue")}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      {!hasSales ? (
+        // Empty axes from 0 to 100 read as a broken chart; say what is missing instead.
+        <div className="flex h-[200px] items-center justify-center text-center text-sm text-content-tertiary">
+          {t("dashboard.noSalesYet")}
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient
+                id={revenueGradientId}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient
+                id={turnoverGradientId}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              stroke="var(--color-text-tertiary)"
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              stroke="var(--color-text-tertiary)"
+              width={60}
+            />
+            {/* filterNull would hide the profit row of an unknown day. */}
+            <Tooltip
+              filterNull={false}
+              formatter={(value) =>
+                typeof value === "number" ? formatCurrency(value * 100) : "—"
+              }
+              contentStyle={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "8px",
+                color: "var(--color-text)",
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="turnover"
+              stroke="#10b981"
+              fill={`url(#${turnoverGradientId})`}
+              name={t("dashboard.turnover", "Turnover")}
+            />
+            <Area
+              type="monotone"
+              dataKey="revenue"
+              connectNulls={false}
+              stroke="#4F46E5"
+              fill={`url(#${revenueGradientId})`}
+              name={t("dashboard.revenue", "Revenue")}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </Card>
   );
 };

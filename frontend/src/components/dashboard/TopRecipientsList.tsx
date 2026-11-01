@@ -65,8 +65,8 @@ export const TopRecipientsList = ({
 
  const title =
  accentColor === 'green'
- ? t('dashboard.revenueByRecipient')
- : t('dashboard.turnoverByRecipient');
+ ? t('dashboard.topRecipientsByRevenue')
+ : t('dashboard.topRecipientsByTurnover');
 
  return (
  <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">

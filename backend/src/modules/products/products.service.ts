@@ -10,6 +10,7 @@ import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { containsPattern } from "../../common/utils/like-pattern.util";
 import {
   IdempotentCreateResult,
   createIdempotently,
@@ -152,7 +153,7 @@ export class ProductsService {
 
     if (search && search.trim()) {
       queryBuilder.andWhere("product.name ILIKE :search", {
-        search: `%${search.trim()}%`,
+        search: containsPattern(search),
       });
     }
 

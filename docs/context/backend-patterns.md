@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-01
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -1037,6 +1037,17 @@ async findAll(
   // Both DTOs are validated & their parsed values are available
 }
 ```
+
+---
+
+### Input hygiene helpers
+
+Use these instead of ad-hoc handling when a DTO or query touches the same kind of value:
+
+- `@NormalizedEmail()` (`common/dto/normalized-email.ts`) trims and lowercases an email before `@IsEmail()`; service lookups compare `LOWER(email)` so older mixed-case accounts still match.
+- `@Trimmed()`, `PHONE_PATTERN` and `MAX_INT4` (`common/dto/trimmed-string.ts`): reject names of only spaces, malformed phones, and integers above the Postgres `integer` limit (otherwise the database answers 500).
+- `containsPattern(text)` (`common/utils/like-pattern.util.ts`) wraps text for an `ILIKE` "contains" search and escapes `%`, `_` and `\`; searching for `%` must not match everything.
+- `DateRangeDto.endDateParsed` treats a date-only end as the whole day.
 
 ---
 

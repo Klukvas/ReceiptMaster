@@ -169,6 +169,8 @@ export const Combobox = ({
  }
  break;
  case 'Escape':
+ // Only swallow the key while a list is open, so a second Esc can close the dialog around it.
+ if (isOpen) e.preventDefault();
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);
@@ -201,6 +203,8 @@ export const Combobox = ({
  }
  break;
  case 'Escape':
+ // Only swallow the key while a list is open, so a second Esc can close the dialog around it.
+ if (isOpen) e.preventDefault();
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);

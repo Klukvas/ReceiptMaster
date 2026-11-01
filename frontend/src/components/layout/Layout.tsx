@@ -40,8 +40,9 @@ export const Layout = ({ children }: LayoutProps) => {
             </span>
             <button
               onClick={logout}
-              className="p-2 -mr-2 rounded-lg text-content-tertiary hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-colors duration-150"
-              title="Logout"
+              className="p-2 pointer-coarse:p-3.5 -mr-2 rounded-lg text-content-tertiary hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-colors duration-150"
+              title={t("auth.logout")}
+              aria-label={t("auth.logout")}
             >
               <LogOut className="h-4 w-4" />
             </button>

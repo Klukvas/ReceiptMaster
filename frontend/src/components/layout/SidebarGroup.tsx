@@ -20,7 +20,7 @@ export const SidebarGroup = ({ label, isCollapsed, children }: SidebarGroupProps
  {isCollapsed ? (
  <div className="w-5 h-px bg-surface-alt" />
  ) : (
- <span className="text-[10px] font-semibold uppercase tracking-wider text-content-tertiary select-none">
+ <span className="text-[11px] font-semibold uppercase tracking-wider text-content-tertiary select-none">
  {label}
  </span>
  )}

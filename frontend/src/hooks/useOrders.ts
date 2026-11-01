@@ -1,17 +1,22 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type Order } from "../lib/api";
+import toast from "react-hot-toast";
+import { receiptsApi, settingsApi, type Order } from "../lib/api";
+import { AUTO_RECEIPT_QUERY_KEY } from "./useAutoReceiptSetting";
+import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
 import { useNotifications } from "./useNotifications";
 
 interface ConfirmAction {
   isOpen: boolean;
-  type: "cancel" | "delete" | "bulkDelete" | null;
+  type: "cancel" | "delete" | "bulkDelete" | "bulkApprove" | null;
   order: Order | null;
 }
 
 const RECEIPT_POLL_INTERVAL_MS = 4000;
+// Mirrors the backend cap: creating receipt number 11 retires the oldest one.
+const RECEIPT_RETENTION_LIMIT = 10;
 
 /**
  * Everything a cancel changes on the server: the order, its voided document,
@@ -60,6 +65,7 @@ export const useReceiptGenerationPolling = (orders: Order[]) => {
 
 export const useOrders = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const { notifications } = useNotifications();
 
   // UI State
@@ -80,10 +86,43 @@ export const useOrders = () => {
     receiptService.loadPrinters();
   }, []);
 
+  const showReceiptEvictionNotice = () =>
+    toast(t("orders.receiptLimitNotice", { limit: RECEIPT_RETENTION_LIMIT }), {
+      duration: 8000,
+    });
+
+  // A failed lookup must never block the order action itself, so errors count as "no".
+  const countReceipts = () =>
+    receiptsApi
+      .getAll({ limit: 1 })
+      .then((response) => response.data.total)
+      .catch(() => 0);
+
+  // Confirming creates receipts on its own when the account setting is on; tell the user
+  // beforehand-known cases where that pushes the oldest receipts out.
+  const willAutoReceiptsEvict = async (newReceipts: number) => {
+    const autoReceiptsOn = await queryClient
+      .fetchQuery({
+        queryKey: AUTO_RECEIPT_QUERY_KEY,
+        queryFn: async () =>
+          (await settingsApi.getAutoReceipt()).data.data.enabled,
+        staleTime: 1000 * 60 * 5,
+      })
+      .catch(() => false);
+    if (!autoReceiptsOn) return false;
+    return (await countReceipts()) + newReceipts > RECEIPT_RETENTION_LIMIT;
+  };
+
   // Mutations
   const confirmMutation = useMutation({
-    mutationFn: (id: string) => orderService.confirmOrder(id),
+    mutationFn: async (id: string) => {
+      const willEvict = await willAutoReceiptsEvict(1);
+      const confirmed = await orderService.confirmOrder(id);
+      if (willEvict) showReceiptEvictionNotice();
+      return confirmed;
+    },
     onSuccess: () => {
+      toast.success(t("orders.orderConfirmed"));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       // Confirm may auto-create a receipt when the account setting is on.
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
@@ -93,6 +132,7 @@ export const useOrders = () => {
   const cancelMutation = useMutation({
     mutationFn: (id: string) => orderService.cancelOrder(id),
     onSuccess: () => {
+      toast.success(t("orders.orderCancelled"));
       for (const queryKey of CANCEL_AFFECTED_QUERIES)
         queryClient.invalidateQueries({ queryKey: [...queryKey] });
       setConfirmAction({ isOpen: false, type: null, order: null });
@@ -102,14 +142,21 @@ export const useOrders = () => {
   const deleteOrderMutation = useMutation({
     mutationFn: orderService.deleteOrder,
     onSuccess: () => {
+      toast.success(t("orders.orderDeleted"));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
   });
 
   const generateReceiptMutation = useMutation({
-    mutationFn: receiptService.generateReceipt,
+    mutationFn: async (orderId: string) => {
+      const result = await receiptService.generateReceipt(orderId);
+      // The PDF renders in the background; say so, otherwise nothing seems to happen.
+      toast(t("receipts.generatingReceipt"));
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -117,12 +164,20 @@ export const useOrders = () => {
   });
 
   const batchApproveMutation = useMutation({
-    mutationFn: (orderIds: string[]) =>
-      orderService.batchApproveOrders(orderIds),
+    mutationFn: async (orderIds: string[]) => {
+      const willEvict = await willAutoReceiptsEvict(orderIds.length);
+      const approved = await orderService.batchApproveOrders(orderIds);
+      if (willEvict) showReceiptEvictionNotice();
+      return approved;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       setSelectedKeys(new Set());
+      setConfirmAction({ isOpen: false, type: null, order: null });
+    },
+    onError: () => {
+      setConfirmAction({ isOpen: false, type: null, order: null });
     },
   });
 
@@ -164,6 +219,8 @@ export const useOrders = () => {
       deleteOrderMutation.mutate(confirmAction.order.id);
     } else if (confirmAction.type === "bulkDelete") {
       if (validOrderIds.length > 0) batchDeleteMutation.mutate(validOrderIds);
+    } else if (confirmAction.type === "bulkApprove") {
+      if (validOrderIds.length > 0) batchApproveMutation.mutate(validOrderIds);
     }
   };
 
@@ -171,8 +228,33 @@ export const useOrders = () => {
     setConfirmAction({ isOpen: false, type: null, order: null });
   };
 
-  const handleGenerateReceipt = (orderId: string) => {
+  // Generating beyond the retention cap deletes the oldest receipt and breaks its public
+  // link, so name that receipt and ask first. A failed lookup must not block generating.
+  const [receiptReplacement, setReceiptReplacement] = useState<{
+    orderId: string;
+    number: string;
+    limit: number;
+  } | null>(null);
+
+  const handleGenerateReceipt = async (orderId: string) => {
+    const retention = await receiptsApi
+      .getRetention()
+      .then((response) => response.data)
+      .catch(() => null);
+    if (retention?.replaces) {
+      setReceiptReplacement({
+        orderId,
+        number: retention.replaces.number,
+        limit: retention.limit,
+      });
+      return;
+    }
     generateReceiptMutation.mutate(orderId);
+  };
+
+  const confirmReceiptReplacement = () => {
+    if (receiptReplacement) generateReceiptMutation.mutate(receiptReplacement.orderId);
+    setReceiptReplacement(null);
   };
 
   const handleDownloadReceipt = (receiptId: string) => {
@@ -184,8 +266,11 @@ export const useOrders = () => {
   };
 
   // Batch action handlers
+  // Approving locks the orders against edits (and may create receipts), so ask first.
   const handleBatchApprove = (validOrderIds: string[]) => {
-    if (validOrderIds.length > 0) batchApproveMutation.mutate(validOrderIds);
+    if (validOrderIds.length > 0) {
+      setConfirmAction({ isOpen: true, type: "bulkApprove", order: null });
+    }
   };
 
   const handleBulkDeleteConfirm = () => {
@@ -222,6 +307,9 @@ export const useOrders = () => {
     handleCancel,
     handleDeleteOrder,
     handleGenerateReceipt,
+    receiptReplacement,
+    confirmReceiptReplacement,
+    cancelReceiptReplacement: () => setReceiptReplacement(null),
     handleDownloadReceipt,
     handlePrintReceipt,
     // Batch actions

@@ -20,6 +20,7 @@ import { useSubscription } from "../hooks/useSubscription";
 import { isProductLimitReached } from "../lib/subscriptionApi";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { UpgradeModal } from "../components/subscription/UpgradeModal";
+import { useCreateIntent } from "../hooks/useCreateIntent";
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);
@@ -124,6 +125,7 @@ export const ProductsPage = () => {
     mutationFn: productsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setNotification({
         type: "success",
         message: t("products.productDeleted"),
@@ -143,6 +145,7 @@ export const ProductsPage = () => {
     mutationFn: (ids: string[]) => productsApi.bulkDelete(ids),
     onSuccess: (resp) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setSelectedKeys(new Set());
       setBulkDeleteConfirm(false);
       const { deleted, skipped } = resp.data;
@@ -150,10 +153,10 @@ export const ProductsPage = () => {
         type: skipped.length > 0 ? "error" : "success",
         message:
           skipped.length > 0
-            ? t(
-                "products.bulkDeletePartial",
-                `Deleted ${deleted}, skipped ${skipped.length}`,
-              )
+            ? t("products.bulkDeletePartial", {
+                deleted,
+                skipped: skipped.length,
+              })
             : t("products.productDeleted"),
       });
     },
@@ -188,6 +191,8 @@ export const ProductsPage = () => {
     }
     setShowForm(true);
   }, [subscriptionStatus]);
+  // Wait for the plan status so a deep link cannot skip the product limit.
+  useCreateIntent(handleCreateProduct, subscriptionStatus !== undefined);
 
   const handleFormClose = () => {
     setShowForm(false);
@@ -327,6 +332,7 @@ export const ProductsPage = () => {
           isLoading={pagination.isLoading}
           isFetching={pagination.isFetching}
           error={pagination.error}
+          onRetry={() => pagination.queryResult.refetch()}
           currentPage={pagination.currentPage}
           totalPages={pagination.totalPages}
           itemsPerPage={pagination.itemsPerPage}
@@ -392,10 +398,9 @@ export const ProductsPage = () => {
         onClose={() => setBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
         title={t("products.deleteSelected", "Delete Selected")}
-        message={t(
-          "products.bulkDeleteMessage",
-          `Are you sure you want to delete ${selectedKeys.size} products?`,
-        )}
+        message={t("products.bulkDeleteMessage", {
+          count: selectedKeys.size,
+        })}
         isLoading={bulkDeleteMutation.isPending}
       />
 

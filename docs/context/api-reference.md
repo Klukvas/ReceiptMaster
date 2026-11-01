@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-01
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -24,8 +24,8 @@ Creates a new user account.
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| email | string | yes | Must be unique |
-| password | string | yes | Min 8 chars recommended |
+| email | string | yes | Must be unique. Trimmed and lowercased before validation, so `A@x.com` and `a@x.com` are one account; login accepts any casing (also for older accounts stored with capitals). The same applies to `POST /auth/login` and profile email updates |
+| password | string | yes | Min 8 characters (`MIN_PASSWORD_LENGTH`, `users/dto/password-policy.ts`). Login still accepts shorter input so accounts created under the old minimum of 6 can sign in; changing a password requires 8+ for the new one only |
 
 **Response** (201):
 ```typescript
@@ -182,7 +182,7 @@ refresh tokens — including the successor of a refresh that is committing at th
 **Request Body:**
 ```typescript
 {
-  oldPassword: string,
+  currentPassword: string,
   newPassword: string,
   confirmPassword: string
 }
@@ -194,8 +194,8 @@ refresh tokens — including the successor of a refresh that is committing at th
 ```
 
 **Errors:**
-- 400 `VALIDATION_ERROR` — Passwords don't match or don't meet requirements
-- 401 `UNAUTHORIZED` — Invalid JWT or old password incorrect
+- 400 `VALIDATION_ERROR` — with an English detail: "New password and confirmation do not match", "Current password is incorrect" (field `currentPassword`) or "New password must be different from the current one"
+- 401 `UNAUTHORIZED` — Invalid JWT
 
 ---
 
@@ -238,11 +238,12 @@ so it never collides with an order or recipient key of the same value.
 **Request Body:**
 ```typescript
 {
-  name: string,
-  price_cents: number,        // in cents, min 1
-  currency: string,           // e.g., "EUR"
-  sku?: string,
-  stock_quantity?: number,    // optional, for inventory
+  name: string,                  // trimmed, non-empty, max 255
+  purchase_price_cents: number,  // integer cents, 0 to 2147483647
+  sale_price_cents: number,      // integer cents, 0 to 2147483647
+  quantity: number,              // 0 to 2147483647 (Postgres integer)
+  currency: string,              // enum, e.g. "UAH"
+  supplier_id?: string | null,   // UUID
 }
 ```
 
@@ -252,10 +253,11 @@ so it never collides with an order or recipient key of the same value.
   id: string,
   user_id: string,
   name: string,
-  price_cents: number,
+  purchase_price_cents: number,
+  sale_price_cents: number,
+  quantity: number,
   currency: string,
-  sku?: string,
-  stock_quantity?: number,
+  supplier_id: string | null,
   created_at: Date,
   updated_at: Date
 }
@@ -275,7 +277,7 @@ Paginated list of user's products.
 |-------|------|---------|-------|
 | limit | number | 10 | Max 1000 |
 | offset | number | 0 | For pagination |
-| sort | string | - | Sortable: `created_at`, `price_cents`, `name` |
+| sortBy | string | `created_at` | Sortable: `name`, `purchase_price_cents`, `sale_price_cents`, `quantity`, `created_at` |
 | sortOrder | enum | DESC | ASC or DESC |
 
 **Response** (200):
@@ -412,6 +414,8 @@ All endpoints require JWT auth. Scoped to authenticated user.
 
 File: `backend/src/modules/suppliers/suppliers.controller.ts` (5 endpoints)
 
+**Supplier ↔ product link.** A product has at most one supplier, stored in `products.supplier_id` (set via `POST/PATCH /products` with `supplier_id`). `Supplier.products` and `product_count` are that link read from the supplier's side; there is no `productIds` on the supplier endpoints (it is ignored if sent). The old `supplier_products` join table is no longer mapped; migration `BackfillProductSupplierFromJoinTable1792500000000` copied its rows into `supplier_id` (oldest supplier wins for a product linked to several) and left the table in place for a later cleanup migration.
+
 ### Create Supplier
 
 **POST** `/suppliers`
@@ -421,7 +425,12 @@ Creates a new supplier.
 **Request Body:**
 ```typescript
 {
-  // See backend/src/modules/suppliers/dto/create-supplier.dto.ts
+  name: string,               // trimmed, non-empty, max 255
+  email?: string,             // lowercased, max 255
+  phone?: string,             // digits, spaces and + ( ) . - only, max 50
+  address?: string,
+  contactPerson?: string,     // max 255
+  notes?: string,
 }
 ```
 
@@ -517,9 +526,10 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 **Request Body:**
 ```typescript
 {
-  name: string,
-  email: string,              // unique per user
-  address?: string,
+  name: string,               // trimmed, non-empty, max 255
+  email?: string,             // normalised to lowercase, max 255, unique per user (case-insensitive)
+  phone?: string,             // digits, spaces and + ( ) . - only, max 50
+  address?: string,           // max 1000
   city?: string,
   postal_code?: string,
   country?: string,
@@ -531,6 +541,7 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 **Errors:**
 - 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
+- 400 validation errors — blank name, over-long values, malformed phone or email
 
 ---
 
@@ -540,13 +551,13 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 
 Paginated list of user's recipients.
 
-**Query Params:** Same as Products (limit, offset, sort, sortOrder)
+**Query Params:** `limit`, `offset`, `search` (name, email or phone contains), `sortOrder`, and `sortBy`: `name`, `email`, `phone`, `created_at` (default), `order_count` or `total_spent_cents`. The last two sort by the aggregates every row carries (confirmed orders only). Ties fall back to newest first, then id, so paging is stable.
 
 **Response** (200):
 ```typescript
 {
-  data: Recipient[],
-  meta: { total: number, page: number, limit: number }
+  data: (Recipient & { order_count: number, total_spent_cents: number })[],
+  total: number, offset: number, limit: number
 }
 ```
 
@@ -575,6 +586,7 @@ Updates recipient details.
 **Response** (200): `Recipient`
 
 **Errors:**
+- 409 `RECIPIENT_ALREADY_EXISTS` — Email belongs to another recipient of this user (saving a recipient's own email is fine)
 - 400 `VALIDATION_ERROR` — `name: null` (the name is required and cannot be cleared); nothing is
   saved. Other class-validator failures return 400 `HTTP_EXCEPTION`
 - 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
@@ -592,6 +604,9 @@ Permanently deletes a recipient that has no orders. Recipients have no soft dele
 **Errors:**
 - 404 `RECIPIENT_NOT_FOUND` — Missing or another tenant's recipient
 - 409 `RECIPIENT_HAS_ORDERS` — The recipient has an order, live or soft-deleted; nothing is deleted
+
+**Errors:**
+- 409 `RECIPIENT_HAS_ORDERS` — The recipient still has orders and cannot be deleted
 
 ---
 
@@ -631,6 +646,7 @@ Creates new order. Supports idempotency via `Idempotency-Key` header.
 ```typescript
 {
   id: string,
+  order_number: number,   // per account: 1, 2, 3, ... never reused (soft-deleted orders keep theirs)
   user_id: string,
   recipient_id: string,
   status: "draft",
@@ -677,7 +693,8 @@ Paginated list of user's orders.
 |-------|------|---------|-------|
 | limit | number | 10 | |
 | offset | number | 0 | |
-| sort | string | - | Sortable: `created_at`, `total_cents`, `status`, `recipient_name` |
+| search | string | - | Recipient name contains the text; a bare number or `#17` also matches that `order_number` |
+| sortBy | string | `created_at` | Sortable: `created_at`, `order_number`, `total_cents`, `status`, `recipient_name` |
 | sortOrder | enum | DESC | ASC or DESC |
 | status | enum | - | Filter: `draft`, `confirmed`, `cancelled` |
 | minAmount | number | - | Min total in cents |
@@ -697,6 +714,18 @@ Paginated list of user's orders.
 ---
 
 ### Get Order by ID
+
+**GET** `/orders/ids`
+
+Ids of every order the list would show for the same filters (`search`, `status`, `minAmount`, `maxAmount`, `productId`, `startDate`, `endDate`), newest first, for "select all N" in the UI. Declared before `GET /orders/:id`.
+
+**Response** (200):
+```typescript
+{
+  ids: string[],   // at most 500 (one batch)
+  total: number    // how many orders match in all; total > ids.length means ids is only the newest part
+}
+```
 
 **GET** `/orders/:id`
 
@@ -1119,6 +1148,22 @@ Paginated list of all user's generated receipts.
 }
 ```
 
+
+### Receipt Retention
+
+**GET** `/receipts/retention` (requires auth)
+
+How close the account is to the retention cap (10 generated receipts) and which receipt creating the next one would delete, so the UI can ask first. Declared before `GET /receipts/:id`.
+
+**Response** (200):
+```typescript
+{
+  limit: number,               // 10
+  count: number,               // generated receipts the account holds
+  replaces: { id: string, number: string, order_id: string } | null  // oldest receipt once count >= limit
+}
+```
+
 ---
 
 ### Get Receipt by ID
@@ -1314,7 +1359,7 @@ Returns current plan and usage metrics.
   plan: "free" | "pro" | "business",
   usage: {
     productsCount: number,
-    ordersThisMonth: number
+    ordersThisMonth: number    // orders created this UTC month, excluding cancelled and deleted ones
   },
   limits: {
     maxProducts: number | null,       // null = unlimited
@@ -2166,7 +2211,7 @@ Emitted if generation fails:
 All routes require JWT auth. New read routes reject unknown query parameters; UUID paths, complete configs, partial overrides and write bodies use strict Zod validation. Complete V1 config includes company fields, template ID, document language, automatic/custom title (custom text must contain non-whitespace characters; literal `Invoice` stays custom), footer/accent/terms, tenant logo reference/layout, per-contact visibility and bounded Intl formatting. Unsupported values are retained. Logo bytes/storage keys are never config fields.
 
 - `GET /settings/document-config` → `{ data: { config, revision } }`, without creating a settings row.
-- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. Concurrent stale save → 409 with reload/compare/discard UX. The 409 body is the standard `{ error, errorCode: "HTTP_EXCEPTION" }`: the current revision is not included, so clients reload it with `GET`. Preset update/delete and receipt regeneration report stale revisions the same way.
+- `PUT /settings/document-config` → committed `{ data: { config, revision } }`; requires `expectedRevision`. A stale save returns 409 with `errorCode: "DOCUMENT_REVISION_CONFLICT"` (the current revision is not included, so clients reload it with `GET`); the UI shows the reload/compare/discard block only for that code, while other errors (validation, limits) appear next to the Save button. Preset update/delete and receipt regeneration report stale revisions as a plain 409 (`HTTP_EXCEPTION`).
 - `GET /settings/document-presets` → `{ data: [{ id, name, revision, updated_at }] }` summaries.
 - `GET /settings/document-presets/:id` → editable `{ data: { id, name, revision, config } }`.
 - `POST /settings/document-presets` → create with `name` and draft.

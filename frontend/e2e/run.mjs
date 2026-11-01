@@ -28,8 +28,12 @@ const SPECS = [
   { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
   { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
   { name: "onboarding", load: () => import("./onboarding.spec.mjs") },
+  { name: "legal-pages", load: () => import("./legal-pages.spec.mjs") },
   { name: "locale-parity", load: () => import("./locale-parity.spec.mjs") },
   { name: "api-errors", load: () => import("./api-errors.spec.mjs") },
+  { name: "auth-inline-errors", load: () => import("./auth-inline-errors.spec.mjs") },
+  { name: "orders-select-all", load: () => import("./orders-select-all.spec.mjs") },
+  { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

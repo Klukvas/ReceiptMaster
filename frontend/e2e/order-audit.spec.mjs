@@ -152,6 +152,10 @@ export const run = async () => {
     await waitFor(async () => (await page.locator("tbody tr").count()) === 1);
     await page.locator("tbody tr").getByRole("checkbox").check();
     await page.getByRole("button", { name: /^approve$/i }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^approve$/i })
+      .click();
     await waitFor(() => submissions.length > 0);
     if (JSON.stringify(submissions[0].data.orderIds) !== '["B"]')
       throw Error(JSON.stringify(submissions[0]));

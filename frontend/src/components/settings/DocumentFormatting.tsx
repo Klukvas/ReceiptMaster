@@ -6,6 +6,14 @@ import {
 } from "../../lib/document-config";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Input } from "../ui/Input";
+/** "ru" -> "Russian", "en-GB" -> "English (United Kingdom)", in the interface language. */
+const readableLanguage = (code: string, interfaceLanguage: string): string => {
+  try {
+    return new Intl.DisplayNames([interfaceLanguage], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
 export const selectClass =
   "w-full rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content focus:ring-2 focus:ring-[var(--color-ring)]";
 export function DocumentFormatting({
@@ -33,7 +41,7 @@ export function DocumentFormatting({
       >
         {values.map((value) => (
           <option key={value} value={value}>
-            {t(`document.option_${value}`, value)}
+            {t(`document.option_${value}`, readableLanguage(value, currentLanguage))}
           </option>
         ))}
       </select>
@@ -58,7 +66,9 @@ export function DocumentFormatting({
           }
         >
           {["en", "ru", "uk"].map((value) => (
-            <option key={value}>{t(`document.option_${value}`, value)}</option>
+            <option key={value} value={value}>
+              {readableLanguage(value, currentLanguage)}
+            </option>
           ))}
         </select>
       </label>
@@ -77,7 +87,9 @@ export function DocumentFormatting({
           }
         >
           {["en", "ru", "uk"].map((value) => (
-            <option key={value}>{t(`document.option_${value}`, value)}</option>
+            <option key={value} value={value}>
+              {readableLanguage(value, currentLanguage)}
+            </option>
           ))}
         </select>
       </label>

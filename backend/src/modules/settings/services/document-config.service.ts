@@ -23,6 +23,9 @@ import {
   parseConfig,
 } from "../document-config";
 
+/** Lets the UI tell a stale-revision conflict (compare and reload) apart from other 409s. */
+export const DOCUMENT_REVISION_CONFLICT = "DOCUMENT_REVISION_CONFLICT";
+
 export const MAX_DOCUMENT_PRESETS = 20;
 export const MAX_CONFIG_REVISION = 2147483646;
 export type ConfigVersion = { config: DocumentConfig; revision: number };
@@ -79,6 +82,7 @@ export class DocumentConfigService {
       throw new ConflictException({
         message:
           "Configuration changed. Reload saved settings or keep your draft and retry after comparing.",
+        errorCode: DOCUMENT_REVISION_CONFLICT,
         revision: actual,
       });
     if (actual >= MAX_CONFIG_REVISION)

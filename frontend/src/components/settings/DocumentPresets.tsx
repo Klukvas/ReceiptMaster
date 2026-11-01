@@ -10,6 +10,7 @@ import {
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { Input } from "../ui/Input";
 import { selectClass } from "./DocumentFormatting";
 export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
@@ -17,6 +18,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const [selected, setSelected] = useState("");
   const [loaded, setLoaded] = useState<Preset>();
   const [name, setName] = useState("");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const presets = useQuery({
     queryKey: ["document-presets"],
     queryFn: async () =>
@@ -39,8 +41,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
         setName(value.name);
         model.usePreset(value.config);
       } else if (action === "delete") {
-        if (!loaded || !window.confirm(t("document.deletePresetConfirm")))
-          return;
+        if (!loaded) return;
         await api.delete(`/settings/document-presets/${loaded.id}`, {
           data: { expectedRevision: loaded.revision },
         });
@@ -143,11 +144,22 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
           type="button"
           variant="danger"
           disabled={!loaded || model.busy}
-          onClick={() => act("delete")}
+          onClick={() => setIsConfirmingDelete(true)}
         >
           {t("common.delete")}
         </Button>
       </div>
+      <ConfirmModal
+        isOpen={isConfirmingDelete}
+        onClose={() => setIsConfirmingDelete(false)}
+        onConfirm={() => {
+          setIsConfirmingDelete(false);
+          void act("delete");
+        }}
+        title={t("document.deletePreset")}
+        message={t("document.deletePresetConfirm")}
+        itemName={loaded?.name}
+      />
     </section>
   );
 }

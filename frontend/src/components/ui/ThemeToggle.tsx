@@ -1,6 +1,7 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../../contexts/useTheme';
 import { clsx } from 'clsx';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface ThemeToggleProps {
  compact?: boolean;
@@ -8,16 +9,17 @@ interface ThemeToggleProps {
 
 export const ThemeToggle = ({ compact = false }: ThemeToggleProps) => {
  const { theme, toggleTheme } = useTheme();
+ const { t } = useTranslation();
 
  return (
  <button
  onClick={toggleTheme}
  className={clsx(
  'relative inline-flex items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2',
- compact ? 'h-7 w-12' : 'h-9 w-16',
+ compact ? 'h-7 w-12 pointer-coarse:h-11' : 'h-9 w-16 pointer-coarse:h-11',
  theme === 'dark' ? 'bg-accent-base' : 'bg-surface-alt'
  )}
- aria-label="Toggle theme"
+ aria-label={t('common.toggleTheme')}
  >
  <span
  className={clsx(

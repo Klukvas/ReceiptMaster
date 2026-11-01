@@ -3,6 +3,7 @@ import { Copy, Check, Unlink, Link2, Loader2 } from"lucide-react";
 import { Modal } from"../ui/Modal";
 import { Button } from"../ui/Button";
 import { receiptsApi } from"../../lib/api";
+import toast from"react-hot-toast";
 import { useTranslation } from"../../hooks/useTranslation";
 
 interface ShareReceiptModalProps {
@@ -18,6 +19,7 @@ export const ShareReceiptModal = ({
 }: ShareReceiptModalProps) => {
  const { t } = useTranslation();
  const [shareUrl, setShareUrl] = useState<string | null>(null);
+ const [confirmingRevoke, setConfirmingRevoke] = useState(false);
  const [loading, setLoading] = useState(false);
  const [revoking, setRevoking] = useState(false);
  const [copied, setCopied] = useState(false);
@@ -31,6 +33,7 @@ export const ShareReceiptModal = ({
  setShareUrl(null);
  setCopied(false);
  setError(null);
+ setConfirmingRevoke(false);
  };
  }, [isOpen, receiptId]);
 
@@ -59,6 +62,8 @@ export const ShareReceiptModal = ({
  try {
  await receiptsApi.revokeShare(receiptId);
  setShareUrl(null);
+ setConfirmingRevoke(false);
+ toast.success(t("receipts.linkRevoked"));
  onClose();
  } catch {
  setError(t("receipts.revokeError","Failed to revoke link"));
@@ -94,9 +99,9 @@ export const ShareReceiptModal = ({
  {t("receipts.publicLink","Public link")}
  </label>
  <div className="flex items-center gap-2">
- <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-surface-alt rounded-lg border border-[var(--color-border)]">
+ <div className="min-w-0 flex-1 flex items-center gap-2 px-3 py-2 bg-surface-alt rounded-lg border border-[var(--color-border)]">
  <Link2 className="w-4 h-4 text-content-tertiary flex-shrink-0" />
- <span className="text-sm text-content-secondary truncate font-mono">
+ <span className="min-w-0 text-sm text-content-secondary truncate font-mono">
  {shareUrl}
  </span>
  </div>
@@ -122,6 +127,13 @@ export const ShareReceiptModal = ({
  </div>
 
  <div className="pt-2 border-t border-[var(--color-border-light)]">
+ {confirmingRevoke ? (
+ // Revoking breaks the link for everyone who already has it, so ask once.
+ <div className="space-y-2">
+ <p className="text-xs text-content-secondary">
+ {t("receipts.revokeConfirm")}
+ </p>
+ <div className="flex gap-2">
  <Button
  size="sm"
  variant="outline"
@@ -136,6 +148,27 @@ export const ShareReceiptModal = ({
  )}
  {t("receipts.revokeLink")}
  </Button>
+ <Button
+ size="sm"
+ variant="secondary"
+ onClick={() => setConfirmingRevoke(false)}
+ disabled={revoking}
+ >
+ {t("receipts.keepLink")}
+ </Button>
+ </div>
+ </div>
+ ) : (
+ <Button
+ size="sm"
+ variant="outline"
+ onClick={() => setConfirmingRevoke(true)}
+ className="text-danger-base border-[var(--color-danger-light)] hover:bg-[var(--color-danger-light)]"
+ >
+ <Unlink className="w-3.5 h-3.5 mr-1.5" />
+ {t("receipts.revokeLink")}
+ </Button>
+ )}
  </div>
  </>
  )}

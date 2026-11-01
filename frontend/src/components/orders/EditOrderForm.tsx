@@ -8,6 +8,7 @@ import { Card } from "../ui/Card";
 import { OrderRecipientSelect, OrderProductSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
 import { useTranslation } from "../../hooks/useTranslation";
 
 interface EditOrderFormProps {
@@ -23,6 +24,7 @@ interface OrderItem {
 
 export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   const { t } = useTranslation();
+  useBackClosesDialog(true, onClose);
   const [recipientId, setRecipientId] = useState(order.recipient_id);
   const [items, setItems] = useState<OrderItem[]>(
     order.items.map((item) => ({

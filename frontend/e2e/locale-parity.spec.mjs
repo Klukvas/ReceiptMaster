@@ -75,7 +75,11 @@ const checkParity = (results, flat) => {
   for (const locale of LOCALES.filter((name) => name !== "en")) {
     const other = new Map(flat[locale]);
     const missing = [...reference.keys()].filter((key) => !other.has(key));
-    const extra = [...other.keys()].filter((key) => !reference.has(key));
+    // Russian and Ukrainian have plural forms English lacks (few/many).
+    const isExtraPluralForm = (key) => /_(few|many)$/.test(key);
+    const extra = [...other.keys()].filter(
+      (key) => !reference.has(key) && !isExtraPluralForm(key),
+    );
     results.check(
       `${locale}: same keys as en (${reference.size})`,
       missing.length === 0 && extra.length === 0,
@@ -102,15 +106,22 @@ const checkParity = (results, flat) => {
 const checkTemplateCount = (results, translations) => {
   const count = templateCount();
   for (const locale of LOCALES) {
-    const { description, tag1 } = translations[locale].landing.grid.receipts;
-    const numbers = [`${description} ${tag1}`.match(STANDALONE_NUMBER) ?? []]
-      .flat()
-      .map(Number);
-    results.check(
-      `${locale}: the landing template count matches TEMPLATE_METADATA (${count})`,
-      numbers.length === 2 && numbers.every((number) => number === count),
-      `${description} | ${tag1}`,
-    );
+    const { landing } = translations[locale];
+    const places = {
+      "grid.receipts": `${landing.grid.receipts.description} ${landing.grid.receipts.tag1}`,
+      "stats strip": landing.stats.templatesValue,
+      "templates title": landing.templates.title,
+      "pro plan": landing.pricing.pro.feat3,
+      "business plan": landing.pricing.business.feat3,
+    };
+    for (const [place, text] of Object.entries(places)) {
+      const numbers = (text.match(STANDALONE_NUMBER) ?? []).map(Number);
+      results.check(
+        `${locale}: the landing template count in ${place} matches TEMPLATE_METADATA (${count})`,
+        numbers.length >= 1 && numbers.every((number) => number === count),
+        text,
+      );
+    }
   }
 };
 

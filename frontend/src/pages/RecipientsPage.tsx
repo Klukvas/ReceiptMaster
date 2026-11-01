@@ -7,6 +7,7 @@ import { parseApiError } from"../lib/api-errors";
 import { Button } from"../components/ui/Button";
 import { DataTable } from"../components/ui/DataTable";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
+import { useCreateIntent } from"../hooks/useCreateIntent";
 import { RecipientForm } from"../components/recipients/RecipientForm";
 import { RecipientDrawer } from"../components/recipients/RecipientDrawer";
 import { RecipientAvatar } from"../components/recipients/RecipientAvatar";
@@ -19,6 +20,7 @@ import { useTranslation } from"../hooks/useTranslation";
 
 export const RecipientsPage = () => {
  const [showForm, setShowForm] = useState(false);
+ useCreateIntent(() => setShowForm(true));
  const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(
  null,
  );
@@ -83,7 +85,7 @@ export const RecipientsPage = () => {
  {
  key:"order_count",
  header: t("recipients.orders"),
- sortable: false,
+ sortable: true,
  render: (r) => {
  const count = r.order_count ?? 0;
  return (
@@ -103,7 +105,8 @@ export const RecipientsPage = () => {
  {
  key:"total_spent",
  header: t("recipients.totalSpent"),
- sortable: false,
+ sortable: true,
+ sortKey:"total_spent_cents",
  render: (r) => (
  <span className="text-sm font-semibold text-content">
  {formatCurrency(r.total_spent_cents ?? 0)}
@@ -139,6 +142,7 @@ export const RecipientsPage = () => {
  mutationFn: recipientsApi.delete,
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ["recipients"] });
+ toast.success(t("recipients.recipientDeleted"));
  setDeleteTarget(null);
  },
  onError: (error: unknown) => {
@@ -188,6 +192,7 @@ export const RecipientsPage = () => {
  isLoading={pagination.isLoading}
  isFetching={pagination.isFetching}
  error={pagination.error}
+ onRetry={() => pagination.queryResult.refetch()}
  currentPage={pagination.currentPage}
  totalPages={pagination.totalPages}
  itemsPerPage={pagination.itemsPerPage}
@@ -213,6 +218,11 @@ export const RecipientsPage = () => {
  </div>
  }
  emptyMessage={t("recipients.noRecipients")}
+ emptyAction={
+ <Button onClick={() => setShowForm(true)}>
+ {t("recipients.createFirstRecipient")}
+ </Button>
+ }
  emptySearchMessage={t("recipients.noRecipientsFound")}
  renderActions={(recipient) => (
  <RecipientActionsMenu
@@ -299,6 +309,7 @@ export const RecipientsPage = () => {
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  title={t("recipients.deleteRecipient","Delete Recipient")}
  message={t("recipients.deleteRecipientMessage")}
+ itemName={deleteTarget?.name}
  isLoading={deleteMutation.isPending}
  />
  </div>

@@ -14,6 +14,9 @@ import { Input } from "../ui/Input";
 import { DocumentFormatting, selectClass } from "./DocumentFormatting";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
+
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export type EditorSection = "company" | "receipt" | "language";
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
@@ -102,7 +105,7 @@ export function DocumentEditor({
             : "document.accountDefaults",
         )}
       </p>
-      {model.error && (
+      {model.error && model.isConflict && (
         <div
           role="alert"
           className="rounded-lg border border-[var(--color-danger-light)] p-4 text-danger-base"
@@ -302,10 +305,13 @@ export function DocumentEditor({
                   {t("document.replaceLogo")}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/gif,image/svg+xml"
+                    accept={LOGO_TYPES.join(",")}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file && file.size <= 5 * 1024 * 1024)
+                      // accept= only filters the picker; a dragged or renamed file still arrives here.
+                      if (file && !LOGO_TYPES.includes(file.type))
+                        model.setError(t("document.logoWrongType"));
+                      else if (file && file.size <= LOGO_MAX_BYTES)
                         model.stageLogo("replace", file);
                       else if (file) model.setError(t("document.logoTooLarge"));
                       event.target.value = "";
@@ -483,35 +489,45 @@ export function DocumentEditor({
           )}
         </section>
       </fieldset>
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
-        <span role="status" className="text-sm text-content-secondary">
-          {t(model.dirty ? "document.unsaved" : "document.saved")}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={model.discard}
-            disabled={model.busy || !model.dirty}
-          >
-            {t("document.discard")}
-          </Button>
-          <Button
-            type="submit"
-            disabled={model.busy || (!documentOnly && !model.dirty)}
-          >
-            {!model.busy && commitLabel
-              ? commitLabel
-              : t(
-                  model.busy
-                    ? "common.saving"
-                    : documentOnly
-                      ? "document.generateDocument"
-                      : "document.saveChanges",
-                )}
-          </Button>
+      {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
+      {(documentOnly || model.dirty || model.busy || model.error) && (
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+          {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
+          {model.error && !model.isConflict ? (
+            <span role="alert" className="text-sm text-danger-base">
+              {model.error}
+            </span>
+          ) : (
+            <span role="status" className="text-sm text-content-secondary">
+              {t(model.dirty ? "document.unsaved" : "document.saved")}
+            </span>
+          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={model.discard}
+              disabled={model.busy || !model.dirty}
+            >
+              {t("document.discard")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={model.busy || (!documentOnly && !model.dirty)}
+            >
+              {!model.busy && commitLabel
+                ? commitLabel
+                : t(
+                    model.busy
+                      ? "common.saving"
+                      : documentOnly
+                        ? "document.generateDocument"
+                        : "document.saveChanges",
+                  )}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
       <TemplateCarouselModal
         isOpen={gallery}
         language={config.documentLanguage}
