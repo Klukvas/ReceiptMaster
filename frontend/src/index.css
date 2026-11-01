@@ -7,6 +7,8 @@
 
 /* ---- Light Theme ---- */
 :root {
+  /* Native scrollbars and form controls follow the theme instead of staying bright on dark. */
+  color-scheme: light;
   /* Backgrounds */
   --color-bg: #F5F5F5;
   --color-bg-secondary: #EFEFEF;
@@ -71,6 +73,7 @@
 
 /* ---- Dark Theme ---- */
 .dark {
+  color-scheme: dark;
   /* Backgrounds */
   --color-bg: #141414;
   --color-bg-secondary: #1A1A1A;
@@ -88,7 +91,8 @@
   --color-border-light: #252525;
 
   /* Accent */
-  --color-accent: #6366F1;
+  /* Slightly deeper than indigo-500 so white text on accent fills reaches 4.5:1. */
+  --color-accent: #6064F0;
   --color-accent-hover: #4F46E5;
   --color-accent-light: rgba(99, 102, 241, 0.1);
   --color-accent-text: #FFFFFF;
@@ -994,9 +998,41 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .landing-trusted-label { width: 100%; margin-bottom: 8px; }
   .landing-theme-toggle { width: 44px; height: 44px; }
 }
+/* Very narrow phones: the wordmark collided with the language switch; the logo icon alone stays. */
+@media (max-width: 400px) {
+  .landing-nav { padding: 0 12px; }
+  .landing-logo-name { display: none; }
+  .landing-nav-right { gap: 4px; }
+}
 @media (max-width: 640px) {
   .landing-feat-grid { grid-template-columns: 1fr; }
   .landing-trusted-items { gap: 20px; }
   .landing-hero-btns { flex-direction: column; align-items: stretch; }
   .landing-feat-card { padding: 28px 22px; }
+}
+
+/* ============================================
+   Status text colours
+   The accent/danger/success/warning tokens are tuned for fills and borders. As small
+   text on their own 8-10% tint they measured 2.6-4.3:1, so text gets its own tokens that
+   keep at least 4.5:1 on cards, the page and tinted chips in both themes.
+   ============================================ */
+:root {
+  --color-text-accent: var(--color-accent);
+  --color-text-danger: #B91C1C;
+  --color-text-success: #065F46;
+  --color-text-warning: #92400E;
+}
+.dark {
+  --color-text-accent: #818CF8;
+  --color-text-danger: #F87171;
+  --color-text-success: var(--color-success);
+  --color-text-warning: var(--color-warning);
+}
+/* In the utilities layer so hover:/dark: variants of other colours still win. */
+@layer utilities {
+  .text-accent-base { color: var(--color-text-accent); }
+  .text-danger-base { color: var(--color-text-danger); }
+  .text-success-base { color: var(--color-text-success); }
+  .text-warning-base { color: var(--color-text-warning); }
 }
