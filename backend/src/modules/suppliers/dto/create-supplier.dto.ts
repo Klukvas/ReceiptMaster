@@ -7,10 +7,18 @@ import {
   MaxLength,
   IsArray,
   IsUUID,
+  Matches,
 } from "class-validator";
+import { NormalizedEmail } from "../../../common/dto/normalized-email";
+import {
+  PHONE_PATTERN,
+  PHONE_PATTERN_MESSAGE,
+  Trimmed,
+} from "../../../common/dto/trimmed-string";
 
 export class CreateSupplierDto {
   @ApiProperty({ description: "Название поставщика", example: "ООО Поставщик" })
+  @Trimmed()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
@@ -21,7 +29,9 @@ export class CreateSupplierDto {
     example: "supplier@example.com",
   })
   @IsOptional()
+  @NormalizedEmail()
   @IsEmail()
+  @MaxLength(255)
   email?: string;
 
   @ApiPropertyOptional({
@@ -29,7 +39,10 @@ export class CreateSupplierDto {
     example: "+380 50 123 4567",
   })
   @IsOptional()
+  @Trimmed()
   @IsString()
+  @MaxLength(50)
+  @Matches(PHONE_PATTERN, { message: PHONE_PATTERN_MESSAGE })
   phone?: string;
 
   @ApiPropertyOptional({
@@ -46,6 +59,7 @@ export class CreateSupplierDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   contactPerson?: string;
 
   @ApiPropertyOptional({

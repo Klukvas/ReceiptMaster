@@ -1,13 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Raw, Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import { normalizeEmail } from "../../common/dto/normalized-email";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -27,11 +28,33 @@ export class RecipientsService {
     createRecipientDto: CreateRecipientDto,
     user: User,
   ): Promise<Recipient> {
+    await this.assertEmailAvailable(createRecipientDto.email, user);
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
       user_id: user.id,
     });
     return this.recipientsRepository.save(recipient);
+  }
+
+  private async assertEmailAvailable(
+    email: string | undefined,
+    user: User,
+    excludeRecipientId?: string,
+  ): Promise<void> {
+    if (!email) return;
+
+    const duplicate = await this.recipientsRepository.findOne({
+      where: {
+        user_id: user.id,
+        email: Raw((alias) => `LOWER(${alias}) = :email`, {
+          email: normalizeEmail(email),
+        }),
+      },
+    });
+
+    if (duplicate && duplicate.id !== excludeRecipientId) {
+      throw ApiErrors.RECIPIENT_ALREADY_EXISTS(email);
+    }
   }
 
   async findAll(
@@ -103,6 +126,7 @@ export class RecipientsService {
     user: User,
   ): Promise<Recipient> {
     const recipient = await this.findOne(id, user);
+    await this.assertEmailAvailable(updateRecipientDto.email, user, id);
     Object.assign(recipient, updateRecipientDto);
     return this.recipientsRepository.save(recipient);
   }
@@ -119,9 +143,7 @@ export class RecipientsService {
       .getCount();
 
     if (ordersCount > 0) {
-      throw ApiErrors.BAD_REQUEST(
-        "Нельзя удалить получателя, у которого есть заказы",
-      );
+      throw ApiErrors.RECIPIENT_HAS_ORDERS();
     }
 
     await this.recipientsRepository.remove(recipient);

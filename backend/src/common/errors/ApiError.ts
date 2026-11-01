@@ -126,6 +126,12 @@ export const ApiErrors = {
       "RECIPIENT_NOT_FOUND",
       404,
     ),
+  RECIPIENT_HAS_ORDERS: () =>
+    new ApiErrorResponse(
+      "Recipient has orders and cannot be deleted",
+      "RECIPIENT_HAS_ORDERS",
+      409,
+    ),
   RECIPIENT_ALREADY_EXISTS: (email: string) =>
     new ApiErrorResponse(
       `Recipient with email ${email} already exists`,
