@@ -24,10 +24,10 @@ export function CustomizeDocumentModal({
     "replace" | "discard" | null
   >(null);
   const active = order.receipts?.find((value) => value.status === "generated");
-  const requestCommit = () => {
+  const requestCommit = async () => {
     if (model.busy || !model.config) return;
     if (active) setPendingConfirm("replace");
-    else void commit();
+    else await commit();
   };
   const commit = async () => {
     if (model.busy || !model.config) return;

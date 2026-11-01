@@ -26,6 +26,11 @@ import {
 } from "./helpers/isolated-postgres";
 
 // Explicit opt-in; no dotenv, production ORM config, or shared cleanup helper.
+// This schema comes from the entities (synchronize), so it has no numbering trigger: rows
+// inserted straight into the repository carry their own number, well clear of the ones the
+// service hands out.
+const SEEDED_ORDER_NUMBER_BASE = 1000;
+
 describeIsolatedPostgres(
   "orders audit: isolated PostgreSQL persistence and concurrency",
   AUDIT_CLUSTER,
@@ -381,7 +386,8 @@ describeIsolatedPostgres(
         await db.getRepository(Order).insert(
           Array.from(
             { length: PLAN_LIMITS.free.maxOrdersPerMonth - 1 },
-            () => ({
+            (_, index) => ({
+              order_number: SEEDED_ORDER_NUMBER_BASE + index,
               recipient_id: recipient.id,
               user_id: user.id,
               currency: "UAH",
@@ -415,13 +421,17 @@ describeIsolatedPostgres(
       const key = randomUUID();
       const order = await create(p, 1, key);
       await db.getRepository(Order).insert(
-        Array.from({ length: PLAN_LIMITS.free.maxOrdersPerMonth - 1 }, () => ({
-          recipient_id: recipient.id,
-          user_id: user.id,
-          currency: "UAH",
-          subtotal_cents: 0,
-          total_cents: 0,
-        })),
+        Array.from(
+          { length: PLAN_LIMITS.free.maxOrdersPerMonth - 1 },
+          (_, index) => ({
+            order_number: SEEDED_ORDER_NUMBER_BASE + index,
+            recipient_id: recipient.id,
+            user_id: user.id,
+            currency: "UAH",
+            subtotal_cents: 0,
+            total_cents: 0,
+          }),
+        ),
       );
       const replay = await service.create(
         { recipientId: recipient.id, items: [{ productId: p.id, qty: 1 }] },
