@@ -50,6 +50,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  }
  };
 
+ const refreshProfile = async () => {
+ const response = await authApi.getProfile();
+ setUser(response.data);
+ };
+
  const retryLoadProfile = async () => {
  setIsLoading(true);
  await fetchUserProfile();
@@ -105,6 +110,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  isAuthenticated: !!user && !!token,
  hasProfileLoadError,
  retryLoadProfile,
+ refreshProfile,
  };
 
  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

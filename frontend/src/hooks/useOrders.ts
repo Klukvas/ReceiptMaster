@@ -108,6 +108,7 @@ export const useOrders = () => {
       return confirmed;
     },
     onSuccess: () => {
+      toast.success(t("orders.orderConfirmed"));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       // Confirm may auto-create a receipt when the account setting is on.
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
@@ -117,7 +118,9 @@ export const useOrders = () => {
   const cancelMutation = useMutation({
     mutationFn: (id: string) => orderService.cancelOrder(id),
     onSuccess: () => {
+      toast.success(t("orders.orderCancelled"));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
   });
@@ -125,7 +128,9 @@ export const useOrders = () => {
   const deleteOrderMutation = useMutation({
     mutationFn: orderService.deleteOrder,
     onSuccess: () => {
+      toast.success(t("orders.orderDeleted"));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
@@ -135,6 +140,8 @@ export const useOrders = () => {
     mutationFn: async (orderId: string) => {
       const receiptsBefore = await countReceipts();
       const result = await receiptService.generateReceipt(orderId);
+      // The PDF renders in the background; say so, otherwise nothing seems to happen.
+      toast(t("receipts.generatingReceipt"));
       if (receiptsBefore >= RECEIPT_RETENTION_LIMIT) showReceiptEvictionNotice();
       return result;
     },

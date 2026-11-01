@@ -18,11 +18,12 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
+import { parseApiError } from "../lib/api-errors";
 
 const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { t } = useTranslation();
   const { status: subscription, isLoading: subLoading } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
@@ -59,12 +60,11 @@ export const ProfilePage: React.FC = () => {
     setIsLoading(true);
     try {
       await authApi.updateProfile(formData);
+      await refreshProfile();
       toast.success(t("profile.profileUpdated"));
       setIsEditing(false);
-      // The auth context will need to be updated with the new user data
-      window.location.reload(); // Simple refresh for now
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || t("profile.updateFailed"));
+    } catch (error: unknown) {
+      toast.error(parseApiError(error).message || t("profile.updateFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -115,12 +115,10 @@ export const ProfilePage: React.FC = () => {
         newPassword: "",
         confirmPassword: "",
       });
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        t("profile.passwordChangeFailed");
-      toast.error(errorMessage);
+    } catch (error: unknown) {
+      toast.error(
+        parseApiError(error).message || t("profile.passwordChangeFailed"),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +162,11 @@ export const ProfilePage: React.FC = () => {
 
               <div className="mt-6 space-y-4">
                 <button
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    // One form at a time: editing the profile closes the password form.
+                    handleCancelPasswordChange();
+                    setIsEditing(true);
+                  }}
                   className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
                   <Edit3 className="w-4 h-4 mr-2" />
@@ -172,7 +174,10 @@ export const ProfilePage: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setIsChangingPassword(true)}
+                  onClick={() => {
+                    handleCancel();
+                    setIsChangingPassword(true);
+                  }}
                   className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
                   <Lock className="w-4 h-4 mr-2" />
@@ -353,6 +358,7 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.current ? "text" : "password"}
+                          autoComplete="current-password"
                           id="currentPassword"
                           name="currentPassword"
                           value={passwordData.currentPassword}
@@ -363,6 +369,8 @@ export const ProfilePage: React.FC = () => {
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.current ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.current}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
@@ -392,6 +400,7 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.new ? "text" : "password"}
+                          autoComplete="new-password"
                           id="newPassword"
                           name="newPassword"
                           value={passwordData.newPassword}
@@ -403,6 +412,8 @@ export const ProfilePage: React.FC = () => {
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.new ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.new}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
@@ -435,6 +446,7 @@ export const ProfilePage: React.FC = () => {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                         <input
                           type={showPasswords.confirm ? "text" : "password"}
+                          autoComplete="new-password"
                           id="confirmPassword"
                           name="confirmPassword"
                           value={passwordData.confirmPassword}
@@ -446,6 +458,8 @@ export const ProfilePage: React.FC = () => {
                         />
                         <button
                           type="button"
+                          aria-label={showPasswords.confirm ? t("auth.hidePassword") : t("auth.showPassword")}
+                          aria-pressed={showPasswords.confirm}
                           onClick={() =>
                             setShowPasswords((prev) => ({
                               ...prev,

@@ -93,6 +93,10 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
       }
 
       if (currentStep === 2 && productData.name.trim()) {
+        if (productData.quantity.trim() && !/^\d+$/.test(productData.quantity.trim())) {
+          toast.error(t("products.quantityMustBeWhole"));
+          return false;
+        }
         await productsApi.create({
           name: productData.name,
           purchase_price_cents: amountToCents(productData.purchase_price),
