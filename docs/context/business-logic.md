@@ -104,7 +104,7 @@ File: `backend/src/modules/orders/orders.service.ts::cancel()`
 
 ### 2. Receipt & Invoice PDF Generation
 
-**Retention cap:** an account keeps its 10 most recent generated receipts (`ReceiptsService.MAX_RECEIPTS`). Generating number 11 retires the oldest one and its public link stops working. The manual "Generate Receipt" action in the UI (`useOrders`) shows a notice when the account is already at the cap; the auto-generate-on-confirm path does not.
+**Retention cap:** an account keeps its 10 most recent generated receipts (`ReceiptsService.MAX_RECEIPTS`). Generating number 11 retires the oldest one and its public link stops working. The UI (`useOrders`) shows a notice when the manual "Generate Receipt" action, or Confirm / bulk Approve with auto-generate on, will push the oldest receipt out. The backend itself never asks: it evicts silently.
 
 **Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
 receipt can later be `VOID`. There is at most **one receipt row per order** (unique

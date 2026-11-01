@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { receiptsApi, type Order } from "../lib/api";
+import { receiptsApi, settingsApi, type Order } from "../lib/api";
+import { AUTO_RECEIPT_QUERY_KEY } from "./useAutoReceiptSetting";
 import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
@@ -71,9 +72,41 @@ export const useOrders = () => {
     receiptService.loadPrinters();
   }, []);
 
+  const showReceiptEvictionNotice = () =>
+    toast(t("orders.receiptLimitNotice", { limit: RECEIPT_RETENTION_LIMIT }), {
+      duration: 8000,
+    });
+
+  // A failed lookup must never block the order action itself, so errors count as "no".
+  const countReceipts = () =>
+    receiptsApi
+      .getAll({ limit: 1 })
+      .then((response) => response.data.total)
+      .catch(() => 0);
+
+  // Confirming creates receipts on its own when the account setting is on; tell the user
+  // beforehand-known cases where that pushes the oldest receipts out.
+  const willAutoReceiptsEvict = async (newReceipts: number) => {
+    const autoReceiptsOn = await queryClient
+      .fetchQuery({
+        queryKey: AUTO_RECEIPT_QUERY_KEY,
+        queryFn: async () =>
+          (await settingsApi.getAutoReceipt()).data.data.enabled,
+        staleTime: 1000 * 60 * 5,
+      })
+      .catch(() => false);
+    if (!autoReceiptsOn) return false;
+    return (await countReceipts()) + newReceipts > RECEIPT_RETENTION_LIMIT;
+  };
+
   // Mutations
   const confirmMutation = useMutation({
-    mutationFn: (id: string) => orderService.confirmOrder(id),
+    mutationFn: async (id: string) => {
+      const willEvict = await willAutoReceiptsEvict(1);
+      const confirmed = await orderService.confirmOrder(id);
+      if (willEvict) showReceiptEvictionNotice();
+      return confirmed;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       // Confirm may auto-create a receipt when the account setting is on.
@@ -100,17 +133,9 @@ export const useOrders = () => {
 
   const generateReceiptMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      // A failed count must never block generating the receipt itself.
-      const receiptsBefore = await receiptsApi
-        .getAll({ limit: 1 })
-        .then((response) => response.data.total)
-        .catch(() => 0);
+      const receiptsBefore = await countReceipts();
       const result = await receiptService.generateReceipt(orderId);
-      if (receiptsBefore >= RECEIPT_RETENTION_LIMIT) {
-        toast(t("orders.receiptLimitNotice", { limit: RECEIPT_RETENTION_LIMIT }), {
-          duration: 8000,
-        });
-      }
+      if (receiptsBefore >= RECEIPT_RETENTION_LIMIT) showReceiptEvictionNotice();
       return result;
     },
     onSuccess: () => {
@@ -120,8 +145,12 @@ export const useOrders = () => {
   });
 
   const batchApproveMutation = useMutation({
-    mutationFn: (orderIds: string[]) =>
-      orderService.batchApproveOrders(orderIds),
+    mutationFn: async (orderIds: string[]) => {
+      const willEvict = await willAutoReceiptsEvict(orderIds.length);
+      const approved = await orderService.batchApproveOrders(orderIds);
+      if (willEvict) showReceiptEvictionNotice();
+      return approved;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });

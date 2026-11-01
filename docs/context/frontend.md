@@ -101,6 +101,7 @@ frontend/
   - Queues failed requests while refreshing to avoid race conditions
   - On refresh failure clears auth and flags the session as expired (`lib/session-expiry.ts`). On a private page (`/dashboard`, `/orders`, ...) it reloads in place, so the inline login screen shows "Your session expired" on the same URL and `AuthContext.login` returns there via `postLoginPath`; elsewhere it goes to `/`
   - Deep link `/?auth=register` or `/?auth=login` makes `LandingShell` open that modal (used by the login screen's "Sign up here")
+  - `?create=1` on `/products`, `/recipients` and `/orders` opens that page's create form (`hooks/useCreateIntent.ts`), then strips the parameter. `/orders?create=1&recipientId=<uuid>` preselects the recipient. Products and orders wait for the subscription status first so the plan limits still apply. The dashboard quick actions and the recipient drawer's "Create order" use it
 - Non-auth endpoints skip retry
 
 **API method groups** (lines 159–497):
