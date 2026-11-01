@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { recipientsApi, type Recipient } from "../../lib/api";
@@ -14,6 +14,7 @@ interface RecipientFormProps {
 
 export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   const { t } = useTranslation();
+  const isSubmittingRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -51,7 +52,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const data = {
@@ -61,10 +62,19 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       address: formData.address || undefined,
     };
 
-    if (recipient) {
-      updateMutation.mutate({ id: recipient.id, data });
-    } else {
-      createMutation.mutate(data);
+    // A fast double click fires twice before the button re-renders as disabled.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    try {
+      if (recipient) {
+        await updateMutation.mutateAsync({ id: recipient.id, data });
+      } else {
+        await createMutation.mutateAsync(data);
+      }
+    } catch {
+      // The mutation's onError already tells the user what went wrong.
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

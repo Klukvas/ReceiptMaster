@@ -441,8 +441,13 @@ export const OrdersPage = () => {
  }
  confirmLabel={
  confirmAction.type ==="cancel"
- ? t("orders.cancel","Cancel Order")
+ ? t("orders.cancelOrder","Cancel Order")
  : t("common.delete")
+ }
+ dismissLabel={
+ confirmAction.type ==="cancel"
+ ? t("orders.keepOrder","Keep order")
+ : undefined
  }
  variant={confirmAction.type ==="cancel" ?"warning" :"danger"}
  isLoading={

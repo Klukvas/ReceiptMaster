@@ -35,6 +35,12 @@ const TITLE_KEYS: Record<UpgradeReason, string> = {
   templates: "subscription.upgradeTemplatesTitle",
 };
 
+const NO_BILLING_DESC_KEYS: Record<UpgradeReason, string> = {
+  products: "subscription.limitProductsNoBilling",
+  orders: "subscription.limitOrdersNoBilling",
+  templates: "subscription.limitTemplatesNoBilling",
+};
+
 const DESC_KEYS: Record<UpgradeReason, string> = {
   products: "subscription.upgradeProductsDesc",
   orders: "subscription.upgradeOrdersDesc",
@@ -62,15 +68,12 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         <div className="flex flex-col items-center text-center py-4">
           <div className="mb-4">{REASON_ICONS[reason]}</div>
           <h3 className="text-lg font-semibold text-content mb-2">
-            {t(
-              "subscription.planUnavailable",
-              "Not included in your current plan",
-            )}
+            {t(titleKey, "Limit reached")}
           </h3>
           <p className="text-content-secondary mb-6">
             {t(
-              "subscription.billingDisabled",
-              "Payments are currently unavailable. Your current plan and usage limits still apply.",
+              NO_BILLING_DESC_KEYS[reason],
+              "You have reached the limit of your current plan. Plan upgrades are not available right now.",
             )}
           </p>
           <Button onClick={onClose}>{t("common.close", "Close")}</Button>

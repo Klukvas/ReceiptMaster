@@ -1,6 +1,8 @@
 import { useState, useMemo } from"react";
 import { useMutation, useQueryClient } from"@tanstack/react-query";
 import { Plus, Users, ShoppingCart } from"lucide-react";
+import toast from"react-hot-toast";
+import { parseApiError } from"../lib/api-errors";
 import { recipientsApi, formatCurrency, type Recipient } from"../lib/api";
 import { Button } from"../components/ui/Button";
 import { DataTable } from"../components/ui/DataTable";
@@ -137,6 +139,10 @@ export const RecipientsPage = () => {
  mutationFn: recipientsApi.delete,
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ["recipients"] });
+ setDeleteTarget(null);
+ },
+ onError: (error: unknown) => {
+ toast.error(parseApiError(error).message);
  setDeleteTarget(null);
  },
  });

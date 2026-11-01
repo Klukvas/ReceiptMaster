@@ -123,7 +123,7 @@ export const DashboardHomePage = () => {
       name: t("home.receipts"),
       value: receiptsData?.data?.total || 0,
       icon: Receipt,
-      href: "/receipts",
+      href: "/orders",
       color: "text-warning-base",
       bgColor: "bg-[var(--color-warning-light)]",
     },

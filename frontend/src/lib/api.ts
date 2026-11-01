@@ -1,3 +1,4 @@
+import { isProtectedPath, markSessionExpired } from "./session-expiry";
 import axios from "axios";
 
 export type {
@@ -97,6 +98,13 @@ const clearAuthAndRedirect = () => {
   localStorage.removeItem("auth_token");
   localStorage.removeItem("refresh_token");
   delete api.defaults.headers.common["Authorization"];
+  markSessionExpired();
+  // On a private page, reload in place: the login screen appears there and
+  // signing in returns the user to the same URL.
+  if (isProtectedPath(window.location.pathname)) {
+    window.location.reload();
+    return;
+  }
   window.location.href = "/";
 };
 

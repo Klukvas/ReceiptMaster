@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-29
+**Last Updated:** 2026-11-01
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -99,7 +99,8 @@ frontend/
   - Calls `POST /auth/refresh` with refresh token
   - Retries original request with new access token
   - Queues failed requests while refreshing to avoid race conditions
-  - Clears auth + redirects to home on refresh failure
+  - On refresh failure clears auth and flags the session as expired (`lib/session-expiry.ts`). On a private page (`/dashboard`, `/orders`, ...) it reloads in place, so the inline login screen shows "Your session expired" on the same URL and `AuthContext.login` returns there via `postLoginPath`; elsewhere it goes to `/`
+  - Deep link `/?auth=register` or `/?auth=login` makes `LandingShell` open that modal (used by the login screen's "Sign up here")
 - Non-auth endpoints skip retry
 
 **API method groups** (lines 159–497):
@@ -124,6 +125,7 @@ frontend/
 **parseApiError(error)** (lines 117–183):
 - Takes any error, returns `{ message: string; code: string }`
 - Checks Axios error response format: `{ error: string; errorCode: string }`
+- For generic codes (`VALIDATION_ERROR`, `BAD_REQUEST`, `HTTP_EXCEPTION`) the server's own detail (string or class-validator array, joined with `; `) wins over the generic translation
 - Falls back to legacy `{ message: string }`
 - Network errors → "Ошибка сети. Проверьте подключение..."
 - **i18n-aware**: translates error codes via `i18n.t('errors.${code.toLowerCase()}')`
@@ -342,7 +344,7 @@ const { theme, toggleTheme, setTheme } = useTheme()
 - 3 languages: `en`, `ru`, `uk`
 - Loads translations from `locales/{lang}/translation.json` (static imports)
 - Auto-detects from localStorage → browser language → HTML lang attribute
-- Syncs `<html lang>` attribute when language changes
+- Syncs `<html lang>` right after init (bundled resources make init synchronous, so the "initialized" event cannot be listened to) and on every language change
 
 **useTranslation hook** (`hooks/useTranslation.ts`):
 ```typescript

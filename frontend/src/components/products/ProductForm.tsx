@@ -7,6 +7,7 @@ import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { Combobox } from "../ui/Combobox";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 
 interface ProductFormProps {
   product?: Product | null;
@@ -37,10 +38,12 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
-  const { data: allProducts } = useQuery({
-    queryKey: ["products"],
-    queryFn: () => productsApi.getAll({ limit: 1000 }),
-    enabled: !product,
+  const similarNameQuery = useDebouncedValue(formData.name.trim(), 250);
+  // The list endpoint caps page size at 100, so ask the server for matches instead of loading everything.
+  const { data: similarProductsResponse } = useQuery({
+    queryKey: ["products", "similar-name", similarNameQuery],
+    queryFn: () => productsApi.getAll({ limit: 10, search: similarNameQuery }),
+    enabled: !product && similarNameQuery.length >= 2,
   });
 
   const { data: suppliersData } = useQuery({
@@ -58,13 +61,10 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }));
   }, [suppliersData?.data?.data]);
 
-  const similarProducts = useMemo(() => {
-    if (!allProducts?.data?.data || formData.name.length < 2) return [];
-    const searchTerm = formData.name.toLowerCase().trim();
-    return allProducts.data.data
-      .filter((p) => p.name.toLowerCase().includes(searchTerm))
-      .slice(0, 10);
-  }, [allProducts?.data?.data, formData.name]);
+  const similarProducts = useMemo(
+    () => similarProductsResponse?.data?.data ?? [],
+    [similarProductsResponse?.data?.data],
+  );
 
   useEffect(() => {
     if (product) {

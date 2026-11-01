@@ -1,4 +1,4 @@
-import { useState, useEffect } from"react";
+import { useState, useEffect, useRef } from"react";
 import { useMutation, useQuery, useQueryClient } from"@tanstack/react-query";
 import { X, Check } from"lucide-react";
 import toast from"react-hot-toast";
@@ -22,6 +22,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  const { t } = useTranslation();
  const queryClient = useQueryClient();
 
+ const isSubmittingRef = useRef(false);
  const [formData, setFormData] = useState({
  name:"",
  email:"",
@@ -97,7 +98,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  },
  });
 
- const handleSubmit = (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
 
  const data = {
@@ -110,10 +111,21 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  productIds: formData.productIds,
  };
 
+ // A fast double click fires twice before the button re-renders as disabled.
+ if (isSubmittingRef.current) return;
+ isSubmittingRef.current = true;
+ try {
  if (supplier) {
- updateMutation.mutate({ id: supplier.id, data });
+ await updateMutation.mutateAsync({ id: supplier.id, data });
  } else {
- createMutation.mutate(data as Parameters<typeof suppliersApi.create>[0]);
+ await createMutation.mutateAsync(
+ data as Parameters<typeof suppliersApi.create>[0],
+ );
+ }
+ } catch {
+ // The mutation's onError already tells the user what went wrong.
+ } finally {
+ isSubmittingRef.current = false;
  }
  };
 

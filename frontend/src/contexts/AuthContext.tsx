@@ -1,3 +1,4 @@
+import { postLoginPath } from '../lib/session-expiry';
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { authApi, type User } from '../lib/api';
 import { AuthContext, type AuthContextType } from './AuthContext.types';
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  setToken(access_token);
  setUser(userData);
 
- window.location.href = '/dashboard';
+ window.location.href = postLoginPath(window.location);
  };
 
  const register = async (email: string, password: string) => {

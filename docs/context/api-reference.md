@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-11-01
 
 **Total Endpoints:** 92 across 12 controllers. This reference covers all controllers exhaustively.
 
@@ -22,7 +22,7 @@ Creates a new user account.
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| email | string | yes | Must be unique |
+| email | string | yes | Must be unique. Trimmed and lowercased before validation, so `A@x.com` and `a@x.com` are one account; login accepts any casing (also for older accounts stored with capitals). The same applies to `POST /auth/login` and profile email updates |
 | password | string | yes | Min 8 chars recommended |
 
 **Response** (201):
@@ -199,11 +199,12 @@ Creates a new product in user's catalog.
 **Request Body:**
 ```typescript
 {
-  name: string,
-  price_cents: number,        // in cents, min 1
-  currency: string,           // e.g., "EUR"
-  sku?: string,
-  stock_quantity?: number,    // optional, for inventory
+  name: string,                  // trimmed, non-empty, max 255
+  purchase_price_cents: number,  // integer cents, 0 to 2147483647
+  sale_price_cents: number,      // integer cents, 0 to 2147483647
+  quantity: number,              // 0 to 2147483647 (Postgres integer)
+  currency: string,              // enum, e.g. "UAH"
+  supplier_id?: string | null,   // UUID
 }
 ```
 
@@ -363,7 +364,13 @@ Creates a new supplier.
 **Request Body:**
 ```typescript
 {
-  // See backend/src/modules/suppliers/dto/create-supplier.dto.ts
+  name: string,               // trimmed, non-empty, max 255
+  email?: string,             // lowercased, max 255
+  phone?: string,             // digits, spaces and + ( ) . - only, max 50
+  address?: string,
+  contactPerson?: string,     // max 255
+  notes?: string,
+  productIds?: string[],      // UUIDs to link
 }
 ```
 
@@ -449,9 +456,10 @@ Adds new customer to user's recipient list.
 **Request Body:**
 ```typescript
 {
-  name: string,
-  email: string,              // unique per user
-  address?: string,
+  name: string,               // trimmed, non-empty, max 255
+  email?: string,             // normalised to lowercase, max 255, unique per user (case-insensitive)
+  phone?: string,             // digits, spaces and + ( ) . - only, max 50
+  address?: string,           // max 1000
   city?: string,
   postal_code?: string,
   country?: string,
@@ -462,6 +470,7 @@ Adds new customer to user's recipient list.
 
 **Errors:**
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
+- 400 validation errors — blank name, over-long values, malformed phone or email
 
 ---
 
@@ -500,9 +509,12 @@ Paginated list of user's recipients.
 
 Updates recipient details.
 
-**Request Body:** Same fields as Create (all optional)
+**Request Body:** Same fields and validation as Create (all optional)
 
 **Response** (200): `Recipient`
+
+**Errors:**
+- 409 `RECIPIENT_ALREADY_EXISTS` — Email belongs to another recipient of this user (saving a recipient's own email is fine)
 
 ---
 
@@ -513,6 +525,9 @@ Updates recipient details.
 Soft-deletes recipient.
 
 **Response** (200): `{ ok: true }`
+
+**Errors:**
+- 409 `RECIPIENT_HAS_ORDERS` — The recipient still has orders and cannot be deleted
 
 ---
 
@@ -599,7 +614,7 @@ Paginated list of user's orders.
 | maxAmount | number | - | Max total in cents |
 | productId | string | - | Filter by product UUID |
 | startDate | string | - | ISO date (e.g., 2026-01-01) |
-| endDate | string | - | ISO date |
+| endDate | string | - | ISO date. A date-only value (`2026-11-01`) covers that whole day (UTC, up to 23:59:59.999); a full timestamp is used as given |
 
 **Response** (200):
 ```typescript
@@ -667,7 +682,7 @@ If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt
 
 **PATCH** `/orders/:id/cancel`
 
-Soft-deletes order (marks as cancelled).
+Marks the order as cancelled and returns its reserved quantities to the products (once; deleting a cancelled order does not restore them again).
 
 **Response** (200): `Order` (status updated to `cancelled`)
 

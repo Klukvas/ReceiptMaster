@@ -33,6 +33,7 @@ export const ErrorCode = {
   // Recipient errors
   RECIPIENT_NOT_FOUND: "RECIPIENT_NOT_FOUND",
   RECIPIENT_ALREADY_EXISTS: "RECIPIENT_ALREADY_EXISTS",
+  RECIPIENT_HAS_ORDERS: "RECIPIENT_HAS_ORDERS",
 
   // Settings errors
   SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
@@ -87,6 +88,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECIPIENT_NOT_FOUND]: "Recipient not found",
   [ErrorCode.RECIPIENT_ALREADY_EXISTS]:
     "Recipient with this email already exists",
+  [ErrorCode.RECIPIENT_HAS_ORDERS]:
+    "This recipient has orders and cannot be deleted",
 
   // Settings errors
   [ErrorCode.SETTINGS_NOT_FOUND]: "Settings not found",
@@ -111,6 +114,24 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
 
+// Codes that say nothing specific on their own; the server's detail is the useful part.
+const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
+  ErrorCode.VALIDATION_ERROR,
+  ErrorCode.BAD_REQUEST,
+  ErrorCode.HTTP_EXCEPTION,
+]);
+
+// class-validator sends an array of messages; domain errors send a single string.
+function serverDetail(error: unknown): string | null {
+  const parts = Array.isArray(error) ? error : [error];
+  const text = parts
+    .filter((part): part is string => typeof part === "string")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("; ");
+  return text || null;
+}
+
 /**
  * Parse API error from axios error
  */
@@ -130,6 +151,11 @@ export function parseApiError(error: unknown): {
     const data = error.response.data as Partial<ApiErrorResponse>;
 
     if (data.error && data.errorCode) {
+      const detail = serverDetail(data.error);
+      if (GENERIC_ERROR_CODES.has(data.errorCode) && detail) {
+        return { message: detail, code: data.errorCode };
+      }
+
       // New format: { error, errorCode }
       const userFriendlyMessage = i18n.t(
         `errors.${data.errorCode.toLowerCase()}`,

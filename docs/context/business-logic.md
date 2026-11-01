@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-11-01
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -90,7 +90,8 @@ File: `backend/src/modules/orders/orders.service.ts::confirm()` / `autoGenerateR
 
 **Cancellation Flow:**
 
-Cancellation changes status to CANCELLED. Deletion is a separate soft-delete operation:
+Cancellation locks the order, returns its reserved quantities to the products in the same transaction, then sets status CANCELLED (a second cancel is rejected, so stock is returned once). Deletion is a separate soft-delete operation:
+- Deleting an already cancelled order (single or batch) does not restore stock again
 - Lock live orders inside the transaction before restoring stock and setting `deleted_at`
 - Single and overlapping batch deletes restore reserved quantities exactly once
 - Batch order locks and affected product locks follow deterministic ID order
@@ -102,6 +103,8 @@ File: `backend/src/modules/orders/orders.service.ts::cancel()`
 ---
 
 ### 2. Receipt & Invoice PDF Generation
+
+**Retention cap:** an account keeps its 10 most recent generated receipts (`ReceiptsService.MAX_RECEIPTS`). Generating number 11 retires the oldest one and its public link stops working. The manual "Generate Receipt" action in the UI (`useOrders`) shows a notice when the account is already at the cap; the auto-generate-on-confirm path does not.
 
 **Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
 receipt can later be `VOID`. There is at most **one receipt row per order** (unique

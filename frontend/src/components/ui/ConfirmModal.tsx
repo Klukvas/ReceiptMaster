@@ -10,6 +10,7 @@ interface ConfirmModalProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
   isLoading?: boolean;
 }
@@ -21,6 +22,7 @@ export const ConfirmModal = ({
   title,
   message,
   confirmLabel,
+  dismissLabel,
   variant = "danger",
   isLoading = false,
 }: ConfirmModalProps) => {
@@ -48,7 +50,7 @@ export const ConfirmModal = ({
       </div>
       <div className="flex justify-end gap-3 mt-6">
         <Button variant="secondary" onClick={onClose} disabled={isLoading}>
-          {t("common.cancel")}
+          {dismissLabel ?? t("common.cancel")}
         </Button>
         <Button
           variant={buttonVariant}

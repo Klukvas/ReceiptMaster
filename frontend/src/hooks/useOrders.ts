@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type Order } from "../lib/api";
+import toast from "react-hot-toast";
+import { receiptsApi, type Order } from "../lib/api";
+import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
 import { useNotifications } from "./useNotifications";
@@ -12,6 +14,8 @@ interface ConfirmAction {
 }
 
 const RECEIPT_POLL_INTERVAL_MS = 4000;
+// Mirrors the backend cap: creating receipt number 11 retires the oldest one.
+const RECEIPT_RETENTION_LIMIT = 10;
 
 const hasGeneratingReceipt = (orders: Order[]): boolean =>
   orders.some((order) =>
@@ -46,6 +50,7 @@ export const useReceiptGenerationPolling = (orders: Order[]) => {
 
 export const useOrders = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const { notifications } = useNotifications();
 
   // UI State
@@ -94,7 +99,20 @@ export const useOrders = () => {
   });
 
   const generateReceiptMutation = useMutation({
-    mutationFn: receiptService.generateReceipt,
+    mutationFn: async (orderId: string) => {
+      // A failed count must never block generating the receipt itself.
+      const receiptsBefore = await receiptsApi
+        .getAll({ limit: 1 })
+        .then((response) => response.data.total)
+        .catch(() => 0);
+      const result = await receiptService.generateReceipt(orderId);
+      if (receiptsBefore >= RECEIPT_RETENTION_LIMIT) {
+        toast(t("orders.receiptLimitNotice", { limit: RECEIPT_RETENTION_LIMIT }), {
+          duration: 8000,
+        });
+      }
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
