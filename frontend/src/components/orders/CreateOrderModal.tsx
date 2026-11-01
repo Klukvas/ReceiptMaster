@@ -212,7 +212,7 @@ export const CreateOrderModal = ({
               type="button"
               onClick={onClose}
               className="rounded-lg p-2 text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <X className="w-5 h-5" />
             </button>

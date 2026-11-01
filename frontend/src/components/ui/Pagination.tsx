@@ -89,7 +89,7 @@ export const Pagination: React.FC<PaginationProps> = ({
  onItemsPerPageChange(newValue);
  onPageChange(1); // Reset to first page when changing items per page
  }}
- className="px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
+ className="px-3 py-1.5 pointer-coarse:min-h-11 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
  >
  {itemsPerPageOptions.map((option) => (
  <option key={option} value={option}>

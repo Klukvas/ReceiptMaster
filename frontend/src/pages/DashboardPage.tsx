@@ -63,9 +63,15 @@ export const DashboardPage = () => {
  setActivePreset(null);
  };
 
+ // One end alone still filters the data (the API accepts a single bound), so the label must not say "All time".
+ const formatDay = (value: string) => new Date(value).toLocaleDateString();
  const periodLabel =
  dateRange.startDate && dateRange.endDate
- ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
+ ? `${formatDay(dateRange.startDate)} — ${formatDay(dateRange.endDate)}`
+ : dateRange.startDate
+ ? t('dashboard.periodFrom', { date: formatDay(dateRange.startDate) })
+ : dateRange.endDate
+ ? t('dashboard.periodUntil', { date: formatDay(dateRange.endDate) })
  : t('dashboard.allTime', 'All time');
 
  // CSV export data

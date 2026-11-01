@@ -14,6 +14,9 @@ import { Input } from "../ui/Input";
 import { DocumentFormatting, selectClass } from "./DocumentFormatting";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
+
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export type EditorSection = "company" | "receipt" | "language";
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
@@ -302,10 +305,13 @@ export function DocumentEditor({
                   {t("document.replaceLogo")}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/gif,image/svg+xml"
+                    accept={LOGO_TYPES.join(",")}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file && file.size <= 5 * 1024 * 1024)
+                      // accept= only filters the picker; a dragged or renamed file still arrives here.
+                      if (file && !LOGO_TYPES.includes(file.type))
+                        model.setError(t("document.logoWrongType"));
+                      else if (file && file.size <= LOGO_MAX_BYTES)
                         model.stageLogo("replace", file);
                       else if (file) model.setError(t("document.logoTooLarge"));
                       event.target.value = "";

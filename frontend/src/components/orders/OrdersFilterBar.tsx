@@ -54,7 +54,7 @@ export const OrdersFilterBar: React.FC<OrdersFilterBarProps> = ({
  <select
  value={statusFilter}
  onChange={(e) => onStatusFilterChange(e.target.value)}
- className="appearance-none pl-3 pr-8 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content-secondary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all cursor-pointer"
+ className="appearance-none pl-3 pr-8 py-2 pointer-coarse:min-h-11 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content-secondary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all cursor-pointer"
  >
  <option value="">{t("orders.allStatuses")}</option>
  <option value="draft">{t("orders.draft")}</option>

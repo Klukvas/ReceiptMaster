@@ -8,6 +8,16 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import { Download, FileText, AlertCircle } from "lucide-react";
 import { downloadPdf } from "../lib/pdf-utils";
+import i18n from "../lib/i18n";
+import { useTranslation } from "../hooks/useTranslation";
+
+const SUPPORTED_LANGUAGES = ["en", "ru", "uk"];
+
+// The receipt reads in the seller's document language, not the visitor's interface language.
+const documentLanguageOf = (value: string | undefined): string => {
+  const base = value?.split("-")[0] ?? "";
+  return SUPPORTED_LANGUAGES.includes(base) ? base : "en";
+};
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
@@ -57,6 +67,7 @@ interface PublicReceiptData {
 
 export const PublicReceiptPage = () => {
   const { token } = useParams<{ token: string }>();
+  const { t: interfaceT } = useTranslation();
   const [data, setData] = useState<PublicReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -71,6 +82,15 @@ export const PublicReceiptPage = () => {
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const language = documentLanguageOf(data?.documentLanguage);
+  useEffect(() => {
+    if (!data) return;
+    document.documentElement.lang = language;
+    return () => {
+      document.documentElement.lang = i18n.language.split("-")[0];
+    };
+  }, [data, language]);
 
   const handleDownload = async () => {
     if (!token) return;
@@ -108,17 +128,17 @@ export const PublicReceiptPage = () => {
         <div className="text-center px-4">
           <AlertCircle className="w-16 h-16 text-content-tertiary mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-content-secondary mb-2">
-            Receipt Not Found
+            {interfaceT("publicReceipt.notFoundTitle")}
           </h1>
           <p className="text-content-tertiary">
-            This receipt is no longer available. Its link may have been revoked,
-            or the receipt was replaced by a newer one.
+            {interfaceT("publicReceipt.notFoundBody")}
           </p>
         </div>
       </div>
     );
   }
 
+  const t = i18n.getFixedT(language);
   const { receipt, companyInfo } = data;
   const { order } = receipt;
   const formatCurrency = (cents: number, currency: string) =>
@@ -133,14 +153,13 @@ export const PublicReceiptPage = () => {
     return (
       <div className="mx-auto max-w-2xl p-8 text-content">
         <h1>#{receipt.number}</h1>
-        <p>
-          Detailed metadata is unavailable for this legacy document. Download
-          the original PDF.
-        </p>
+        <p>{t("publicReceipt.legacyUnavailable")}</p>
         <button onClick={handleDownload} disabled={downloading}>
-          Download PDF
+          {t("publicReceipt.downloadPdf")}
         </button>
-        {downloadError && <p role="alert">Download failed. Please retry.</p>}
+        {downloadError && (
+          <p role="alert">{t("publicReceipt.downloadFailed")}</p>
+        )}
       </div>
     );
 
@@ -169,7 +188,7 @@ export const PublicReceiptPage = () => {
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-content-tertiary" />
                 <h2 className="text-lg font-semibold text-content">
-                  {companyInfo.receiptTitle || "Receipt"}
+                  {companyInfo.receiptTitle || t("publicReceipt.defaultTitle")}
                 </h2>
               </div>
               <button
@@ -178,12 +197,12 @@ export const PublicReceiptPage = () => {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-accent-base rounded-lg hover:bg-accent-base-hover transition-colors disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
-                {downloading ? "..." : "Download PDF"}
+                {downloading ? "..." : t("publicReceipt.downloadPdf")}
               </button>
             </div>
             {downloadError && (
-              <p className="mt-2 text-sm text-danger-base">
-                Failed to download PDF. Please try again.
+              <p role="alert" className="mt-2 text-sm text-danger-base">
+                {t("publicReceipt.downloadFailed")}
               </p>
             )}
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-content-tertiary">
@@ -198,13 +217,19 @@ export const PublicReceiptPage = () => {
             <table className="w-full table-fixed">
               <thead>
                 <tr className="text-xs font-semibold uppercase tracking-wider text-content-tertiary border-b border-[var(--color-border-light)]">
-                  <th className="text-left pb-2">Item</th>
-                  <th className="hidden sm:table-cell text-center pb-2 w-16">Qty</th>
+                  <th className="text-left pb-2">{t("publicReceipt.item")}</th>
+                  <th className="hidden sm:table-cell text-center pb-2 w-16">
+                    {t("publicReceipt.qty")}
+                  </th>
                   {data.money !== false && (
-                    <th className="hidden sm:table-cell text-right pb-2 w-28">Price</th>
+                    <th className="hidden sm:table-cell text-right pb-2 w-28">
+                      {t("publicReceipt.price")}
+                    </th>
                   )}
                   {data.money !== false && (
-                    <th className="text-right pb-2 w-28">Total</th>
+                    <th className="text-right pb-2 w-28">
+                      {t("publicReceipt.total")}
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -243,14 +268,16 @@ export const PublicReceiptPage = () => {
           {data.money !== false && (
             <div className="px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-content-tertiary">Subtotal</span>
+                <span className="text-sm text-content-tertiary">
+                  {t("publicReceipt.subtotal")}
+                </span>
                 <span className="text-sm tabular-nums text-content-secondary">
                   {formatCurrency(order.subtotal_cents, order.currency)}
                 </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-[var(--color-border)]">
                 <span className="text-base font-semibold text-content">
-                  Total
+                  {t("publicReceipt.total")}
                 </span>
                 <span className="text-xl font-bold tabular-nums text-content">
                   {formatCurrency(order.total_cents, order.currency)}
@@ -262,7 +289,7 @@ export const PublicReceiptPage = () => {
           {order.recipient && (
             <div className="px-6 py-4 border-t border-[var(--color-border-light)]">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-2">
-                Bill To
+                {t("publicReceipt.billTo")}
               </h3>
               <div className="space-y-0.5 text-sm text-content-secondary">
                 {order.recipient.name && (
@@ -281,7 +308,7 @@ export const PublicReceiptPage = () => {
             companyInfo.companyWebsite) && (
             <div className="px-6 py-4 border-t border-[var(--color-border-light)]">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-2">
-                Contact
+                {t("publicReceipt.contact")}
               </h3>
               <div className="space-y-0.5 text-sm text-content-tertiary">
                 {companyInfo.companyEmail && <p>{companyInfo.companyEmail}</p>}
@@ -302,7 +329,7 @@ export const PublicReceiptPage = () => {
             </p>
           )}
           <p className="text-xs text-content-tertiary mt-2">
-            Powered by receiptmaster.org
+            {t("publicReceipt.poweredBy")}
           </p>
         </div>
       </div>

@@ -3,6 +3,9 @@ import { useAuth } from "../../hooks/useAuth";
 import { Link } from "react-router-dom";
 import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useFieldErrors } from "../../hooks/useFieldErrors";
+import { validateLogin, type AuthField } from "../../lib/auth-validation";
+import { FieldError } from "../ui/FieldError";
 import {
   clearSessionExpired,
   hasSessionExpired,
@@ -17,14 +20,19 @@ export const LoginForm: React.FC = () => {
 
   const { login } = useAuth();
   const { t } = useTranslation();
+  const { errors, clearField, showErrors, messageFor } = useFieldErrors(t);
+
+  const borderFor = (field: AuthField) =>
+    errors[field] ? "border-danger-base" : "border-[var(--color-border)]";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
+    if (!showErrors(validateLogin({ email, password }))) return;
+    setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       clearSessionExpired();
     } catch (err: unknown) {
       const apiError = parseApiError(err);
@@ -53,8 +61,8 @@ export const LoginForm: React.FC = () => {
             {t("auth.sessionExpired")}
           </div>
         )}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
+          <div className="space-y-4">
             <div>
               <label htmlFor="email" className="sr-only">
                 {t("auth.email")}
@@ -65,11 +73,18 @@ export const LoginForm: React.FC = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-[var(--color-border)] placeholder-content-tertiary text-content bg-elevated rounded-t-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base focus:z-10 sm:text-sm transition-colors duration-200"
+                aria-invalid={errors.email ? true : undefined}
+                aria-describedby={errors.email ? "email-error" : undefined}
+                className={`appearance-none relative block w-full px-3 py-2 border ${borderFor("email")} placeholder-content-tertiary text-content bg-elevated rounded-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base sm:text-sm transition-colors duration-200`}
                 placeholder={t("auth.email")}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  clearField("email");
+                  setError("");
+                }}
               />
+              <FieldError id="email-error" message={messageFor("email")} />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
@@ -81,16 +96,31 @@ export const LoginForm: React.FC = () => {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-[var(--color-border)] placeholder-content-tertiary text-content bg-elevated rounded-b-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base focus:z-10 sm:text-sm transition-colors duration-200"
+                aria-invalid={errors.password ? true : undefined}
+                aria-describedby={
+                  errors.password ? "password-error" : undefined
+                }
+                className={`appearance-none relative block w-full px-3 py-2 border ${borderFor("password")} placeholder-content-tertiary text-content bg-elevated rounded-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base sm:text-sm transition-colors duration-200`}
                 placeholder={t("auth.password")}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearField("password");
+                  setError("");
+                }}
+              />
+              <FieldError
+                id="password-error"
+                message={messageFor("password")}
               />
             </div>
           </div>
 
           {error && (
-            <div className="rounded-md bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] p-4">
+            <div
+              role="alert"
+              className="rounded-md bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] p-4"
+            >
               <div className="text-sm text-danger-base">{error}</div>
             </div>
           )}

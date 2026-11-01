@@ -29,6 +29,14 @@ interface ProductFormProps {
 
 type QuantityConflict = { readonly server: number; readonly mine: number };
 
+// In form order, so the first problem is the one that gets focus.
+const FIELD_IDS = {
+  name: "product-name",
+  purchase_price_cents: "product-purchase-price",
+  sale_price_cents: "product-sale-price",
+  quantity: "product-quantity",
+} as const;
+
 export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormValues>({
     name: "",
@@ -42,9 +50,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [backendError, setBackendError] = useState<string>("");
   // The stock a quantity edit replaces: the loaded value, or the server's after
   // a conflict, so saving again is an informed overwrite.
-  const [quantityBaseline, setQuantityBaseline] = useState<number | null>(
-    null,
-  );
+  const [quantityBaseline, setQuantityBaseline] = useState<number | null>(null);
   const [quantityConflict, setQuantityConflict] =
     useState<QuantityConflict | null>(null);
 
@@ -112,9 +118,15 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
+      const { code, message } = parseApiError(error);
+      // A taken name is a problem with that field, not with the form.
+      if (code === ErrorCode.PRODUCT_ALREADY_EXISTS) {
+        setErrors({ name: message });
+        document.getElementById(FIELD_IDS.name)?.focus();
+        return;
+      }
       setBackendError(
-        parseApiError(error).message ||
-          t("products.createError", "Error creating product"),
+        message || t("products.createError", "Error creating product"),
       );
     },
   });
@@ -150,7 +162,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }
     const purchasePrice = parseFloat(formData.purchase_price_cents);
     if (isNaN(purchasePrice) || purchasePrice < 0) {
-      newErrors.purchase_price_cents = t("products.purchasePriceMustBePositive");
+      newErrors.purchase_price_cents = t(
+        "products.purchasePriceMustBePositive",
+      );
     }
     const salePrice = parseFloat(formData.sale_price_cents);
     if (isNaN(salePrice) || salePrice < 0) {
@@ -161,7 +175,11 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       newErrors.quantity = t("products.quantityMustBeWhole");
     }
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const firstInvalid = (
+      Object.keys(FIELD_IDS) as (keyof typeof FIELD_IDS)[]
+    ).find((field) => newErrors[field]);
+    if (firstInvalid) document.getElementById(FIELD_IDS[firstInvalid])?.focus();
+    return !firstInvalid;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -194,7 +212,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={product ? t("products.editProduct") : t("products.createProduct")}
+      aria-label={
+        product ? t("products.editProduct") : t("products.createProduct")
+      }
       tabIndex={-1}
       className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 outline-none"
     >
@@ -208,7 +228,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {backendError && (
             <div className="p-3 bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] rounded-lg">
               <div className="flex items-center">
@@ -220,6 +240,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div>
             <Input
+              id={FIELD_IDS.name}
               label={t("products.productName")}
               value={formData.name}
               onChange={(e) => {
@@ -246,7 +267,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
                     >
                       <div className="flex items-center gap-2">
                         <Package className="w-3 h-3 text-content-tertiary" />
-                        <span className="font-medium text-content">{sp.name}</span>
+                        <span className="font-medium text-content">
+                          {sp.name}
+                        </span>
                       </div>
                       <div className="text-content-tertiary">
                         {sp.quantity} {t("products.pcs", "pcs")}
@@ -260,6 +283,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
+              id={FIELD_IDS.purchase_price_cents}
               label={t("products.purchasePrice")}
               type="number"
               step="0.01"
@@ -268,13 +292,18 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               placeholder="0.00"
               value={formData.purchase_price_cents}
               onChange={(e) => {
-                setFormData({ ...formData, purchase_price_cents: e.target.value });
-                if (errors.purchase_price_cents) setErrors({ ...errors, purchase_price_cents: "" });
+                setFormData({
+                  ...formData,
+                  purchase_price_cents: e.target.value,
+                });
+                if (errors.purchase_price_cents)
+                  setErrors({ ...errors, purchase_price_cents: "" });
               }}
               required
               error={errors.purchase_price_cents}
             />
             <Input
+              id={FIELD_IDS.sale_price_cents}
               label={t("products.salePrice")}
               type="number"
               step="0.01"
@@ -284,7 +313,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               value={formData.sale_price_cents}
               onChange={(e) => {
                 setFormData({ ...formData, sale_price_cents: e.target.value });
-                if (errors.sale_price_cents) setErrors({ ...errors, sale_price_cents: "" });
+                if (errors.sale_price_cents)
+                  setErrors({ ...errors, sale_price_cents: "" });
               }}
               required
               error={errors.sale_price_cents}
@@ -298,6 +328,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div>
             <Input
+              id={FIELD_IDS.quantity}
               label={t("products.quantity")}
               type="number"
               min="0"
@@ -329,7 +360,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             <select
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
               value={formData.currency}
-              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, currency: e.target.value })
+              }
             >
               <option value="UAH">UAH</option>
             </select>
@@ -346,7 +379,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             <Combobox
               options={supplierOptions}
               value={formData.supplier_id}
-              onChange={(value) => setFormData({ ...formData, supplier_id: value })}
+              onChange={(value) =>
+                setFormData({ ...formData, supplier_id: value })
+              }
               onClear={() => setFormData({ ...formData, supplier_id: "" })}
               placeholder={t("products.selectSupplier", "Select supplier")}
               searchPlaceholder={t("common.search", "Search...")}

@@ -5,6 +5,7 @@ import { documentError, documentEnvelope } from "../../lib/document-config";
 import { useDocumentDraft } from "../../hooks/useDocumentDraft";
 import { DocumentEditor, type EditorSection } from "../settings/DocumentEditor";
 import { Button } from "../ui/Button";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { Modal } from "../ui/Modal";
 import { useTranslation } from "../../hooks/useTranslation";
 export function CustomizeDocumentModal({
@@ -19,10 +20,17 @@ export function CustomizeDocumentModal({
   const model = useDocumentDraft(order.id);
   const [section, setSection] = useState<EditorSection>("receipt");
   const [reconstruct, setReconstruct] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<
+    "replace" | "discard" | null
+  >(null);
   const active = order.receipts?.find((value) => value.status === "generated");
+  const requestCommit = () => {
+    if (model.busy || !model.config) return;
+    if (active) setPendingConfirm("replace");
+    else void commit();
+  };
   const commit = async () => {
     if (model.busy || !model.config) return;
-    if (active && !window.confirm(t("document.replaceConfirm"))) return;
     model.setBusy(true);
     model.setError("");
     try {
@@ -63,11 +71,15 @@ export function CustomizeDocumentModal({
     } catch (error) { model.setError(await documentError(error)); } finally { model.setBusy(false); }
   };
   const close = () => {
-    if (
-      !model.busy &&
-      (!model.dirty || window.confirm(t("document.discardConfirm")))
-    )
-      onClose();
+    if (model.busy) return;
+    if (model.dirty) setPendingConfirm("discard");
+    else onClose();
+  };
+  const confirmPending = () => {
+    const confirmed = pendingConfirm;
+    setPendingConfirm(null);
+    if (confirmed === "replace") void commit();
+    if (confirmed === "discard") onClose();
   };
   return (
     <Modal
@@ -114,10 +126,31 @@ export function CustomizeDocumentModal({
           model={model}
           section={section}
           documentOnly
-          onCommit={commit}
+          onCommit={requestCommit}
           commitLabel={active ? t("document.replaceDocument") : undefined}
         />
       </div>
+      <ConfirmModal
+        isOpen={pendingConfirm !== null}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={confirmPending}
+        variant="warning"
+        title={
+          pendingConfirm === "discard"
+            ? t("document.discard")
+            : t("document.replaceDocument")
+        }
+        message={
+          pendingConfirm === "discard"
+            ? t("document.discardConfirm")
+            : t("document.replaceConfirm")
+        }
+        confirmLabel={
+          pendingConfirm === "discard"
+            ? t("document.discard")
+            : t("document.replaceDocument")
+        }
+      />
     </Modal>
   );
 }

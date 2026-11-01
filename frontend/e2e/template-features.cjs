@@ -391,8 +391,14 @@ async function check(name, operation) {
     await replacementDialog
       .getByLabel("Footer Title", { exact: true })
       .fill("Explicit replacement");
-    page.once("dialog", (dialog) => dialog.accept());
     await replacementDialog
+      .getByRole("button", { name: "Replace document", exact: true })
+      .click();
+    // Replacing asks first, in the app's own dialog rather than the browser's.
+    await page
+      .getByRole("dialog")
+      .filter({ hasText: "update its existing share links" })
+      .last()
       .getByRole("button", { name: "Replace document", exact: true })
       .click();
     await replacementDialog.waitFor({ state: "hidden" });

@@ -496,8 +496,30 @@ const scenario = async (results, name, body) => {
   }
 };
 
+/** The Skip/Next footer must stay on screen however short the window is. */
+const footerStaysVisible = async (results) => {
+  for (const viewport of [
+    { width: 1024, height: 600 },
+    { width: 320, height: 568 },
+  ]) {
+    await withPage({ viewport }, async (page) => {
+      page.setDefaultTimeout(5000);
+      await installBackend(page);
+      await page.goto(`${BASE_URL}/dashboard`);
+      await heading(page, 0).waitFor();
+      const box = await button(page, "Continue").boundingBox();
+      results.check(
+        `footer: Continue is inside a ${viewport.width}x${viewport.height} window`,
+        Boolean(box) && box.y + box.height <= viewport.height && box.y >= 0,
+        JSON.stringify(box),
+      );
+    });
+  }
+};
+
 export const run = async () => {
   const results = new Results("onboarding");
+  await footerStaysVisible(results);
   finishCopyInEveryLocale(results);
   await scenario(results, "revisit", revisitReusesEntities);
   await scenario(results, "in flight", saveIsSingleFlight);
