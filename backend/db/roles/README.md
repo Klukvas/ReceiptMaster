@@ -92,7 +92,10 @@ keys, and recreate `db-backup`. The roles can stay, since nothing uses them.
 1. Run `04-verify.sql` again and stop if it fails. A migration applied as the wrong role since Stage 2
    would otherwise surface only as `permission denied` after the switch.
 2. Keep a copy of `.env` with mode `600`.
-3. Set `DB_USERNAME=rm_app`, its password, and `AUTO_RUN_MIGRATIONS=false`.
+3. Set `DB_USERNAME=rm_app`, its password, and `AUTO_RUN_MIGRATIONS=false`. Also set
+   `POSTGRES_BOOTSTRAP_PASSWORD` to the superuser's previous password (on production, the former
+   `postgres` value). Without it the compose file falls back to `DB_PASSWORD`, and the `rm_app`
+   password would become the superuser's.
 4. `docker compose $args up -d --no-deps --no-build --pull never --force-recreate backend`.
 5. Confirm the backend's connection is restricted:
 

@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-01
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -567,7 +567,8 @@ connection; normal database defaults are never used by the opt-in audit suite (p
 *Tests* below). `test/db-roles.e2e-spec.ts` runs the production role scripts, with suite-owned role
 names, and CI repeats `test/e2e` as `rm_app` on a database converted with them. Neither is
 evidence of what is deployed; `scripts/deploy-production.sh` reports that from the backend's own
-connection on every release.
+connection on every release. `REQUIRE_RESTRICTED_APP_ROLE` is `True`, so a release is blocked if the
+app role is a superuser, has `BYPASSRLS`, can create roles or databases, or owns objects in `public`.
 
 Cross-tenant background work needs no role of its own. The outbox, storage sweep schedule,
 idempotency keys, Telegram update ids and subscriptions have no RLS and hold identifiers or billing
