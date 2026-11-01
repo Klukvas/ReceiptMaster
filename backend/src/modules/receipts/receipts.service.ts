@@ -343,6 +343,34 @@ export class ReceiptsService {
     return { data, total, offset, limit };
   }
 
+  /**
+   * How close the account is to the retention cap and which receipt the next one would
+   * replace, so the UI can ask before an old receipt (and its public link) disappears.
+   */
+  async getRetention(user: User): Promise<{
+    limit: number;
+    count: number;
+    replaces: { id: string; number: string; order_id: string } | null;
+  }> {
+    const where = { user_id: user.id, status: ReceiptStatus.GENERATED };
+    const count = await this.receiptsRepository.count({ where });
+    if (count < this.MAX_RECEIPTS) {
+      return { limit: this.MAX_RECEIPTS, count, replaces: null };
+    }
+
+    const oldest = await this.receiptsRepository.findOne({
+      where,
+      order: { created_at: "ASC", id: "ASC" },
+    });
+    return {
+      limit: this.MAX_RECEIPTS,
+      count,
+      replaces: oldest
+        ? { id: oldest.id, number: oldest.number, order_id: oldest.order_id }
+        : null,
+    };
+  }
+
   async findOne(id: string, user: User): Promise<Receipt> {
     const receipt = await this.receiptsRepository.findOne({
       where: { id, user_id: user.id },

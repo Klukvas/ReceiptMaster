@@ -201,6 +201,43 @@ describe("ReceiptsService", () => {
     service = module.get<ReceiptsService>(ReceiptsService);
   });
 
+  describe("getRetention", () => {
+    it("reports the count without a replaced receipt while under the cap", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(4);
+
+      const result = await service.getRetention(mockUser);
+
+      expect(result).toEqual({ limit: 10, count: 4, replaces: null });
+      expect(receiptsRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it("names the oldest generated receipt once the account is at the cap", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(10);
+      receiptsRepo.findOne.mockResolvedValue({
+        id: "rec-oldest",
+        number: "2026-000004",
+        order_id: "order-old",
+      });
+
+      const result = await service.getRetention(mockUser);
+
+      expect(result).toEqual({
+        limit: 10,
+        count: 10,
+        replaces: {
+          id: "rec-oldest",
+          number: "2026-000004",
+          order_id: "order-old",
+        },
+      });
+      expect(receiptsRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: { created_at: "ASC", id: "ASC" },
+        }),
+      );
+    });
+  });
+
   describe("findAll", () => {
     it("should return all receipts for user", async () => {
       const result = await service.findAll(mockUser);
