@@ -760,6 +760,7 @@
     "finish": "Get started",
     "next": "Continue",
     "back": "Back",
+    "templatesAvailable": "{{available}} of {{total}} templates are included in your plan.",
     "stepOf": "Step {{current}} of {{total}}",
     "step1": {
       "title": "Company Information",
@@ -785,6 +786,7 @@
     "business": "Business",
     "productsUsage": "Products",
     "ordersUsage": "Orders this month",
+    "templateNotInPlan": "Not in your plan",
     "upgradeProductsTitle": "Product Limit Reached",
     "limitProductsNoBilling": "You have reached the product limit of your plan. Delete a product you no longer need to add another. Plan upgrades are not available right now.",
     "limitOrdersNoBilling": "You have used all orders included in your plan this month. The counter resets next month. Plan upgrades are not available right now.",
