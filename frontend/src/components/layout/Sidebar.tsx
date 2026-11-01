@@ -115,7 +115,7 @@ export const Sidebar = ({
                 <span className="text-lg font-semibold text-content tracking-tight">
                   receiptmaster
                 </span>
-                <span className="text-[10px] text-content-tertiary -mt-0.5">
+                <span className="text-[11px] text-content-tertiary -mt-0.5">
                   receiptmaster.org
                 </span>
               </div>

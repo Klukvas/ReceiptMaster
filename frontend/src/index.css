@@ -14,8 +14,8 @@
 
   /* Text */
   --color-text: #202020;
-  --color-text-secondary: #6B6B6B;
-  --color-text-tertiary: #A0A0A0;
+  --color-text-secondary: #4F4F4F;
+  --color-text-tertiary: #6B6B6B;
   --color-text-inverse: #FFFFFF;
 
   /* Borders */
@@ -77,8 +77,8 @@
 
   /* Text */
   --color-text: #EFEFEF;
-  --color-text-secondary: #9A9A9A;
-  --color-text-tertiary: #5A5A5A;
+  --color-text-secondary: #B0B0B0;
+  --color-text-tertiary: #909090;
   --color-text-inverse: #141414;
 
   /* Borders */

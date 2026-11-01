@@ -63,7 +63,7 @@ frontend/
 | `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders |
 | `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics |
 | `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing |
-| `/profile` | `ProfilePage` | Yes | Layout | User profile |
+| `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
 | `/blog` | `BlogListPage` | No | None | Blog listing |
 | `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown) |
@@ -313,6 +313,8 @@ const { user, token, isAuthenticated, isLoading, login, register, logout } = use
 - `theme: 'light' | 'dark'`
 - Applies class to `<html>` (`.dark` or removed)
 - Persists to `localStorage.theme`
+
+**Text colour tokens** (`index.css`): `--color-text-secondary` and `--color-text-tertiary` are chosen to keep at least 4.5:1 against the page and card backgrounds in both themes (light 4.5–7:1, dark 4.8–8.5:1). Do not lighten them; use `text-content-tertiary` for the faintest readable text only. Accent chips (`text-accent-base` on `--color-accent-light`) are still around 2.8:1 in the light theme.
 
 **useTheme hook** (`hooks/useTheme.ts`):
 ```typescript
