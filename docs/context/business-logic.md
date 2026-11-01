@@ -57,6 +57,7 @@ export enum OrderStatus {
    - Acquire a transaction-scoped advisory lock per user before counting monthly orders
    - This serializes creates across different products, including accounts with no subscription row
    - Reject an additional order beyond the plan limit with `ORDER_MONTHLY_LIMIT_EXCEEDED`
+   - Cancelled and deleted orders do not count toward the month, so cancelling frees a place (as it also returns the stock)
    - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreateOrderInTx()`
 
 3. **Validate References**
