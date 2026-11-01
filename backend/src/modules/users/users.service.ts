@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Raw, Repository } from "typeorm";
+import { normalizeEmail } from "../../common/dto/normalized-email";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
@@ -17,6 +18,12 @@ import { AuthResponseDto } from "./dto/auth-response.dto";
 import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
 
 const REFRESH_TOKEN_EXPIRATION_DAYS = 30;
+
+// Accounts created before emails were normalised may still be stored with capitals.
+const emailEquals = (email: string) =>
+  Raw((alias) => `LOWER(${alias}) = :email`, {
+    email: normalizeEmail(email),
+  });
 
 @Injectable()
 export class UsersService {
@@ -48,7 +55,7 @@ export class UsersService {
     const { email, password } = registerDto;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (existingUser) {
@@ -83,7 +90,7 @@ export class UsersService {
     const { email, password } = loginDto;
 
     const user = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (!user || !user.isActive) {
@@ -166,7 +173,7 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
   }
 
@@ -177,7 +184,7 @@ export class UsersService {
     const { email } = updateProfileDto;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (existingUser && existingUser.id !== userId) {
