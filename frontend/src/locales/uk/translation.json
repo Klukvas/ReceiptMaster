@@ -1,5 +1,7 @@
 {
   "common": {
+    "copyFailed": "Не вдалося скопіювати в буфер обміну",
+    "copied": "Скопійовано",
     "selectAll": "Обрати всі рядки",
     "selectRow": "Обрати рядок",
     "optional": "необов'язково",
@@ -76,6 +78,10 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "activeFiltersCount_other": "{{count}} активних фільтрів",
+    "activeFiltersCount_many": "{{count}} активних фільтрів",
+    "activeFiltersCount_few": "{{count}} активні фільтри",
+    "activeFiltersCount_one": "{{count}} активний фільтр",
     "mixedCurrencies": "Усі товари в замовленні мають бути в одній валюті.",
     "title": "Замовлення",
     "createOrder": "Створити замовлення",
@@ -146,6 +152,8 @@
     "moreActions": "Ще",
     "selectedCount": "Вибрано замовлень: {{count}}",
     "batchApprove": "Підтвердити",
+    "batchApproveTitle": "Підтвердити вибрані замовлення",
+    "batchApproveMessage": "Підтвердити вибрані замовлення ({{count}})? Підтверджені замовлення більше не можна редагувати, а якщо ввімкнено автоматичні чеки, для них буде створено чеки.",
     "batchDelete": "Видалити",
     "batchApproveDisabledHint": "Всі вибрані замовлення повинні бути в статусі чернетка",
     "batchDeleteTitle": "Видалити вибрані замовлення",
@@ -330,6 +338,7 @@
     "noActivity": "Немає активності"
   },
   "settings": {
+    "tabsLabel": "Розділи налаштувань",
     "selectTemplate": "Обрати цей шаблон",
     "title": "Налаштування",
     "subtitle": "Управління налаштуваннями системи та зовнішнім виглядом документів",

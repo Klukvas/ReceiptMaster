@@ -1,5 +1,7 @@
 {
   "common": {
+    "copyFailed": "Could not copy to the clipboard",
+    "copied": "Copied",
     "selectAll": "Select all rows",
     "selectRow": "Select row",
     "optional": "optional",
@@ -76,6 +78,8 @@
     "groupSystem": "System"
   },
   "orders": {
+    "activeFiltersCount_other": "{{count}} active filters",
+    "activeFiltersCount_one": "{{count}} active filter",
     "mixedCurrencies": "All products in an order must use the same currency.",
     "title": "Orders",
     "createOrder": "Create Order",
@@ -146,6 +150,8 @@
     "moreActions": "More actions",
     "selectedCount": "{{count}} orders selected",
     "batchApprove": "Approve",
+    "batchApproveTitle": "Approve selected orders",
+    "batchApproveMessage": "Approve {{count}} selected orders? Approved orders can no longer be edited, and receipts are created for them if automatic receipts are on.",
     "batchDelete": "Delete",
     "batchApproveDisabledHint": "All selected orders must be in draft status",
     "batchDeleteTitle": "Delete Selected Orders",
@@ -330,6 +336,7 @@
     "noActivity": "No activity yet"
   },
   "settings": {
+    "tabsLabel": "Settings sections",
     "selectTemplate": "Select This Template",
     "title": "Settings",
     "subtitle": "System settings and document appearance management",

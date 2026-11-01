@@ -1,5 +1,7 @@
 {
   "common": {
+    "copyFailed": "Не удалось скопировать в буфер обмена",
+    "copied": "Скопировано",
     "selectAll": "Выбрать все строки",
     "selectRow": "Выбрать строку",
     "optional": "необязательно",
@@ -76,6 +78,10 @@
     "groupSystem": "Система"
   },
   "orders": {
+    "activeFiltersCount_other": "{{count}} активных фильтров",
+    "activeFiltersCount_many": "{{count}} активных фильтров",
+    "activeFiltersCount_few": "{{count}} активных фильтра",
+    "activeFiltersCount_one": "{{count}} активный фильтр",
     "mixedCurrencies": "Все товары в заказе должны быть в одной валюте.",
     "title": "Заказы",
     "createOrder": "Создать заказ",
@@ -146,6 +152,8 @@
     "moreActions": "Ещё",
     "selectedCount": "Выбрано заказов: {{count}}",
     "batchApprove": "Подтвердить",
+    "batchApproveTitle": "Подтвердить выбранные заказы",
+    "batchApproveMessage": "Подтвердить выбранные заказы ({{count}})? Подтверждённые заказы больше нельзя редактировать, а если включены автоматические чеки, для них будут созданы чеки.",
     "batchDelete": "Удалить",
     "batchApproveDisabledHint": "Все выбранные заказы должны быть в статусе черновик",
     "batchDeleteTitle": "Удалить выбранные заказы",
@@ -330,6 +338,7 @@
     "noActivity": "Нет активности"
   },
   "settings": {
+    "tabsLabel": "Разделы настроек",
     "selectTemplate": "Выбрать этот шаблон",
     "title": "Настройки",
     "subtitle": "Управление настройками системы и внешним видом документов",

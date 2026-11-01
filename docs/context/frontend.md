@@ -60,9 +60,9 @@ frontend/
 | `/products` | `ProductsPage` | Yes | Layout | Manage products |
 | `/recipients` | `RecipientsPage` | Yes | Layout | Manage buyers |
 | `/suppliers` | `SuppliersPage` | Yes | Layout | Manage suppliers |
-| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders. The status filter is kept in `?status=` (draft, confirmed or cancelled); clicking a row opens its details |
+| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders. The status filter is kept in `?status=` (draft, confirmed or cancelled); clicking a row opens its details; bulk Approve asks for confirmation first (it locks the orders and may create receipts) |
 | `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas |
-| `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing |
+| `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing. Tabs follow the ARIA tabs pattern (arrow keys, Home/End, roving tabindex) with a fade on the right while tabs are scrolled out of view. The sticky save bar of `DocumentEditor` appears only when there is a draft, a save in progress or an error (always in the "Customize document" modal); a successful save shows a toast. `--color-ring` is opaque so the focus indicator stays above 3:1 |
 | `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
 | `/blog` | `BlogListPage` | No | None | Blog listing |
@@ -119,6 +119,7 @@ frontend/
 **Utilities** (lines 500–528):
 - `formatCurrency(cents, currency)` — e.g., `100` cents → "1.00 UAH"
 - `formatDate(dateString)` → localized "uk-RU" format
+- `formatDate(iso)` / `formatDateOnly(iso)` format in the viewer's time zone and the interface language (`ru` -> ru-RU, `uk` -> uk-UA, `en` -> en-GB); do not call `toLocaleDateString()` without a locale
 - `amountToCents(amount: string | number)` → robust parsing (handles commas, spaces, NaN)
 
 ### Error Handling: `lib/api-errors.ts`
