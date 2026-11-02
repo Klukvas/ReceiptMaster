@@ -13,7 +13,7 @@ interface LanguageSwitcherProps {
 }
 
 export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ compact = false }) => {
- const { changeLanguage, currentLanguage } = useTranslation();
+ const { t, changeLanguage, currentLanguage } = useTranslation();
  const { theme } = useTheme();
  const isDark = theme === 'dark';
 
@@ -21,6 +21,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ compact = fa
  <div className="relative inline-block">
  <select
  value={currentLanguage}
+ aria-label={t('common.language')}
  onChange={(e) => changeLanguage(e.target.value as 'en' | 'ru' | 'uk')}
  className={`appearance-none border rounded-md py-2 pointer-coarse:min-h-11 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base transition-colors duration-200 w-full min-w-0 ${
  compact ? 'px-2 pr-6' : 'px-3 pr-8'

@@ -80,11 +80,7 @@ export const FooterSection: React.FC = React.memo(() => {
   return (
     <footer className="landing-footer">
       <a href="/" className="landing-logo">
-        <img
-          src="/logo-icon.svg"
-          alt="receiptmaster"
-          className="landing-logo-icon"
-        />
+        <img src="/logo-icon.svg" alt="" className="landing-logo-icon" />
         <span className="landing-logo-name">
           receipt<em>master</em>
         </span>
@@ -96,6 +92,8 @@ export const FooterSection: React.FC = React.memo(() => {
         <a href="/api/v1/docs">{t("landing.footer.apiDocs")}</a>
         <Link to="/privacy">{t("landing.footer.privacy")}</Link>
         <Link to="/terms">{t("landing.footer.terms")}</Link>
+        <Link to="/refund-policy">{t("landing.footer.refundPolicy")}</Link>
+        <Link to="/cookie-policy">{t("landing.footer.cookiePolicy")}</Link>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <span className="landing-footer-copy">

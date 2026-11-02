@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { BlogLayout } from "../components/blog/BlogLayout";
 import { getPostsByLang } from "../../content/blog";
-import { useTranslation } from "../hooks/useTranslation";
+import { useTranslation as useI18nTranslation } from "react-i18next";
 import { SEO } from "../components/seo/SEO";
 import { BreadcrumbJsonLd } from "../components/seo/JsonLd";
 import { SITE_URL } from "../components/seo/constants";
@@ -22,42 +22,44 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const BlogListPage: React.FC = () => {
-  const { currentLanguage } = useTranslation();
-  const lang = currentLanguage === "uk" ? "uk" : "en";
+  const { t, i18n } = useI18nTranslation();
+  const interfaceLanguage = i18n.language?.split("-")[0] ?? "en";
+  const lang = interfaceLanguage === "uk" ? "uk" : "en";
+  // Posts only exist in English and Ukrainian; the header follows the posts.
+  const tContent = i18n.getFixedT(lang);
+  const hasNoPostsInInterfaceLanguage = interfaceLanguage === "ru";
   const posts = getPostsByLang(lang);
 
   return (
     <BlogLayout>
       <SEO
-        title={lang === "uk" ? "\u0411\u043B\u043E\u0433" : "Blog"}
-        description={
-          lang === "uk"
-            ? "\u0413\u0430\u0439\u0434\u0438, \u043F\u043E\u0440\u0430\u0434\u0438 \u0442\u0430 \u0456\u043D\u0441\u0430\u0439\u0442\u0438 \u0434\u043B\u044F \u0441\u0443\u0447\u0430\u0441\u043D\u0438\u0445 \u043F\u0440\u043E\u0434\u0430\u0432\u0446\u0456\u0432."
-            : "Guides, tips, and insights for modern merchants."
-        }
+        title={tContent("blog.title")}
+        description={tContent("blog.description")}
         path="/blog"
         lang={lang}
-        alternates={[
-          { hreflang: "x-default", href: `${SITE_URL}/blog` },
-          { hreflang: "en", href: `${SITE_URL}/blog` },
-          { hreflang: "uk", href: `${SITE_URL}/blog` },
-        ]}
       />
       <BreadcrumbJsonLd
         items={[
-          { name: "Home", url: `${SITE_URL}/` },
-          { name: "Blog", url: `${SITE_URL}/blog` },
+          { name: tContent("blog.home"), url: `${SITE_URL}/` },
+          { name: tContent("blog.title"), url: `${SITE_URL}/blog` },
         ]}
       />
       <div className="mb-10">
         <h1 className="text-3xl sm:text-4xl font-bold text-content tracking-tight mb-3">
-          {lang === "uk" ? "\u0411\u043B\u043E\u0433" : "Blog"}
+          {tContent("blog.title")}
         </h1>
         <p className="text-content-secondary text-lg">
-          {lang === "uk"
-            ? "\u0413\u0430\u0439\u0434\u0438, \u043F\u043E\u0440\u0430\u0434\u0438 \u0442\u0430 \u0456\u043D\u0441\u0430\u0439\u0442\u0438 \u0434\u043B\u044F \u0441\u0443\u0447\u0430\u0441\u043D\u0438\u0445 \u043F\u0440\u043E\u0434\u0430\u0432\u0446\u0456\u0432."
-            : "Guides, tips, and insights for modern merchants."}
+          {tContent("blog.description")}
         </p>
+        {hasNoPostsInInterfaceLanguage && (
+          <p
+            role="note"
+            className="mt-4 text-sm text-content-secondary"
+            data-testid="blog-language-note"
+          >
+            {t("blog.languageNote")}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-6">

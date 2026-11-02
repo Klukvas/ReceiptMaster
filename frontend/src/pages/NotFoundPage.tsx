@@ -19,7 +19,7 @@ export const NotFoundPage = () => {
 
   return (
     <div className="min-h-screen bg-surface-alt flex items-center justify-center px-4">
-      <SEO title="Page Not Found" noindex />
+      <SEO title={t("notFound.title")} noindex />
       <div className="max-w-md w-full">
         <Card className="p-8 text-center">
           {/* 404 Icon */}
