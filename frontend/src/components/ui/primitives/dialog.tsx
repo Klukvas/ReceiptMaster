@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "./cn";
 import { useBackClosesDialog } from "../../../hooks/useBackClosesDialog";
 
@@ -123,7 +124,9 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
 
   if (!open) return null;
 
-  return (
+  // Rendered under <body>, not where it is declared: a dialog opened from a table row would
+  // otherwise inherit that cell's styles (a right-aligned cell right-aligned the whole form).
+  return createPortal(
     <DialogContext.Provider
       value={{ titleId, descriptionId, setTitleId, setDescriptionId }}
     >
@@ -149,7 +152,8 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
           {children}
         </div>
       </div>
-    </DialogContext.Provider>
+    </DialogContext.Provider>,
+    document.body,
   );
 }
 
