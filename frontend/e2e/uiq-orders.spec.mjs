@@ -176,8 +176,11 @@ const editFormInlineError = async (results) => {
 };
 
 const boxOf = (locator) => locator.evaluate((element) => {
-  const rect = element.getBoundingClientRect();
-  return { width: rect.width, height: rect.height, opacity: getComputedStyle(element).opacity };
+  return {
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+    opacity: getComputedStyle(element).opacity,
+  };
 });
 
 const openCreateModalWithProduct = async (page) => {
@@ -226,7 +229,7 @@ const rowMenuTouchTargets = async (results) => {
     await items.first().waitFor();
     await page.waitForTimeout(300);
     const heights = await items.evaluateAll((nodes) =>
-      nodes.map((node) => node.getBoundingClientRect().height),
+      nodes.map((node) => node.offsetHeight),
     );
     results.check(
       "row menu items are at least 44px on a phone",

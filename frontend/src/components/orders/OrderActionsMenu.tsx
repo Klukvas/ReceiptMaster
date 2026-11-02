@@ -353,7 +353,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
                   onClick={item.onClick}
                   disabled={item.disabled}
                   role="menuitem"
-                  className={`w-full px-3 py-2 pointer-coarse:py-3 text-left text-sm flex items-center gap-2.5 transition-colors ${
+                  className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors ${
                     item.className
                   } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
                     index === focusedIndex ? "bg-surface-alt" : ""

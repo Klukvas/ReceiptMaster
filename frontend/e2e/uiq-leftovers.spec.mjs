@@ -156,8 +156,8 @@ const routeFallback = async (results) => {
     await page.locator("#app-sidebar").waitFor();
     await page.getByRole("link", { name: "Orders" }).first().click();
     const fastSpinner = await page.locator("main [role=status] .animate-spin").count();
-    await page.waitForTimeout(400);
     const status = page.locator("main").getByRole("status").filter({ hasText: "Loading" });
+    await status.first().waitFor({ state: "attached" });
     results.check(
       "a slow route chunk loads inside the shell: status region with text, spinner only after the delay",
       fastSpinner === 0 &&
