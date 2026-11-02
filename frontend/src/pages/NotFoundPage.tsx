@@ -5,12 +5,17 @@ import { Card } from "../components/ui/Card";
 import { useTranslation } from "../hooks/useTranslation";
 import { SEO } from "../components/seo/SEO";
 
-export const NotFoundPage = () => {
+interface NotFoundPageProps {
+  /** Rendered inside the app shell: points home to the dashboard and drops the full-screen frame. */
+  isInLayout?: boolean;
+}
+
+export const NotFoundPage = ({ isInLayout = false }: NotFoundPageProps) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
   const handleGoHome = () => {
-    navigate("/");
+    navigate(isInLayout ? "/dashboard" : "/");
   };
 
   const handleGoBack = () => {
@@ -18,7 +23,13 @@ export const NotFoundPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-alt flex items-center justify-center px-4">
+    <div
+      className={
+        isInLayout
+          ? "flex items-center justify-center py-8"
+          : "min-h-screen bg-surface-alt flex items-center justify-center px-4"
+      }
+    >
       <SEO title={t("notFound.title")} noindex />
       <div className="max-w-md w-full">
         <Card className="p-8 text-center">
@@ -48,7 +59,7 @@ export const NotFoundPage = () => {
           <div className="space-y-3">
             <Button onClick={handleGoHome} className="w-full" size="lg">
               <Home className="w-4 h-4 mr-2" />
-              {t("notFound.goHome")}
+              {isInLayout ? t("notFound.goDashboard") : t("notFound.goHome")}
             </Button>
 
             <Button

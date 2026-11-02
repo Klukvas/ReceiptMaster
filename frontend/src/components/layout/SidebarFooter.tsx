@@ -2,6 +2,7 @@ import { LogOut } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
+import { SidebarCompactControls } from './SidebarCompactControls';
 
 interface SidebarFooterProps {
  isCollapsed: boolean;
@@ -17,8 +18,10 @@ export const SidebarFooter = ({ isCollapsed, logoutLabel, onLogout }: SidebarFoo
  <div className="h-px bg-surface-alt" />
  </div>
 
- {/* Theme & Language – hidden when collapsed */}
- {!isCollapsed && (
+ {/* Theme & Language: full controls when expanded, icon buttons when collapsed */}
+ {isCollapsed ? (
+ <SidebarCompactControls />
+ ) : (
  <div className="space-y-2 mb-3">
  <div className="flex items-center justify-between px-2 py-1">
  <ThemeToggle />
@@ -49,13 +52,6 @@ export const SidebarFooter = ({ isCollapsed, logoutLabel, onLogout }: SidebarFoo
  <span className="ml-3">{logoutLabel}</span>
  )}
  </button>
-
- {/* Collapsed tooltips for footer items */}
- {isCollapsed && (
- <div className="relative group mt-1">
- {/* Theme & Language collapsed tooltips handled via title attr */}
- </div>
- )}
  </div>
  );
 };

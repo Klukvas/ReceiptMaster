@@ -10,7 +10,7 @@ import { useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/layout/Layout";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ScrollToTop } from "./components/ScrollToTop";
-import { PageSpinner } from "./components/common/PageSpinner";
+import { ContentSpinner, PageSpinner } from "./components/common/PageSpinner";
 import { HomePage } from "./pages/HomePage";
 
 // Lazy-loaded page components for code splitting
@@ -82,8 +82,33 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Sign-in gate + app shell; the page chunk loads inside the shell so the sidebar stays put. */
+const AuthenticatedPage: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <ProtectedRoute>
+    <Layout>
+      <Suspense fallback={<ContentSpinner />}>{children}</Suspense>
+    </Layout>
+  </ProtectedRoute>
+);
+
+/** Signed-in users keep the sidebar on an unknown URL; visitors get the standalone page. */
+const NotFoundRoute: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return <PageSpinner />;
+  if (!isAuthenticated) return <NotFoundPage />;
+  return (
+    <Layout>
+      <Suspense fallback={<ContentSpinner />}>
+        <NotFoundPage isInLayout />
+      </Suspense>
+    </Layout>
+  );
+};
+
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated: _isAuthenticated } = useAuth();
 
   return (
     <Suspense fallback={<PageSpinner />}>
@@ -92,81 +117,65 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <DashboardHomePage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <DashboardHomePage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/products"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <ProductsPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <ProductsPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/recipients"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <RecipientsPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <RecipientsPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/suppliers"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <SuppliersPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <SuppliersPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/orders"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <OrdersPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <OrdersPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/analytics"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <DashboardPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <DashboardPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <SettingsPage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <SettingsPage />
+            </AuthenticatedPage>
           }
         />
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
-              <Layout>
-                <ProfilePage />
-              </Layout>
-            </ProtectedRoute>
+            <AuthenticatedPage>
+              <ProfilePage />
+            </AuthenticatedPage>
           }
         />
         <Route path="/r/:token" element={<PublicReceiptPage />} />
@@ -176,7 +185,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/refund-policy" element={<RefundPolicyPage />} />
         <Route path="/cookie-policy" element={<CookiePolicyPage />} />
-        <Route path="*" element={<NotFoundPage />} />
+        <Route path="*" element={<NotFoundRoute />} />
       </Routes>
     </Suspense>
   );

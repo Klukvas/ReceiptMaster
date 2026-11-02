@@ -5,6 +5,7 @@ import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Sidebar } from "./Sidebar";
+import { OfflineBanner } from "./OfflineBanner";
 import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
 
 interface LayoutProps {
@@ -71,6 +72,7 @@ export const Layout = ({ children }: LayoutProps) => {
       >
         <main className="flex-1 py-6 pt-[calc(5rem+env(safe-area-inset-top))] lg:pt-6 pb-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <OfflineBanner />
             {children}
           </div>
         </main>
