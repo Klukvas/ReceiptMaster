@@ -533,8 +533,30 @@ const footerStaysVisible = async (results) => {
   }
 };
 
+// The first field takes focus a frame after a step opens. When that frame is late, it must not
+// pull focus back from a field the person has already moved to (typed text went into the name).
+const focusIsNotStolen = async (results) => {
+  await withPage({ viewport: VIEWPORT }, async (page) => {
+    page.setDefaultTimeout(5000);
+    await page.addInitScript(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) =>
+        raf(() => setTimeout(() => callback(performance.now()), 600));
+    });
+    await installBackend(page, {});
+    await openAtProductStep(page);
+    await page.getByLabel("Sale Price (UAH)").focus();
+    await page.waitForTimeout(900);
+    results.check(
+      "a late first-field focus does not take focus from the field being used",
+      (await page.evaluate(() => document.activeElement?.getAttribute("placeholder"))) === "0.00",
+    );
+  });
+};
+
 export const run = async () => {
   const results = new Results("onboarding");
+  await focusIsNotStolen(results);
   await footerStaysVisible(results);
   finishCopyInEveryLocale(results);
   await scenario(results, "revisit", revisitReusesEntities);

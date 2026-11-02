@@ -663,6 +663,13 @@ export const run = async () => {
   await scenario(
     "10: a page picked right after load is not sent back to page 1 by the search debounce",
     async (page) => {
+      // The debounce timer starts at mount; hold the search debounce back so it fires after the
+      // click on page 2, as it does on a fast machine.
+      await page.addInitScript(() => {
+        const native = window.setTimeout.bind(window);
+        window.setTimeout = (callback, delay, ...args) =>
+          native(callback, delay === 400 ? 1500 : delay, ...args);
+      });
       await setup(
         page,
         Array.from({ length: 12 }, (_, i) => order(`A${i}`, `Alpha ${i}`)),
@@ -671,10 +678,10 @@ export const run = async () => {
       await waitFor(async () => (await page.locator("tbody tr").count()) === 2, {
         label: "page 2 to show its two rows",
       });
-      // The debounce timer started at mount fires after 300 ms: the page must survive it.
-      await page.waitForTimeout(700);
-      if ((await page.locator("tbody tr").count()) !== 2)
-        throw Error("The debounce timer reset the page to 1");
+      await page.waitForTimeout(2200);
+      const rows = await page.locator("tbody tr").count();
+      if (rows !== 2)
+        throw Error(`The debounce timer reset the page to 1 (${rows} rows)`);
     },
   );
   await scenario(
