@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, settingsApi, type Order } from "../lib/api";
@@ -6,6 +6,7 @@ import { AUTO_RECEIPT_QUERY_KEY } from "./useAutoReceiptSetting";
 import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
+import { parseApiError } from "../lib/api-errors";
 import { useNotifications } from "./useNotifications";
 
 interface ConfirmAction {
@@ -78,6 +79,9 @@ export const useOrders = () => {
     order: null,
   });
 
+  // Shown inside the open confirm dialog so a failed action can be retried from there.
+  const [actionError, setActionError] = useState<string | null>(null);
+
   // Selection state
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
@@ -113,6 +117,12 @@ export const useOrders = () => {
     return (await countReceipts()) + newReceipts > RECEIPT_RETENTION_LIMIT;
   };
 
+  const reportActionError = (error: unknown) => {
+    const { message } = parseApiError(error);
+    toast.error(message);
+    setActionError(message);
+  };
+
   // Mutations
   const confirmMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -127,6 +137,7 @@ export const useOrders = () => {
       // Confirm may auto-create a receipt when the account setting is on.
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
     },
+    onError: (error) => toast.error(parseApiError(error).message),
   });
 
   const cancelMutation = useMutation({
@@ -137,6 +148,7 @@ export const useOrders = () => {
         queryClient.invalidateQueries({ queryKey: [...queryKey] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
+    onError: reportActionError,
   });
 
   const deleteOrderMutation = useMutation({
@@ -148,15 +160,16 @@ export const useOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
+    onError: reportActionError,
   });
 
   const generateReceiptMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const result = await receiptService.generateReceipt(orderId);
+      await receiptService.generateReceipt(orderId);
       // The PDF renders in the background; say so, otherwise nothing seems to happen.
       toast(t("receipts.generatingReceipt"));
-      return result;
     },
+    onError: (error) => toast.error(parseApiError(error).message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -176,9 +189,7 @@ export const useOrders = () => {
       setSelectedKeys(new Set());
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
-    onError: () => {
-      setConfirmAction({ isOpen: false, type: null, order: null });
-    },
+    onError: reportActionError,
   });
 
   const batchDeleteMutation = useMutation({
@@ -190,6 +201,7 @@ export const useOrders = () => {
       setSelectedKeys(new Set());
       setConfirmAction({ isOpen: false, type: null, order: null });
     },
+    onError: reportActionError,
   });
 
   // Action handlers
@@ -198,6 +210,7 @@ export const useOrders = () => {
   };
 
   const handleCancel = (id: string) => {
+    setActionError(null);
     // Find order from id to show in modal — use a stub with id
     setConfirmAction({
       isOpen: true,
@@ -207,11 +220,13 @@ export const useOrders = () => {
   };
 
   const handleDeleteOrder = (order: Order) => {
+    setActionError(null);
     setConfirmAction({ isOpen: true, type: "delete", order });
   };
 
   const handleConfirmAction = (validOrderIds: string[] = []) => {
     if (!confirmAction.type) return;
+    setActionError(null);
 
     if (confirmAction.type === "cancel" && confirmAction.order) {
       cancelMutation.mutate(confirmAction.order.id);
@@ -225,6 +240,7 @@ export const useOrders = () => {
   };
 
   const handleCloseConfirm = () => {
+    setActionError(null);
     setConfirmAction({ isOpen: false, type: null, order: null });
   };
 
@@ -236,7 +252,21 @@ export const useOrders = () => {
     limit: number;
   } | null>(null);
 
+  // Synchronous guard: the retention lookup is async, so a second click lands before the
+  // mutation's pending state flips.
+  const isGenerateInFlight = useRef(false);
+
   const handleGenerateReceipt = async (orderId: string) => {
+    if (isGenerateInFlight.current) return;
+    isGenerateInFlight.current = true;
+    try {
+      await requestReceiptGeneration(orderId);
+    } finally {
+      isGenerateInFlight.current = false;
+    }
+  };
+
+  const requestReceiptGeneration = async (orderId: string) => {
     const retention = await receiptsApi
       .getRetention()
       .then((response) => response.data)
@@ -249,7 +279,7 @@ export const useOrders = () => {
       });
       return;
     }
-    generateReceiptMutation.mutate(orderId);
+    await generateReceiptMutation.mutateAsync(orderId).catch(() => undefined);
   };
 
   const confirmReceiptReplacement = () => {
@@ -269,11 +299,13 @@ export const useOrders = () => {
   // Approving locks the orders against edits (and may create receipts), so ask first.
   const handleBatchApprove = (validOrderIds: string[]) => {
     if (validOrderIds.length > 0) {
+      setActionError(null);
       setConfirmAction({ isOpen: true, type: "bulkApprove", order: null });
     }
   };
 
   const handleBulkDeleteConfirm = () => {
+    setActionError(null);
     setConfirmAction({ isOpen: true, type: "bulkDelete", order: null });
   };
 
@@ -292,6 +324,7 @@ export const useOrders = () => {
 
     // Confirm modal state
     confirmAction,
+    actionError,
     handleConfirmAction,
     handleCloseConfirm,
 

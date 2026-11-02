@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, AlertCircle, Plus, Package, User } from "lucide-react";
 import { ordersApi } from "../../lib/api";
@@ -41,8 +41,15 @@ export const CreateOrderModal = ({
   const [items, setItems] = useState<OrderItem[]>(() => [createItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState("");
+  const backendErrorRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+
+  // The error renders at the top of the scrolling body while Submit sits in the footer.
+  useEffect(() => {
+    if (backendError)
+      backendErrorRef.current?.scrollIntoView({ block: "nearest" });
+  }, [backendError]);
 
   const productOptions = useOrderProducts(items.map((item) => item.productId));
   const products = productOptions.records;
@@ -216,7 +223,11 @@ export const CreateOrderModal = ({
           <div className="px-6 pb-6 pt-2 max-h-[calc(90vh-140px)] overflow-y-auto space-y-6">
             {/* Backend error */}
             {backendError && (
-              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] text-sm text-danger-base">
+              <div
+                ref={backendErrorRef}
+                role="alert"
+                className="flex items-start gap-2.5 p-3 rounded-lg bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] text-sm text-danger-base"
+              >
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-danger-base" />
                 <span>{backendError}</span>
               </div>

@@ -75,6 +75,22 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
+  // The menu is position: fixed, so it would stay behind while the page moves under it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnViewportChange = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && dropdownRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("resize", closeOnViewportChange);
+    return () => {
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("resize", closeOnViewportChange);
+    };
+  }, [isOpen]);
+
   const updatePosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
@@ -331,7 +347,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
                   onClick={item.onClick}
                   disabled={item.disabled}
                   role="menuitem"
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 transition-colors ${
+                  className={`w-full px-3 py-2 pointer-coarse:py-3 text-left text-sm flex items-center gap-2.5 transition-colors ${
                     item.className
                   } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
                     index === focusedIndex ? "bg-surface-alt" : ""

@@ -1,7 +1,5 @@
-import { useState, useEffect } from"react";
-import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
+import { useState } from"react";
 import {
- X,
  Copy,
  Check,
  Mail,
@@ -18,6 +16,7 @@ import {
 } from"lucide-react";
 import { formatCurrency, formatDate, type Order } from"../../lib/api";
 import { Button } from"../ui/Button";
+import { Modal } from"../ui/Modal";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
 import { formatOrderNumber } from"../../lib/order-number";
@@ -47,20 +46,6 @@ export const OrderDetails = ({
 }: OrderDetailsProps) => {
  const { t } = useTranslation();
  const [idCopied, setIdCopied] = useState(false);
- useBackClosesDialog(true, onClose);
-
- // Close on Escape
- useEffect(() => {
- const handleKeyDown = (e: KeyboardEvent) => {
- if (e.key !=="Escape") return;
- // A dialog opened on top (e.g. Share Receipt) owns this Escape; closing both
- // would throw away the order the user was looking at.
- if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
- onClose();
- };
- document.addEventListener("keydown", handleKeyDown);
- return () => document.removeEventListener("keydown", handleKeyDown);
- }, [onClose]);
 
  const copyOrderId = async () => {
  await navigator.clipboard.writeText(order.id);
@@ -86,34 +71,25 @@ export const OrderDetails = ({
  :"?";
 
  return (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-modal-backdrop"
- onClick={(e) => {
- if (e.target === e.currentTarget) onClose();
- }}
+ <Modal
+ isOpen
+ onClose={onClose}
+ title={`${t("orders.orderDetails")} ${formatOrderNumber(order)}`}
+ size="xl"
  >
- {/* Backdrop */}
- <div className="absolute inset-0 bg-[var(--color-overlay)] backdrop-blur-sm" />
-
- {/* Modal */}
- <div className="relative w-full max-w-3xl bg-elevated rounded-2xl shadow-2xl border border-[var(--color-border)] max-h-[90vh] flex flex-col animate-modal-content">
  {/* ─── Header ─── */}
- <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-[var(--color-border-light)]">
- <div className="flex-1 min-w-0">
- <div className="flex items-center gap-3 mb-2">
- <h2 className="text-lg font-semibold text-content">
- {t("orders.orderDetails")} {formatOrderNumber(order)}
- </h2>
+ <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 mb-5 border-b border-[var(--color-border-light)]">
  <OrderStatusBadge order={order} />
- </div>
- <div className="flex items-center gap-2">
+ <div className="flex items-center gap-2 min-w-0">
  <span className="text-xs font-mono text-content-tertiary truncate">
  {order.id}
  </span>
  <button
+ type="button"
  onClick={copyOrderId}
- className="p-0.5 rounded hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
+ className="p-0.5 rounded hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary pointer-coarse:p-3"
  title={t("orders.copyId")}
+ aria-label={t("orders.copyId")}
  >
  {idCopied ? (
  <Check className="w-3.5 h-3.5 text-success-base" />
@@ -122,22 +98,15 @@ export const OrderDetails = ({
  )}
  </button>
  {idCopied && (
- <span className="text-xs text-success-base">
+ <span role="status" className="text-xs text-success-base">
  {t("orders.idCopied")}
  </span>
  )}
  </div>
  </div>
- <button
- onClick={onClose}
- className="p-2 -m-2 rounded-lg hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
- >
- <X className="w-5 h-5" />
- </button>
- </div>
 
  {/* ─── Body ─── */}
- <div className="flex-1 overflow-y-auto px-6 py-5">
+ <div>
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
  {/* ─── Left Column ─── */}
  <div className="space-y-6">
@@ -236,7 +205,7 @@ export const OrderDetails = ({
  <div className="text-sm font-medium text-content truncate">
  {item.product_name}
  </div>
- <div className="text-xs text-content-tertiary mt-0.5">
+ <div className="text-xs tabular-nums text-content-tertiary mt-0.5">
  {formatCurrency(
  item.unit_price_cents,
  order.currency,
@@ -282,7 +251,7 @@ export const OrderDetails = ({
  </div>
 
  {/* ─── Action Footer ─── */}
- <div className="px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt rounded-b-2xl">
+ <div className="-mx-6 -mb-4 mt-5 px-6 py-4 border-t border-[var(--color-border-light)] bg-surface-alt rounded-b-xl">
  <div className="flex items-center justify-end gap-2 flex-wrap">
  {/* Draft actions */}
  {order.status ==="draft" && !order.is_locked && (
@@ -391,7 +360,6 @@ export const OrderDetails = ({
  </Button>
  </div>
  </div>
- </div>
- </div>
+ </Modal>
  );
 };
