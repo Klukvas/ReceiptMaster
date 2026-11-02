@@ -15,6 +15,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { clsx } from "clsx";
+import toast from "react-hot-toast";
+import { parseApiError } from "../../lib/api-errors";
 import { useReceiptSocket } from "../../hooks/useReceiptSocket";
 import { receiptService } from "../../services/ReceiptService";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -326,20 +328,25 @@ export const ReceiptProgressPanel = () => {
     });
   };
 
-  const handleRetry = (orderId: string, receiptId: string) => {
-    receiptService.generateReceipt(orderId);
+  const handleRetry = async (orderId: string, receiptId: string) => {
+    try {
+      await receiptService.generateReceipt(orderId);
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+      return;
+    }
     dismissReceipt(receiptId);
   };
 
   if (receipts.size === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[calc(100vw-2rem)] max-w-sm pointer-events-none">
+    <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex flex-col gap-2 w-[calc(100vw-2rem)] max-w-sm pointer-events-none">
       {Array.from(receipts.values()).map((receipt) => (
         <div
           key={receipt.receiptId}
           className={clsx(
-            "pointer-events-auto rounded-xl shadow-lg border backdrop-blur-sm p-4 transition-all duration-300 animate-in slide-in-from-bottom-2",
+            "pointer-events-auto rounded-xl shadow-lg border backdrop-blur-sm p-4 transition-all duration-300 animate-in slide-in-from-bottom-2 motion-reduce:transition-none motion-reduce:animate-none",
             receipt.status === "processing" &&
               "bg-elevated/95 border-[var(--color-accent-light)]",
             receipt.status === "completed" &&
@@ -381,7 +388,7 @@ export const ReceiptProgressPanel = () => {
           {receipt.status === "processing" && (
             <div className="w-full bg-surface-alt rounded-full h-1.5 mb-2 overflow-hidden">
               <div
-                className="bg-accent-base h-1.5 rounded-full transition-all duration-700 ease-out"
+                className="bg-accent-base h-1.5 rounded-full transition-all duration-700 ease-out motion-reduce:transition-none"
                 style={{ width: `${receipt.progress}%` }}
               />
             </div>
@@ -390,7 +397,7 @@ export const ReceiptProgressPanel = () => {
           {/* Status text and actions */}
           <div className="flex items-center justify-between">
             {receipt.status === "processing" && (
-              <span className="text-xs text-content-tertiary">
+              <span className="text-xs text-content-tertiary tabular-nums">
                 {receipt.stage && STAGE_LABELS[receipt.stage]
                   ? t(STAGE_LABELS[receipt.stage])
                   : `${receipt.progress}%`}
@@ -401,7 +408,7 @@ export const ReceiptProgressPanel = () => {
                 onClick={() =>
                   receiptService.downloadReceipt(receipt.receiptId)
                 }
-                className="text-xs text-accent-base hover:text-accent-base font-medium flex items-center gap-1 transition-colors"
+                className="text-xs text-accent-base hover:text-accent-base font-medium flex items-center gap-1 transition-colors py-1.5 -my-1.5 pointer-coarse:min-h-11"
               >
                 <Download className="w-3 h-3" />
                 {t("receipts.downloadReceipt")}
@@ -409,14 +416,14 @@ export const ReceiptProgressPanel = () => {
             )}
             {receipt.status === "failed" && (
               <>
-                <span className="text-xs text-danger-base truncate min-w-0 flex-1">
+                <span className="text-xs text-danger-base line-clamp-2 break-words min-w-0 flex-1">
                   {receipt.error || t("receipts.receiptFailed")}
                 </span>
                 <button
                   onClick={() =>
                     handleRetry(receipt.orderId, receipt.receiptId)
                   }
-                  className="text-xs text-accent-base hover:text-accent-base font-medium flex items-center gap-1 transition-colors shrink-0 ml-2"
+                  className="text-xs text-accent-base hover:text-accent-base font-medium flex items-center gap-1 transition-colors shrink-0 ml-2 py-1.5 -my-1.5 pointer-coarse:min-h-11"
                 >
                   <RefreshCw className="w-3 h-3" />
                   {t("receipts.retryGeneration")}
@@ -425,7 +432,7 @@ export const ReceiptProgressPanel = () => {
             )}
 
             {receipt.status === "processing" && (
-              <span className="text-xs font-medium text-accent-base">
+              <span className="text-xs font-medium text-accent-base tabular-nums">
                 {receipt.progress}%
               </span>
             )}
