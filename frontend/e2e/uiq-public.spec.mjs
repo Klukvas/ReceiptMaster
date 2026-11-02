@@ -40,6 +40,15 @@ const contrastIn = (page, selector) =>
 const hashScroll = async (results, width) => {
   await withPage({ viewport: { width, height: 800 } }, async (page) => {
     await setup(page);
+    // Record how the app scrolls: a route change that glides can undo the jump to a hash target.
+    await page.addInitScript(() => {
+      window.__scrollCalls = [];
+      const native = window.scrollTo.bind(window);
+      window.scrollTo = (...args) => {
+        window.__scrollCalls.push(typeof args[0] === "object" ? args[0].behavior : "default");
+        return native(...args);
+      };
+    });
     await page.goto(`${BASE_URL}/blog`);
     await page.locator("footer .landing-footer-links a", { hasText: "Features" }).waitFor();
     await page.locator("footer .landing-footer-links a", { hasText: "Features" }).click();
@@ -61,8 +70,9 @@ const hashScroll = async (results, width) => {
     }
     results.check(
       `${width}px: Features link from /blog lands with the section below the nav`,
-      stableFor >= 5,
-      `section top = ${seen.top}, scrollY = ${seen.scrollY}, page height = ${seen.height}`,
+      stableFor >= 5 &&
+        (await page.evaluate(() => window.__scrollCalls)).every((behavior) => behavior === "instant"),
+      `section top = ${seen.top}, scrollY = ${seen.scrollY}, page height = ${seen.height}, scrollTo behaviors = ${JSON.stringify(await page.evaluate(() => window.__scrollCalls))}`,
     );
   });
 };
