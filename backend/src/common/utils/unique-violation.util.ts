@@ -20,3 +20,21 @@ export function isUniqueViolationOf(
     driverError.constraint === constraint
   );
 }
+
+/**
+ * Like `isUniqueViolationOf`, for a constraint whose generated name is not
+ * known: matches on the `Key (column)=(value)` detail Postgres attaches.
+ */
+export function isUniqueViolationOnColumn(
+  error: unknown,
+  column: string,
+): boolean {
+  if (!(error instanceof QueryFailedError)) return false;
+  const driverError: { code?: unknown; detail?: unknown } =
+    error.driverError ?? {};
+  return (
+    driverError.code === UNIQUE_VIOLATION &&
+    typeof driverError.detail === "string" &&
+    driverError.detail.startsWith(`Key (${column})=`)
+  );
+}
