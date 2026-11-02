@@ -11,6 +11,8 @@ export interface ColumnDef<T> {
   sortKey?: string;
   visible?: boolean;
   hideable?: boolean;
+  /** Numbers read best flush right; the cell also gets tabular figures. */
+  align?: 'right';
   render: (item: T) => React.ReactNode;
   renderCard?: (item: T) => React.ReactNode;
 }
@@ -171,6 +173,8 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     total,
     isLoading: queryResult.isLoading,
     isFetching: queryResult.isFetching,
+    // React Query pauses (does not fail) a fetch while the browser is offline.
+    isOffline: queryResult.fetchStatus === 'paused',
     isSearchPending: searchQuery.trim() !== debouncedSearch.trim(),
     error: queryResult.error,
     currentPage,

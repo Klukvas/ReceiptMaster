@@ -86,6 +86,7 @@ export const RecipientsPage = () => {
  key:"order_count",
  header: t("recipients.orders"),
  sortable: true,
+ align:"right",
  render: (r) => {
  const count = r.order_count ?? 0;
  return (
@@ -107,8 +108,9 @@ export const RecipientsPage = () => {
  header: t("recipients.totalSpent"),
  sortable: true,
  sortKey:"total_spent_cents",
+ align:"right",
  render: (r) => (
- <span className="text-sm font-semibold text-content">
+ <span className="text-sm font-semibold text-content tabular-nums">
  {formatCurrency(r.total_spent_cents ?? 0)}
  </span>
  ),
