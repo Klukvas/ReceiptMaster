@@ -974,6 +974,7 @@
     "fileNotFound": "Файл не знайдено",
     "fileUploadFailed": "Не вдалося завантажити файл",
     "fileDeleteFailed": "Не вдалося видалити файл",
+    "idempotencyKeyReused": "Цей запит уже надсилався з іншими даними. Спробуйте ще раз",
     "validationError": "Помилка валідації",
     "invalidEmail": "Введіть коректний email",
     "invalidPhone": "Лише цифри, пробіли та + ( ) . -",

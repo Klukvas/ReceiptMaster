@@ -974,6 +974,7 @@
     "fileNotFound": "Файл не найден",
     "fileUploadFailed": "Не удалось загрузить файл",
     "fileDeleteFailed": "Не удалось удалить файл",
+    "idempotencyKeyReused": "Этот запрос уже отправлялся с другими данными. Попробуйте ещё раз",
     "validationError": "Ошибка валидации",
     "invalidEmail": "Введите корректный email",
     "invalidPhone": "Только цифры, пробелы и + ( ) . -",

@@ -968,6 +968,7 @@
     "recipientAlreadyExists": "Recipient with this email already exists",
     "recipientHasOrders": "This recipient can't be deleted: it has orders, including deleted ones kept for history",
     "settingsNotFound": "Settings not found",
+    "idempotencyKeyReused": "This request was already sent with different details. Please try again",
     "invalidSettings": "Invalid settings",
     "fileNotFound": "File not found",
     "fileUploadFailed": "Failed to upload file",
