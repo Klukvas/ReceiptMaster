@@ -96,9 +96,12 @@ export const TopRecipientsList = ({
 
  {/* Loading */}
  {isLoading ? (
- <div className={`space-y-3 ${isSkeletonVisible ? '' : 'invisible'}`} aria-hidden="true">
- {Array.from({ length: 5 }).map((_, i) => (
- <div key={i} className="flex items-center gap-3 py-2">
+ <div
+ className={`divide-y divide-transparent ${isSkeletonVisible ? '' : 'invisible'}`}
+ aria-hidden="true"
+ >
+ {Array.from({ length: INITIAL_LIMIT }).map((_, i) => (
+ <div key={i} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
  <Skeleton className="h-9 w-9 rounded-full shrink-0 motion-reduce:animate-none" />
  <div className="flex-1">
  <Skeleton className="h-3.5 w-28 mb-1.5 motion-reduce:animate-none" />

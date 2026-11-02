@@ -6,6 +6,7 @@ import { LoginModal } from "../auth/LoginModal";
 import { RegisterModal } from "../auth/RegisterModal";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useAuth } from "../../hooks/useAuth";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useTheme } from "../../contexts/useTheme";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
 import { FooterSection } from "./FooterSection";
@@ -27,6 +28,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useBodyScrollLock(isMobileMenuOpen);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +61,6 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;
-    document.body.style.overflow = "hidden";
     const closeBtn = mobileMenuRef.current?.querySelector<HTMLButtonElement>(
       ".landing-mobile-close",
     );
@@ -87,7 +88,6 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = "";
       document.removeEventListener("keydown", handleKeyDown);
       hamburgerRef.current?.focus();
     };

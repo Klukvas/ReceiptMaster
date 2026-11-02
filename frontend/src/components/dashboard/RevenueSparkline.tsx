@@ -23,6 +23,34 @@ import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
 
 const TABULAR_TICK_STYLE = { fontVariantNumeric: "tabular-nums" } as const;
 
+const RANGE_OPTIONS_DAYS = [7, 30];
+
+const DaysToggle = ({
+  days,
+  onChange,
+}: {
+  days: number;
+  onChange: (days: number) => void;
+}) => (
+  <div className="flex gap-1">
+    {RANGE_OPTIONS_DAYS.map((option) => (
+      <button
+        key={option}
+        type="button"
+        aria-pressed={days === option}
+        onClick={() => onChange(option)}
+        className={`px-2 py-1 text-xs rounded tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
+          days === option
+            ? "bg-accent-base text-white"
+            : "bg-surface-alt text-content-secondary"
+        }`}
+      >
+        {option}d
+      </button>
+    ))}
+  </div>
+);
+
 interface RevenueSparklineProps {
   /** Currency of the figures (the API sends it with the totals, not with each day). */
   currency?: string;
@@ -46,8 +74,14 @@ export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
   if (isError) {
     return (
       <Card>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-content-secondary">
+            {t("dashboard.revenueOverTime", "Revenue Over Time")}
+          </h3>
+          <DaysToggle days={days} onChange={setDays} />
+        </div>
         <QueryErrorState
-          className="h-52"
+          className="h-[200px]"
           message={t("dashboard.widgetLoadError", "Could not load this section")}
           onRetry={() => void refetch()}
         />
@@ -83,23 +117,7 @@ export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
           {/* Gaps in the line mark unknown days; this flags any excluded line. */}
           <ProfitStatus profit={chartProfit} completeness={completeness} />
         </div>
-        <div className="flex gap-1">
-          {[7, 30].map((d) => (
-            <button
-              key={d}
-              type="button"
-              aria-pressed={days === d}
-              onClick={() => setDays(d)}
-              className={`px-2 py-1 text-xs rounded tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
-                days === d
-                  ? "bg-accent-base text-white"
-                  : "bg-surface-alt text-content-secondary"
-              }`}
-            >
-              {d}d
-            </button>
-          ))}
-        </div>
+        <DaysToggle days={days} onChange={setDays} />
       </div>
       {!hasSales ? (
         // Empty axes from 0 to 100 read as a broken chart; say what is missing instead.

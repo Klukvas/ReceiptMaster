@@ -17,7 +17,7 @@ frontend/
 │   ├── App.tsx               # Provider setup + routing (React Router 7.8)
 │   ├── pages/                # Page components (lazy-loaded for code splitting)
 │   ├── components/           # Organized by feature (orders/, products/, ui/, etc.)
-│   ├── services/             # Business logic (OrderService, ReceiptService, NotificationService)
+│   ├── services/             # Business logic (OrderService, ReceiptService)
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
 │   ├── providers/            # Context providers (PaddleProvider for billing)
@@ -82,7 +82,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 | `/blog` | `BlogListPage` | No | None | Blog listing |
 | `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown) |
 | `/terms`, `/privacy`, `/refund-policy`, `/cookie-policy` | Legal pages | No | None | Follow the interface language (en/ru/uk; any other language shows English) — see "Legal pages" |
-| `*` | `NotFoundPage` | No | None | 404 fallback |
+| `*` | `NotFoundPage` | No | Layout when signed in | 404 fallback: `NotFoundRoute` in `App.tsx` renders it inside `Layout` (sidebar kept, button goes to `/dashboard`, `isInLayout`) for a signed-in user and standalone for visitors (`/` link) |
 
 **Protected routes** wrap with `<ProtectedRoute>` component (line 101ff):
 - Checks `useAuth().isAuthenticated`
@@ -102,6 +102,9 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 - Header with user email + logout
 - Receipt progress panel for real-time updates (WebSocket)
 - Tailwind `lg:` breakpoints for responsive design
+- `OfflineBanner` (`layout/OfflineBanner.tsx`, `hooks/useOnlineStatus.ts`): a sticky `role="status"` notice (`common.offlineNotice`) below the mobile header while `navigator.onLine` is false; loaded data stays readable, changes cannot be saved. The live region stays mounted
+- Collapsed desktop sidebar keeps the theme and language switchers as icon buttons (`layout/SidebarCompactControls.tsx`; labelled, with a tooltip; the language button cycles en, ru, uk)
+- Authenticated routes use `AuthenticatedPage` in `App.tsx` (`ProtectedRoute` + `Layout` + its own `Suspense`), so a lazy page chunk shows `ContentSpinner` inside the shell. `PageSpinner`/`ContentSpinner` paint after 200 ms and are `role="status"` with sr-only text
 
 ## Data Layer
 
@@ -204,9 +207,7 @@ export const orderService = new OrderService() // singleton
 ```
 - Calls `ordersApi.*` from `lib/api.ts`
 - Parses errors with `parseApiError()`
-- Logs to console (dev only, no console.log in prod — hook flags it)
-- Triggers toast notifications via `notificationService.success/error()`
-- Throws error so caller can handle it
+- Thin API wrapper: it neither logs nor notifies, it rethrows so the caller (the mutations in `useOrders`) shows exactly one toast per failure (`parseApiError(error).message`) and the matching success toast
 
 **ReceiptService** (similar pattern):
 ```typescript
@@ -217,13 +218,7 @@ async downloadReceipt(receiptId: string): Promise<void>
 // ... more methods
 ```
 
-`ReceiptService` reports through react-hot-toast with translated messages (not `notificationService`). `generateReceipt` rethrows a failed POST and resolves on 202 (the PDF renders in the background; progress comes from `ReceiptProgressPanel`), so callers own the error toast. `PublicReceiptPage` treats only HTTP 404/410 as "not found"; other failures show a retry state.
-
-**NotificationService**:
-- In-memory notification queue
-- `success(msg)`, `error(msg)`, `warning(msg)`, `info(msg)`
-- Subscribers get notified: `subscribe((notifications) => {...})`
-- Used by services + hooks
+`ReceiptService` reports through react-hot-toast with translated messages. `generateReceipt` rethrows a failed POST and resolves on 202 (the PDF renders in the background; progress comes from `ReceiptProgressPanel`), so callers own the error toast. `PublicReceiptPage` treats only HTTP 404/410 as "not found"; other failures show a retry state.
 
 **Singleton pattern**: All services export a singleton instance (e.g., `export const orderService = new OrderService()`). Always use the singleton, never instantiate directly.
 
@@ -315,7 +310,7 @@ const { items, total, isLoading, currentPage, totalPages, itemsPerPage } = useSe
   defaultItemsPerPage: 10,
   extraParams: { status: 'pending' }, // merged into query
   debounceMs: 400, // delay for search input
-  storageKeyPrefix: 'orders', // persist page size + column visibility to localStorage
+  storageKeyPrefix: 'orders', // persist page size + column visibility to localStorage; add `columnsVersion: n` when a column default changes so older saved choices are ignored once (key becomes `<prefix>_v<n>_columns`)
 })
 ```
 
@@ -577,12 +572,7 @@ toast.error('Failed to confirm order')
 toast.loading('Processing...')
 ```
 
-**Services emit toasts** (e.g., OrderService confirms on success, toast.error on failure).
-
-**useNotifications hook** (`hooks/useNotifications.ts`):
-- Wrapper around NotificationService singleton
-- Returns in-memory notifications list (for custom UI if needed)
-- Most code just uses `toast` directly
+**Who toasts:** hooks and pages call `toast` (translated text, `parseApiError(error).message` for failures); services such as `OrderService` only throw, so one failure is one toast. The old `NotificationService` / `useNotifications` / `NotificationToast` trio is gone. Batch approve/delete success uses the plural keys `orders.batchApproved` / `orders.batchDeleted`.
 
 ### Styling: Tailwind CSS v4
 
@@ -702,13 +692,13 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
 - `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus; when dialogs stack, only the topmost handles Escape and Tab)
 - `ConfirmModal.tsx` — yes/no dialog (X, Escape, backdrop and Back are ignored while `isLoading`, as in `common/DeleteConfirmation`); `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
-- `Drawer.tsx` — side drawer (focus trap, Escape and Back via `hooks/useFocusTrap.ts`, page scroll locked by `hooks/useBodyScrollLock.ts`, a shared counter so stacked overlays can close in any order; labelled close button; `title` shows a heading, `ariaLabel` only names the dialog). The mobile sidebar (`layout/Sidebar.tsx`) is the same kind of modal below `lg` and `inert` while closed
+- `Drawer.tsx` — side drawer (focus trap, Escape and Back via `hooks/useFocusTrap.ts`, page scroll locked by `hooks/useBodyScrollLock.ts`, a shared counter so stacked overlays can close in any order, used by every overlay including `CreateOrderModal`, `TemplateCarouselModal` and the landing mobile menu, never `document.body.style.overflow` directly; labelled close button; `title` shows a heading, `ariaLabel` only names the dialog). The mobile sidebar (`layout/Sidebar.tsx`) is the same kind of modal below `lg` and `inert` while closed
 - `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). Loading shows `itemsPerPage` skeleton rows (card skeletons on `< lg`) after 200 ms (`useDelayedFlag`; the boxes are reserved from the start so nothing jumps), and a refetch overlay after 200 ms. On `< lg`, `selectable` adds a 44 px checkbox per card and a "Select all on this page" row. `ColumnDef.align: "right"` right-aligns numbers with `tabular-nums`; `isCompact` tightens cell padding; `rowLabel` names the checkboxes; `isOffline` (from `useServerPagination`, else the browser's online state) shows a `role="status"` notice with Retry. A zero-result search offers "Clear search"; an error with no rows shows only the alert card (a raw "status code" message becomes a friendly fallback). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. While a query is in flight with no rows yet, the spinner shows instead of the "no data" empty state (so clearing a search does not flash "No suppliers yet"). `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
 - **Back closes dialogs:** `hooks/useBackClosesDialog.ts` gives every open dialog one marker history entry (a copy of `history.state`, so react-router's `idx` and the settings unsaved-draft guard see no navigation), so the browser Back button / phone back gesture closes only the topmost dialog instead of leaving the page. A normal close (X, Esc, overlay, submit) removes its own marker with `history.go(-n)`; pushes wait while such a pop is in flight. It is applied in `primitives/dialog.tsx` (so `Modal`/`ConfirmModal`), `Drawer`, `useFocusTrap` (so `ProductForm`, `SupplierForm`, `RecipientForm`, `CreateOrderModal`), `OrderDetails`, `EditOrderForm` and `TemplateCarouselModal`. A new hand-rolled overlay must call it too. Known limit: if the router navigates (e.g. a link inside a dialog) while a dialog is open, its marker is buried and one later Back is a no-op. Spec: `e2e/back-closes-modal.spec.mjs`.
 - Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow
-- `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus
+- `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus. Both follow the menu pattern: trigger `aria-haspopup="menu"` + `aria-expanded`, `role="menu"` / `role="menuitem"`, Arrow Up/Down, Home/End, Escape closes and returns focus to the trigger. `PortalDropdown` moves real focus into the menu on open (roving over `DropdownItem`s); `DropdownMenu` highlights a virtual index
 - `Pagination.tsx` — page controls
 - `Combobox.tsx` — searchable select
 - `ThemeToggle.tsx` — dark/light switcher

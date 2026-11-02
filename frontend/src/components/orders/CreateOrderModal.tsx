@@ -7,6 +7,7 @@ import { OrderRecipientSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import { OrderLineItem } from "./OrderLineItem";
@@ -77,13 +78,7 @@ export const CreateOrderModal = ({
     },
   });
 
-  // Lock body scroll
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, []);
+  useBodyScrollLock(true);
 
   const addItem = useCallback(() => {
     setItems((prev) => [...prev, createItem()]);

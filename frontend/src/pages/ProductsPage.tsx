@@ -119,6 +119,8 @@ export const ProductsPage = () => {
     defaultSortBy: "created_at",
     defaultSortOrder: "DESC",
     storageKeyPrefix: "products",
+    // v2: the currency column is hidden by default now; older saved choices kept it visible.
+    columnsVersion: 2,
   });
 
   // Total worth of everything in stock (cost & retail). Keyed under "products"

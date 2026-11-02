@@ -27,6 +27,12 @@ export interface UseServerPaginationOptions<T> {
   extraParams?: Record<string, string>;
   debounceMs?: number;
   storageKeyPrefix?: string;
+  /**
+   * Bump when column defaults change (a column hidden or shown by default): saved choices
+   * made under an older version are then ignored once. Keys keep the `_columns` suffix so
+   * clearing preferences on logout still finds them.
+   */
+  columnsVersion?: number;
   /** Search text to start with, e.g. from a deep link. */
   initialSearch?: string;
 }
@@ -42,8 +48,12 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     extraParams = {},
     debounceMs = 400,
     storageKeyPrefix,
+    columnsVersion = 1,
     initialSearch = '',
   } = options;
+  const columnsStorageKey = storageKeyPrefix
+    ? `${storageKeyPrefix}${columnsVersion > 1 ? `_v${columnsVersion}` : ''}_columns`
+    : null;
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
@@ -58,19 +68,21 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   const [sortBy, setSortBy] = useState<string | null>(defaultSortBy);
   const [sortOrder, setSortOrder] = useState<SortOrder>(defaultSortOrder);
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
-    if (storageKeyPrefix) {
-      const saved = localStorage.getItem(`${storageKeyPrefix}_columns`);
+    const defaults = Object.fromEntries(
+      initialColumns.map((col) => [col.key, col.visible !== false])
+    );
+    if (columnsStorageKey) {
+      const saved = localStorage.getItem(columnsStorageKey);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          // Defaults first so a column added after the choice was saved still appears.
+          return { ...defaults, ...JSON.parse(saved) };
         } catch {
           // ignore invalid JSON
         }
       }
     }
-    return Object.fromEntries(
-      initialColumns.map((col) => [col.key, col.visible !== false])
-    );
+    return defaults;
   });
 
   // Debounce search
@@ -91,10 +103,10 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
 
   // Persist column visibility
   useEffect(() => {
-    if (storageKeyPrefix) {
-      localStorage.setItem(`${storageKeyPrefix}_columns`, JSON.stringify(columnVisibility));
+    if (columnsStorageKey) {
+      localStorage.setItem(columnsStorageKey, JSON.stringify(columnVisibility));
     }
-  }, [columnVisibility, storageKeyPrefix]);
+  }, [columnVisibility, columnsStorageKey]);
 
   // Build query params
   const offset = (currentPage - 1) * itemsPerPage;
