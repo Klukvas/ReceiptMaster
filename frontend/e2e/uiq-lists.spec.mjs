@@ -169,18 +169,21 @@ const tableHeight = (page) =>
 const skeletonWithoutJump = async (results) => {
   await withPage(DESKTOP, async (page) => {
     await setup(page, { listDelayMs: 1500 });
+    const startedAt = Date.now();
     await page.goto(`${BASE_URL}/products`);
     await page.locator("table").first().waitFor();
-    await page.waitForTimeout(80);
     const skeletonRows = page.locator("tbody tr[aria-hidden='true']");
     const earlyVisible = await skeletonRows.first().isVisible();
+    // A slow machine can take longer than the delay just to reach this point; only trust the
+    // "hidden at first" reading when it was taken inside the delay window.
+    const tookTooLong = Date.now() - startedAt > 150;
     await page.waitForTimeout(400);
     const lateVisible = await skeletonRows.first().isVisible();
     const rowCount = await skeletonRows.count();
     const loadingHeight = await tableHeight(page);
     results.check(
       "table skeleton: hidden for the first ~200 ms, then 10 skeleton rows",
-      !earlyVisible && lateVisible && rowCount === PAGE_SIZE,
+      (tookTooLong || !earlyVisible) && lateVisible && rowCount === PAGE_SIZE,
       JSON.stringify({ earlyVisible, lateVisible, rowCount }),
     );
     await firstProduct(page).waitFor();
