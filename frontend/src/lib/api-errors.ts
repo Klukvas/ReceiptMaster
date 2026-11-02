@@ -117,6 +117,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
 
+const HTTP_TOO_MANY_REQUESTS = 429;
+
 // Codes that say nothing specific on their own; the server's detail is the useful part.
 const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
   ErrorCode.VALIDATION_ERROR,
@@ -157,6 +159,19 @@ export function parseApiError(error: unknown): {
     return {
       message: "Неизвестная ошибка",
       code: ErrorCode.UNKNOWN_ERROR,
+    };
+  }
+
+  // Throttled (login/register allow 5 per minute): the body is a raw English exception.
+  if (
+    isAxiosError(error) &&
+    error.response?.status === HTTP_TOO_MANY_REQUESTS
+  ) {
+    return {
+      message: i18n.t("errors.tooManyRequests", {
+        defaultValue: "Too many attempts. Wait a minute and try again.",
+      }),
+      code: ErrorCode.HTTP_EXCEPTION,
     };
   }
 
