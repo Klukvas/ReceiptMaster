@@ -21,7 +21,16 @@ export function useFocusFirstField<T extends HTMLElement>(
   useEffect(() => {
     if (!active || isTouchDevice()) return;
     const frame = requestAnimationFrame(() => {
-      containerRef.current?.querySelector<HTMLElement>(FIELD_SELECTOR)?.focus();
+      const container = containerRef.current;
+      const focused = document.activeElement;
+      // A slow frame must not pull focus back from a field the person already moved to.
+      if (
+        focused instanceof HTMLElement &&
+        container?.contains(focused) &&
+        focused.matches(FIELD_SELECTOR)
+      )
+        return;
+      container?.querySelector<HTMLElement>(FIELD_SELECTOR)?.focus();
     });
     return () => cancelAnimationFrame(frame);
   }, [active, resetKey]);

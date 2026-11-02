@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { PaginatedResponse, PaginationParams } from '../lib/api';
 
@@ -85,11 +85,17 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     return defaults;
   });
 
-  // Debounce search
+  // Debounce search. The page goes back to 1 only when the applied search really changes: the
+  // timer also fires once after mount, and resetting then would undo a page the user already
+  // picked in the first moments.
+  const appliedSearchRef = useRef(initialSearch);
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setCurrentPage(1);
+      if (appliedSearchRef.current !== searchQuery) {
+        appliedSearchRef.current = searchQuery;
+        setCurrentPage(1);
+      }
     }, debounceMs);
     return () => clearTimeout(timer);
   }, [searchQuery, debounceMs]);

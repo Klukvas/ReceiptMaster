@@ -40,18 +40,39 @@ const contrastIn = (page, selector) =>
 const hashScroll = async (results, width) => {
   await withPage({ viewport: { width, height: 800 } }, async (page) => {
     await setup(page);
+    // Record how the app scrolls: a route change that glides can undo the jump to a hash target.
+    await page.addInitScript(() => {
+      window.__scrollCalls = [];
+      const native = window.scrollTo.bind(window);
+      window.scrollTo = (...args) => {
+        window.__scrollCalls.push(typeof args[0] === "object" ? args[0].behavior : "default");
+        return native(...args);
+      };
+    });
     await page.goto(`${BASE_URL}/blog`);
     await page.locator("footer .landing-footer-links a", { hasText: "Features" }).waitFor();
     await page.locator("footer .landing-footer-links a", { hasText: "Features" }).click();
-    await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 8000 }).catch(() => {});
-    await page.waitForTimeout(1500);
-    const top = await page.evaluate(
-      () => document.getElementById("features")?.getBoundingClientRect().top ?? -1,
-    );
+    const measure = () =>
+      page.evaluate(() => ({
+        top: document.getElementById("features")?.getBoundingClientRect().top ?? -1,
+        scrollY: Math.round(window.scrollY),
+        height: document.documentElement.scrollHeight,
+      }));
+    const isBelowNav = ({ top }) => top >= NAV_HEIGHT - 2 && top < 400;
+    // Wait for the jump to settle rather than sleeping: the page may still be loading.
+    // It must stay there for half a second: a late layout shift would move it again.
+    let seen = await measure();
+    let stableFor = 0;
+    for (let attempt = 0; attempt < 80 && stableFor < 5; attempt += 1) {
+      await page.waitForTimeout(100);
+      seen = await measure();
+      stableFor = isBelowNav(seen) ? stableFor + 1 : 0;
+    }
     results.check(
       `${width}px: Features link from /blog lands with the section below the nav`,
-      top >= NAV_HEIGHT - 2 && top < 400,
-      `section top = ${top}`,
+      stableFor >= 5 &&
+        (await page.evaluate(() => window.__scrollCalls)).every((behavior) => behavior === "instant"),
+      `section top = ${seen.top}, scrollY = ${seen.scrollY}, page height = ${seen.height}, scrollTo behaviors = ${JSON.stringify(await page.evaluate(() => window.__scrollCalls))}`,
     );
   });
 };

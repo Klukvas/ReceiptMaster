@@ -40,7 +40,8 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
 
   // Plain <a href="/#features"> links from other pages land here with a hash
   // the browser cannot resolve before React has rendered the sections. The jump
-  // is instant (it is a page load, not an in-page glide) and repeated once web
+  // is "instant", not "auto": "auto" follows the stylesheet's `scroll-behavior: smooth`, and a
+  // glide still running when fonts settle ends at a stale position. It is repeated once web
   // fonts settle, because they reflow the text above the target.
   useEffect(() => {
     if (!hash) return;
@@ -48,7 +49,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     const jumpToTarget = () =>
       document
         .getElementById(id)
-        ?.scrollIntoView({ behavior: "auto", block: "start" });
+        ?.scrollIntoView({ behavior: "instant", block: "start" });
     jumpToTarget();
     let isCancelled = false;
     void document.fonts.ready.then(() => {
