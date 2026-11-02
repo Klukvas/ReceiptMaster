@@ -65,6 +65,10 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
 
     requestAnimationFrame(() => {
       if (!dialogRef.current) return;
+      // A late frame must not pull focus back from a field that already has it.
+      const active = document.activeElement;
+      if (active !== dialogRef.current && dialogRef.current.contains(active))
+        return;
       // Focus the first focusable child, falling back to the container
       const focusable = getFocusableElements(dialogRef.current);
       if (focusable.length > 0) {
