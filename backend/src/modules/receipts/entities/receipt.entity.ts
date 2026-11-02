@@ -19,9 +19,31 @@ export enum ReceiptStatus {
   FAILED = "failed",
 }
 
+/** `waybill` is the видаткова накладна, the only type generated today. */
+export enum DocumentType {
+  WAYBILL = "waybill",
+  INVOICE = "invoice",
+  QUOTE = "quote",
+  ACT = "act",
+  SALES_RECEIPT = "sales_receipt",
+  PACKING_LIST = "packing_list",
+  RETURN_NOTE = "return_note",
+}
+
 @Entity("receipts")
-@Index(["order_id"], { unique: true })
-@Index(["user_id", "number"], { unique: true })
+// A return note is the one type an order may carry several of (partial returns).
+@Index("IDX_receipts_order_document_type", ["order_id", "document_type"], {
+  unique: true,
+  where: `"document_type" <> 'return_note'`,
+})
+@Index(
+  "IDX_receipts_user_type_number",
+  ["user_id", "document_type", "number"],
+  {
+    unique: true,
+  },
+)
+@Index("IDX_receipts_order_id", ["order_id"])
 @Index(["user_id", "created_at"])
 export class Receipt {
   @ApiProperty()
@@ -29,8 +51,17 @@ export class Receipt {
   id: string;
 
   @ApiProperty()
-  @Column({ type: "uuid", unique: true })
+  @Column({ type: "uuid" })
   order_id: string;
+
+  @ApiProperty({ enum: DocumentType })
+  @Column({
+    type: "enum",
+    enum: DocumentType,
+    enumName: "receipts_document_type_enum",
+    default: DocumentType.WAYBILL,
+  })
+  document_type: DocumentType;
 
   @ApiProperty()
   @Column({ type: "varchar", length: 50 })

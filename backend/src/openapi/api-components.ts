@@ -14,7 +14,10 @@ import {
   previewSchema,
   regenerationSchema,
 } from "../modules/receipts/document-schemas";
-import { ReceiptStatus } from "../modules/receipts/entities/receipt.entity";
+import {
+  DocumentType,
+  ReceiptStatus,
+} from "../modules/receipts/entities/receipt.entity";
 import { TEMPLATE_METADATA } from "../modules/receipts/templates/metadata";
 import type { SharedSchemaName } from "./api-docs.decorators";
 import { OpenApiSchema, zodComponents } from "./zod-openapi";
@@ -46,6 +49,7 @@ const preset = z.object({
 export const receiptProjectionSchema = z.object({
   id: z.string().uuid(),
   order_id: z.string().uuid(),
+  document_type: z.nativeEnum(DocumentType),
   number: z.string(),
   pdf_url: z.string().nullable(),
   hash: z.string().nullable(),

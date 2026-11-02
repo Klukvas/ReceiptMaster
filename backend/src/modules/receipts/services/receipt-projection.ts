@@ -4,6 +4,7 @@ export function receiptProjection(receipt: Receipt) {
   return {
     id: receipt.id,
     order_id: receipt.order_id,
+    document_type: receipt.document_type,
     number: receipt.number,
     pdf_url: receipt.pdf_url,
     hash: receipt.hash,

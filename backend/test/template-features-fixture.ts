@@ -38,7 +38,10 @@ import { TenantInterceptor } from "../src/common/tenancy/tenant.interceptor";
 import { GlobalExceptionFilter } from "../src/common/filters/GlobalExceptionFilter";
 import { UserSettings } from "../src/modules/settings/entities/user-settings.entity";
 import { DocumentPreset } from "../src/modules/settings/entities/document-preset.entity";
-import { Receipt } from "../src/modules/receipts/entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+} from "../src/modules/receipts/entities/receipt.entity";
 import { Order } from "../src/modules/orders/entities/order.entity";
 import { UserSubscription } from "../src/modules/subscription/entities/user-subscription.entity";
 import { User } from "../src/modules/users/entities/user.entity";
@@ -69,7 +72,11 @@ export class MemoryDatabase {
                 new Date(String(value._value)).getTime()
             : value._type === "not"
               ? "_value" in value && row[key] !== value._value
-              : false
+              : value._type === "in"
+                ? "_value" in value &&
+                  Array.isArray(value._value) &&
+                  value._value.includes(row[key])
+                : false
         : row[key] === value,
     );
   }
@@ -146,6 +153,9 @@ export class MemoryDatabase {
           createdAt: now,
           active_revision: 0,
           document_config_revision: 0,
+          ...(entity === Receipt
+            ? { document_type: DocumentType.WAYBILL }
+            : {}),
           ...value,
           id,
           updated_at: now,
@@ -237,6 +247,8 @@ export class MemoryDatabase {
       this.repository(entity).find(options as never),
     count: (entity: Entity, options: { where?: Row }) =>
       this.repository(entity).count(options as never),
+    exists: async (entity: Entity, options: { where?: Row }) =>
+      (await this.repository(entity).count(options as never)) > 0,
     save: (entity: Entity, value: Row) =>
       this.repository(entity).save(value as never),
     update: (entity: Entity, filter: Row, value: Row) =>
@@ -245,8 +257,7 @@ export class MemoryDatabase {
       this.repository(entity).delete(filter as never),
     query: async (sql: string, params: unknown[] = []) => {
       this.queries.push(sql);
-      if (/receipt_counter/.test(sql))
-        return [{ receipt_counter: ++this.counter }];
+      if (/document_counters/.test(sql)) return [{ value: ++this.counter }];
       const userId = String(params[0]);
       const logoUsed = (id: unknown) =>
         this.rows(UserSettings).some(

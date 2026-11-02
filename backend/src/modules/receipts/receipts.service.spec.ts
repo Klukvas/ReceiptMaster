@@ -31,7 +31,11 @@ import { getRepositoryToken, getDataSourceToken } from "@nestjs/typeorm";
 import { getQueueToken } from "@nestjs/bullmq";
 import { ConfigService } from "@nestjs/config";
 import { ReceiptsService } from "./receipts.service";
-import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import {
   PdfGeneratorService,
@@ -141,7 +145,7 @@ describe("ReceiptsService", () => {
     };
     dataSource = {
       manager: {
-        query: jest.fn().mockResolvedValue([{ receipt_counter: 1 }]),
+        query: jest.fn().mockResolvedValue([{ value: 1 }]),
       },
       transaction: jest.fn(),
       query: jest.fn(),
@@ -235,6 +239,52 @@ describe("ReceiptsService", () => {
       expect(receiptsRepo.findOne).toHaveBeenCalledWith(
         expect.objectContaining({
           order: { created_at: "ASC", id: "ASC" },
+        }),
+      );
+    });
+  });
+
+  describe("getRetention per document type", () => {
+    it("counts only the requested type and defaults to waybill", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(2);
+
+      await service.getRetention(mockUser);
+      expect(receiptsRepo.count).toHaveBeenLastCalledWith({
+        where: {
+          user_id: mockUser.id,
+          status: ReceiptStatus.GENERATED,
+          document_type: DocumentType.WAYBILL,
+        },
+      });
+
+      await service.getRetention(mockUser, DocumentType.INVOICE);
+      expect(receiptsRepo.count).toHaveBeenLastCalledWith({
+        where: {
+          user_id: mockUser.id,
+          status: ReceiptStatus.GENERATED,
+          document_type: DocumentType.INVOICE,
+        },
+      });
+    });
+
+    it("looks for the receipt to replace within the same type", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(10);
+      receiptsRepo.findOne.mockResolvedValue({
+        id: "inv-oldest",
+        number: "INV-1",
+        order_id: "o1",
+      });
+
+      const result = await service.getRetention(mockUser, DocumentType.INVOICE);
+
+      expect(result.replaces?.id).toBe("inv-oldest");
+      expect(receiptsRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            document_type: DocumentType.INVOICE,
+            status: ReceiptStatus.GENERATED,
+            user_id: mockUser.id,
+          }),
         }),
       );
     });
@@ -405,6 +455,7 @@ describe("ReceiptsService", () => {
   });
 
   describe("voidReceipt", () => {
+    let manager$: any;
     it("should void a receipt and unlock order", async () => {
       const voidedReceipt = {
         ...mockReceipt,
@@ -423,7 +474,9 @@ describe("ReceiptsService", () => {
           findOneOrFail: jest.fn().mockResolvedValue(voidedReceipt),
           save: jest.fn((entity, data) => Promise.resolve(data)),
           update: jest.fn(),
+          exists: jest.fn().mockResolvedValue(false),
         };
+        manager$ = manager;
         return cb(manager);
       });
 
@@ -435,6 +488,11 @@ describe("ReceiptsService", () => {
 
       expect(result.status).toBe(ReceiptStatus.VOID);
       expect(result.void_reason).toBe("Duplicate");
+      expect(manager$.update).toHaveBeenLastCalledWith(
+        Order,
+        { id: mockReceipt.order_id, user_id: mockUser.id },
+        { is_locked: false },
+      );
     });
 
     it("should throw if receipt not found", async () => {
@@ -771,12 +829,43 @@ describe("ReceiptsService", () => {
       const paths = await (service as any).cleanupOldReceipts(
         manager,
         "user-1",
+        DocumentType.WAYBILL,
       );
 
       expect(manager.delete).toHaveBeenCalled();
       expect(paths).toBeUndefined();
       expect(artifacts.retire).toHaveBeenCalledTimes(2);
       expect(pdfStorageService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it("counts and selects victims only within the given document type", async () => {
+      const manager = {
+        count: jest.fn().mockResolvedValue(11),
+        find: jest.fn().mockResolvedValue([{ id: "r1" }, { id: "r2" }]),
+        delete: jest.fn(),
+      };
+
+      await (service as any).cleanupOldReceipts(
+        manager,
+        "user-1",
+        DocumentType.INVOICE,
+      );
+
+      const scope = {
+        user_id: "user-1",
+        status: ReceiptStatus.GENERATED,
+        document_type: DocumentType.INVOICE,
+      };
+      expect(manager.count).toHaveBeenCalledWith(Receipt, { where: scope });
+      expect(manager.find).toHaveBeenCalledWith(
+        Receipt,
+        expect.objectContaining({
+          where: scope,
+          // 11 generated, keep 9 so the new one makes 10
+          take: 2,
+          order: { created_at: "ASC", id: "ASC" },
+        }),
+      );
     });
 
     it("should not delete when under limit", async () => {
@@ -786,7 +875,11 @@ describe("ReceiptsService", () => {
         delete: jest.fn(),
       };
 
-      await (service as any).cleanupOldReceipts(manager, "user-1");
+      await (service as any).cleanupOldReceipts(
+        manager,
+        "user-1",
+        DocumentType.WAYBILL,
+      );
       expect(manager.find).not.toHaveBeenCalled();
     });
 
@@ -796,7 +889,11 @@ describe("ReceiptsService", () => {
       };
 
       await expect(
-        (service as any).cleanupOldReceipts(manager, "user-1"),
+        (service as any).cleanupOldReceipts(
+          manager,
+          "user-1",
+          DocumentType.WAYBILL,
+        ),
       ).rejects.toThrow("DB error");
     });
 
@@ -817,7 +914,11 @@ describe("ReceiptsService", () => {
       });
       pdfStorageService.deleteFile.mockRejectedValue(new Error("S3 error"));
 
-      await (service as any).cleanupOldReceipts(manager, "user-1");
+      await (service as any).cleanupOldReceipts(
+        manager,
+        "user-1",
+        DocumentType.WAYBILL,
+      );
       expect(manager.delete).toHaveBeenCalled();
     });
   });

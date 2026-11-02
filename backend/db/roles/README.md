@@ -136,7 +136,7 @@ layout: it replays into the live database and connects with `DB_USERNAME`, so do
 ## Writing migrations
 
 - Migrations run as `rm_owner`, which has no `BYPASSRLS`. On FORCE RLS tables (`document_assets`,
-  `document_presets`, `document_artifacts`) an owner sees no rows, and `UPDATE` reports zero rows
+  `document_presets`, `document_artifacts`, `document_counters`) an owner sees no rows, and `UPDATE` reports zero rows
   without an error. A backfill there needs a transaction-local `TO CURRENT_USER` policy; see
   `1792100000002-DocumentUploadFencing.ts`.
 - New tables and sequences reach `rm_app` through default privileges only when `rm_owner` creates

@@ -1,5 +1,7 @@
 import { ReceiptsController } from "./receipts.controller";
 import { User } from "../users/entities/user.entity";
+import { DocumentType } from "./entities/receipt.entity";
+import { ApiErrorResponse } from "../../common/errors/ApiError";
 
 describe("ReceiptsController", () => {
   let controller: ReceiptsController;
@@ -24,6 +26,9 @@ describe("ReceiptsController", () => {
         .fn()
         .mockResolvedValue({ token: "abc123", url: "https://app/r/abc123" }),
       revokePublicToken: jest.fn().mockResolvedValue({ id: "r1" }),
+      getRetention: jest
+        .fn()
+        .mockResolvedValue({ limit: 10, count: 0, replaces: null }),
     };
 
     controller = new ReceiptsController(receiptsService);
@@ -81,6 +86,36 @@ describe("ReceiptsController", () => {
         limit: undefined,
       });
     });
+  });
+
+  describe("retention", () => {
+    it("uses the service default (waybill) when no type is given", async () => {
+      await controller.retention(mockReq);
+      expect(receiptsService.getRetention).toHaveBeenCalledWith(mockUser);
+    });
+
+    it("passes a valid document type through", async () => {
+      await controller.retention(mockReq, "invoice");
+      expect(receiptsService.getRetention).toHaveBeenCalledWith(
+        mockUser,
+        DocumentType.INVOICE,
+      );
+    });
+
+    it.each(["bogus", "", "INVOICE"])(
+      "rejects %p with 400 VALIDATION_ERROR",
+      async (type) => {
+        const error = await controller
+          .retention(mockReq, type)
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ApiErrorResponse);
+        expect(error).toMatchObject({
+          errorCode: "VALIDATION_ERROR",
+          statusCode: 400,
+        });
+        expect(receiptsService.getRetention).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("findOne", () => {

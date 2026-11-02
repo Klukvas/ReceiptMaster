@@ -3,6 +3,8 @@ import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, IsNull, Not } from "typeorm";
 import { createHash, randomUUID } from "crypto";
 import { Receipt, ReceiptStatus } from "../entities/receipt.entity";
+import { DOCUMENTS_RETAINED_PER_TYPE } from "../document-retention";
+import { isLockingDocumentType } from "../order-lock";
 import { Order, OrderStatus } from "../../orders/entities/order.entity";
 import { DocumentRenderService } from "./document-render.service";
 import { DocumentArtifactsService } from "./document-artifacts.service";
@@ -80,7 +82,9 @@ export class ReceiptArtifactService {
       if (
         !order ||
         order.status !== OrderStatus.CONFIRMED ||
-        (receipt.status === ReceiptStatus.GENERATED && !order.is_locked)
+        (receipt.status === ReceiptStatus.GENERATED &&
+          isLockingDocumentType(receipt.document_type) &&
+          !order.is_locked)
       )
         return null;
       await manager.findOne(Receipt, {
@@ -132,13 +136,18 @@ export class ReceiptArtifactService {
       if (!updated.affected) return null;
       if (current.status === ReceiptStatus.PROCESSING) {
         const total = await manager.count(Receipt, {
-          where: { user_id: userId, status: ReceiptStatus.GENERATED },
+          where: {
+            user_id: userId,
+            status: ReceiptStatus.GENERATED,
+            document_type: current.document_type,
+          },
         });
-        if (total > 10) {
+        if (total > DOCUMENTS_RETAINED_PER_TYPE) {
           const oldest = await manager.find(Receipt, {
             where: {
               user_id: userId,
               status: ReceiptStatus.GENERATED,
+              document_type: current.document_type,
               id: Not(id),
             },
             select: [
@@ -149,7 +158,7 @@ export class ReceiptArtifactService {
               "pending_logo_asset_id",
             ],
             order: { created_at: "ASC", id: "ASC" },
-            take: total - 10,
+            take: total - DOCUMENTS_RETAINED_PER_TYPE,
           });
           const locked = await this.lockRetirements(oldest, userId, manager);
           for (const old of locked) await this.retire(old, manager);
@@ -168,11 +177,12 @@ export class ReceiptArtifactService {
           receipt.active_logo_asset_id,
           manager,
         );
-      await manager.update(
-        Order,
-        { id: receipt.order_id, user_id: userId },
-        { is_locked: true },
-      );
+      if (isLockingDocumentType(current.document_type))
+        await manager.update(
+          Order,
+          { id: receipt.order_id, user_id: userId },
+          { is_locked: true },
+        );
       return manager.findOneOrFail(Receipt, { where: { id, user_id: userId } });
     });
   }
@@ -298,7 +308,11 @@ export class ReceiptArtifactService {
         where: { id: receipt.order_id, user_id: userId },
         lock: { mode: "pessimistic_write" },
       });
-      if (!order || order.status !== OrderStatus.CONFIRMED || !order.is_locked)
+      if (
+        !order ||
+        order.status !== OrderStatus.CONFIRMED ||
+        (isLockingDocumentType(receipt.document_type) && !order.is_locked)
+      )
         return false;
       // Receipt before either new or retired lease, matching eviction/promotion.
       await manager.findOne(Receipt, {

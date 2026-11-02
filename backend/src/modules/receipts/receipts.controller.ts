@@ -1,5 +1,6 @@
 import { HttpException } from "@nestjs/common";
-import { ApiErrorResponse } from "../../common/errors/ApiError";
+import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
+import { DocumentType } from "./entities/receipt.entity";
 import { ParseUUIDPipe, UseInterceptors, UploadedFile } from "@nestjs/common";
 import { selectionSchema } from "../settings/document-config";
 import {
@@ -37,6 +38,10 @@ import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
+
+function isDocumentType(value: string): value is DocumentType {
+  return (Object.values(DocumentType) as string[]).includes(value);
+}
 
 @ApiTags("receipts")
 @ApiBearerAuth("bearer")
@@ -168,8 +173,23 @@ export class ReceiptsController {
   @ApiOperation({
     summary: "Receipt retention cap and the receipt the next one would replace",
   })
-  async retention(@Request() req: { user: User }) {
-    return this.receiptsService.getRetention(req.user);
+  @ApiQuery({
+    name: "type",
+    required: false,
+    enum: DocumentType,
+    description: "Document type to count (default: waybill)",
+  })
+  async retention(
+    @Request() req: { user: User },
+    @Query("type") type?: string,
+  ) {
+    if (type === undefined) return this.receiptsService.getRetention(req.user);
+    if (!isDocumentType(type))
+      throw ApiErrors.VALIDATION_ERROR(
+        "type",
+        `type must be one of: ${Object.values(DocumentType).join(", ")}`,
+      );
+    return this.receiptsService.getRetention(req.user, type);
   }
 
   @Get(":id")

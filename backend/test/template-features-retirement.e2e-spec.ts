@@ -8,6 +8,7 @@ import {
   ORDER_ID,
 } from "./template-features-fixture";
 import {
+  DocumentType,
   Receipt,
   ReceiptStatus,
 } from "../src/modules/receipts/entities/receipt.entity";
@@ -276,9 +277,13 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
           if (mode === "precreate") {
             await (
               f.receipts as unknown as {
-                cleanupOldReceipts(m: EntityManager, u: string): Promise<void>;
+                cleanupOldReceipts(
+                  m: EntityManager,
+                  u: string,
+                  t: DocumentType,
+                ): Promise<void>;
               }
-            ).cleanupOldReceipts(m("E"), TENANT);
+            ).cleanupOldReceipts(m("E"), TENANT, DocumentType.WAYBILL);
           } else if (mode === "orderdelete") {
             await f.receipts.deleteReceiptFilesForOrder("orderB", TENANT);
           } else {
@@ -329,7 +334,11 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
     await held.promise;
     const eviction = (
       f.receipts as unknown as {
-        cleanupOldReceipts(m: EntityManager, u: string): Promise<void>;
+        cleanupOldReceipts(
+          m: EntityManager,
+          u: string,
+          t: DocumentType,
+        ): Promise<void>;
       }
     )
       .cleanupOldReceipts(
@@ -339,6 +348,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
           find: async () => [b],
         } as unknown as EntityManager,
         TENANT,
+        DocumentType.WAYBILL,
       )
       .finally(() => locks.release("E"));
     const results = await Promise.allSettled([repair, eviction]);
@@ -377,9 +387,13 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
     const results = await Promise.allSettled([
       (
         f.receipts as unknown as {
-          cleanupOldReceipts(m: EntityManager, u: string): Promise<void>;
+          cleanupOldReceipts(
+            m: EntityManager,
+            u: string,
+            t: DocumentType,
+          ): Promise<void>;
         }
-      ).cleanupOldReceipts(overridden, TENANT),
+      ).cleanupOldReceipts(overridden, TENANT, DocumentType.WAYBILL),
     ]);
     saveTrace("refetch", locks, results);
     expect(results[0].status).toBe("fulfilled");

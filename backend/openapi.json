@@ -2181,7 +2181,26 @@
       "get": {
         "operationId": "ReceiptsController_retention",
         "summary": "Receipt retention cap and the receipt the next one would replace",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Document type to count (default: waybill)",
+            "schema": {
+              "enum": [
+                "waybill",
+                "invoice",
+                "quote",
+                "act",
+                "sales_receipt",
+                "packing_list",
+                "return_note"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -5098,6 +5117,18 @@
           "order_id": {
             "type": "string"
           },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
           "number": {
             "type": "string"
           },
@@ -5155,6 +5186,7 @@
         "required": [
           "id",
           "order_id",
+          "document_type",
           "number",
           "status",
           "progress",
@@ -6906,6 +6938,18 @@
             "type": "string",
             "format": "uuid"
           },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
           "number": {
             "type": "string"
           },
@@ -6977,6 +7021,7 @@
         "required": [
           "id",
           "order_id",
+          "document_type",
           "number",
           "pdf_url",
           "hash",

@@ -11,13 +11,19 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager, IsNull, Not } from "typeorm";
-import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 import {
   PdfGeneratorService,
   ReceiptStyle,
 } from "./services/pdf-generator.service";
-import { nextReceiptNumber } from "./receipt-number";
+import { nextDocumentNumber } from "./receipt-number";
+import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
+import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
@@ -64,7 +70,6 @@ function voidedReceiptFields(reason: string, voidedAt: Date) {
 @Injectable()
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
-  private readonly MAX_RECEIPTS = 10;
   /** A PROCESSING receipt older than this is treated as stuck and may be retried. */
 
   constructor(
@@ -132,7 +137,11 @@ export class ReceiptsService {
     file?: Express.Multer.File,
   ): Promise<Receipt> {
     const prior = await this.receiptsRepository.findOne({
-      where: { order_id: orderId, user_id: user.id },
+      where: {
+        order_id: orderId,
+        user_id: user.id,
+        document_type: DocumentType.WAYBILL,
+      },
     });
     if (prior?.status === ReceiptStatus.PROCESSING && prior.generation_id)
       return prior;
@@ -161,7 +170,11 @@ export class ReceiptsService {
       });
     const number =
       prior?.number ||
-      (await nextReceiptNumber(this.dataSource.manager, user.id));
+      (await nextDocumentNumber(
+        this.dataSource.manager,
+        user.id,
+        DocumentType.WAYBILL,
+      ));
     const prepared = retryFrozen
       ? undefined
       : await this.snapshots.prepare(
@@ -194,7 +207,11 @@ export class ReceiptsService {
       if (!order || order.status !== OrderStatus.CONFIRMED)
         throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
       const existing = await manager.findOne(Receipt, {
-        where: { order_id: orderId, user_id: user.id },
+        where: {
+          order_id: orderId,
+          user_id: user.id,
+          document_type: DocumentType.WAYBILL,
+        },
       });
       if (
         existing?.status === ReceiptStatus.PROCESSING &&
@@ -230,12 +247,13 @@ export class ReceiptsService {
           where: { id: existing.id, user_id: user.id },
         });
       } else {
-        await this.cleanupOldReceipts(manager, user.id);
+        await this.cleanupOldReceipts(manager, user.id, DocumentType.WAYBILL);
         result = await manager.save(
           Receipt,
           manager.create(Receipt, {
             ...candidate,
             order_id: orderId,
+            document_type: DocumentType.WAYBILL,
             number,
             status: ReceiptStatus.PROCESSING,
             active_revision: 0,
@@ -318,15 +336,17 @@ export class ReceiptsService {
         relations: ["order"],
       });
 
-      // Unlock the order so it can be modified again
-      await manager.update(
-        Order,
-        { id: receipt.order_id, user_id: user.id },
-        { is_locked: false },
+      // The order stays locked while another locking document of it is still issued.
+      const isOrderLocked = await syncOrderLock(
+        manager,
+        receipt.order_id,
+        user.id,
       );
 
       this.logger.log(
-        `Receipt ${receipt.number} voided. Order ${receipt.order_id} unlocked.`,
+        `Receipt ${receipt.number} voided. Order ${receipt.order_id} ${
+          isOrderLocked ? "stays locked" : "unlocked"
+        }.`,
       );
 
       return savedReceipt;
@@ -414,15 +434,22 @@ export class ReceiptsService {
    * How close the account is to the retention cap and which receipt the next one would
    * replace, so the UI can ask before an old receipt (and its public link) disappears.
    */
-  async getRetention(user: User): Promise<{
+  async getRetention(
+    user: User,
+    type: DocumentType = DocumentType.WAYBILL,
+  ): Promise<{
     limit: number;
     count: number;
     replaces: { id: string; number: string; order_id: string } | null;
   }> {
-    const where = { user_id: user.id, status: ReceiptStatus.GENERATED };
+    const where = {
+      user_id: user.id,
+      status: ReceiptStatus.GENERATED,
+      document_type: type,
+    };
     const count = await this.receiptsRepository.count({ where });
-    if (count < this.MAX_RECEIPTS) {
-      return { limit: this.MAX_RECEIPTS, count, replaces: null };
+    if (count < DOCUMENTS_RETAINED_PER_TYPE) {
+      return { limit: DOCUMENTS_RETAINED_PER_TYPE, count, replaces: null };
     }
 
     const oldest = await this.receiptsRepository.findOne({
@@ -430,7 +457,7 @@ export class ReceiptsService {
       order: { created_at: "ASC", id: "ASC" },
     });
     return {
-      limit: this.MAX_RECEIPTS,
+      limit: DOCUMENTS_RETAINED_PER_TYPE,
       count,
       replaces: oldest
         ? { id: oldest.id, number: oldest.number, order_id: oldest.order_id }
@@ -569,7 +596,11 @@ export class ReceiptsService {
           prepared,
           manager,
         );
-        if (original.status === ReceiptStatus.GENERATED && !order.is_locked)
+        if (
+          original.status === ReceiptStatus.GENERATED &&
+          isLockingDocumentType(original.document_type) &&
+          !order.is_locked
+        )
           throw new ConflictException(
             "Order must remain locked during replacement",
           );
@@ -631,13 +662,17 @@ export class ReceiptsService {
   private async cleanupOldReceipts(
     manager: EntityManager,
     userId: string,
+    type: DocumentType,
   ): Promise<void> {
-    const total = await manager.count(Receipt, {
-      where: { status: ReceiptStatus.GENERATED, user_id: userId },
-    });
-    if (total < this.MAX_RECEIPTS) return;
+    const where = {
+      user_id: userId,
+      status: ReceiptStatus.GENERATED,
+      document_type: type,
+    };
+    const total = await manager.count(Receipt, { where });
+    if (total < DOCUMENTS_RETAINED_PER_TYPE) return;
     const old = await manager.find(Receipt, {
-      where: { user_id: userId, status: ReceiptStatus.GENERATED },
+      where,
       select: [
         "id",
         "user_id",
@@ -646,7 +681,7 @@ export class ReceiptsService {
         "pending_logo_asset_id",
       ],
       order: { created_at: "ASC", id: "ASC" },
-      take: total - (this.MAX_RECEIPTS - 1),
+      take: total - (DOCUMENTS_RETAINED_PER_TYPE - 1),
     });
     const locked = await this.artifacts.lockRetirements(old, userId, manager);
     for (const receipt of locked) await this.artifacts.retire(receipt, manager);

@@ -11,7 +11,11 @@ import { UserSettings } from "./entities/user-settings.entity";
 import { DocumentAsset } from "./entities/document-asset.entity";
 import { DocumentPreset } from "./entities/document-preset.entity";
 import { DocumentArtifact } from "../receipts/entities/document-artifact.entity";
-import { Receipt, ReceiptStatus } from "../receipts/entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "../receipts/entities/receipt.entity";
 import { formatDocumentDate } from "../../common/utils/document-formatting.util";
 // Its types alias the gitignored api-types.generated.ts, so backend ts-jest skips
 // frontend diagnostics (package.json jest.transform); the frontend typecheck owns them.
@@ -371,9 +375,13 @@ describe("durable document cleanup with synthetic storage only", () => {
     await f.db.transaction((manager) =>
       (
         f.receipts as unknown as {
-          cleanupOldReceipts: (m: typeof manager, id: string) => Promise<void>;
+          cleanupOldReceipts: (
+            m: typeof manager,
+            id: string,
+            type: DocumentType,
+          ) => Promise<void>;
         }
-      ).cleanupOldReceipts(manager, TENANT),
+      ).cleanupOldReceipts(manager, TENANT, DocumentType.WAYBILL),
     );
     expect(f.memory.rows(Receipt)).toHaveLength(9);
     expect(f.memory.rows(Receipt).some((r) => r.id === active.id)).toBe(false);

@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-11-01
+**Last Updated:** 2026-11-02
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -1153,14 +1153,17 @@ Paginated list of all user's generated receipts.
 
 **GET** `/receipts/retention` (requires auth)
 
-How close the account is to the retention cap (10 generated receipts) and which receipt creating the next one would delete, so the UI can ask first. Declared before `GET /receipts/:id`.
+How close the account is to the retention cap (10 generated documents of a document type) and which document creating the next one of that type would delete, so the UI can ask first. Declared before `GET /receipts/:id`.
+
+**Query Params:**
+- `type` (optional): one of `waybill`, `invoice`, `quote`, `act`, `sales_receipt`, `packing_list`, `return_note`. Defaults to `waybill`; any other value returns 400 `VALIDATION_ERROR`.
 
 **Response** (200):
 ```typescript
 {
   limit: number,               // 10
-  count: number,               // generated receipts the account holds
-  replaces: { id: string, number: string, order_id: string } | null  // oldest receipt once count >= limit
+  count: number,               // generated documents of that type the account holds
+  replaces: { id: string, number: string, order_id: string } | null  // oldest document of that type once count >= limit
 }
 ```
 
