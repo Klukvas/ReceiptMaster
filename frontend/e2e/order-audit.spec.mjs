@@ -92,7 +92,16 @@ const setup = async (page, initialOrders) => {
       });
     }
     if (path.startsWith("/orders") && request.method() !== "GET") {
-      submissions.push({ path, data: request.postDataJSON() });
+      submissions.push({
+        path,
+        data: request.postDataJSON(),
+        key: request.headers()["idempotency-key"] ?? null,
+      });
+      // A lost response: the server may have created the order, the page never heard.
+      if (path === "/orders" && state.abortPosts > 0) {
+        state.abortPosts -= 1;
+        return route.abort("connectionreset");
+      }
       if (request.method() === "PATCH")
         return send(
           {
@@ -186,6 +195,47 @@ export const run = async () => {
         )
       )
         throw Error("No server search");
+    },
+  );
+  const pickProduct = async (page) => {
+    await create(page);
+    await chooseRecipient(page);
+    await page.locator("input[role=combobox]").fill("Catalogue 120");
+    await page
+      .getByRole("option", { name: /Catalogue 120/ })
+      .click({ timeout: 4000 });
+    await page.getByRole("heading", { name: "Catalogue 120" }).waitFor();
+    return page.getByRole("dialog");
+  };
+  await scenario(
+    "create order: a retry after a lost response reuses the Idempotency-Key",
+    async (page) => {
+      const { state, submissions } = await setup(page);
+      state.abortPosts = 1;
+      const dialog = await pickProduct(page);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 1);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 2);
+      if (!submissions[0].key) throw Error("no Idempotency-Key header sent");
+      if (submissions[0].key !== submissions[1].key)
+        throw Error(`key changed on retry: ${submissions[0].key} vs ${submissions[1].key}`);
+    },
+  );
+  await scenario(
+    "create order: changing the order after a failed try starts a new key",
+    async (page) => {
+      const { state, submissions } = await setup(page);
+      state.abortPosts = 1;
+      const dialog = await pickProduct(page);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 1);
+      await page.getByRole("button", { name: /^custom$/i }).click();
+      await dialog.locator("input[inputmode=decimal]").fill("5");
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 2);
+      if (!submissions[1].key || submissions[0].key === submissions[1].key)
+        throw Error("an edited order reused the previous key");
     },
   );
   await scenario(

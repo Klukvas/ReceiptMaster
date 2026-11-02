@@ -8,6 +8,7 @@ import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import { OrderLineItem } from "./OrderLineItem";
 import { OrderSummary } from "./OrderSummary";
 
@@ -55,8 +56,10 @@ export const CreateOrderModal = ({
   ];
   const hasMixedCurrencies = currencies.length > 1;
 
+  const keyFor = useIdempotencyKey();
   const createMutation = useMutation({
-    mutationFn: ordersApi.create,
+    mutationFn: (data: Parameters<typeof ordersApi.create>[0]) =>
+      ordersApi.create(data, { idempotencyKey: keyFor(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
