@@ -7,7 +7,6 @@ import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
 import { parseApiError } from "../lib/api-errors";
-import { useNotifications } from "./useNotifications";
 
 interface ConfirmAction {
   isOpen: boolean;
@@ -67,7 +66,6 @@ export const useReceiptGenerationPolling = (orders: Order[]) => {
 export const useOrders = () => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { notifications } = useNotifications();
 
   // UI State
   const [showForm, setShowForm] = useState(false);
@@ -183,7 +181,8 @@ export const useOrders = () => {
       if (willEvict) showReceiptEvictionNotice();
       return approved;
     },
-    onSuccess: () => {
+    onSuccess: ({ approved }) => {
+      toast.success(t("orders.batchApproved", { count: approved }));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       setSelectedKeys(new Set());
@@ -195,7 +194,8 @@ export const useOrders = () => {
   const batchDeleteMutation = useMutation({
     mutationFn: (orderIds: string[]) =>
       orderService.batchDeleteOrders(orderIds),
-    onSuccess: () => {
+    onSuccess: ({ deleted }) => {
+      toast.success(t("orders.batchDeleted", { count: deleted }));
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setSelectedKeys(new Set());
@@ -331,9 +331,6 @@ export const useOrders = () => {
     // Selection state
     selectedKeys,
     setSelectedKeys,
-
-    // Notifications
-    notifications,
 
     // Actions
     handleConfirm,

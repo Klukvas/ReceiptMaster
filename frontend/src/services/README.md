@@ -7,12 +7,10 @@
 ```
 src/
 ├── services/              # Бизнес-логика и сервисы
-│   ├── NotificationService.ts  # Управление уведомлениями
 │   ├── ReceiptService.ts       # Работа с чеками
 │   ├── OrderService.ts         # Бизнес-логика заказов
 │   └── index.ts               # Экспорты сервисов
 ├── hooks/                 # React хуки
-│   ├── useNotifications.ts     # Хук для уведомлений
 │   ├── useOrders.ts           # Основной хук для заказов
 │   └── index.ts               # Экспорты хуков
 └── components/            # UI компоненты
@@ -39,22 +37,6 @@ src/
 - **Components** - только UI
 
 ## Сервисы
-
-### NotificationService
-Централизованное управление уведомлениями.
-
-```typescript
-import { notificationService } from '../services';
-
-// Добавить уведомление
-notificationService.success('Operation completed');
-notificationService.error('Something went wrong');
-
-// Подписаться на изменения
-const unsubscribe = notificationService.subscribe((notifications) => {
-  console.log(notifications);
-});
-```
 
 ### ReceiptService
 Работа с чеками и принтерами.
@@ -89,25 +71,6 @@ await orderService.confirmOrderWithConfirmation(orderId);
 ```
 
 ## Хуки
-
-### useNotifications
-Хук для работы с уведомлениями.
-
-```typescript
-import { useNotifications } from '../hooks';
-
-const MyComponent = () => {
-  const { notifications, success, error, clear } = useNotifications();
-  
-  return (
-    <div>
-      <button onClick={() => success('Success!')}>Success</button>
-      <button onClick={() => error('Error!')}>Error</button>
-      <NotificationToast notifications={notifications} />
-    </div>
-  );
-};
-```
 
 ### useOrders
 Основной хук для работы с заказами.

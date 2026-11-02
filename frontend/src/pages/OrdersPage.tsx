@@ -15,7 +15,6 @@ import {
  OrdersFilterBar,
  OrderActionsMenu,
 } from"../components/orders";
-import { NotificationToast } from"../components/common";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
 import { ShareReceiptModal } from"../components/receipts/ShareReceiptModal";
 import { useOrders, useReceiptGenerationPolling } from"../hooks/useOrders";
@@ -92,7 +91,6 @@ export const OrdersPage = () => {
  actionError,
  handleConfirmAction,
  handleCloseConfirm,
- notifications,
  handleConfirm,
  handleCancel,
  handleDeleteOrder,
@@ -454,8 +452,6 @@ export const OrdersPage = () => {
 
  return (
  <div className="space-y-5">
- <NotificationToast notifications={notifications} />
-
  <OrdersPageHeader onCreateOrder={() => openCreateOrder()} />
  {subscriptionStatus && (
  <UsageBar
