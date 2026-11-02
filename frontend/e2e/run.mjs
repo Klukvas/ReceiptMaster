@@ -41,6 +41,7 @@ const SPECS = [
   { name: "uiq-lists", load: () => import("./uiq-lists.spec.mjs") },
   { name: "uiq-shell", load: () => import("./uiq-shell.spec.mjs") },
   { name: "uiq-leftovers", load: () => import("./uiq-leftovers.spec.mjs") },
+  { name: "document-form", load: () => import("./document-form.spec.mjs") },
   { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
 ];
 
