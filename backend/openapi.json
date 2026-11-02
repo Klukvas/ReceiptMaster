@@ -77,6 +77,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -543,6 +553,16 @@
           },
           "400": {
             "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4330,7 +4350,17 @@
       "post": {
         "operationId": "SuppliersController_create",
         "summary": "Создать поставщика",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4343,11 +4373,31 @@
         },
         "responses": {
           "201": {
-            "description": "Поставщик успешно создан",
+            "description": "Поставщик успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Supplier"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
