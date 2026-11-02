@@ -38,6 +38,9 @@ export const ErrorCode = {
 
   // Settings errors
   SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
+
+  // Idempotency
+  IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
   INVALID_SETTINGS: "INVALID_SETTINGS",
 
   // File errors
@@ -82,6 +85,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECEIPT_PRINT_FAILED]: "Failed to print receipt",
 
   // Product errors
+  [ErrorCode.IDEMPOTENCY_KEY_REUSED]:
+    "This request was already sent with different details. Please try again",
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
   [ErrorCode.PRODUCT_ALREADY_EXISTS]: "Product with this name already exists",
   [ErrorCode.PRODUCT_QUANTITY_CONFLICT]:
