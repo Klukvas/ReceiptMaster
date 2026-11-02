@@ -1,7 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DollarSign, ShoppingCart, CalendarDays } from "lucide-react";
 import { dashboardApi, formatCurrency } from "../../lib/api";
-import { StatCardSkeleton } from "../ui/Skeleton";
+import { KpiPrimarySkeleton, KpiSecondarySkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
+import { AnalyticsUpdatingFrame } from "./UpdatingCue";
+import { buildPeriodLabel } from "./periodLabel";
 import { RevenueChart } from "./RevenueChart";
 import { TopProductsChart } from "./TopProductsChart";
 import { TopRecipientsList } from "./TopRecipientsList";
@@ -12,6 +15,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 import {
   formatProfit,
   profitChartValue,
+  UNKNOWN_PROFIT,
   type ProfitCompleteness,
 } from "../../lib/profit";
 
@@ -29,7 +33,7 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
     endDate: dateRange.endDate || undefined,
   };
 
-  const { data: totalRevenue, isLoading: totalRevenueLoading } = useQuery({
+  const totalRevenueQuery = useQuery({
     queryKey: [
       "dashboard",
       "total-revenue",
@@ -37,9 +41,10 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
       dateRange.endDate,
     ],
     queryFn: () => dashboardApi.getTotalRevenue(params),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: revenueByProducts, isLoading: productsLoading } = useQuery({
+  const productsQuery = useQuery({
     queryKey: [
       "dashboard",
       "revenue-by-products",
@@ -47,9 +52,10 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
       dateRange.endDate,
     ],
     queryFn: () => dashboardApi.getRevenueByProducts(params),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: revenueByRecipients, isLoading: recipientsLoading } = useQuery({
+  const recipientsQuery = useQuery({
     queryKey: [
       "dashboard",
       "revenue-by-recipients",
@@ -57,9 +63,17 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
       dateRange.endDate,
     ],
     queryFn: () => dashboardApi.getRevenueByRecipients(params),
+    placeholderData: keepPreviousData,
   });
 
-  const summaryLoading = totalRevenueLoading;
+  const totalRevenue = totalRevenueQuery.data;
+  const revenueByProducts = productsQuery.data;
+  const revenueByRecipients = recipientsQuery.data;
+  const summaryLoading = totalRevenueQuery.isLoading;
+  const summaryFailed = totalRevenueQuery.isError;
+  const isUpdating = [totalRevenueQuery, productsQuery, recipientsQuery].some(
+    (query) => query.isPlaceholderData,
+  );
 
   /** Tooltip text for a bar whose profit leaves some lines out. */
   const profitNote = (
@@ -113,94 +127,110 @@ export const RevenueDashboard = ({ dateRange }: RevenueDashboardProps) => {
 
   const total = totalRevenue?.data;
 
-  const periodText =
-    dateRange.startDate && dateRange.endDate
-      ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
-      : t("dashboard.allTime", "All time");
+  const periodText = buildPeriodLabel(dateRange, t);
+  const productsCurrency = total?.currency ?? revenueByProducts?.data?.[0]?.currency;
+  const recipientsCurrency =
+    total?.currency ?? revenueByRecipients?.data?.[0]?.currency;
 
   return (
-    <div className="space-y-6">
-      {/* KPI section */}
-      {summaryLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="sm:col-span-2">
-            <StatCardSkeleton />
+    <AnalyticsUpdatingFrame isUpdating={isUpdating}>
+      <div className="space-y-6">
+        {summaryFailed && <QueryErrorState onRetry={() => void totalRevenueQuery.refetch()} />}
+
+        {/* KPI section */}
+        {summaryLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+              <KpiPrimarySkeleton />
+            </div>
+            <KpiSecondarySkeleton />
+            <KpiSecondarySkeleton />
           </div>
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="sm:col-span-2">
-            <KPIPrimaryCard
-              label={t("dashboard.totalRevenue")}
-              value={
-                total
-                  ? formatProfit(total.total_revenue_cents, total.currency)
-                  : formatCurrency(0)
-              }
-              icon={<DollarSign className="h-5 w-5" />}
-              accentColor="green"
-              footer={
-                total && (
-                  <ProfitStatus
-                    profit={total.total_revenue_cents}
-                    completeness={total}
-                    currency={total.currency}
-                  />
-                )
-              }
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+              <KPIPrimaryCard
+                label={t("dashboard.totalRevenue")}
+                value={
+                  summaryFailed
+                    ? UNKNOWN_PROFIT
+                    : total
+                      ? formatProfit(total.total_revenue_cents, total.currency)
+                      : formatCurrency(0)
+                }
+                icon={<DollarSign className="h-5 w-5" />}
+                accentColor="green"
+                footer={
+                  total && (
+                    <ProfitStatus
+                      profit={total.total_revenue_cents}
+                      completeness={total}
+                      currency={total.currency}
+                    />
+                  )
+                }
+              />
+            </div>
+            <KPISecondaryCard
+              label={t("dashboard.totalOrders")}
+              value={summaryFailed ? UNKNOWN_PROFIT : String(total?.total_orders || 0)}
+              icon={<ShoppingCart className="h-4 w-4" />}
+            />
+            <KPISecondaryCard
+              label={t("dashboard.period", "Period")}
+              value={periodText}
+              icon={<CalendarDays className="h-4 w-4" />}
             />
           </div>
-          <KPISecondaryCard
-            label={t("dashboard.totalOrders")}
-            value={String(total?.total_orders || 0)}
-            icon={<ShoppingCart className="h-4 w-4" />}
+        )}
+
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <RevenueChart
+            title={t("dashboard.revenueByProduct")}
+            data={productChartData}
+            isLoading={productsQuery.isLoading}
+            isError={productsQuery.isError}
+            onRetry={() => void productsQuery.refetch()}
+            currency={productsCurrency}
+            color="#10b981"
+            emptyMessage={t("dashboard.noData")}
+            unknownMessage={t("dashboard.profitChartUnknown")}
           />
-          <KPISecondaryCard
-            label={t("dashboard.period", "Period")}
-            value={periodText}
-            icon={<CalendarDays className="h-4 w-4" />}
+          <TopProductsChart
+            title={t("dashboard.topProductsByQty", "Top Products by Quantity")}
+            data={productChartData}
+            isLoading={productsQuery.isLoading}
+            isError={productsQuery.isError}
+            onRetry={() => void productsQuery.refetch()}
+            color="#8b5cf6"
+            emptyMessage={t("dashboard.noData")}
           />
         </div>
-      )}
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <RevenueChart
-          title={t("dashboard.revenueByProduct")}
-          data={productChartData}
-          isLoading={productsLoading}
-          color="#10b981"
-          emptyMessage={t("dashboard.noData")}
-          unknownMessage={t("dashboard.profitChartUnknown")}
-        />
-        <TopProductsChart
-          title={t("dashboard.topProductsByQty", "Top Products by Quantity")}
-          data={productChartData}
-          isLoading={productsLoading}
-          color="#8b5cf6"
-          emptyMessage={t("dashboard.noData")}
-        />
+        {/* Recipients row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <RevenueChart
+            title={t("dashboard.revenueByRecipient")}
+            data={recipientChartData}
+            isLoading={recipientsQuery.isLoading}
+            isError={recipientsQuery.isError}
+            onRetry={() => void recipientsQuery.refetch()}
+            currency={recipientsCurrency}
+            color="#10b981"
+            emptyMessage={t("dashboard.noData")}
+            unknownMessage={t("dashboard.profitChartUnknown")}
+          />
+          <TopRecipientsList
+            recipients={recipientListData}
+            isLoading={recipientsQuery.isLoading}
+            isError={recipientsQuery.isError}
+            onRetry={() => void recipientsQuery.refetch()}
+            emptyMessage={t("dashboard.noData")}
+            accentColor="green"
+          />
+        </div>
       </div>
-
-      {/* Recipients row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <RevenueChart
-          title={t("dashboard.revenueByRecipient")}
-          data={recipientChartData}
-          isLoading={recipientsLoading}
-          color="#10b981"
-          emptyMessage={t("dashboard.noData")}
-          unknownMessage={t("dashboard.profitChartUnknown")}
-        />
-        <TopRecipientsList
-          recipients={recipientListData}
-          isLoading={recipientsLoading}
-          emptyMessage={t("dashboard.noData")}
-          accentColor="green"
-        />
-      </div>
-    </div>
+    </AnalyticsUpdatingFrame>
   );
 };

@@ -8,7 +8,11 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
-import { SkeletonChart } from "../ui/Skeleton";
+import { AnalyticsChartSkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
+import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
+
+const TABULAR_TICK_STYLE = { fontVariantNumeric: "tabular-nums" } as const;
 
 interface ChartItem {
   name: string;
@@ -19,6 +23,9 @@ interface TopProductsChartProps {
   title: string;
   data: ChartItem[];
   isLoading?: boolean;
+  /** Replaces the plot with a retryable error so a failure never reads as "no data". */
+  isError?: boolean;
+  onRetry?: () => void;
   color?: string;
   emptyMessage?: string;
 }
@@ -49,17 +56,25 @@ export const TopProductsChart = ({
   title,
   data,
   isLoading,
+  isError,
+  onRetry,
   color = "#8b5cf6",
   emptyMessage = "No data",
 }: TopProductsChartProps) => {
-  if (isLoading) return <SkeletonChart height="h-72" />;
+  const prefersReducedMotion = usePrefersReducedMotion();
+  if (isLoading) return <AnalyticsChartSkeleton />;
 
   const chartHeight = Math.max(250, data.length * 40);
 
   return (
     <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
       <h3 className="text-sm font-semibold text-content mb-5">{title}</h3>
-      {data.length === 0 ? (
+      {isError ? (
+        <QueryErrorState
+          className="h-[250px]"
+          onRetry={() => onRetry?.()}
+        />
+      ) : data.length === 0 ? (
         <div className="flex items-center justify-center h-[250px] text-sm text-content-tertiary">
           {emptyMessage}
         </div>
@@ -79,7 +94,11 @@ export const TopProductsChart = ({
             />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              tick={{
+                fontSize: 11,
+                fill: "var(--color-text-tertiary)",
+                style: TABULAR_TICK_STYLE,
+              }}
               axisLine={false}
               tickLine={false}
             />
@@ -95,7 +114,12 @@ export const TopProductsChart = ({
               content={<CustomTooltip />}
               cursor={{ fill: "currentColor", opacity: 0.04 }}
             />
-            <Bar dataKey="quantity" radius={[0, 6, 6, 0]} maxBarSize={28}>
+            <Bar
+              dataKey="quantity"
+              radius={[0, 6, 6, 0]}
+              maxBarSize={28}
+              isAnimationActive={!prefersReducedMotion}
+            >
               {data.map((_, index) => (
                 <Cell
                   key={index}

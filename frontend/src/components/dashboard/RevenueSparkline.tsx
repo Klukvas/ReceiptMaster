@@ -1,5 +1,5 @@
 import { useState, useId } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   AreaChart,
   Area,
@@ -16,28 +16,41 @@ import {
 } from "../../lib/profit";
 import { Card } from "../ui/Card";
 import { ProfitStatus } from "./ProfitStatus";
-import { SkeletonChart } from "../ui/Skeleton";
+import { HomeChartSkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
 import { useTranslation } from "../../hooks/useTranslation";
+import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
 
-export const RevenueSparkline = () => {
+const TABULAR_TICK_STYLE = { fontVariantNumeric: "tabular-nums" } as const;
+
+interface RevenueSparklineProps {
+  /** Currency of the figures (the API sends it with the totals, not with each day). */
+  currency?: string;
+}
+
+export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
   const { t } = useTranslation();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const [days, setDays] = useState(7);
   const revenueGradientId = useId();
   const turnoverGradientId = useId();
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["dailyRevenue", days],
     queryFn: () => dashboardApi.getDailyRevenue(days),
+    placeholderData: keepPreviousData,
   });
 
-  if (isLoading) return <SkeletonChart height="h-52" />;
+  if (isLoading) return <HomeChartSkeleton headerClassName="h-6" />;
 
   if (isError) {
     return (
       <Card>
-        <div className="flex items-center justify-center h-52 text-content-tertiary text-sm">
-          {t("dashboard.noData", "No data available")}
-        </div>
+        <QueryErrorState
+          className="h-52"
+          message={t("dashboard.widgetLoadError", "Could not load this section")}
+          onRetry={() => void refetch()}
+        />
       </Card>
     );
   }
@@ -74,8 +87,10 @@ export const RevenueSparkline = () => {
           {[7, 30].map((d) => (
             <button
               key={d}
+              type="button"
+              aria-pressed={days === d}
               onClick={() => setDays(d)}
-              className={`px-2 py-1 text-xs rounded ${
+              className={`px-2 py-1 text-xs rounded tabular-nums pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
                 days === d
                   ? "bg-accent-base text-white"
                   : "bg-surface-alt text-content-secondary"
@@ -118,11 +133,19 @@ export const RevenueSparkline = () => {
             </defs>
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              tick={{
+                fontSize: 11,
+                fill: "var(--color-text-tertiary)",
+                style: TABULAR_TICK_STYLE,
+              }}
               stroke="var(--color-text-tertiary)"
             />
             <YAxis
-              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              tick={{
+                fontSize: 11,
+                fill: "var(--color-text-tertiary)",
+                style: TABULAR_TICK_STYLE,
+              }}
               stroke="var(--color-text-tertiary)"
               width={60}
             />
@@ -130,7 +153,7 @@ export const RevenueSparkline = () => {
             <Tooltip
               filterNull={false}
               formatter={(value) =>
-                typeof value === "number" ? formatCurrency(value * 100) : "—"
+                typeof value === "number" ? formatCurrency(value * 100, currency) : "—"
               }
               contentStyle={{
                 backgroundColor: "var(--color-bg-elevated)",
@@ -143,6 +166,7 @@ export const RevenueSparkline = () => {
               type="monotone"
               dataKey="turnover"
               stroke="#10b981"
+              isAnimationActive={!prefersReducedMotion}
               fill={`url(#${turnoverGradientId})`}
               name={t("dashboard.turnover", "Turnover")}
             />
@@ -151,6 +175,7 @@ export const RevenueSparkline = () => {
               dataKey="revenue"
               connectNulls={false}
               stroke="#4F46E5"
+              isAnimationActive={!prefersReducedMotion}
               fill={`url(#${revenueGradientId})`}
               name={t("dashboard.revenue", "Revenue")}
             />
