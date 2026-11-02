@@ -77,17 +77,23 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
 
   // The menu is position: fixed, so it would stay behind while the page moves under it.
   useEffect(() => {
-    if (!isOpen) return;
-    const closeOnViewportChange = (event: Event) => {
+    if (!isOpen || !buttonRef.current) return;
+    const openedAt = buttonRef.current.getBoundingClientRect();
+    // Scroll and resize events are delivered a frame late, so one caused by the scroll that
+    // brought the trigger into view arrives after the menu opened. Only a trigger that has
+    // actually moved leaves the fixed menu behind.
+    const closeIfTriggerMoved = (event: Event) => {
       const target = event.target;
       if (target instanceof Node && dropdownRef.current?.contains(target)) return;
+      const now = buttonRef.current?.getBoundingClientRect();
+      if (now && now.top === openedAt.top && now.left === openedAt.left) return;
       setIsOpen(false);
     };
-    window.addEventListener("scroll", closeOnViewportChange, true);
-    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeIfTriggerMoved, true);
+    window.addEventListener("resize", closeIfTriggerMoved);
     return () => {
-      window.removeEventListener("scroll", closeOnViewportChange, true);
-      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeIfTriggerMoved, true);
+      window.removeEventListener("resize", closeIfTriggerMoved);
     };
   }, [isOpen]);
 

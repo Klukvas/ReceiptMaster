@@ -621,8 +621,13 @@ export const run = async () => {
       await page.locator("tbody tr").first().getByRole("checkbox").check();
       await page.getByRole("button", { name: "2", exact: true }).click();
       await waitFor(async () => (await page.locator("tbody tr").count()) === 2);
-      if (await page.getByRole("button", { name: /^approve$/i }).count())
+      await waitFor(
+        async () =>
+          (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
+        { label: "the selection to clear after the page change" },
+      ).catch(() => {
         throw Error("Selection survived page change");
+      });
       await page.locator("tbody tr").first().getByRole("checkbox").check();
       await page
         .locator("select")
@@ -631,8 +636,13 @@ export const run = async () => {
       await waitFor(
         async () => (await page.locator("tbody tr").count()) === 12,
       );
-      if (await page.getByRole("button", { name: /^approve$/i }).count())
+      await waitFor(
+        async () =>
+          (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
+        { label: "the selection to clear after the page-size change" },
+      ).catch(() => {
         throw Error("Selection survived page-size change");
+      });
     },
   );
   await scenario(
