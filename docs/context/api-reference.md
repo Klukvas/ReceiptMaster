@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-11-01
+**Last Updated:** 2026-11-02
 
 **Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -38,7 +38,7 @@ Creates a new user account.
 ```
 
 **Errors:**
-- 409 `USER_ALREADY_EXISTS` — Email already registered
+- 409 `USER_ALREADY_EXISTS` — Email already registered; also the answer when two registrations race and the unique email index rejects the loser's insert (never a 500)
 - 400 `VALIDATION_ERROR` — Invalid input
 
 ---
@@ -222,12 +222,21 @@ nothing and answers 201 with the first response's body plus `X-Idempotency-Repla
 when two requests with the key arrive at once (they are serialized on the key) and also once the
 plan's product limit has been reached (the key is checked before the quota). Only successful creates
 are stored: a refused or failed create is run again on retry. A repeated key with a *different* body
-still replays the first response — the client then PATCHes the difference. Without the header the
-route behaves as before. The key is stored as `product:` + SHA-256 of the key in `idempotency_keys`,
+is refused: see *Payload fingerprint* below. Without the header the route behaves as before. The key is stored as `product:` + SHA-256 of the key in `idempotency_keys`,
 so it never collides with an order or recipient key of the same value.
+
+**Payload fingerprint (since 2026-11-02):** the stored key row also holds a SHA-256 of the request
+body (`idempotency_keys.payload_hash`, object keys sorted so key order does not matter). Within the
+24 hours a repeated key with the **same** body replays as above; with a **different** body it answers
+422 `IDEMPOTENCY_KEY_REUSED` and creates nothing (the stored response is kept). Rows written before
+the fingerprint existed have `payload_hash` NULL and keep replaying whatever the body. The same
+applies to `POST /recipients` and `POST /suppliers`; order keys carry no fingerprint. The web forms
+derive the key from the payload (`useIdempotencyKey`), so an edited form gets a new key and never
+hits this error.
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
+- 422 `IDEMPOTENCY_KEY_REUSED` — The key was already used with a different body (see below)
 - 402 `PRODUCT_LIMIT_EXCEEDED` — Plan product limit reached (free: 10, pro: 100). The count excludes
   soft-deleted products and is taken in the insert's transaction under a per-tenant lock, so two
   creates racing for the last slot get one 201 and one 402; a rolled-back create frees its slot.
@@ -420,7 +429,11 @@ File: `backend/src/modules/suppliers/suppliers.controller.ts` (5 endpoints)
 
 **POST** `/suppliers`
 
-Creates a new supplier.
+Creates a new supplier. Supports idempotency via `Idempotency-Key` with the same semantics as
+**Create Product** (optional header, 1–255 visible ASCII else 400 `VALIDATION_ERROR`; 24-hour replay
+with `X-Idempotency-Replayed: true`; concurrent repeats create one supplier; only successful creates
+are stored; stored key `supplier:` + SHA-256; 422 `IDEMPOTENCY_KEY_REUSED` for a different body).
+Without the header the route behaves as before.
 
 **Request Body:**
 ```typescript
@@ -521,7 +534,8 @@ Adds new customer to user's recipient list. Supports idempotency via `Idempotenc
 
 Same replay semantics as **Create Product** (24 hours, 201 + `X-Idempotency-Replayed: true`,
 concurrent repeats create one recipient, only successful creates are stored; stored key
-`recipient:` + SHA-256). Without the header the route behaves as before.
+`recipient:` + SHA-256), and the same 422 `IDEMPOTENCY_KEY_REUSED` for a repeated key with a
+different body. Without the header the route behaves as before.
 
 **Request Body:**
 ```typescript

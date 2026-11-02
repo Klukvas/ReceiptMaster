@@ -142,7 +142,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 - `productsApi.getAll()`, `getById()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getLowStock()`
 - `recipientsApi.*` — same CRUD pattern; `recipientsApi.update` takes `UpdateRecipientRequest` (changed
   fields only, `null` clears an optional field)
-- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` send
+- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` / `suppliersApi.create(data, { idempotencyKey })` send
   the optional `Idempotency-Key` header (see *Onboarding wizard*)
 - `suppliersApi.*` — same CRUD pattern
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`

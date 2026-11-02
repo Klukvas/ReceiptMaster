@@ -107,6 +107,12 @@ describe("ApiErrors", () => {
   });
 
   describe("Product errors", () => {
+    it("IDEMPOTENCY_KEY_REUSED should return 422", () => {
+      const error = ApiErrors.IDEMPOTENCY_KEY_REUSED();
+      expect(error.statusCode).toBe(422);
+      expect(error.errorCode).toBe("IDEMPOTENCY_KEY_REUSED");
+    });
+
     it("PRODUCT_NOT_FOUND should return 404", () => {
       const error = ApiErrors.PRODUCT_NOT_FOUND("p-123");
       expect(error.statusCode).toBe(404);
