@@ -64,12 +64,15 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
   if (!billingEnabled)
     return (
-      <Modal isOpen={isOpen} onClose={onClose} size="md">
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={t(titleKey, "Limit reached")}
+        size="md"
+        showCloseButton={false}
+      >
         <div className="flex flex-col items-center text-center py-4">
           <div className="mb-4">{REASON_ICONS[reason]}</div>
-          <h3 className="text-lg font-semibold text-content mb-2">
-            {t(titleKey, "Limit reached")}
-          </h3>
           <p className="text-content-secondary mb-6">
             {t(
               NO_BILLING_DESC_KEYS[reason],
@@ -82,15 +85,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t(titleKey, "Upgrade Required")}
+      size="md"
+      showCloseButton={false}
+    >
       <div className="flex flex-col items-center text-center py-4">
         <div className="mb-4 p-3 bg-[var(--color-warning-light)] rounded-full">
           {REASON_ICONS[reason]}
         </div>
-
-        <h3 className="text-lg font-semibold text-content mb-2">
-          {t(titleKey, "Upgrade Required")}
-        </h3>
 
         <p className="text-content-secondary mb-6">
           {t(descKey, "You have reached the limit of your current plan.")}
@@ -116,7 +121,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               <button
                 onClick={() => handleUpgrade("pro")}
                 disabled={!!loading}
-                className="w-full flex items-center justify-between p-4 rounded-lg border-2 border-[var(--color-accent-light)] bg-[var(--color-accent-light)] hover:border-accent-base transition-colors"
+                className="w-full flex items-center justify-between p-4 pointer-coarse:min-h-11 rounded-lg border-2 border-[var(--color-accent-light)] bg-[var(--color-accent-light)] hover:border-accent-base transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Crown className="h-5 w-5 text-accent-base" />
@@ -130,7 +135,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                         "Up to {{count}} products",
                         { count: 100 },
                       )}{" "}
-                      &middot;{""}
+                      &middot;{" "}
                       {t(
                         "subscription.ordersLimit",
                         "Up to {{count}} orders/month",
@@ -151,7 +156,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               <button
                 onClick={() => handleUpgrade("business")}
                 disabled={!!loading}
-                className="w-full flex items-center justify-between p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600 transition-colors"
+                className="w-full flex items-center justify-between p-4 pointer-coarse:min-h-11 rounded-lg border-2 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Crown className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -167,7 +172,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                         "subscription.unlimitedProducts",
                         "Unlimited products",
                       )}{" "}
-                      &middot;{""}
+                      &middot;{" "}
                       {t("subscription.unlimitedOrders", "Unlimited orders")}
                     </div>
                   </div>
@@ -191,12 +196,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          className="mt-4 text-sm text-content-tertiary hover:text-content-secondary"
-        >
+        <Button variant="ghost" onClick={onClose} className="mt-4">
           {t("common.close", "Close")}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

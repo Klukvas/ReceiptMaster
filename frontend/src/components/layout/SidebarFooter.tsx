@@ -11,7 +11,7 @@ interface SidebarFooterProps {
 
 export const SidebarFooter = ({ isCollapsed, logoutLabel, onLogout }: SidebarFooterProps) => {
  return (
- <div className={clsx('px-3 pb-4 pt-2', isCollapsed ? 'px-2' : '')}>
+ <div className={clsx('px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2', isCollapsed ? 'px-2' : '')}>
  {/* Divider */}
  <div className={clsx('mb-3', isCollapsed ? 'mx-1' : 'mx-1')}>
  <div className="h-px bg-surface-alt" />
@@ -33,7 +33,7 @@ export const SidebarFooter = ({ isCollapsed, logoutLabel, onLogout }: SidebarFoo
  <button
  onClick={onLogout}
  className={clsx(
- 'w-full rounded-lg text-sm font-medium transition-all duration-150 group',
+ 'w-full rounded-lg text-sm font-medium transition-all duration-150 motion-reduce:transition-none group pointer-coarse:min-h-11',
  'text-content-tertiary',
  'hover:text-danger-base hover:bg-[var(--color-danger-light)]',
  isCollapsed ? 'flex justify-center p-2.5 mx-1' : 'flex items-center px-3 py-2.5 mx-0'

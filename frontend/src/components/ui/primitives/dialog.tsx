@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "./cn";
 import { useBackClosesDialog } from "../../../hooks/useBackClosesDialog";
+import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock";
 
 /* ------------------------------------------------------------------ */
 /*  Dialog Context                                                      */
@@ -48,6 +49,7 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
   }, [onOpenChange]);
 
   useBackClosesDialog(open, () => onOpenChangeRef.current(false));
+  useBodyScrollLock(open);
 
   React.useEffect(() => {
     if (!open) return;
@@ -59,8 +61,6 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
       openDialogStack[openDialogStack.length - 1] === dialogId;
 
     previousFocusRef.current = document.activeElement as HTMLElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
 
     requestAnimationFrame(() => {
       if (!dialogRef.current) return;
@@ -116,7 +116,6 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
       const position = openDialogStack.indexOf(dialogId);
       if (position !== -1) openDialogStack.splice(position, 1);
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
   }, [open]);

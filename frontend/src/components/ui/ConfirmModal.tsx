@@ -15,6 +15,8 @@ interface ConfirmModalProps {
   dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
   isLoading?: boolean;
+  /** Failure of the last confirm attempt; the buttons stay usable so it can be retried. */
+  errorMessage?: string | null;
 }
 
 export const ConfirmModal = ({
@@ -28,6 +30,7 @@ export const ConfirmModal = ({
   dismissLabel,
   variant = "danger",
   isLoading = false,
+  errorMessage,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
 
@@ -41,8 +44,13 @@ export const ConfirmModal = ({
   const defaultLabel =
     variant === "danger" ? t("common.delete") : t("common.confirm");
 
+  // X, Escape, backdrop and Back all funnel into onClose; none may abandon a request in flight.
+  const handleClose = () => {
+    if (!isLoading) onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+    <Modal isOpen={isOpen} onClose={handleClose} title={title} size="sm">
       <div className="flex gap-4">
         <div
           className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${iconColors[variant]}`}
@@ -58,6 +66,14 @@ export const ConfirmModal = ({
           )}
         </div>
       </div>
+      {errorMessage && (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg bg-[var(--color-danger-light)] p-3 text-sm text-danger-base"
+        >
+          {errorMessage}
+        </p>
+      )}
       <div className="flex justify-end gap-3 mt-6">
         <Button variant="secondary" onClick={onClose} disabled={isLoading}>
           {dismissLabel ?? t("common.cancel")}
