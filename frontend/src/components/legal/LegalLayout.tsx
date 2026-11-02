@@ -2,6 +2,8 @@ import React, { useMemo } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "../../hooks/useTranslation";
+import { LanguageSwitcher } from "../ui/LanguageSwitcher";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 interface LegalLayoutProps {
   title: string;
@@ -42,12 +44,16 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
           <Link
             to="/"
-            className="flex items-center gap-2 text-sm text-content-tertiary hover:text-content transition-colors"
+            className="flex items-center gap-2 text-sm text-content-tertiary hover:text-content transition-colors pointer-coarse:min-h-11"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <img src="/logo-icon.svg" alt="receiptmaster" className="h-6 w-6" />
+            <img src="/logo-icon.svg" alt="" className="h-6 w-6" />
             <span className="font-medium">receiptmaster</span>
           </Link>
+          <div className="ml-auto flex items-center gap-2">
+            <LanguageSwitcher compact />
+            <ThemeToggle compact />
+          </div>
         </div>
       </header>
 
@@ -62,7 +68,7 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
           {t("legal.lastUpdated", { date: formattedDate })}
         </p>
 
-        <div className="prose prose-gray dark:prose-invert max-w-none prose-headings:font-semibold prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-lg prose-h3:mt-6 prose-h3:mb-3 prose-p:text-content-secondary dark:prose-p:text-content-tertiary prose-p:leading-relaxed prose-li:text-content-secondary dark:prose-li:text-content-tertiary prose-a:text-accent-base dark:prose-a:text-accent-base prose-strong:text-content prose-th:text-content dark:prose-th:text-content prose-td:text-content-secondary dark:prose-td:text-content-tertiary">
+        <div className="prose prose-gray dark:prose-invert max-w-none prose-headings:font-semibold prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-lg prose-h3:mt-6 prose-h3:mb-3 prose-p:text-content-secondary dark:prose-p:text-content-tertiary prose-p:leading-relaxed prose-li:text-content-secondary dark:prose-li:text-content-tertiary prose-a:text-accent-base dark:prose-a:text-[var(--color-text-accent)] prose-strong:text-content prose-th:text-content dark:prose-th:text-content prose-td:text-content-secondary dark:prose-td:text-content-tertiary">
           {children}
         </div>
       </main>
@@ -74,7 +80,7 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
               key={to}
               to={to}
               className={({ isActive }) =>
-                isActive ? "text-content font-medium" : "hover:text-content"
+                `pointer-coarse:inline-block pointer-coarse:py-3 ${isActive ? "text-content font-medium" : "hover:text-content"}`
               }
             >
               {t(labelKey)}

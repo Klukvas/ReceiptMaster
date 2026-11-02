@@ -1,4 +1,5 @@
 import axios from "axios";
+import { newIdempotencyKey } from "../../lib/idempotency-key";
 import type {
   Product,
   Recipient,
@@ -49,15 +50,7 @@ export const isBlank = (value: string): boolean => value.trim() === "";
 export const hasChanges = (update: object): boolean =>
   Object.keys(update).length > 0;
 
-/** One key per create attempt; retries of that attempt reuse it. */
-export const newIdempotencyKey = (): string => {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  // randomUUID needs a secure context; getRandomValues does not.
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
-};
+export { newIdempotencyKey };
 
 // A gateway answered for a backend it could not hear from: the create may
 // have been committed, exactly as when no response arrived at all.

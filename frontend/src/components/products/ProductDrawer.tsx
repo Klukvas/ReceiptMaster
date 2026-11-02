@@ -97,7 +97,7 @@ export const ProductDrawer = ({
   };
 
   return (
-    <Drawer open={open} onClose={onClose}>
+    <Drawer open={open} onClose={onClose} ariaLabel={product.name}>
       <div className="space-y-1">
         {/* Header */}
         <div className="-mx-6 -mt-6 px-6 pt-5 pb-5 bg-gradient-to-b from-surface-alt to-elevated border-b border-[var(--color-border-light)]">

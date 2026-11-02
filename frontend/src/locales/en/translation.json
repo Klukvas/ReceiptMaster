@@ -1,5 +1,6 @@
 {
   "common": {
+    "offlineNotice": "No internet connection. You can still read data that is already loaded, but changes cannot be saved until you reconnect.",
     "copyFailed": "Could not copy to the clipboard",
     "copied": "Copied",
     "selectAll": "Select all rows",
@@ -17,10 +18,12 @@
     "save": "Save",
     "close": "Close",
     "toggleTheme": "Toggle theme",
+    "language": "Language",
     "sidebar": "Sidebar",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "closeSidebar": "Close sidebar",
+    "openSidebar": "Open menu",
     "back": "Back",
     "next": "Next",
     "previous": "Previous",
@@ -43,7 +46,12 @@
     "actions": "Actions",
     "columns": "Columns",
     "saving": "Saving...",
-    "retry": "Retry"
+    "retry": "Retry",
+    "clearSearch": "Clear search",
+    "offlineResults": "You are offline: results will refresh when you reconnect",
+    "selectAllOnPage": "Select all on this page",
+    "selectRowNamed": "Select {{name}}",
+    "listLoadError": "Could not load the list. Please try again."
   },
   "auth": {
     "login": "Login",
@@ -129,6 +137,10 @@
     "cancelOrderMessage": "Are you sure you want to cancel this order?",
     "deleteOrderMessage": "Are you sure you want to delete this order? This action cannot be undone.",
     "orderConfirmed": "Order confirmed successfully",
+    "batchApproved_one": "{{count}} order approved",
+    "batchApproved_other": "{{count}} orders approved",
+    "batchDeleted_one": "{{count}} order deleted",
+    "batchDeleted_other": "{{count}} orders deleted",
     "orderCancelled": "Order cancelled successfully",
     "orderDeleted": "Order deleted successfully",
     "failedToLoadOrders": "Failed to load orders",
@@ -151,6 +163,11 @@
     "customPriceDefault": "Default",
     "searchPlaceholder": "Search orders by recipient name or number...",
     "noOrdersFound": "No orders found matching your search",
+    "noOrdersMatchFilters": "No orders match these filters",
+    "clearSearch": "Clear search",
+    "decreaseQty": "Decrease quantity",
+    "increaseQty": "Increase quantity",
+    "removeItem": "Remove item",
     "filters": "Filters",
     "clearFilters": "Clear",
     "startDate": "From",
@@ -253,6 +270,7 @@
     "deleteProductMessage": "Are you sure you want to delete this product? This action cannot be undone.",
     "searchPlaceholder": "Search products by name...",
     "noProductsFound": "No products found matching your search",
+    "suppliersLoadError": "Could not load suppliers.",
     "productFound": "product found",
     "productsFound": "products found",
     "deleteError": "Failed to delete product",
@@ -340,6 +358,7 @@
     "supplierUpdated": "Supplier updated successfully",
     "supplierDeleted": "Supplier deleted successfully",
     "deleteSupplierMessage": "Are you sure you want to delete this supplier?",
+    "deleteSupplierWithProductsMessage": "Are you sure you want to delete this supplier? Its {{count}} linked product(s) will not be deleted, only unlinked from the supplier.",
     "searchPlaceholder": "Search suppliers by name, email or contact person...",
     "noSuppliersFound": "No suppliers found matching your search",
     "viewDetails": "View Details",
@@ -498,6 +517,9 @@
     "publicLink": "Public link",
     "shareError": "Failed to generate share link",
     "revokeError": "Failed to revoke link",
+    "downloaded": "Receipt downloaded",
+    "copyFailed": "Could not copy the link. Select it and copy it manually.",
+    "choosePrinter": "Available printers: {{printers}}\nEnter printer name (or leave empty for default):",
     "receiptNotFound": "Receipt not found",
     "downloadPdf": "Download PDF",
     "poweredBy": "Powered by ReceiptMaster"
@@ -526,7 +548,7 @@
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
-    "passwordChanged": "Password changed successfully",
+    "passwordChanged": "Password changed. Your other devices are signed out and will ask you to sign in again when their session ends.",
     "passwordChangeFailed": "Failed to change password",
     "passwordMinLength": "Password must be at least {{min}} characters long"
   },
@@ -537,7 +559,11 @@
       "features": "Features",
       "howItWorks": "How it works",
       "pricing": "Pricing",
-      "blog": "Blog"
+      "blog": "Blog",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu",
+      "mainNavigation": "Main navigation",
+      "mobileNavigation": "Mobile navigation"
     },
     "hero": {
       "line1": "Orders, Receipts",
@@ -791,6 +817,9 @@
     "ordersByStatus": "Orders by Status",
     "lowStock": "Low Stock",
     "allStocked": "All products are well-stocked",
+    "loadError": "Could not load analytics",
+    "widgetLoadError": "Could not load this section",
+    "updating": "Updating",
     "pcs": "pcs",
     "viewAll": "View all",
     "exportCsv": "Export CSV",
@@ -819,6 +848,7 @@
   "notFound": {
     "title": "Page Not Found",
     "description": "Sorry, the page you are looking for does not exist or has been moved.",
+    "goDashboard": "Go to Dashboard",
     "goHome": "Go Home",
     "goBack": "Go Back",
     "helpText": "If you believe this is an error, please contact support."
@@ -857,6 +887,8 @@
     "free": "Free",
     "pro": "Pro",
     "business": "Business",
+    "usageUnlimited": "{{current}} / unlimited",
+    "loadFailed": "Could not load your subscription. Your plan and usage are unknown until you retry.",
     "productsUsage": "Products",
     "ordersUsage": "Orders this month",
     "templateNotInPlan": "Not in your plan",
@@ -906,6 +938,8 @@
     "reload": "Reload page"
   },
   "publicReceipt": {
+    "loadFailed": "Could not load this receipt. Check your connection and try again.",
+    "retry": "Retry",
     "notFoundTitle": "Receipt Not Found",
     "notFoundBody": "This receipt is no longer available. Its link may have been revoked, or the receipt was replaced by a newer one.",
     "legacyUnavailable": "Detailed metadata is unavailable for this legacy document. Download the original PDF.",
@@ -941,6 +975,7 @@
     "recipientAlreadyExists": "Recipient with this email already exists",
     "recipientHasOrders": "This recipient can't be deleted: it has orders, including deleted ones kept for history",
     "settingsNotFound": "Settings not found",
+    "idempotencyKeyReused": "This request was already sent with different details. Please try again",
     "invalidSettings": "Invalid settings",
     "fileNotFound": "File not found",
     "fileUploadFailed": "Failed to upload file",
@@ -955,6 +990,7 @@
     "notFound": "Resource not found",
     "badRequest": "Bad request",
     "networkError": "Network error. Please check your internet connection",
+    "tooManyRequests": "Too many attempts. Wait a minute and try again.",
     "unknownError": "Unknown error occurred"
   },
   "document": {
@@ -1101,6 +1137,16 @@
     "sectionBrandHelp": "The accent colour and the logo shown on documents.",
     "forOrder": "For {{order}}",
     "pdfPreviewOrder": "Preview of this document"
+  },
+  "blog": {
+    "title": "Blog",
+    "description": "Guides, tips, and insights for modern merchants.",
+    "home": "Home",
+    "allArticles": "All articles",
+    "backToBlog": "Back to blog",
+    "notFoundTitle": "Article Not Found",
+    "notFoundHeading": "Article not found",
+    "languageNote": "Articles are available in English and Ukrainian."
   },
   "legal": {
     "lastUpdated": "Last updated: {{date}}",

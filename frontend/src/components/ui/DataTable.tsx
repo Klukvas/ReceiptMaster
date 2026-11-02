@@ -1,24 +1,46 @@
-import React, { useState, useRef, useEffect } from"react";
+import React, { useState, useRef, useEffect, useSyncExternalStore } from"react";
+import { onlineManager } from"@tanstack/react-query";
 import {
  Search,
  X,
  ChevronUp,
  ChevronDown,
  ArrowUpDown,
- Loader2,
 } from"lucide-react";
 import { Card } from"./Card";
 import { Button } from"./Button";
 import { Pagination } from"./Pagination";
 import { useTranslation } from"../../hooks/useTranslation";
-import { parseApiError } from"../../lib/api-errors";
+import { ErrorCode, parseApiError } from"../../lib/api-errors";
+import { useDelayedFlag } from"../../hooks/useDelayedFlag";
 import type { ColumnDef, SortOrder } from"../../hooks/useServerPagination";
+import {
+ PaginationPlaceholder,
+ RefreshOverlay,
+ SkeletonCards,
+ SkeletonRows,
+} from"./DataTableSkeletons";
+
+// A load shorter than this never flashes a skeleton or an overlay.
+const LOADING_CUE_DELAY_MS = 200;
+const CHECKBOX_CLASS =
+ "rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]";
+
+/** A bare "Request failed with status code 500" tells a person nothing. */
+function listErrorMessage(error: Error, fallback: string): string {
+ const { message, code } = parseApiError(error);
+ const isRawTransportMessage =
+ code === ErrorCode.UNKNOWN_ERROR && /status code \d+/i.test(message);
+ return !message || isRawTransportMessage ? fallback : message;
+}
 
 interface DataTableProps<T> {
  items: T[];
  total: number;
  isLoading: boolean;
  isFetching?: boolean;
+ /** The fetch is paused because the browser is offline; defaults to the browser's online state. */
+ isOffline?: boolean;
  error: Error | null;
  onRetry?: () => void;
 
@@ -59,6 +81,10 @@ interface DataTableProps<T> {
  toolbarExtra?: React.ReactNode;
 
  onRowClick?: (item: T) => void;
+ /** Row name for the selection checkbox's accessible name. */
+ rowLabel?: (item: T) => string;
+ /** Tighter horizontal cell padding for tables that are wide at laptop widths. */
+ isCompact?: boolean;
 
  selectable?: boolean;
  selectedKeys?: Set<string>;
@@ -70,6 +96,7 @@ export function DataTable<T>({
  total,
  isLoading,
  isFetching,
+ isOffline,
  error,
  onRetry,
  currentPage,
@@ -100,6 +127,8 @@ export function DataTable<T>({
  renderCard,
  toolbarExtra,
  onRowClick,
+ rowLabel,
+ isCompact = false,
  selectable = false,
  selectedKeys,
  onSelectionChange,
@@ -107,6 +136,24 @@ export function DataTable<T>({
  const { t } = useTranslation();
  const [showColumnMenu, setShowColumnMenu] = useState(false);
  const columnMenuRef = useRef<HTMLDivElement>(null);
+ const isBrowserOnline = useSyncExternalStore(
+ onlineManager.subscribe.bind(onlineManager),
+ () => onlineManager.isOnline(),
+ );
+ const showOffline = isOffline ?? !isBrowserOnline;
+
+ const isLoadingFirstRows = (isLoading || !!isFetching) && items.length === 0;
+ const showSkeleton = useDelayedFlag(isLoadingFirstRows, LOADING_CUE_DELAY_MS);
+ const showRefresh = useDelayedFlag(
+ !!isFetching && items.length > 0,
+ LOADING_CUE_DELAY_MS,
+ );
+ // With nothing to show and nothing loading, the error card stands alone.
+ const hasOnlyError = !!error && items.length === 0 && !isLoadingFirstRows;
+ const cellPadding = isCompact ?"px-4" :"px-6";
+ const cellClassName = `${cellPadding} py-4 whitespace-nowrap`;
+ const alignClass = (col: ColumnDef<T>) =>
+ col.align ==="right" ?"text-right tabular-nums" :"";
 
  // Close column menu on click outside
  useEffect(() => {
@@ -158,6 +205,56 @@ export function DataTable<T>({
 
  const getRowClass = rowClassName || defaultRowClass;
 
+ const selectLabel = (item: T) =>
+ rowLabel
+ ? t("common.selectRowNamed", { name: rowLabel(item) })
+ : t("common.selectRow");
+
+ const emptyContent = (
+ <div className="flex flex-col items-center text-content-tertiary">
+ {emptyIcon}
+ <p className="mt-3 text-sm">
+ {searchQuery
+ ? emptySearchMessage || t("common.noResults")
+ : emptyMessage || t("common.noData")}
+ </p>
+ {searchQuery ? (
+ <Button
+ variant="secondary"
+ size="sm"
+ className="mt-4"
+ onClick={() => onSearchChange("")}
+ >
+ {t("common.clearSearch")}
+ </Button>
+ ) : (
+ emptyAction && <div className="mt-4">{emptyAction}</div>
+ )}
+ </div>
+ );
+
+ const defaultCard = (item: T) => (
+ <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4">
+ <div className="space-y-2.5">
+ {visibleColumns.map((col) => (
+ <div key={col.key} className="flex justify-between items-start">
+ <span className="text-xs font-medium text-content-tertiary uppercase tracking-wider">
+ {col.header}
+ </span>
+ <span className="text-sm text-content text-right">
+ {col.renderCard ? col.renderCard(item) : col.render(item)}
+ </span>
+ </div>
+ ))}
+ {renderActions && (
+ <div className="pt-2.5 border-t border-[var(--color-border-light)] flex justify-end">
+ {renderActions(item)}
+ </div>
+ )}
+ </div>
+ </div>
+ );
+
  const renderSortIcon = (col: ColumnDef<T>) => {
  const colSortKey = col.sortKey || col.key;
  if (sortBy === colSortKey) {
@@ -189,8 +286,10 @@ export function DataTable<T>({
  />
  {searchQuery && (
  <button
+ type="button"
  onClick={() => onSearchChange("")}
- className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-content-tertiary hover:text-content-secondary transition-colors"
+ aria-label={t("common.clearSearch")}
+ className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-content-tertiary hover:text-content-secondary transition-colors pointer-coarse:px-3.5"
  >
  <X className="h-4 w-4" />
  </button>
@@ -239,6 +338,20 @@ export function DataTable<T>({
  </div>
  )}
 
+ {/* Offline: React Query pauses the fetch, so the rows below may be stale */}
+ <div role="status" className="empty:hidden">
+ {showOffline && (
+ <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-border)] bg-surface-alt px-4 py-3 text-sm text-content-secondary">
+ <span>{t("common.offlineResults")}</span>
+ {onRetry && (
+ <Button variant="secondary" size="sm" onClick={onRetry}>
+ {t("common.retry")}
+ </Button>
+ )}
+ </div>
+ )}
+ </div>
+
  {/* Error state */}
  {error && (
  <Card>
@@ -246,7 +359,7 @@ export function DataTable<T>({
  role="alert"
  className="flex flex-col items-center gap-3 py-8 text-center text-danger-base"
  >
- <p>{parseApiError(error).message || t("common.error")}</p>
+ <p>{listErrorMessage(error, t("common.listLoadError"))}</p>
  {onRetry && (
  <Button variant="secondary" size="sm" onClick={onRetry}>
  {t("common.retry")}
@@ -257,13 +370,10 @@ export function DataTable<T>({
  )}
 
  {/* Desktop Table */}
+ {!hasOnlyError && (
  <div className="hidden lg:block bg-elevated rounded-2xl border border-[var(--color-border)] shadow-sm">
- <div className="overflow-x-auto relative rounded-2xl">
- {isFetching && items.length > 0 && (
- <div className="absolute inset-0 bg-elevated/60 flex items-center justify-center z-10 backdrop-blur-[1px]">
- <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
- </div>
- )}
+ <div className="overflow-x-auto relative rounded-2xl" aria-busy={isLoadingFirstRows || showRefresh}>
+ {showRefresh && <RefreshOverlay />}
  <table className="min-w-full">
  <thead>
  <tr className="border-b border-[var(--color-border-light)]">
@@ -274,19 +384,19 @@ export function DataTable<T>({
  checked={!!allSelected}
  onChange={toggleAll}
  aria-label={t("common.selectAll")}
- className="rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]"
+ className={CHECKBOX_CLASS}
  />
  </th>
  )}
  {visibleColumns.map((col) => (
  <th
  key={col.key}
- className="px-6 py-3.5 text-left text-xs font-medium text-content-tertiary uppercase tracking-wider"
+ className={`${cellPadding} py-3.5 text-left text-xs font-medium text-content-tertiary uppercase tracking-wider ${col.align ==="right" ?"text-right" :""}`}
  >
  {col.sortable ? (
  <button
  onClick={() => onSort(col.key)}
- className="flex items-center gap-1 uppercase hover:text-content-secondary transition-colors duration-150"
+ className={`flex items-center gap-1 uppercase hover:text-content-secondary transition-colors duration-150 ${col.align ==="right" ?"ml-auto" :""}`}
  >
  <span>{col.header}</span>
  {renderSortIcon(col)}
@@ -306,24 +416,19 @@ export function DataTable<T>({
  </tr>
  </thead>
  <tbody>
- {(isLoading || isFetching) && items.length === 0 ? (
- <tr>
- <td colSpan={colSpan} className="text-center py-16">
- <Loader2 className="w-5 h-5 animate-spin text-primary-500 mx-auto" />
- </td>
- </tr>
- ) : error && items.length === 0 ? null : items.length === 0 ? (
+ {isLoadingFirstRows ? (
+ <SkeletonRows
+ columns={visibleColumns}
+ rowCount={itemsPerPage}
+ hasSelection={selectable}
+ hasActions={!!renderActions}
+ isShown={showSkeleton}
+ cellClassName={cellClassName}
+ />
+ ) : items.length === 0 ? (
  <tr>
  <td colSpan={colSpan} className="px-6 py-16 text-center">
- <div className="flex flex-col items-center text-content-tertiary">
- {emptyIcon}
- <p className="mt-3 text-sm">
- {searchQuery
- ? emptySearchMessage || t("common.noResults")
- : emptyMessage || t("common.noData")}
- </p>
- {!searchQuery && emptyAction && <div className="mt-4">{emptyAction}</div>}
- </div>
+ {emptyContent}
  </td>
  </tr>
  ) : (
@@ -355,15 +460,15 @@ export function DataTable<T>({
  type="checkbox"
  checked={isSelected}
  onChange={() => toggleOne(key)}
- aria-label={t("common.selectRow")}
- className="rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]"
+ aria-label={selectLabel(item)}
+ className={CHECKBOX_CLASS}
  />
  </td>
  )}
  {visibleColumns.map((col) => (
  <td
  key={col.key}
- className="px-6 py-4 whitespace-nowrap"
+ className={`${cellClassName} ${alignClass(col)}`}
  >
  {col.render(item)}
  </td>
@@ -381,68 +486,47 @@ export function DataTable<T>({
  </table>
  </div>
  </div>
+ )}
 
  {/* Mobile View */}
- <div className="lg:hidden">
- {(isLoading || isFetching) && items.length === 0 ? (
- <div className="flex justify-center py-16">
- <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
- </div>
- ) : error && items.length === 0 ? null : items.length === 0 ? (
- <div className="flex flex-col items-center text-content-tertiary py-16">
- {emptyIcon}
- <p className="mt-3 text-sm">
- {searchQuery
- ? emptySearchMessage || t("common.noResults")
- : emptyMessage || t("common.noData")}
- </p>
- {!searchQuery && emptyAction && <div className="mt-4">{emptyAction}</div>}
- </div>
- ) : renderCard ? (
- <div className="space-y-3">
- {items.map((item) => (
- <React.Fragment key={rowKey(item)}>
- {renderCard(item)}
- </React.Fragment>
- ))}
- </div>
+ {!hasOnlyError && (
+ <div className="lg:hidden relative" aria-busy={isLoadingFirstRows || showRefresh}>
+ {showRefresh && <RefreshOverlay />}
+ {isLoadingFirstRows ? (
+ <SkeletonCards itemCount={itemsPerPage} isShown={showSkeleton} />
+ ) : items.length === 0 ? (
+ <div className="flex flex-col items-center py-16">{emptyContent}</div>
  ) : (
  <div className="space-y-3">
+ {selectable && (
+ <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-sm font-medium text-content-secondary">
+ <input
+ type="checkbox"
+ checked={!!allSelected}
+ onChange={toggleAll}
+ className={`${CHECKBOX_CLASS} size-5`}
+ />
+ {t("common.selectAllOnPage")}
+ </label>
+ )}
  {items.map((item) => (
- <div
+ <SelectableCard
  key={rowKey(item)}
- className="bg-elevated rounded-xl border border-[var(--color-border)] p-4"
+ isSelectable={selectable}
+ isSelected={selectedKeys?.has(rowKey(item)) ?? false}
+ label={selectLabel(item)}
+ onToggle={() => toggleOne(rowKey(item))}
  >
- <div className="space-y-2.5">
- {visibleColumns.map((col) => (
- <div
- key={col.key}
- className="flex justify-between items-start"
- >
- <span className="text-xs font-medium text-content-tertiary uppercase tracking-wider">
- {col.header}
- </span>
- <span className="text-sm text-content text-right">
- {col.renderCard
- ? col.renderCard(item)
- : col.render(item)}
- </span>
- </div>
- ))}
- {renderActions && (
- <div className="pt-2.5 border-t border-[var(--color-border-light)] flex justify-end">
- {renderActions(item)}
- </div>
- )}
- </div>
- </div>
+ {renderCard ? renderCard(item) : defaultCard(item)}
+ </SelectableCard>
  ))}
  </div>
  )}
  </div>
+ )}
 
  {/* Pagination */}
- {total > 0 && (
+ {total > 0 ? (
  <div className="pt-1">
  <Pagination
  currentPage={currentPage}
@@ -454,7 +538,46 @@ export function DataTable<T>({
  itemsPerPageOptions={itemsPerPageOptions}
  />
  </div>
+ ) : (
+ isLoadingFirstRows && <PaginationPlaceholder isShown={showSkeleton} />
  )}
+ </div>
+ );
+}
+
+interface SelectableCardProps {
+ isSelectable: boolean;
+ isSelected: boolean;
+ label: string;
+ onToggle: () => void;
+ children: React.ReactNode;
+}
+
+/** Cards have no table column for a checkbox, so each gets a 44 px tap box beside it. */
+function SelectableCard({
+ isSelectable,
+ isSelected,
+ label,
+ onToggle,
+ children,
+}: SelectableCardProps) {
+ if (!isSelectable) return <>{children}</>;
+ return (
+ <div className="flex items-start gap-1">
+ <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center">
+ <input
+ type="checkbox"
+ checked={isSelected}
+ onChange={onToggle}
+ aria-label={label}
+ className={`${CHECKBOX_CLASS} size-5`}
+ />
+ </label>
+ <div
+ className={`min-w-0 flex-1 rounded-xl ${isSelected ?"ring-2 ring-[var(--color-ring)]" :""}`}
+ >
+ {children}
+ </div>
  </div>
  );
 }

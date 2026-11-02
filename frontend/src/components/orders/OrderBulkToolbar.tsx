@@ -3,6 +3,8 @@ import { CheckCircle, Trash2, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { useTranslation } from "../../hooks/useTranslation";
 
+const APPROVE_HINT_ID = "bulk-approve-hint";
+
 interface OrderBulkToolbarProps {
   selectedCount: number;
   allSelectedAreDraft: boolean;
@@ -23,6 +25,7 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
   isDeleting,
 }) => {
   const { t } = useTranslation();
+  const approveHintVisible = !allSelectedAreDraft;
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-modal-content w-[calc(100%-2rem)] sm:w-auto max-w-[calc(100%-2rem)]">
@@ -39,12 +42,10 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
             variant="primary"
             onClick={onBatchApprove}
             disabled={!allSelectedAreDraft || isApproving}
-            title={
-              !allSelectedAreDraft
-                ? t("orders.batchApproveDisabledHint")
-                : t("orders.batchApprove")
+            aria-describedby={
+              approveHintVisible ? APPROVE_HINT_ID : undefined
             }
-            className="bg-success-base hover:bg-success-base-hover focus:ring-[var(--color-success)]/10 text-white text-xs"
+            className="bg-success-strong hover:bg-success-strong-hover focus:ring-[var(--color-success)]/10 text-white pointer-coarse:text-sm text-xs"
           >
             <CheckCircle className="w-3.5 h-3.5 mr-1" />
             {t("orders.batchApprove")}
@@ -55,7 +56,7 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
             variant="danger"
             onClick={onBatchDelete}
             disabled={isDeleting}
-            className="text-xs"
+            className="pointer-coarse:text-sm text-xs"
           >
             <Trash2 className="w-3.5 h-3.5 mr-1" />
             {t("orders.batchDelete")}
@@ -64,11 +65,22 @@ export const OrderBulkToolbar: React.FC<OrderBulkToolbarProps> = ({
 
         <button
           onClick={onClearSelection}
-          className="p-1 rounded-md hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content"
+          type="button"
+          className="p-1 pointer-coarse:p-3 rounded-md hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content"
           title={t("common.clear")}
+          aria-label={t("common.clear")}
         >
           <X className="w-4 h-4" />
         </button>
+
+        {approveHintVisible && (
+          <p
+            id={APPROVE_HINT_ID}
+            className="w-full text-center text-xs text-content-secondary"
+          >
+            {t("orders.batchApproveDisabledHint")}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useIsDesktop } from "../../hooks/useIsDesktop";
 import { useTranslation } from "../../hooks/useTranslation";
 import { SidebarGroup } from "./SidebarGroup";
 import { SidebarItem } from "./SidebarItem";
@@ -60,24 +63,38 @@ export const Sidebar = ({
   const location = useLocation();
   const { user, logout } = useAuth();
   const { t } = useTranslation();
+  const isDesktop = useIsDesktop();
+  // Below `lg` the sidebar is an off-canvas modal: out of the Tab order while closed,
+  // focus-trapped with Escape/Back and a locked page while open.
+  const isModalOpen = !isDesktop && isOpen;
+  const isOffCanvas = !isDesktop && !isOpen;
+  const sidebarRef = useFocusTrap<HTMLElement>(isModalOpen, onClose);
+  useBodyScrollLock(isModalOpen);
 
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 backdrop-blur-sm bg-[var(--color-overlay)] transition-opacity duration-300"
+          className="lg:hidden fixed inset-0 z-40 backdrop-blur-sm bg-[var(--color-overlay)] transition-opacity duration-300 motion-reduce:transition-none"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
+        id="app-sidebar"
+        role={isModalOpen ? "dialog" : undefined}
+        aria-modal={isModalOpen ? true : undefined}
+        inert={isOffCanvas}
+        tabIndex={isModalOpen ? -1 : undefined}
         className={clsx(
-          "fixed top-0 bottom-0 left-0 z-50 h-screen flex flex-col",
+          "fixed top-0 bottom-0 left-0 z-50 h-dvh flex flex-col outline-none",
           "bg-elevated/80 backdrop-blur-xl",
           "border-r border-[var(--color-border)]",
-          "transform transition-all duration-300 ease-in-out",
+          "transform transition-all duration-300 ease-in-out motion-reduce:transition-none",
           // Mobile slide
           isOpen ? "translate-x-0" : "-translate-x-full",
           "lg:translate-x-0",
@@ -92,7 +109,8 @@ export const Sidebar = ({
         <div
           className={clsx(
             "flex-shrink-0 border-b border-[var(--color-border-light)]",
-            isCollapsed ? "px-3 py-4" : "px-4 py-4",
+            "pt-[max(1rem,env(safe-area-inset-top))] pb-4",
+            isCollapsed ? "px-3" : "px-4",
           )}
         >
           {isCollapsed ? (

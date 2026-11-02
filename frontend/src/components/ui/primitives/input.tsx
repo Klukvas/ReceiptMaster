@@ -37,7 +37,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={type}
             id={inputId}
             className={cn(
-              "flex h-10 w-full rounded-[var(--radius,10px)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] ring-offset-[var(--color-surface)]",
+              "flex h-10 w-full rounded-[var(--radius,10px)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm pointer-coarse:text-base text-[var(--color-text)] ring-offset-[var(--color-surface)]",
               "file:border-0 file:bg-transparent file:text-sm file:font-medium",
               "placeholder:text-[var(--color-text-tertiary)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2",

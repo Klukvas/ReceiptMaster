@@ -186,9 +186,16 @@ const revisitReusesEntities = async (results) => {
 
     await button(page, "Back").click();
     await heading(page, 2).waitFor();
+    // The form fills from the saved step a moment after the heading renders.
+    let restored = false;
+    for (let attempt = 0; attempt < 20 && !restored; attempt += 1) {
+      restored =
+        (await page.getByLabel("Product Name").inputValue()) === "Arabica beans";
+      if (!restored) await page.waitForTimeout(100);
+    }
     results.check(
       "revisit: going back shows the saved product's values",
-      (await page.getByLabel("Product Name").inputValue()) === "Arabica beans",
+      restored,
     );
     await button(page, "Continue").click();
     const advancedUnchanged = await atStep(page, 3);

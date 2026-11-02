@@ -167,6 +167,14 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
  e.preventDefault();
  setFocusedIndex((prev) => (prev - 1 + menuItems.length) % menuItems.length);
  break;
+ case 'Home':
+ e.preventDefault();
+ setFocusedIndex(0);
+ break;
+ case 'End':
+ e.preventDefault();
+ setFocusedIndex(menuItems.length - 1);
+ break;
  case 'Enter':
  e.preventDefault();
  if (focusedIndex >= 0 && focusedIndex < menuItems.length && !menuItems[focusedIndex].disabled) {
@@ -193,6 +201,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
  title={t('orders.moreActions', 'More actions')}
  aria-label={t('orders.moreActions', 'More actions')}
  aria-haspopup="menu"
+ aria-expanded={isOpen}
  >
  <MoreVertical className="w-4 h-4 text-content-tertiary" />
  </button>

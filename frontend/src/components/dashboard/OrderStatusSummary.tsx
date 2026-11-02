@@ -9,8 +9,10 @@ import {
 } from "recharts";
 import { dashboardApi } from "../../lib/api";
 import { Card } from "../ui/Card";
-import { SkeletonChart } from "../ui/Skeleton";
+import { HomeChartSkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
 import { useTranslation } from "../../hooks/useTranslation";
+import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
 
 const COLORS = {
   draft: "#f59e0b",
@@ -20,13 +22,14 @@ const COLORS = {
 
 export const OrderStatusSummary = () => {
   const { t } = useTranslation();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["orderStatusSummary"],
     queryFn: () => dashboardApi.getOrderStatusSummary(),
   });
 
-  if (isLoading) return <SkeletonChart height="h-52" />;
+  if (isLoading) return <HomeChartSkeleton />;
 
   const summary = data?.data;
   const chartData = [
@@ -54,7 +57,13 @@ export const OrderStatusSummary = () => {
       <h3 className="text-sm font-medium text-content-secondary mb-4">
         {t("dashboard.ordersByStatus", "Orders by Status")}
       </h3>
-      {total === 0 ? (
+      {isError ? (
+        <QueryErrorState
+          className="h-[200px]"
+          message={t("dashboard.widgetLoadError", "Could not load this section")}
+          onRetry={() => void refetch()}
+        />
+      ) : total === 0 ? (
         <div className="flex items-center justify-center h-[200px] text-sm text-content-tertiary">
           {t("dashboard.noData", "No data available")}
         </div>
@@ -69,6 +78,7 @@ export const OrderStatusSummary = () => {
               outerRadius={80}
               paddingAngle={3}
               dataKey="value"
+              isAnimationActive={!prefersReducedMotion}
             >
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />

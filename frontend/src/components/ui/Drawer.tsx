@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect } from "react";
-import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
+import type { ReactNode } from "react";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useTranslation } from "../../hooks/useTranslation";
 import { X } from "lucide-react";
 import {
   AnimatePresence,
@@ -12,7 +13,10 @@ import {
 interface DrawerProps {
   open: boolean;
   onClose: () => void;
+  /** Visible heading. */
   title?: string;
+  /** Accessible name for drawers whose content already shows its own heading. */
+  ariaLabel?: string;
   children: ReactNode;
 }
 
@@ -25,19 +29,18 @@ const projectMomentum = (velocity: number, decelerationRate = 0.998) =>
 // throws the panel closed even from a small drag (§6).
 const DISMISS_PROJECTION_PX = 160;
 
-export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
+export const Drawer = ({
+  open,
+  onClose,
+  title,
+  ariaLabel,
+  children,
+}: DrawerProps) => {
+  const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
-  const dialogRef = useFocusTrap<HTMLDivElement>(open);
-  useBackClosesDialog(open, onClose);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  // Escape and the browser Back button both close the drawer through the trap.
+  const dialogRef = useFocusTrap<HTMLDivElement>(open, onClose);
+  useBodyScrollLock(open);
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     // Project the resting point from release velocity (§5/§6). Past the
@@ -84,7 +87,7 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={title}
+          aria-label={title ?? ariaLabel}
           tabIndex={-1}
           className="fixed inset-0 z-50 flex justify-end outline-none"
         >
@@ -101,20 +104,24 @@ export const Drawer = ({ open, onClose, title, children }: DrawerProps) => {
             {...panelMotion}
             {...dragProps}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-elevated">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 pb-4 pt-[max(1rem,env(safe-area-inset-top))] border-b border-[var(--color-border)] bg-elevated">
               {title && (
                 <h2 className="text-lg font-semibold tracking-tight text-content">
                   {title}
                 </h2>
               )}
               <button
+                type="button"
                 onClick={onClose}
-                className="p-1 rounded-md hover:bg-surface-alt text-content-tertiary motion-safe:active:scale-95 transition-transform"
+                aria-label={t("common.close")}
+                className="ml-auto p-1 pointer-coarse:p-3 rounded-md hover:bg-surface-alt text-content-tertiary motion-safe:active:scale-95 transition-transform"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6">{children}</div>
+            <div className="p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+              {children}
+            </div>
           </motion.div>
         </motion.div>
       )}

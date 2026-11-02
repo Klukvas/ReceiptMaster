@@ -8,6 +8,10 @@ import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
+import {
+  IdempotentCreateResult,
+  createIdempotently,
+} from "../../common/idempotency/idempotent-create";
 import { containsPattern } from "../../common/utils/like-pattern.util";
 
 const SUPPLIER_SORTABLE_COLUMNS: Record<string, string> = {
@@ -28,15 +32,49 @@ export class SuppliersService {
     createSupplierDto: CreateSupplierDto,
     user: User,
   ): Promise<Supplier> {
-    const { contactPerson, ...rest } = createSupplierDto;
+    return this.suppliersRepository.save(
+      this.buildSupplier(this.suppliersRepository, createSupplierDto, user),
+    );
+  }
 
-    const supplier = this.suppliersRepository.create({
+  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  async createWithIdempotencyKey(
+    createSupplierDto: CreateSupplierDto,
+    user: User,
+    idempotencyKey: string,
+  ): Promise<IdempotentCreateResult<Supplier>> {
+    return this.suppliersRepository.manager.transaction((manager) =>
+      createIdempotently(
+        manager,
+        {
+          scope: "supplier",
+          key: idempotencyKey,
+          userId: user.id,
+          payload: createSupplierDto,
+        },
+        () =>
+          manager.save(
+            this.buildSupplier(
+              manager.getRepository(Supplier),
+              createSupplierDto,
+              user,
+            ),
+          ),
+      ),
+    );
+  }
+
+  private buildSupplier(
+    repository: Repository<Supplier>,
+    createSupplierDto: CreateSupplierDto,
+    user: User,
+  ): Supplier {
+    const { contactPerson, ...rest } = createSupplierDto;
+    return repository.create({
       ...rest,
       contact_person: contactPerson,
       user_id: user.id,
     });
-
-    return this.suppliersRepository.save(supplier);
   }
 
   async findAll(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   Palette,
@@ -15,6 +16,7 @@ import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { formatDateOnly } from "../lib/api";
+import { Button } from "../components/ui/Button";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
@@ -61,7 +63,7 @@ const PLAN_COLORS: Record<
 
 const SubscriptionTab = () => {
   const { t } = useTranslation();
-  const { status, isLoading } = useSubscription();
+  const { status, isLoading, isError, refetch } = useSubscription();
   const {
     loading: upgrading,
     handleUpgrade,
@@ -78,6 +80,32 @@ const SubscriptionTab = () => {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-content-tertiary" />
+      </div>
+    );
+  }
+
+  // A failed status request must not pose as the Free plan: a paying user would see
+  // Free and Upgrade buttons.
+  if (isError && !status) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-[var(--color-border)] p-4 space-y-3"
+      >
+        <p className="text-sm text-content">
+          {t(
+            "subscription.loadFailed",
+            "Could not load your subscription. Your plan and usage are unknown until you retry.",
+          )}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+        >
+          {t("common.retry", "Retry")}
+        </Button>
       </div>
     );
   }
@@ -208,7 +236,7 @@ const SubscriptionTab = () => {
           periodEnd &&
           paddleStatus === "active" && (
             <p className="mt-4 text-xs text-content-tertiary">
-              {t("subscription.nextRenewal", "Next renewal")}:{""}
+              {t("subscription.nextRenewal", "Next renewal")}:{" "}
               {formatDateOnly(periodEnd)}
             </p>
           )}
@@ -269,7 +297,7 @@ const SubscriptionTab = () => {
                   <button
                     onClick={() => handleUpgrade(plan)}
                     disabled={!!upgrading}
-                    className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
+                    className={`w-full flex items-center justify-center gap-2 py-2 pointer-coarse:min-h-11 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
                       plan === "business"
                         ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
                         : "bg-accent-base hover:bg-accent-base-hover"
@@ -301,12 +329,16 @@ export const SettingsPage = () => {
   const documentDraft = useDocumentDraft();
   const { t } = useTranslation();
   // H3: Validate tab query parameter against known values
-  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get("tab") ?? "";
-    const aliased = LEGACY_TAB_ALIASES[tabParam] ?? (tabParam as SettingsTab);
-    return VALID_TABS.includes(aliased) ? aliased : "documents";
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") ?? "";
+  const aliasedTab = LEGACY_TAB_ALIASES[tabParam] ?? (tabParam as SettingsTab);
+  const activeTab: SettingsTab = VALID_TABS.includes(aliasedTab)
+    ? aliasedTab
+    : "documents";
+  // Written back to the URL so reload keeps the tab; replace keeps Back from stepping
+  // through every tab the user clicked.
+  const setActiveTab = (tab: SettingsTab) =>
+    setSearchParams({ tab }, { replace: true });
 
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
@@ -416,7 +448,7 @@ export const SettingsPage = () => {
                 aria-controls="settings-tabpanel"
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(key)}
-                className={`group relative flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`group relative flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 pointer-coarse:min-h-11 text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-elevated text-accent-base border border-[var(--color-border)] border-b-elevated -mb-px"
                     : "text-content-tertiary hover:text-content-secondary hover:bg-surface-alt"

@@ -115,7 +115,12 @@ export class ProductsService {
       this.productsRepository.manager.transaction((manager) =>
         createIdempotently(
           manager,
-          { scope: "product", key: idempotencyKey, userId: user.id },
+          {
+            scope: "product",
+            key: idempotencyKey,
+            userId: user.id,
+            payload: createProductDto,
+          },
           () => this.insertWithinQuota(manager, createProductDto, user),
         ),
       ),

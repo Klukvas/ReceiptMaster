@@ -12,6 +12,7 @@ import { Input } from"../ui/Input";
 import { Card } from"../ui/Card";
 import { useFocusTrap } from"../../hooks/useFocusTrap";
 import { useTranslation } from"../../hooks/useTranslation";
+import { useIdempotencyKey } from"../../hooks/useIdempotencyKey";
 
 interface SupplierFormProps {
  supplier?: Supplier | null;
@@ -23,6 +24,7 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  const queryClient = useQueryClient();
 
  const isSubmittingRef = useRef(false);
+ const keyFor = useIdempotencyKey();
  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
  const [formData, setFormData] = useState({
  name:"",
@@ -59,7 +61,8 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  }, [fullSupplier]);
 
  const createMutation = useMutation({
- mutationFn: suppliersApi.create,
+ mutationFn: (data: Parameters<typeof suppliersApi.create>[0]) =>
+ suppliersApi.create(data, { idempotencyKey: keyFor(data) }),
  onSuccess: () => {
  toast.success(t("suppliers.supplierCreated"));
  queryClient.invalidateQueries({ queryKey: ["suppliers"] });

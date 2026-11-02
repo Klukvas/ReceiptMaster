@@ -1,5 +1,8 @@
 import { QueryFailedError } from "typeorm";
-import { isUniqueViolationOf } from "./unique-violation.util";
+import {
+  isUniqueViolationOf,
+  isUniqueViolationOnColumn,
+} from "./unique-violation.util";
 
 const driverFailure = (fields: Record<string, unknown>) =>
   new QueryFailedError(
@@ -46,5 +49,37 @@ describe("isUniqueViolationOf", () => {
     expect(isUniqueViolationOf(undefined, "IDX_products_user_name")).toBe(
       false,
     );
+  });
+});
+
+describe("isUniqueViolationOnColumn", () => {
+  const detail = "Key (email)=(a@b.c) already exists.";
+
+  it("matches a 23505 whose detail names the column", () => {
+    expect(
+      isUniqueViolationOnColumn(
+        driverFailure({ code: "23505", detail }),
+        "email",
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores another column, another SQLSTATE and non-query errors", () => {
+    expect(
+      isUniqueViolationOnColumn(
+        driverFailure({
+          code: "23505",
+          detail: "Key (id)=(1) already exists.",
+        }),
+        "email",
+      ),
+    ).toBe(false);
+    expect(
+      isUniqueViolationOnColumn(
+        driverFailure({ code: "23502", detail }),
+        "email",
+      ),
+    ).toBe(false);
+    expect(isUniqueViolationOnColumn(new Error(detail), "email")).toBe(false);
   });
 });

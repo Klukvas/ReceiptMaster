@@ -44,7 +44,7 @@ const generatingToasts = (page) =>
   page.locator('span:text-is("Generating receipt...")').count();
 
 const panelText = async (page) => {
-  const panel = page.locator("div.fixed.bottom-4.right-4");
+  const panel = page.locator("div.fixed.right-4.z-50");
   if ((await panel.count()) === 0) return "";
   return (await panel.first().innerText()).replace(/\s+/g, " ").trim();
 };
@@ -384,7 +384,7 @@ export const run = async () => {
       const dismissDeadline = Date.now() + FAILED_DISMISS_MS;
 
       await page
-        .locator('div.fixed.bottom-4.right-4 button:text-is("Retry")')
+        .locator('div.fixed.right-4.z-50 button:text-is("Retry")')
         .first()
         .click();
       await waitFor(async () => state.generateRequests.length === 1, {

@@ -438,12 +438,13 @@ const SelectedProductCard = ({
 
         {/* Quantity stepper */}
         <div className="flex-shrink-0 flex items-center gap-2">
-          <div className="flex items-center h-8 rounded-lg border border-[var(--color-border)] bg-surface-alt overflow-hidden">
+          <div className="flex items-center h-8 pointer-coarse:h-[2.875rem] rounded-lg border border-[var(--color-border)] bg-surface-alt overflow-hidden">
             <button
               type="button"
               onClick={() => handleQtyChange(-1)}
               disabled={item.qty <= 1}
-              className="w-7 h-full flex items-center justify-center text-content-tertiary hover:text-content-secondary hover:bg-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95"
+              aria-label={t("orders.decreaseQty")}
+              className="w-7 pointer-coarse:w-11 h-full flex items-center justify-center text-content-tertiary hover:text-content-secondary hover:bg-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:scale-95"
             >
               <Minus className="w-3 h-3" />
             </button>
@@ -459,12 +460,13 @@ const SelectedProductCard = ({
                   Math.max(1, parseInt(e.target.value) || 1),
                 )
               }
-              className="w-10 h-full text-center text-xs font-semibold bg-transparent border-x border-[var(--color-border)] text-content focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-10 pointer-coarse:w-12 h-full text-center text-xs pointer-coarse:text-sm font-semibold tabular-nums bg-transparent border-x border-[var(--color-border)] text-content focus:outline-none focus:ring-1 focus:ring-[var(--color-ring)] focus:ring-inset [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button
               type="button"
               onClick={() => handleQtyChange(1)}
-              className="w-7 h-full flex items-center justify-center text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors active:scale-95"
+              aria-label={t("orders.increaseQty")}
+              className="w-7 pointer-coarse:w-11 h-full flex items-center justify-center text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors active:scale-95"
             >
               <Plus className="w-3 h-3" />
             </button>
@@ -475,7 +477,8 @@ const SelectedProductCard = ({
             <button
               type="button"
               onClick={() => onRemove(index)}
-              className="p-1 rounded-md text-content-tertiary sm:opacity-0 sm:group-hover:opacity-100 hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-all duration-150"
+              aria-label={t("orders.removeItem")}
+              className="relative p-1 rounded-md text-content-tertiary sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 pointer-coarse:p-3.5 hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-all duration-150"
             >
               <X className="w-4 h-4" />
             </button>
