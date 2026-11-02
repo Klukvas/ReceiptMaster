@@ -61,3 +61,21 @@ export function formatDocumentDate(
     timeZone: preferences.timeZone,
   }).format(new Date(date));
 }
+
+// Calendar date without a clock time, in the same locale as the document's other dates
+// (e.g. "15 жовтня 2026 р." for uk). A moment is shown in the document's time zone; a plain
+// "YYYY-MM-DD" is already a calendar date, so it is formatted in UTC to avoid a day shift.
+export function formatDocumentDateOnly(
+  date: Date | string,
+  language: string,
+  preferences: Formatting,
+): string {
+  const isCalendarDate =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  return formatDocumentDate(date, language, {
+    ...preferences,
+    dateStyle: "long",
+    timeStyle: "none",
+    ...(isCalendarDate ? { timeZone: "UTC" } : {}),
+  });
+}
