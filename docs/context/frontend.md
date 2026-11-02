@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-01
+**Last Updated:** 2026-11-02
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -70,12 +70,12 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 | Path | Component | Auth | Layout | Notes |
 |------|-----------|------|--------|-------|
 | `/` | `HomePage` | No | None | Public landing |
-| `/dashboard` | `DashboardHomePage` | Yes | Layout | Main dashboard |
+| `/dashboard` | `DashboardHomePage` | Yes | Layout | Main dashboard. Every query group shows an inline `role="alert"` with Retry on failure (never a 0 or an "all well-stocked" empty state; figures fall back to "—"); widget failures also feed the page banner via `useHasFailedQuery`. Skeletons live in `components/dashboard/DashboardSkeletons.tsx` (real heights, painted after 200 ms) |
 | `/products` | `ProductsPage` | Yes | Layout | Manage products |
 | `/recipients` | `RecipientsPage` | Yes | Layout | Manage buyers |
 | `/suppliers` | `SuppliersPage` | Yes | Layout | Manage suppliers |
 | `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders. The status filter is kept in `?status=` (draft, confirmed or cancelled); clicking a row opens its details; bulk Approve asks for confirmation first (it locks the orders and may create receipts) |
-| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas |
+| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas. Changing the period keeps the previous figures on screen (`placeholderData: keepPreviousData`), dimmed with `aria-busy` and an "Updating" cue; charts format money in the data's currency and honour reduced motion (`usePrefersReducedMotion`); date-only strings are formatted as local days (`periodLabel.ts`) |
 | `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing. Tabs follow the ARIA tabs pattern (arrow keys, Home/End, roving tabindex) with a fade on the right while tabs are scrolled out of view. The sticky save bar of `DocumentEditor` appears only when there is a draft, a save in progress or an error (always in the "Customize document" modal); a successful save shows a toast. `--color-ring` is opaque so the focus indicator stays above 3:1 |
 | `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
@@ -216,6 +216,8 @@ async printReceipt(receiptId: string, printer?: string): Promise<void>
 async downloadReceipt(receiptId: string): Promise<void>
 // ... more methods
 ```
+
+`ReceiptService` reports through react-hot-toast with translated messages (not `notificationService`). `generateReceipt` rethrows a failed POST and resolves on 202 (the PDF renders in the background; progress comes from `ReceiptProgressPanel`), so callers own the error toast. `PublicReceiptPage` treats only HTTP 404/410 as "not found"; other failures show a retry state.
 
 **NotificationService**:
 - In-memory notification queue
@@ -453,6 +455,8 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 
 **Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
 
+**Public-page behaviour:** `LandingShell` scrolls to the URL hash after mount (plain `<a href="/#features">` links from `/blog` and the legal pages) and the sections carry `scroll-margin-top: 84px` for the sticky nav; smooth scrolling exists only under `prefers-reduced-motion: no-preference` (CSS) and script scrolls use `getScrollBehavior()` (`lib/scroll-behavior.ts`). The blog has posts in `en`/`uk` only: the list follows `uk` or English, and a Russian interface shows `blog.languageNote`. `LegalLayout`'s header carries the language switcher and theme toggle.
+
 ### Legal pages
 
 `TermsPage`, `PrivacyPage`, `RefundPolicyPage` and `CookiePolicyPage` are thin wrappers: they pick the text for the interface language with `pickLegalContent` (`pages/legal/types.ts`; `ru`/`uk` or English for anything else) and render it inside `LegalLayout`. The texts are per-language content modules, `pages/legal/<slug>.{en,ru,uk}.tsx`, each exporting a `LegalContent` (`title`, `seoDescription`, `body` JSX); `<SEO>` gets the translated title/description and `lang`. Page chrome (the "Last updated" line, its date format, the footer links) uses the `legal.*` locale keys. The `ru`/`uk` texts are **unreviewed translations** of the English originals; the English text is the source of truth, so a change there must be mirrored in the other two files with the same section structure (`e2e/legal-pages.spec.mjs` compares headings, lists, tables and links across languages). They need a legal review before being relied on.
@@ -559,9 +563,9 @@ const { loading, handleUpgrade, handleManage } = useCheckout()
 
 ### Notifications: react-hot-toast
 
-**Global Toaster** setup in App.tsx (lines 202–226):
-- Position: top-right
-- Duration: 4s (success 3s, error 4s)
+**Global Toaster** is `components/common/AppToaster.tsx`, rendered by App.tsx:
+- Position: top-right on desktop; top-center below the 56px mobile header on phones (`hooks/useIsDesktop.ts`)
+- Duration: 4s (success 3s, error 7s); errors are announced as `role="alert"` (set at render time through a `ToastBar` wrapper, because react-hot-toast ignores per-type `ariaProps`)
 - Styled with CSS vars for dark/light mode
 
 **Usage:**
@@ -675,7 +679,12 @@ PATCH with only the changed fields (products via `buildProductUpdate`: a changed
 A blank name never creates and never changes an existing entity.
 
 - **Single flight:** one `inFlight` ref covers Next, Back, Skip, Finish, Retry and closing (Escape/X);
-  Skip and Back are also disabled while saving, so a double click sends one request.
+  Skip and Back are also disabled while saving, so a double click sends one request. The auth modals,
+  in-place `LoginForm` and `ProfilePage` use the same synchronous `inFlight` ref.
+- **Closing is not skipping:** X, Escape, the backdrop and browser Back only hide the wizard for this
+  visit (`isDismissed`, no request, offered again next time); the explicit "Skip for now" is the only
+  close that POSTs `onboarding-complete`. The step title is the Modal `title` (the dialog's name) and
+  focus opens on the step's first field (`hooks/useFocusFirstField.ts`, skipped on touch screens).
 - **Errors** keep the step and every value and show an inline alert: `parseApiError` text for a refused
   request (the next attempt sends the current form with a new key); for no response or a 502/503/504,
   `onboarding.saveUnconfirmed` with Retry, which resends the same body with the **same** key (the
@@ -692,9 +701,9 @@ A blank name never creates and never changes an existing entity.
 Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
 - `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus; when dialogs stack, only the topmost handles Escape and Tab)
-- `ConfirmModal.tsx` — yes/no dialog; `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
-- `Drawer.tsx` — side drawer (focus trap via `hooks/useFocusTrap.ts`)
-- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. While a query is in flight with no rows yet, the spinner shows instead of the "no data" empty state (so clearing a search does not flash "No suppliers yet"). `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
+- `ConfirmModal.tsx` — yes/no dialog (X, Escape, backdrop and Back are ignored while `isLoading`, as in `common/DeleteConfirmation`); `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
+- `Drawer.tsx` — side drawer (focus trap, Escape and Back via `hooks/useFocusTrap.ts`, page scroll locked by `hooks/useBodyScrollLock.ts`, a shared counter so stacked overlays can close in any order; labelled close button; `title` shows a heading, `ariaLabel` only names the dialog). The mobile sidebar (`layout/Sidebar.tsx`) is the same kind of modal below `lg` and `inert` while closed
+- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). Loading shows `itemsPerPage` skeleton rows (card skeletons on `< lg`) after 200 ms (`useDelayedFlag`; the boxes are reserved from the start so nothing jumps), and a refetch overlay after 200 ms. On `< lg`, `selectable` adds a 44 px checkbox per card and a "Select all on this page" row. `ColumnDef.align: "right"` right-aligns numbers with `tabular-nums`; `isCompact` tightens cell padding; `rowLabel` names the checkboxes; `isOffline` (from `useServerPagination`, else the browser's online state) shows a `role="status"` notice with Retry. A zero-result search offers "Clear search"; an error with no rows shows only the alert card (a raw "status code" message becomes a friendly fallback). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. While a query is in flight with no rows yet, the spinner shows instead of the "no data" empty state (so clearing a search does not flash "No suppliers yet"). `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
 - **Back closes dialogs:** `hooks/useBackClosesDialog.ts` gives every open dialog one marker history entry (a copy of `history.state`, so react-router's `idx` and the settings unsaved-draft guard see no navigation), so the browser Back button / phone back gesture closes only the topmost dialog instead of leaving the page. A normal close (X, Esc, overlay, submit) removes its own marker with `history.go(-n)`; pushes wait while such a pop is in flight. It is applied in `primitives/dialog.tsx` (so `Modal`/`ConfirmModal`), `Drawer`, `useFocusTrap` (so `ProductForm`, `SupplierForm`, `RecipientForm`, `CreateOrderModal`), `OrderDetails`, `EditOrderForm` and `TemplateCarouselModal`. A new hand-rolled overlay must call it too. Known limit: if the router navigates (e.g. a link inside a dialog) while a dialog is open, its marker is buried and one later Back is a no-op. Spec: `e2e/back-closes-modal.spec.mjs`.
 - Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
