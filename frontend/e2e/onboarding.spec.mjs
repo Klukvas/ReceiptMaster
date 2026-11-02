@@ -188,14 +188,16 @@ const revisitReusesEntities = async (results) => {
     await heading(page, 2).waitFor();
     // The form fills from the saved step a moment after the heading renders.
     let restored = false;
+    let lastSeen = "";
     for (let attempt = 0; attempt < 20 && !restored; attempt += 1) {
-      restored =
-        (await page.getByLabel("Product Name").inputValue()) === "Arabica beans";
+      lastSeen = await page.getByLabel("Product Name").inputValue();
+      restored = lastSeen === "Arabica beans";
       if (!restored) await page.waitForTimeout(100);
     }
     results.check(
       "revisit: going back shows the saved product's values",
       restored,
+      `Product Name showed "${lastSeen}"`,
     );
     await button(page, "Continue").click();
     const advancedUnchanged = await atStep(page, 3);
@@ -334,12 +336,19 @@ const failedSaveKeepsInput = async (results) => {
     await page.getByTestId("onboarding-notice").waitFor();
 
     const text = await noticeText(page);
+    const shown = {
+      onStep: await heading(page, 2).isVisible(),
+      name: await page.getByLabel("Product Name").inputValue(),
+      price: await page.getByLabel("Sale Price (UAH)").inputValue(),
+      quantity: await page.getByLabel("Quantity").inputValue(),
+    };
     results.check(
       "500: the step and every typed value stay",
-      (await heading(page, 2).isVisible()) &&
-        (await page.getByLabel("Product Name").inputValue()) === "Arabica beans" &&
-        (await page.getByLabel("Sale Price (UAH)").inputValue()) === "26" &&
-        (await page.getByLabel("Quantity").inputValue()) === "10",
+      shown.onStep &&
+        shown.name === "Arabica beans" &&
+        shown.price === "26" &&
+        shown.quantity === "10",
+      JSON.stringify(shown),
     );
     results.check(
       "500: a friendly message, without database text",

@@ -614,13 +614,30 @@ export const run = async () => {
   await scenario(
     "10: page and page-size changes clear selection",
     async (page) => {
-      await setup(
+      const { state } = await setup(
         page,
         Array.from({ length: 12 }, (_, i) => order(`A${i}`, `Alpha ${i}`)),
       );
+      // On a failed wait, say what the table looked like and which list requests were sent.
+      const describeTable = async () =>
+        JSON.stringify({
+          rows: await page.locator("tbody tr").count(),
+          requests: (state.orderQueries || []).map((url) => url.search),
+          pagination: await page
+            .getByText(/showing/i)
+            .first()
+            .innerText()
+            .catch(() => "none"),
+        });
+      const rowsAre = (count, label) =>
+        waitFor(async () => (await page.locator("tbody tr").count()) === count, {
+          label,
+        }).catch(async (error) => {
+          throw Error(`${error.message}: ${await describeTable()}`);
+        });
       await page.locator("tbody tr").first().getByRole("checkbox").check();
       await page.getByRole("button", { name: "2", exact: true }).click();
-      await waitFor(async () => (await page.locator("tbody tr").count()) === 2);
+      await rowsAre(2, "page 2 to show its two rows");
       await waitFor(
         async () =>
           (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
@@ -633,9 +650,7 @@ export const run = async () => {
         .locator("select")
         .filter({ has: page.locator('option[value="20"]') })
         .selectOption("20");
-      await waitFor(
-        async () => (await page.locator("tbody tr").count()) === 12,
-      );
+      await rowsAre(12, "twelve rows after the page size changed to 20");
       await waitFor(
         async () =>
           (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
@@ -643,6 +658,23 @@ export const run = async () => {
       ).catch(() => {
         throw Error("Selection survived page-size change");
       });
+    },
+  );
+  await scenario(
+    "10: a page picked right after load is not sent back to page 1 by the search debounce",
+    async (page) => {
+      await setup(
+        page,
+        Array.from({ length: 12 }, (_, i) => order(`A${i}`, `Alpha ${i}`)),
+      );
+      await page.getByRole("button", { name: "2", exact: true }).click();
+      await waitFor(async () => (await page.locator("tbody tr").count()) === 2, {
+        label: "page 2 to show its two rows",
+      });
+      // The debounce timer started at mount fires after 300 ms: the page must survive it.
+      await page.waitForTimeout(700);
+      if ((await page.locator("tbody tr").count()) !== 2)
+        throw Error("The debounce timer reset the page to 1");
     },
   );
   await scenario(
