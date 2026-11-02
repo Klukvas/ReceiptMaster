@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { ordersApi, formatCurrency, type Order } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { Card } from "../ui/Card";
+import { Modal } from "../ui/Modal";
 import { OrderRecipientSelect, OrderProductSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
@@ -100,7 +100,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
 
     const validItems = items.filter((item) => item.productId && item.qty > 0);
     if (validItems.length === 0) {
-      alert(t("orders.addAtLeastOneProduct"));
+      setBackendError(t("orders.addAtLeastOneProduct"));
       return;
     }
 
@@ -129,17 +129,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   };
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-content">
-            {t("orders.editOrder")}
-          </h2>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-
+    <Modal isOpen onClose={onClose} title={t("orders.editOrder")} size="lg">
         <form onSubmit={handleSubmit} className="space-y-6">
           {backendError && (
             <p
@@ -366,7 +356,6 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
             </Button>
           </div>
         </form>
-      </Card>
-    </div>
+    </Modal>
   );
 };

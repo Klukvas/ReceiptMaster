@@ -28,8 +28,21 @@ const SPECS = [
   { name: "profit-lifecycle", load: () => import("./profit-lifecycle.spec.mjs") },
   { name: "chunk-recovery", load: () => import("./chunk-recovery.spec.mjs") },
   { name: "onboarding", load: () => import("./onboarding.spec.mjs") },
+  { name: "legal-pages", load: () => import("./legal-pages.spec.mjs") },
   { name: "locale-parity", load: () => import("./locale-parity.spec.mjs") },
   { name: "api-errors", load: () => import("./api-errors.spec.mjs") },
+  { name: "auth-inline-errors", load: () => import("./auth-inline-errors.spec.mjs") },
+  { name: "orders-select-all", load: () => import("./orders-select-all.spec.mjs") },
+  { name: "uiq-public", load: () => import("./uiq-public.spec.mjs") },
+  { name: "uiq-auth", load: () => import("./uiq-auth.spec.mjs") },
+  { name: "uiq-dashboard", load: () => import("./uiq-dashboard.spec.mjs") },
+  { name: "uiq-receipts", load: () => import("./uiq-receipts.spec.mjs") },
+  { name: "uiq-orders", load: () => import("./uiq-orders.spec.mjs") },
+  { name: "uiq-lists", load: () => import("./uiq-lists.spec.mjs") },
+  { name: "uiq-shell", load: () => import("./uiq-shell.spec.mjs") },
+  { name: "uiq-leftovers", load: () => import("./uiq-leftovers.spec.mjs") },
+  { name: "document-form", load: () => import("./document-form.spec.mjs") },
+  { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

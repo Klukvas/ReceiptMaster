@@ -3,6 +3,7 @@ import { Building2, Palette, Package, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { useFocusFirstField } from "../../hooks/useFocusFirstField";
 import { useTranslation } from "../../hooks/useTranslation";
 import {
   settingsApi,
@@ -79,7 +80,8 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  // Closed after a failed skip without completing; offered again on the next visit.
+  // Hidden for this visit without completing (failed skip, or X / Escape / backdrop / Back);
+  // offered again on the next visit.
   const [isDismissed, setIsDismissed] = useState(false);
   // Single flight: every action that talks to the server, and closing, waits for it.
   const inFlight = useRef(false);
@@ -259,6 +261,12 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
       onComplete();
     });
 
+  // Closing is not a decision: only the explicit "Skip for now" writes the completion.
+  const handleDismiss = () => {
+    if (inFlight.current) return;
+    setIsDismissed(true);
+  };
+
   const isLastStep = currentStep === TOTAL_STEPS - 1;
 
   const renderStep = () => {
@@ -294,23 +302,23 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
     }
   };
 
+  const isVisible = open && !isDismissed;
+  const stepRef = useFocusFirstField<HTMLDivElement>(isVisible, currentStep);
   const stepTitle = t(`${STEP_TITLE_KEYS[currentStep]}.title`);
   const stepSubtitle = t(`${STEP_TITLE_KEYS[currentStep]}.subtitle`);
 
   return (
     <Modal
-      isOpen={open && !isDismissed}
-      onClose={handleSkip}
+      isOpen={isVisible}
+      onClose={handleDismiss}
+      title={stepTitle}
       size="lg"
       showCloseButton={true}
     >
       {/* Step indicator */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-content">{stepTitle}</h2>
-            <p className="text-sm text-content-tertiary mt-1">{stepSubtitle}</p>
-          </div>
+          <p className="text-sm text-content-tertiary">{stepSubtitle}</p>
           <span className="text-xs font-medium text-content-tertiary">
             {t("onboarding.stepOf", {
               current: currentStep + 1,
@@ -345,7 +353,9 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
       </div>
 
       {/* Step content */}
-      <div className="min-h-[280px]">{renderStep()}</div>
+      <div ref={stepRef} className="min-h-[280px]">
+        {renderStep()}
+      </div>
 
       {notice && (
         <div
@@ -367,13 +377,13 @@ export const OnboardingModal = ({ open, onComplete }: OnboardingModalProps) => {
         </div>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-[var(--color-border)]">
+      {/* Footer: sticks to the bottom of the scrolling dialog so Skip/Next stay reachable in a short window. */}
+      <div className="sticky bottom-0 z-10 -mx-6 -mb-4 mt-6 flex items-center justify-between border-t border-[var(--color-border)] bg-[var(--color-elevated)] px-6 pb-4 pt-4">
         <button
           type="button"
           onClick={handleSkip}
           disabled={saving}
-          className="text-sm text-content-tertiary hover:text-content-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="-ml-2 px-2 py-2 text-sm text-content-tertiary hover:text-content-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed pointer-coarse:min-h-11"
         >
           {t("onboarding.skip")}
         </button>

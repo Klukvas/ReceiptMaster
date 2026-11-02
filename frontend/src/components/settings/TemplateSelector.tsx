@@ -211,7 +211,10 @@ export const TemplateSelector = () => {
     );
   }
 
-  const templatesList = templates;
+  // Templates the plan includes come first; locked ones follow (the sort is stable).
+  const templatesList = [...templates].sort(
+    (a, b) => Number(a.locked === true) - Number(b.locked === true),
+  );
 
   const currentTemplateId = designData?.templateId || "standard";
   const selectedTemplateId = selectedTemplate || currentTemplateId;

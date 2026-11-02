@@ -8,7 +8,7 @@ import {
 } from "./entities/user-subscription.entity";
 import { PLAN_LIMITS, PlanLimits } from "./config/plans.config";
 import { Product } from "../products/entities/product.entity";
-import { Order } from "../orders/entities/order.entity";
+import { Order, OrderStatus } from "../orders/entities/order.entity";
 
 export interface SubscriptionStatus {
   plan: PlanName;
@@ -59,14 +59,20 @@ export class SubscriptionService {
   }
 
   private async countOrdersThisMonth(userId: string): Promise<number> {
-    return this.orderRepository
-      .createQueryBuilder("order")
-      .where("order.user_id = :userId", { userId })
-      .andWhere(
-        "order.created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')",
-      )
-      .andWhere("order.deleted_at IS NULL")
-      .getCount();
+    return (
+      this.orderRepository
+        .createQueryBuilder("order")
+        .where("order.user_id = :userId", { userId })
+        .andWhere(
+          "order.created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')",
+        )
+        .andWhere("order.deleted_at IS NULL")
+        // A cancelled order frees its place in the quota, as it already gives its stock back.
+        .andWhere("order.status <> :cancelled", {
+          cancelled: OrderStatus.CANCELLED,
+        })
+        .getCount()
+    );
   }
 
   async getStatus(userId: string): Promise<SubscriptionStatus> {
@@ -155,6 +161,10 @@ export class SubscriptionService {
         "order.created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')",
       )
       .andWhere("order.deleted_at IS NULL")
+      // A cancelled order frees its place in the quota, as it already gives its stock back.
+      .andWhere("order.status <> :cancelled", {
+        cancelled: OrderStatus.CANCELLED,
+      })
       .getCount();
 
     if (count >= limits.maxOrdersPerMonth) {

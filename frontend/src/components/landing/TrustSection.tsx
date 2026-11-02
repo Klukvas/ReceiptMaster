@@ -1,26 +1,17 @@
 import React from "react";
 import { useTranslation } from "../../hooks/useTranslation";
 
+// Only facts the code backs: the template registry size, the three
+// interface languages, and the Telegram bot.
 const STAT_KEYS: ReadonlyArray<{
   id: string;
   valueKey: string;
   labelKey: string;
-  highlight?: boolean;
 }> = [
   {
-    id: "receipts",
-    valueKey: "landing.stats.receiptsValue",
-    labelKey: "landing.stats.receipts",
-  },
-  {
-    id: "orders",
-    valueKey: "landing.stats.ordersValue",
-    labelKey: "landing.stats.orders",
-  },
-  {
-    id: "merchants",
-    valueKey: "landing.stats.merchantsValue",
-    labelKey: "landing.stats.merchants",
+    id: "templates",
+    valueKey: "landing.stats.templatesValue",
+    labelKey: "landing.stats.templates",
   },
   {
     id: "languages",
@@ -28,10 +19,9 @@ const STAT_KEYS: ReadonlyArray<{
     labelKey: "landing.stats.languages",
   },
   {
-    id: "uptime",
-    valueKey: "landing.stats.uptimeValue",
-    labelKey: "landing.stats.uptime",
-    highlight: true,
+    id: "bot",
+    valueKey: "landing.stats.botValue",
+    labelKey: "landing.stats.bot",
   },
 ];
 
@@ -45,12 +35,7 @@ export const TrustSection: React.FC = React.memo(() => {
       <div className="landing-trusted-items">
         {STAT_KEYS.map((stat) => (
           <div key={stat.id}>
-            <span
-              className="landing-trusted-n"
-              style={stat.highlight ? { color: "var(--l-green)" } : undefined}
-            >
-              {t(stat.valueKey)}
-            </span>
+            <span className="landing-trusted-n">{t(stat.valueKey)}</span>
             <span className="landing-trusted-l">{t(stat.labelKey)}</span>
           </div>
         ))}

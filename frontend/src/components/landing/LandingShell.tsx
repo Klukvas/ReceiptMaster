@@ -1,10 +1,12 @@
 import { usePaddle } from "../../providers/PaddleProvider";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Moon, Sun, Menu, X } from "lucide-react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { LoginModal } from "../auth/LoginModal";
 import { RegisterModal } from "../auth/RegisterModal";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useAuth } from "../../hooks/useAuth";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useTheme } from "../../contexts/useTheme";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
 import { FooterSection } from "./FooterSection";
@@ -20,10 +22,13 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const { billingEnabled } = usePaddle();
   const { isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { hash } = useLocation();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useBodyScrollLock(isMobileMenuOpen);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -33,9 +38,29 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Plain <a href="/#features"> links from other pages land here with a hash
+  // the browser cannot resolve before React has rendered the sections. The jump
+  // is instant (it is a page load, not an in-page glide) and repeated once web
+  // fonts settle, because they reflow the text above the target.
+  useEffect(() => {
+    if (!hash) return;
+    const id = decodeURIComponent(hash.slice(1));
+    const jumpToTarget = () =>
+      document
+        .getElementById(id)
+        ?.scrollIntoView({ behavior: "auto", block: "start" });
+    jumpToTarget();
+    let isCancelled = false;
+    void document.fonts.ready.then(() => {
+      if (!isCancelled) jumpToTarget();
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [hash]);
+
   useEffect(() => {
     if (!isMobileMenuOpen) return;
-    document.body.style.overflow = "hidden";
     const closeBtn = mobileMenuRef.current?.querySelector<HTMLButtonElement>(
       ".landing-mobile-close",
     );
@@ -63,7 +88,6 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = "";
       document.removeEventListener("keydown", handleKeyDown);
       hamburgerRef.current?.focus();
     };
@@ -83,20 +107,26 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
     setIsLoginModalOpen(false);
     setIsRegisterModalOpen(false);
   }, []);
+
+  // Deep links such as the login screen's "Sign up here" open the modal directly.
+  useEffect(() => {
+    const authIntent = searchParams.get("auth");
+    if (authIntent === "register") openRegisterModal();
+    if (authIntent === "login") openLoginModal();
+    if (authIntent) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, openRegisterModal, openLoginModal]);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   return (
     <div className="landing-page">
       <nav
         className={`landing-nav ${scrolled ? "scrolled" : ""}`}
-        aria-label="Main navigation"
+        aria-label={t("landing.nav.mainNavigation")}
       >
         <a href="/" className="landing-logo">
-          <img
-            src="/logo-icon.svg"
-            alt="receiptmaster"
-            className="landing-logo-icon"
-          />
+          <img src="/logo-icon.svg" alt="" className="landing-logo-icon" />
           <span className="landing-logo-name">
             receipt<em>master</em>
           </span>
@@ -114,7 +144,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
           <button
             className="landing-theme-toggle"
             onClick={toggleTheme}
-            aria-label="Toggle theme"
+            aria-label={t("common.toggleTheme")}
           >
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
@@ -141,7 +171,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
             ref={hamburgerRef}
             className="landing-hamburger"
             onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open menu"
+            aria-label={t("landing.nav.openMenu")}
             aria-expanded={isMobileMenuOpen}
           >
             <Menu size={24} />
@@ -155,12 +185,12 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
           className="landing-mobile-menu open"
           role="dialog"
           aria-modal="true"
-          aria-label="Mobile navigation"
+          aria-label={t("landing.nav.mobileNavigation")}
         >
           <button
             className="landing-mobile-close"
             onClick={closeMobileMenu}
-            aria-label="Close menu"
+            aria-label={t("landing.nav.closeMenu")}
           >
             <X size={24} />
           </button>

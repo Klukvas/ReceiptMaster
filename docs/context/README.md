@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-02
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -64,7 +64,7 @@ market/
 │   ├── src/
 │   │   ├── main.tsx, App.tsx (routing + providers)
 │   │   ├── pages/           # 18 route pages (public + dashboard)
-│   │   ├── services/        # OrderService, ReceiptService, NotificationService
+│   │   ├── services/        # OrderService, ReceiptService
 │   │   ├── lib/             # api.ts (Axios client + interceptors), auth-session.ts
 │   │   │                    #   (cross-tab refresh outcome), api-errors.ts, profit.ts
 │   │   │                    #   (unknown/partial profit display helpers), chunk-load.ts

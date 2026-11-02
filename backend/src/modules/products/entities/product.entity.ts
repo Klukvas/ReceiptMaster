@@ -60,7 +60,10 @@ export class Product {
   supplier_id?: string | null;
 
   @ApiHideProperty()
-  @ManyToOne(() => Supplier, { nullable: true, onDelete: "SET NULL" })
+  @ManyToOne(() => Supplier, (supplier) => supplier.products, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
   @JoinColumn({ name: "supplier_id" })
   supplier?: Supplier;
 

@@ -117,8 +117,40 @@ export function documentDate(
   ).format(new Date(date));
 }
 
+const DOCUMENT_REVISION_CONFLICT = "DOCUMENT_REVISION_CONFLICT";
+
+/** True only for a stale-revision conflict (someone saved first), not for other 409s such as limits. */
+export function isDocumentRevisionConflict(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== 409) return false;
+  const body: unknown = error.response.data;
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "errorCode" in body &&
+    body.errorCode === DOCUMENT_REVISION_CONFLICT
+  );
+}
+
+/** Resolves a config field name (e.g. companyWebsite) to its label, or undefined when unknown. */
+export type FieldLabel = (field: string) => string | undefined;
+
+/** "Validation error for config.company.companyWebsite: Use a valid website" -> "Website: Use a valid website" */
+export function readableValidationMessage(
+  message: string,
+  fieldLabel?: FieldLabel,
+): string {
+  const match = /^Validation error for ([\w.[\]]+): (.+)$/.exec(message);
+  if (!match) return message;
+  const field = match[1].split(".").pop() ?? match[1];
+  const label = fieldLabel?.(field);
+  return label ? `${label}: ${match[2]}` : match[2];
+}
+
 /** Keep validation/conflict details, including PDF endpoints' blob error responses. */
-export async function documentError(error: unknown): Promise<string> {
+export async function documentError(
+  error: unknown,
+  fieldLabel?: FieldLabel,
+): Promise<string> {
   if (isAxiosError(error)) {
     let body: unknown = error.response?.data;
     if (body instanceof Blob) {
@@ -135,7 +167,8 @@ export async function documentError(error: unknown): Promise<string> {
           : "message" in body
             ? body.message
             : undefined;
-      if (typeof value === "string") return value.slice(0, 500);
+      if (typeof value === "string")
+        return readableValidationMessage(value, fieldLabel).slice(0, 500);
       if (
         Array.isArray(value) &&
         value.every((part) => typeof part === "string")

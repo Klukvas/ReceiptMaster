@@ -24,6 +24,10 @@ export class IdempotencyKey {
   @Column({ type: "jsonb", nullable: true })
   response: Record<string, any>;
 
+  /** SHA-256 of the request body; NULL on rows stored before fingerprints existed. */
+  @Column({ type: "varchar", length: 64, nullable: true })
+  payload_hash: string | null;
+
   @Column({ type: "integer", default: 200 })
   status_code: number;
 

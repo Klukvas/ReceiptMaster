@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
 import { api } from "../lib/api";
 import {
   documentError,
   documentEnvelope,
+  isDocumentRevisionConflict,
   type ConfigVersion,
   type DocumentConfig,
   type DocumentDraft,
@@ -13,6 +16,11 @@ export const DOCUMENT_CONFIG_KEY = ["settings", "document-config"] as const;
 export function useDocumentDraft(orderId?: string) {
   const cache = useQueryClient();
   const { t } = useTranslation();
+  const fieldLabel = (field: string) => {
+    const key = `settings.${field}`;
+    const label = t(key);
+    return label === key ? undefined : label;
+  };
   const query = useQuery({
     queryKey: DOCUMENT_CONFIG_KEY,
     queryFn: async () =>
@@ -29,9 +37,14 @@ export function useDocumentDraft(orderId?: string) {
   const [file, setFile] = useState<File>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [isConflict, setIsConflict] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewVersion, setPreviewVersion] = useState(-1);
   const [refreshing, setRefreshing] = useState(false);
+  // Preview problems belong to the preview panel, not to the page-wide error: with an
+  // auto-updating preview, half-typed input must not flash a red banner over the form.
+  const [previewError, setPreviewError] = useState("");
+  const [previewPaused, setPreviewPaused] = useState(false);
   const version = useRef(0),
     sequence = useRef(0),
     controller = useRef<AbortController | null>(null);
@@ -49,6 +62,7 @@ export function useDocumentDraft(orderId?: string) {
     controller.current?.abort();
     setRefreshing(false);
     setError("");
+    setPreviewError("");
   };
   const update = (value: DocumentConfig) => {
     changed();
@@ -163,6 +177,7 @@ export function useDocumentDraft(orderId?: string) {
     if (!config || !saved || busy) return;
     setBusy(true);
     setError("");
+    setIsConflict(false);
     try {
       const response = await api.put<{ data: ConfigVersion }>(
         "/settings/document-config",
@@ -180,8 +195,11 @@ export function useDocumentDraft(orderId?: string) {
       await cache.invalidateQueries({
         queryKey: ["settings", "receipt-design"],
       });
+      // The save bar disappears once nothing is pending, so confirm the save here.
+      toast.success(t("document.saved"));
     } catch (value) {
-      setError(await documentError(value));
+      setIsConflict(isDocumentRevisionConflict(value));
+      setError(await documentError(value, fieldLabel));
     } finally {
       setBusy(false);
     }
@@ -190,9 +208,13 @@ export function useDocumentDraft(orderId?: string) {
     if (busy) return;
     try {
       const value = await query.refetch();
-      if (value.data) setBase(value.data);
+      if (value.data) {
+        setBase(value.data);
+        setError("");
+        setIsConflict(false);
+      }
     } catch (value) {
-      setError(await documentError(value));
+      setError(await documentError(value, fieldLabel));
     }
   };
   const refreshPreview = async () => {
@@ -203,7 +225,7 @@ export function useDocumentDraft(orderId?: string) {
     const request = ++sequence.current,
       captured = version.current;
     setRefreshing(true);
-    setError("");
+    setPreviewError("");
     try {
       const response = await api.post(
         "/receipts/preview",
@@ -224,10 +246,15 @@ export function useDocumentDraft(orderId?: string) {
           ),
         );
         setPreviewVersion(captured);
+        setPreviewPaused(false);
       }
     } catch (value) {
-      if (!abort.signal.aborted && request === sequence.current)
-        setError(await documentError(value));
+      if (!abort.signal.aborted && request === sequence.current) {
+        // Too many previews in a minute: stop updating on its own until asked again.
+        if (isAxiosError(value) && value.response?.status === 429)
+          setPreviewPaused(true);
+        else setPreviewError(await documentError(value, fieldLabel));
+      }
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }
@@ -242,6 +269,7 @@ export function useDocumentDraft(orderId?: string) {
     busy,
     setBusy,
     error,
+    isConflict,
     setError,
     update,
     stageLogo,
@@ -252,6 +280,8 @@ export function useDocumentDraft(orderId?: string) {
     reloadSaved,
     refreshPreview,
     previewUrl,
+    previewError,
+    previewPaused,
     refreshing,
     stale: previewVersion !== version.current,
   };

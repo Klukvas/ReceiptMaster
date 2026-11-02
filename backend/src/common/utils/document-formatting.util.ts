@@ -1,4 +1,15 @@
 import type { Formatting } from "../../modules/settings/document-config";
+// Fallback for callers without a user's saved preferences: UTC, so the order
+// date and the "generated at" stamp always share one explicit time zone.
+export const DEFAULT_DOCUMENT_FORMATTING: Formatting = {
+  numberLocale: "ru-RU",
+  currencyDisplay: "symbol",
+  dateLocale: "document",
+  dateStyle: "numeric",
+  timeStyle: "medium",
+  hourCycle: "h23",
+  timeZone: "UTC",
+};
 export function formatDocumentMoney(
   cents: number,
   currency: string,

@@ -28,11 +28,13 @@ export const CompanyInfoStep = ({ data, onChange }: CompanyInfoStepProps) => {
  value={data.companyName}
  onChange={(e) => handleChange('companyName', e.target.value)}
  required
+ autoComplete="organization"
  />
  <Input
  label={t('settings.companyEmail')}
  placeholder={t('settings.companyEmailPlaceholder')}
  type="email"
+ autoComplete="email"
  value={data.companyEmail}
  onChange={(e) => handleChange('companyEmail', e.target.value)}
  />
@@ -40,6 +42,7 @@ export const CompanyInfoStep = ({ data, onChange }: CompanyInfoStepProps) => {
  label={t('settings.companyPhone')}
  placeholder={t('settings.companyPhonePlaceholder')}
  type="tel"
+ autoComplete="tel"
  value={data.companyPhone}
  onChange={(e) => handleChange('companyPhone', e.target.value)}
  />

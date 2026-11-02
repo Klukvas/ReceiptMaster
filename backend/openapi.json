@@ -77,6 +77,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -543,6 +553,16 @@
           },
           "400": {
             "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1023,6 +1043,143 @@
           },
           "400": {
             "description": "Some orders cannot be deleted"
+          }
+        },
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orders/ids": {
+      "get": {
+        "operationId": "OrdersController_findMatchingIds",
+        "summary": "Ids of every order matching the list filters",
+        "description": "For \"select all N\": the same filters as the list, newest first, at most one batch of ids; `total` is the full match count.",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Поисковый запрос",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Поле для сортировки",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Направление сортировки: ASC или DESC",
+            "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering (ISO 8601 string)",
+            "schema": {
+              "example": "2025-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering (ISO 8601 string). A date without a time (YYYY-MM-DD) includes that whole UTC day; a full timestamp is an exact upper bound.",
+            "schema": {
+              "example": "2025-12-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minAmount",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxAmount",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching order ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderIdsResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2028,6 +2185,26 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/retention": {
+      "get": {
+        "operationId": "ReceiptsController_retention",
+        "summary": "Receipt retention cap and the receipt the next one would replace",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
           }
         },
         "tags": [
@@ -4173,7 +4350,17 @@
       "post": {
         "operationId": "SuppliersController_create",
         "summary": "Создать поставщика",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional, 1–255 visible ASCII characters. Within 24 hours a repeated key creates nothing and replays the first 201 response with X-Idempotency-Replayed: true; only successful creates are stored.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4186,11 +4373,31 @@
         },
         "responses": {
           "201": {
-            "description": "Поставщик успешно создан",
+            "description": "Поставщик успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Supplier"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -4857,6 +5064,10 @@
           "id": {
             "type": "string"
           },
+          "order_number": {
+            "type": "number",
+            "description": "Short number within the account (1, 2, 3, ...), never reused, for people to quote"
+          },
           "recipient_id": {
             "type": "string"
           },
@@ -4913,6 +5124,7 @@
         },
         "required": [
           "id",
+          "order_number",
           "recipient_id",
           "status",
           "subtotal_cents",
@@ -5042,6 +5254,26 @@
           "offset",
           "limit",
           "data"
+        ]
+      },
+      "OrderIdsResponse": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "Newest first; at most one batch (500) of ids",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "How many orders match in all, which may exceed ids.length"
+          }
+        },
+        "required": [
+          "ids",
+          "total"
         ]
       },
       "UpdateOrderItemDto": {
@@ -5531,13 +5763,13 @@
             "type": "string",
             "description": "Новый пароль",
             "example": "newPassword123",
-            "minLength": 6
+            "minLength": 8
           },
           "confirmPassword": {
             "type": "string",
             "description": "Подтверждение нового пароля",
             "example": "newPassword123",
-            "minLength": 6
+            "minLength": 8
           }
         },
         "required": [
@@ -5578,13 +5810,6 @@
             "type": "string",
             "description": "Заметки",
             "example": "Основной поставщик"
-          },
-          "productIds": {
-            "description": "ID продуктов для привязки",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "required": [
@@ -5696,13 +5921,6 @@
             "type": "string",
             "description": "Заметки",
             "example": "Основной поставщик"
-          },
-          "productIds": {
-            "description": "ID продуктов для привязки",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },

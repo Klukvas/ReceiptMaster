@@ -28,6 +28,11 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
+  /** Last receipt number handed out to this account; see receipt-number.ts. */
+  @ApiHideProperty()
+  @Column({ type: "integer", default: 0, select: false })
+  receipt_counter: number;
+
   @ApiHideProperty()
   @OneToMany(() => Product, (product) => product.user)
   products: Product[];

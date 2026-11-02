@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-01
+**Last Updated:** 2026-11-02
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -283,25 +283,32 @@ stays with the writers (`OrdersService` above, and `TelegramService` for bot-cre
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write (read side in `OrdersDashboardService`, invalidation in the writing service)
+- A check-then-insert on a unique column (register by email) still needs the unique index to decide
+  the race: catch `isUniqueViolationOf` / `isUniqueViolationOnColumn` (`common/utils/unique-violation.util.ts`,
+  SQLSTATE 23505) around the insert and throw the same `ApiErrors` the pre-check throws — see
+  `UsersService.register`
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
 - Never `save()` a whole entity loaded without a lock: write only the changed columns with a
   conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
   precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
 - Check a quota and insert in **one** transaction, after taking the tenant's quota lock
 - Idempotent creates go through `common/idempotency/idempotent-create.ts` (`createIdempotently`,
-  used by `POST /products` and `POST /recipients`; orders keep their own older implementation).
+  used by `POST /products`, `POST /recipients` and `POST /suppliers`; orders keep their own older implementation).
   Inside the caller's transaction and before any other lock it validates the key (1–255 visible
   ASCII, else 400 `VALIDATION_ERROR`), takes `pg_advisory_xact_lock(hashtext(scopedKey))`, replays an
   unexpired `idempotency_keys` row for (scoped key, user) or deletes an expired one, runs the create
-  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (no migration: the
-  existing table, `order_id` NULL). `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
+  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (`order_id` NULL).
+  The caller passes the request body as `payload`; its SHA-256 over key-sorted JSON
+  (`payloadFingerprint`) is stored in the nullable `idempotency_keys.payload_hash` (migration
+  `AddIdempotencyPayloadHash1792800000000`), and a replay whose fingerprint differs throws 422
+  `IDEMPOTENCY_KEY_REUSED` (`ApiErrors.IDEMPOTENCY_KEY_REUSED`). A row with NULL `payload_hash`
+  (written before the column existed) replays unchecked. `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
   fits `varchar(255)` for every accepted key and never equals an order key, which is stored raw in
   the same `(key, user_id)`-unique column. The controller sets `X-Idempotency-Replayed: true` on a
   replay (`@Res({ passthrough: true })`, so interceptors still see the body); without the header the
   original create path runs unchanged. Guarantee: within 24 h, retries with one key — concurrent
   ones too — create at most one entity and get the first response. Not covered: a failed create
-  stores nothing (a retry runs it again), a repeated key with a different body replays the first
-  response, and the client must keep its key (the onboarding keeps it only in memory)
+  stores nothing (a retry runs it again), and the client must keep its key (the onboarding keeps it only in memory)
 
 #### Tenant advisory locks and lock ordering
 
@@ -310,7 +317,7 @@ Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
 | Key | Taken by | Serializes |
 |---|---|---|
 | `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
-| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
+| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` / `hashtext('supplier:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients`, `POST /suppliers` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
 | `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
 | `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
 | `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel | receipts and document configuration |
@@ -1038,6 +1045,17 @@ async findAll(
   // Both DTOs are validated & their parsed values are available
 }
 ```
+
+---
+
+### Input hygiene helpers
+
+Use these instead of ad-hoc handling when a DTO or query touches the same kind of value:
+
+- `@NormalizedEmail()` (`common/dto/normalized-email.ts`) trims and lowercases an email before `@IsEmail()`; service lookups compare `LOWER(email)` so older mixed-case accounts still match.
+- `@Trimmed()`, `PHONE_PATTERN` and `MAX_INT4` (`common/dto/trimmed-string.ts`): reject names of only spaces, malformed phones, and integers above the Postgres `integer` limit (otherwise the database answers 500).
+- `containsPattern(text)` (`common/utils/like-pattern.util.ts`) wraps text for an `ILIKE` "contains" search and escapes `%`, `_` and `\`; searching for `%` must not match everything.
+- `DateRangeDto.endDateParsed` treats a date-only end as the whole day.
 
 ---
 

@@ -33,7 +33,7 @@ export const run = async () => {
 
     await page.goto(`${BASE_URL}/recipients`);
     await page.getByTitle("Actions").first().click();
-    await page.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Delete" }).click();
 

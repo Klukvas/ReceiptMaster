@@ -29,7 +29,7 @@ export const FirstProductStep = ({ data, onChange }: FirstProductStepProps) => {
  onChange={(e) => handleChange('name', e.target.value)}
  required
  />
- <div className="grid grid-cols-2 gap-4">
+ <div className="grid grid-cols-2 items-end gap-4">
  <Input
  label={`${t('products.purchasePrice')} (UAH)`}
  placeholder="0.00"
@@ -54,6 +54,7 @@ export const FirstProductStep = ({ data, onChange }: FirstProductStepProps) => {
  placeholder="0"
  type="number"
  min="0"
+ step="1"
  value={data.quantity}
  onChange={(e) => handleChange('quantity', e.target.value)}
  />

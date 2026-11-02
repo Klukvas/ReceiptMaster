@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { SettingsPage } from "../../src/pages/SettingsPage";
 import { OrderActionsMenu } from "../../src/components/orders/OrderActionsMenu";
 import { api, type Order } from "../../src/lib/api";
@@ -16,6 +17,8 @@ function Fixture() {
   }, []);
   return (
     <main className="mx-auto max-w-7xl p-5">
+      {/* The page confirms a save with a toast, as the app does. */}
+      <Toaster />
       <SettingsPage />
       <div className="mt-8 rounded-xl border border-[var(--color-border)] bg-elevated p-6">
         <h2>Orders · document customization fixture</h2>

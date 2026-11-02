@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -25,6 +25,7 @@ export const Pagination: React.FC<PaginationProps> = ({
  className = '',
 }) => {
  const { t } = useTranslation();
+ const itemsPerPageId = useId();
 
  // Show pagination if there are multiple pages OR if itemsPerPage selector is enabled
  if (totalPages <= 1 && !onItemsPerPageChange) {
@@ -73,23 +74,24 @@ export const Pagination: React.FC<PaginationProps> = ({
  return (
  <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 ${className}`}>
  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
- <div className="text-sm text-content-secondary">
+ <div className="text-sm text-content-secondary tabular-nums">
  {t('common.showing')} {startItem}-{endItem} {t('common.of')} {totalItems}
  </div>
  
  {onItemsPerPageChange && (
  <div className="flex items-center gap-2">
- <label className="text-sm text-content-secondary whitespace-nowrap">
+ <label htmlFor={itemsPerPageId} className="text-sm text-content-secondary whitespace-nowrap">
  {t('common.itemsPerPage')}:
  </label>
  <select
+ id={itemsPerPageId}
  value={itemsPerPage}
  onChange={(e) => {
  const newValue = Number(e.target.value);
  onItemsPerPageChange(newValue);
  onPageChange(1); // Reset to first page when changing items per page
  }}
- className="px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
+ className="px-3 py-1.5 pointer-coarse:min-h-11 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
  >
  {itemsPerPageOptions.map((option) => (
  <option key={option} value={option}>

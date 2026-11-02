@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { X, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { clsx } from "clsx";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
@@ -33,6 +35,8 @@ export const TemplateCarouselModal = ({
   const previewAreaRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBackClosesDialog(isOpen, onClose);
+  useBodyScrollLock(isOpen);
 
   // Sync index when modal opens or initialTemplateId changes
   useEffect(() => {
@@ -79,11 +83,9 @@ export const TemplateCarouselModal = ({
     [templates.length],
   );
 
-  // Keyboard navigation + ESC close + scroll lock + focus trap
+  // Keyboard navigation + ESC close + focus trap
   useEffect(() => {
     if (!isOpen) return;
-
-    const prevOverflow = document.body.style.overflow;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -114,11 +116,9 @@ export const TemplateCarouselModal = ({
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = prevOverflow;
     };
   }, [isOpen, onClose, goTo]);
 

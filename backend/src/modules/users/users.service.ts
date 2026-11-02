@@ -1,7 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { EntityManager, Repository } from "typeorm";
+import { EntityManager, Raw, Repository } from "typeorm";
+import { normalizeEmail } from "../../common/dto/normalized-email";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
@@ -13,6 +14,7 @@ import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
+import { isUniqueViolationOnColumn } from "../../common/utils/unique-violation.util";
 import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
 import {
   familyOf,
@@ -37,6 +39,12 @@ type RefreshOutcome =
 
 const REJECTED: RefreshOutcome = { kind: "rejected" };
 
+// Accounts created before emails were normalised may still be stored with capitals.
+const emailEquals = (email: string) =>
+  Raw((alias) => `LOWER(${alias}) = :email`, {
+    email: normalizeEmail(email),
+  });
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -58,7 +66,7 @@ export class UsersService {
     const { email, password } = registerDto;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (existingUser) {
@@ -73,7 +81,17 @@ export class UsersService {
       password: _hashedPassword,
     });
 
-    const savedUser = await this.userRepository.save(user);
+    let savedUser: User;
+    try {
+      savedUser = await this.userRepository.save(user);
+    } catch (error) {
+      // Two registrations can both pass the pre-check above; the unique email
+      // index settles the race and the loser gets the same 409.
+      if (isUniqueViolationOnColumn(error, "email")) {
+        throw ApiErrors.USER_ALREADY_EXISTS(registerDto.email);
+      }
+      throw error;
+    }
 
     const payload = { sub: savedUser.id, email: savedUser.email };
     const access_token = this.jwtService.sign(payload);
@@ -93,7 +111,7 @@ export class UsersService {
     const { email, password } = loginDto;
 
     const user = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (!user || !user.isActive) {
@@ -231,7 +249,7 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
   }
 
@@ -242,7 +260,7 @@ export class UsersService {
     const { email } = updateProfileDto;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email: emailEquals(email) },
     });
 
     if (existingUser && existingUser.id !== userId) {
@@ -272,7 +290,7 @@ export class UsersService {
     if (newPassword !== confirmPassword) {
       throw ApiErrors.VALIDATION_ERROR(
         "password",
-        "Новый пароль и подтверждение не совпадают",
+        "New password and confirmation do not match",
       );
     }
 
@@ -291,7 +309,7 @@ export class UsersService {
     if (!isCurrentPasswordValid) {
       throw ApiErrors.VALIDATION_ERROR(
         "currentPassword",
-        "Текущий пароль неверен",
+        "Current password is incorrect",
       );
     }
 
@@ -299,7 +317,7 @@ export class UsersService {
     if (isSamePassword) {
       throw ApiErrors.VALIDATION_ERROR(
         "newPassword",
-        "Новый пароль должен отличаться от текущего",
+        "New password must be different from the current one",
       );
     }
 

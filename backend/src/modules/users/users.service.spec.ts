@@ -7,6 +7,7 @@ import { UsersService } from "./users.service";
 import { User } from "./entities/user.entity";
 import { RefreshToken } from "./entities/refresh-token.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
+import { QueryFailedError } from "typeorm";
 import { hashRefreshToken } from "./refresh-tokens";
 
 jest.mock("bcrypt");
@@ -107,6 +108,43 @@ describe("UsersService", () => {
       await expect(
         service.register({ email: "test@test.com", password: "pw" }),
       ).rejects.toThrow(ApiErrorResponse);
+    });
+  });
+
+  describe("register unique-violation race", () => {
+    const emailViolation = () =>
+      new QueryFailedError(
+        'INSERT INTO "users"',
+        [],
+        Object.assign(new Error("duplicate key"), {
+          code: "23505",
+          detail: "Key (email)=(new@test.com) already exists.",
+        }),
+      );
+
+    it("answers 409 USER_ALREADY_EXISTS when the email index rejects the insert", async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-pw");
+      userRepo.save.mockRejectedValue(emailViolation());
+
+      await expect(
+        service.register({ email: "new@test.com", password: "Password123!" }),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "USER_ALREADY_EXISTS",
+      });
+      expect(tokenStore.insert).not.toHaveBeenCalled();
+    });
+
+    it("lets other save failures through", async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-pw");
+      const failure = new Error("connection lost");
+      userRepo.save.mockRejectedValue(failure);
+
+      await expect(
+        service.register({ email: "new@test.com", password: "Password123!" }),
+      ).rejects.toBe(failure);
     });
   });
 

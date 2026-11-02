@@ -5,6 +5,11 @@ import Handlebars from "handlebars";
 import { Order } from "../../orders/entities/order.entity";
 import { MoneyUtil } from "../../../common/utils/money.util";
 import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
+import {
+  DEFAULT_DOCUMENT_FORMATTING,
+  formatDocumentDate,
+} from "../../../common/utils/document-formatting.util";
+import type { Formatting } from "../../settings/document-config";
 import { PRINT_LAYOUT_CSS } from "../templates/print-layout";
 
 export interface TemplateData {
@@ -359,6 +364,7 @@ export class TemplateService {
     paymentTerms?: string,
     deliveryTerms?: string,
     hasCustomReceiptTitle?: boolean,
+    formatting: Formatting = DEFAULT_DOCUMENT_FORMATTING,
   ): TemplateData {
     const formatCurrency = (cents: number) =>
       MoneyUtil.formatCentsToCurrency(cents, order.currency);
@@ -366,8 +372,6 @@ export class TemplateService {
     // Get translations for the specified language, fallback to English
     const translations =
       this.translations.get(language) || this.translations.get("en") || {};
-
-    const locale = TemplateService.getLocaleForLanguage(language);
 
     return {
       companyName: companyInfo.companyName || "",
@@ -394,8 +398,8 @@ export class TemplateService {
               (DEFAULT_RECEIPT_TITLE[language] || DEFAULT_RECEIPT_TITLE.en),
         ),
       receiptNumber,
-      orderDate: new Date(order.created_at).toLocaleString(locale),
-      generatedAt: new Date().toLocaleString(locale),
+      orderDate: formatDocumentDate(order.created_at, language, formatting),
+      generatedAt: formatDocumentDate(new Date(), language, formatting),
       recipientName: order.recipient.name,
       recipientEmail: order.recipient.email || undefined,
       recipientPhone: order.recipient.phone || undefined,

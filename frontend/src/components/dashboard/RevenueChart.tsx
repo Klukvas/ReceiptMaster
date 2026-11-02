@@ -9,7 +9,11 @@ import {
   Cell,
 } from "recharts";
 import { formatCurrency } from "../../lib/api";
-import { SkeletonChart } from "../ui/Skeleton";
+import { AnalyticsChartSkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
+import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
+
+const TABULAR_TICK_STYLE = { fontVariantNumeric: "tabular-nums" } as const;
 
 interface ChartItem {
   name: string;
@@ -23,6 +27,11 @@ interface RevenueChartProps {
   title: string;
   data: ChartItem[];
   isLoading?: boolean;
+  /** Replaces the plot with a retryable error so a failure never reads as "no data". */
+  isError?: boolean;
+  onRetry?: () => void;
+  /** Currency of the plotted amounts (the API reports it per group). */
+  currency?: string;
   color?: string;
   emptyMessage?: string;
   /** Replaces the plot when every row is unknown and no bar could be drawn. */
@@ -33,7 +42,9 @@ const CustomTooltip = ({
   active,
   payload,
   label,
+  currency,
 }: {
+  currency?: string;
   active?: boolean;
   payload?: Array<{ value: number | null; payload?: ChartItem }>;
   label?: string;
@@ -47,7 +58,7 @@ const CustomTooltip = ({
         {label}
       </p>
       <p className="text-sm font-semibold text-content tabular-nums">
-        {typeof value === "number" ? formatCurrency(value * 100) : "—"}
+        {typeof value === "number" ? formatCurrency(value * 100, currency) : "—"}
       </p>
       {note && (
         <p className="text-xs text-warning-base mt-0.5 max-w-[220px]">{note}</p>
@@ -60,11 +71,15 @@ export const RevenueChart = ({
   title,
   data,
   isLoading,
+  isError,
+  onRetry,
+  currency,
   color = "#4F46E5",
   emptyMessage = "No data",
   unknownMessage = "Cost unknown",
 }: RevenueChartProps) => {
-  if (isLoading) return <SkeletonChart height="h-72" />;
+  const prefersReducedMotion = usePrefersReducedMotion();
+  if (isLoading) return <AnalyticsChartSkeleton />;
 
   const chartHeight = Math.max(250, data.length * 40);
   const hasBars = data.some((item) => item.value !== null);
@@ -72,7 +87,12 @@ export const RevenueChart = ({
   return (
     <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
       <h3 className="text-sm font-semibold text-content mb-5">{title}</h3>
-      {!hasBars ? (
+      {isError ? (
+        <QueryErrorState
+          className="h-[250px]"
+          onRetry={() => onRetry?.()}
+        />
+      ) : !hasBars ? (
         <div
           className="flex items-center justify-center h-[250px] px-6 text-center text-sm text-content-tertiary"
           data-testid="chart-message"
@@ -95,10 +115,14 @@ export const RevenueChart = ({
             />
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+              tick={{
+                fontSize: 11,
+                fill: "var(--color-text-tertiary)",
+                style: TABULAR_TICK_STYLE,
+              }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v: number) => formatCurrency(v * 100)}
+              tickFormatter={(v: number) => formatCurrency(v * 100, currency)}
             />
             <YAxis
               type="category"
@@ -111,10 +135,15 @@ export const RevenueChart = ({
             {/* filterNull would drop an unknown row and with it the tooltip. */}
             <Tooltip
               filterNull={false}
-              content={<CustomTooltip />}
+              content={<CustomTooltip currency={currency} />}
               cursor={{ fill: "currentColor", opacity: 0.04 }}
             />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={28}>
+            <Bar
+              dataKey="value"
+              radius={[0, 6, 6, 0]}
+              maxBarSize={28}
+              isAnimationActive={!prefersReducedMotion}
+            >
               {data.map((entry, index) => (
                 <Cell
                   key={entry.name ?? index}

@@ -53,6 +53,7 @@ export class ProductsController {
   })
   @ApiFailureResponses({
     400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+    422: "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
     402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
     409: "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
   })

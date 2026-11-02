@@ -28,6 +28,7 @@ import { PaginatedOrderResponse } from "../../common/dto/paginated-response.dto"
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { BatchOrderIdsDto } from "./dto/batch-orders.dto";
+import { OrderIdsResponse } from "./dto/order-ids-response.dto";
 import {
   DailyRevenueDto,
   OrderStatusSummaryDto,
@@ -156,6 +157,39 @@ export class OrdersController {
       productId,
     };
     return this.ordersService.findAll(paginationDto, req.user, status, filters);
+  }
+
+  @Get("ids")
+  @ApiOperation({
+    summary: "Ids of every order matching the list filters",
+    description:
+      'For "select all N": the same filters as the list, newest first, at most one batch of ids; `total` is the full match count.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Matching order ids",
+    type: OrderIdsResponse,
+  })
+  @ApiQuery({ name: "status", required: false })
+  @ApiQuery({ name: "minAmount", required: false })
+  @ApiQuery({ name: "maxAmount", required: false })
+  @ApiQuery({ name: "productId", required: false })
+  findMatchingIds(
+    @Query() paginationDto: PaginationDto,
+    @Query() dateRange: DateRangeDto,
+    @Request() req: { user: User },
+    @Query("status") status?: OrderStatus,
+    @Query("minAmount") minAmount?: string,
+    @Query("maxAmount") maxAmount?: string,
+    @Query("productId") productId?: string,
+  ): Promise<OrderIdsResponse> {
+    return this.ordersService.findMatchingIds(paginationDto, req.user, status, {
+      startDate: dateRange.startDateParsed,
+      endDate: dateRange.endDateParsed,
+      minAmount: minAmount ? parseInt(minAmount) : undefined,
+      maxAmount: maxAmount ? parseInt(maxAmount) : undefined,
+      productId,
+    });
   }
 
   @Get(":id")

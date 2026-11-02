@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-10-31
+**Last Updated:** 2026-11-02
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -17,7 +17,7 @@ frontend/
 │   ├── App.tsx               # Provider setup + routing (React Router 7.8)
 │   ├── pages/                # Page components (lazy-loaded for code splitting)
 │   ├── components/           # Organized by feature (orders/, products/, ui/, etc.)
-│   ├── services/             # Business logic (OrderService, ReceiptService, NotificationService)
+│   ├── services/             # Business logic (OrderService, ReceiptService)
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
 │   ├── providers/            # Context providers (PaddleProvider for billing)
@@ -70,30 +70,41 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 | Path | Component | Auth | Layout | Notes |
 |------|-----------|------|--------|-------|
 | `/` | `HomePage` | No | None | Public landing |
-| `/dashboard` | `DashboardHomePage` | Yes | Layout | Main dashboard |
+| `/dashboard` | `DashboardHomePage` | Yes | Layout | Main dashboard. Every query group shows an inline `role="alert"` with Retry on failure (never a 0 or an "all well-stocked" empty state; figures fall back to "—"); widget failures also feed the page banner via `useHasFailedQuery`. Skeletons live in `components/dashboard/DashboardSkeletons.tsx` (real heights, painted after 200 ms) |
 | `/products` | `ProductsPage` | Yes | Layout | Manage products |
 | `/recipients` | `RecipientsPage` | Yes | Layout | Manage buyers |
 | `/suppliers` | `SuppliersPage` | Yes | Layout | Manage suppliers |
-| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders |
-| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics |
-| `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing |
-| `/profile` | `ProfilePage` | Yes | Layout | User profile |
+| `/orders` | `OrdersPage` | Yes | Layout | Core CRUD: orders. The status filter is kept in `?status=` (draft, confirmed or cancelled); clicking a row opens its details; bulk Approve asks for confirmation first (it locks the orders and may create receipts) |
+| `/analytics` | `DashboardPage` | Yes | Layout | Charts & analytics. The date range stays ordered (moving one end past the other drags the other along); CSV export is disabled for an empty period and prefixes cells starting with `= + - @` with `'` (`lib/csv-safety.ts`) so spreadsheets do not run them as formulas. Changing the period keeps the previous figures on screen (`placeholderData: keepPreviousData`), dimmed with `aria-busy` and an "Updating" cue; charts format money in the data's currency and honour reduced motion (`usePrefersReducedMotion`); date-only strings are formatted as local days (`periodLabel.ts`) |
+| `/settings` | `SettingsPage` | Yes | Layout | Receipt design, billing. Tabs follow the ARIA tabs pattern (arrow keys, Home/End, roving tabindex) with a fade on the right while tabs are scrolled out of view. The sticky save bar of `DocumentEditor` appears only when there is a draft, a save in progress or an error (always in the "Customize document" modal); a successful save shows a toast. `--color-ring` is opaque so the focus indicator stays above 3:1 |
+| `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link |
 | `/blog` | `BlogListPage` | No | None | Blog listing |
 | `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown) |
-| `/terms`, `/privacy`, etc. | Static pages | No | None | Legal docs |
-| `*` | `NotFoundPage` | No | None | 404 fallback |
+| `/terms`, `/privacy`, `/refund-policy`, `/cookie-policy` | Legal pages | No | None | Follow the interface language (en/ru/uk; any other language shows English) — see "Legal pages" |
+| `*` | `NotFoundPage` | No | Layout when signed in | 404 fallback: `NotFoundRoute` in `App.tsx` renders it inside `Layout` (sidebar kept, button goes to `/dashboard`, `isInLayout`) for a signed-in user and standalone for visitors (`/` link) |
 
 **Protected routes** wrap with `<ProtectedRoute>` component (line 101ff):
 - Checks `useAuth().isAuthenticated`
 - Shows loading spinner while `isLoading: true`
 - Falls back to `<LoginForm>` if not authenticated
 
+**Auth form errors:** `LoginModal`, `RegisterModal` and `LoginForm` validate with `lib/auth-validation.ts` (`validateLogin` / `validateRegister` return a problem per field) and show it under the field via `useFieldErrors` + `components/ui/FieldError` (`role="alert"`, `aria-invalid`, `aria-describedby`); the forms are `noValidate` so the browser's own bubbles do not replace them. Focus goes to the first invalid field, and editing a field clears only its own error. A server `USER_ALREADY_EXISTS` lands on the email field; wrong login credentials stay one form-level alert; anything else is a toast. New problem kinds need a key in `PROBLEM_MESSAGE_KEYS` and in all three locales. `ProductForm` and `RecipientForm` follow the same pattern (`noValidate`, per-field `error`, focus on the first invalid field); a taken product name or recipient email comes back as `PRODUCT_ALREADY_EXISTS` / `RECIPIENT_ALREADY_EXISTS` and is shown on that field. Shared input shapes live in `lib/field-patterns.ts`.
+
+**Select all N (orders):** ticking the page's header checkbox shows a banner offering to select every matching order; `ordersApi.getMatchingIds` (`GET /orders/ids`, same filters as the list, capped at one 500-order batch) fills `allMatching`, and the bulk bar, confirm dialog and `batch-approve`/`batch-delete` then use those ids. The choice dies with its view (any filter, search, sort or page change, or a refetch). Approve is offered for it only under the Drafts filter, because the ids carry no status.
+
+**Order numbers:** orders are quoted as `#<order_number>` (`lib/order-number.ts`, `formatOrderNumber`) in the list (own sortable `No.` column), mobile cards, details header, cancel/delete dialogs, the dashboard and the recipient drawer; the search box also finds an order by its number.
+
+**Orders deep links:** `/orders?status=<draft|confirmed|cancelled>` and `/orders?search=<text>` open the list already filtered; `search` seeds `useServerPagination({ initialSearch })` and is removed from the URL straight away (the recipient drawer's "View all orders" uses it with the recipient's name, since the orders API searches by recipient name). **Confirmations** use `ConfirmModal`, never `window.confirm` (preset delete, replace/discard in `CustomizeDocumentModal`). Icon-only controls take their `aria-label`/`title` from `common.*` keys. `OnboardingModal`'s Skip/Back/Next footer is sticky inside the scrolling dialog, so it stays reachable in a short window; icon-only buttons (row actions, logout, sidebar close) grow to 44px under `pointer-coarse:` (touch screens) while staying compact for a mouse; order cancel/delete dialogs name the order (recipient · total); the logo picker rejects non-image types and files over 5 MiB itself, because `accept=` only filters the file dialog.
+
 **Layout component** wraps authenticated pages:
 - Sidebar (desktop) + mobile drawer
 - Header with user email + logout
 - Receipt progress panel for real-time updates (WebSocket)
 - Tailwind `lg:` breakpoints for responsive design
+- `OfflineBanner` (`layout/OfflineBanner.tsx`, `hooks/useOnlineStatus.ts`): a sticky `role="status"` notice (`common.offlineNotice`) below the mobile header while `navigator.onLine` is false; loaded data stays readable, changes cannot be saved. The live region stays mounted
+- Collapsed desktop sidebar keeps the theme and language switchers as icon buttons (`layout/SidebarCompactControls.tsx`; labelled, with a tooltip; the language button cycles en, ru, uk)
+- Authenticated routes use `AuthenticatedPage` in `App.tsx` (`ProtectedRoute` + `Layout` + its own `Suspense`), so a lazy page chunk shows `ContentSpinner` inside the shell. `PageSpinner`/`ContentSpinner` paint after 200 ms and are `role="status"` with sr-only text
 
 ## Data Layer
 
@@ -125,13 +136,16 @@ and a reload is the way out. Errors in event handlers and queries never reach it
     keep storage. A rotation that keeps the access token and only changes the refresh token is
     adopted too
   - `clearAuthAndRedirect` is the only client code that ends a session on an API failure
+  - On refresh failure clears auth and flags the session as expired (`lib/session-expiry.ts`). On a private page (`/dashboard`, `/orders`, ...) it reloads in place, so the inline login screen shows "Your session expired" on the same URL and `AuthContext.login` returns there via `postLoginPath`; elsewhere it goes to `/`
+  - Deep link `/?auth=register` or `/?auth=login` makes `LandingShell` open that modal (used by the login screen's "Sign up here")
+  - `?create=1` on `/products`, `/recipients` and `/orders` opens that page's create form (`hooks/useCreateIntent.ts`), then strips the parameter. `/orders?create=1&recipientId=<uuid>` preselects the recipient. Products and orders wait for the subscription status first so the plan limits still apply. The dashboard quick actions and the recipient drawer's "Create order" use it
 
 **API method groups** (lines 159–497):
 - `authApi.login()`, `register()`, `refresh()`, `logout()`, `getProfile()`, `updateProfile()`, `changePassword()`
 - `productsApi.getAll()`, `getById()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getLowStock()`
 - `recipientsApi.*` — same CRUD pattern; `recipientsApi.update` takes `UpdateRecipientRequest` (changed
   fields only, `null` clears an optional field)
-- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` send
+- `productsApi.create(data, { idempotencyKey })` / `recipientsApi.create(data, { idempotencyKey })` / `suppliersApi.create(data, { idempotencyKey })` send
   the optional `Idempotency-Key` header (see *Onboarding wizard*)
 - `suppliersApi.*` — same CRUD pattern
 - `ordersApi.getAll()`, `getById()`, `create()`, `update()`, `confirm()`, `cancel()`, `delete()`, `batchApprove()`, `batchDelete()`
@@ -144,6 +158,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 **Utilities** (lines 500–528):
 - `formatCurrency(cents, currency)` — e.g., `100` cents → "1.00 UAH"
 - `formatDate(dateString)` → localized "uk-RU" format
+- `formatDate(iso)` / `formatDateOnly(iso)` format in the viewer's time zone and the interface language (`ru` -> ru-RU, `uk` -> uk-UA, `en` -> en-GB); do not call `toLocaleDateString()` without a locale
 - `amountToCents(amount: string | number)` → robust parsing (handles commas, spaces, NaN)
 
 ### Error Handling: `lib/api-errors.ts`
@@ -151,13 +166,14 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 **parseApiError(error)**:
 - Takes any error, returns `{ message: string; code: string }`
 - Checks Axios error response format: `{ error: string; errorCode: string }`
+- For generic codes (`VALIDATION_ERROR`, `BAD_REQUEST`, `HTTP_EXCEPTION`) the server's own detail (string or class-validator array, joined with `; `) wins over the generic translation
 - Falls back to legacy `{ message: string }`
 - Network errors → "Ошибка сети. Проверьте подключение..."
 - **i18n-aware**: translates error codes via the camelCase locale key —
   `PRODUCT_ALREADY_EXISTS` → `i18n.t('errors.productAlreadyExists')` (until 2026-10-30 it looked up
   a lower snake_case key that no locale has, so ru/uk always showed English). A code without a
   locale entry falls back to `ERROR_MESSAGES` (English), then to the backend's `error` text.
-  Guarded by `frontend/e2e/api-errors.spec.mjs`
+  Guarded by `frontend/e2e/api-errors.spec.mjs` Forms show `parseApiError(error).message`, not a blanket "Bad request" or a hand-rolled `data.message` lookup: the API puts the text in `data.error`.
 - Fallback to `ERROR_MESSAGES` constant if i18n not ready
 
 **ErrorCode enum**:
@@ -191,9 +207,7 @@ export const orderService = new OrderService() // singleton
 ```
 - Calls `ordersApi.*` from `lib/api.ts`
 - Parses errors with `parseApiError()`
-- Logs to console (dev only, no console.log in prod — hook flags it)
-- Triggers toast notifications via `notificationService.success/error()`
-- Throws error so caller can handle it
+- Thin API wrapper: it neither logs nor notifies, it rethrows so the caller (the mutations in `useOrders`) shows exactly one toast per failure (`parseApiError(error).message`) and the matching success toast
 
 **ReceiptService** (similar pattern):
 ```typescript
@@ -204,11 +218,7 @@ async downloadReceipt(receiptId: string): Promise<void>
 // ... more methods
 ```
 
-**NotificationService**:
-- In-memory notification queue
-- `success(msg)`, `error(msg)`, `warning(msg)`, `info(msg)`
-- Subscribers get notified: `subscribe((notifications) => {...})`
-- Used by services + hooks
+`ReceiptService` reports through react-hot-toast with translated messages. `generateReceipt` rethrows a failed POST and resolves on 202 (the PDF renders in the background; progress comes from `ReceiptProgressPanel`), so callers own the error toast. `PublicReceiptPage` treats only HTTP 404/410 as "not found"; other failures show a retry state.
 
 **Singleton pattern**: All services export a singleton instance (e.g., `export const orderService = new OrderService()`). Always use the singleton, never instantiate directly.
 
@@ -300,7 +310,7 @@ const { items, total, isLoading, currentPage, totalPages, itemsPerPage } = useSe
   defaultItemsPerPage: 10,
   extraParams: { status: 'pending' }, // merged into query
   debounceMs: 400, // delay for search input
-  storageKeyPrefix: 'orders', // persist page size + column visibility to localStorage
+  storageKeyPrefix: 'orders', // persist page size + column visibility to localStorage; add `columnsVersion: n` when a column default changes so older saved choices are ignored once (key becomes `<prefix>_v<n>_columns`)
 })
 ```
 
@@ -357,6 +367,8 @@ const { items, total, isLoading, handleSort, visibleColumns } = useServerPaginat
 - `token: string | null` — access token from localStorage
 - `isLoading: boolean` — loading user profile on mount
 - `isAuthenticated: boolean` — derived (!!user && !!token)
+- `refreshProfile()` — re-reads `/auth/profile` into `user` without the loading screen (used after an email change; no page reload)
+- `hasProfileLoadError` / `retryLoadProfile()` — set when the startup profile request fails for a reason other than 401/403 (server down, 5xx). The tokens are kept, `ProtectedRoute` shows "Network error" with Retry instead of logging the user out
 
 **Methods:**
 - `login(email, password)` — calls `authApi.login()`, stores tokens through `auth-session.ts`
@@ -386,6 +398,12 @@ const { user, token, isAuthenticated, isLoading, login, register, logout } = use
 - `theme: 'light' | 'dark'`
 - Applies class to `<html>` (`.dark` or removed)
 - Persists to `localStorage.theme`
+
+**First paint:** `index.html` carries a small inline script that adds the `dark` class and sets `<html lang>` from `localStorage` (`theme`, `i18nextLng`) before the bundle loads, so a dark theme does not flash white; keep it in sync with `getInitialTheme()` and `lib/i18n.ts`. Below 400 px the landing header hides the wordmark (icon only) so it cannot collide with the language switch.
+
+**Native widgets:** `color-scheme` is `light` on `:root` and `dark` on `.dark`, so browser scrollbars and form controls follow the theme. Logout clears the saved table preferences (`*_columns`, `*_itemsPerPage`, `lib/table-preferences.ts`) but keeps theme and language.
+
+**Text colour tokens** (`index.css`): `--color-text-secondary` and `--color-text-tertiary` are chosen to keep at least 4.5:1 against the page and card backgrounds in both themes (light 4.5–7:1, dark 4.8–8.5:1). Do not lighten them; use `text-content-tertiary` for the faintest readable text only. Status text uses its own tokens (`--color-text-accent|danger|success|warning`, applied through the `.text-*-base` classes in `index.css`): the fill tokens measured 2.6-4.3:1 as small text on their own tint, the text tokens keep at least 4.5:1 in both themes. Keep fills and text apart: change a fill via `--color-accent|danger|success|warning`, text via the `--color-text-*` ones. The dark accent fill is `#6064F0` so white text on it reaches 4.5:1.
 
 **useTheme hook** (`hooks/useTheme.ts`):
 ```typescript
@@ -418,7 +436,7 @@ const { theme, toggleTheme, setTheme } = useTheme()
 - 3 languages: `en`, `ru`, `uk`
 - Loads translations from `locales/{lang}/translation.json` (static imports)
 - Auto-detects from localStorage → browser language → HTML lang attribute
-- Syncs `<html lang>` attribute when language changes
+- Syncs `<html lang>` right after init (bundled resources make init synchronous, so the "initialized" event cannot be listened to) and on every language change
 
 **useTranslation hook** (`hooks/useTranslation.ts`):
 ```typescript
@@ -429,6 +447,14 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 ```
 
 **Convention:** Organize translation keys hierarchically (orders.recipient, settings.receiptTitle, etc.). Check JSON files for the full key structure.
+
+**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
+
+**Public-page behaviour:** `LandingShell` scrolls to the URL hash after mount (plain `<a href="/#features">` links from `/blog` and the legal pages) and the sections carry `scroll-margin-top: 84px` for the sticky nav; smooth scrolling exists only under `prefers-reduced-motion: no-preference` (CSS) and script scrolls use `getScrollBehavior()` (`lib/scroll-behavior.ts`). The blog has posts in `en`/`uk` only: the list follows `uk` or English, and a Russian interface shows `blog.languageNote`. `LegalLayout`'s header carries the language switcher and theme toggle.
+
+### Legal pages
+
+`TermsPage`, `PrivacyPage`, `RefundPolicyPage` and `CookiePolicyPage` are thin wrappers: they pick the text for the interface language with `pickLegalContent` (`pages/legal/types.ts`; `ru`/`uk` or English for anything else) and render it inside `LegalLayout`. The texts are per-language content modules, `pages/legal/<slug>.{en,ru,uk}.tsx`, each exporting a `LegalContent` (`title`, `seoDescription`, `body` JSX); `<SEO>` gets the translated title/description and `lang`. Page chrome (the "Last updated" line, its date format, the footer links) uses the `legal.*` locale keys. The `ru`/`uk` texts are **unreviewed translations** of the English originals; the English text is the source of truth, so a change there must be mirrored in the other two files with the same section structure (`e2e/legal-pages.spec.mjs` compares headings, lists, tables and links across languages). They need a legal review before being relied on.
 
 ### Receipt template previews
 
@@ -532,9 +558,9 @@ const { loading, handleUpgrade, handleManage } = useCheckout()
 
 ### Notifications: react-hot-toast
 
-**Global Toaster** setup in App.tsx (lines 202–226):
-- Position: top-right
-- Duration: 4s (success 3s, error 4s)
+**Global Toaster** is `components/common/AppToaster.tsx`, rendered by App.tsx:
+- Position: top-right on desktop; top-center below the 56px mobile header on phones (`hooks/useIsDesktop.ts`)
+- Duration: 4s (success 3s, error 7s); errors are announced as `role="alert"` (set at render time through a `ToastBar` wrapper, because react-hot-toast ignores per-type `ariaProps`)
 - Styled with CSS vars for dark/light mode
 
 **Usage:**
@@ -546,12 +572,7 @@ toast.error('Failed to confirm order')
 toast.loading('Processing...')
 ```
 
-**Services emit toasts** (e.g., OrderService confirms on success, toast.error on failure).
-
-**useNotifications hook** (`hooks/useNotifications.ts`):
-- Wrapper around NotificationService singleton
-- Returns in-memory notifications list (for custom UI if needed)
-- Most code just uses `toast` directly
+**Who toasts:** hooks and pages call `toast` (translated text, `parseApiError(error).message` for failures); services such as `OrderService` only throw, so one failure is one toast. The old `NotificationService` / `useNotifications` / `NotificationToast` trio is gone. Batch approve/delete success uses the plural keys `orders.batchApproved` / `orders.batchDeleted`.
 
 ### Styling: Tailwind CSS v4
 
@@ -596,7 +617,7 @@ components/
 ├── dashboard/         # Analytics charts, widgets
 ├── landing/           # Homepage, hero, pricing
 ├── layout/            # Layout, Sidebar, Header
-├── legal/             # Terms, Privacy, etc. (static)
+├── legal/             # LegalLayout (page chrome); the texts live in pages/legal/
 ├── onboarding/        # Onboarding flow
 ├── orders/            # Order CRUD, forms, filters, actions
 ├── products/          # Product CRUD
@@ -648,7 +669,12 @@ PATCH with only the changed fields (products via `buildProductUpdate`: a changed
 A blank name never creates and never changes an existing entity.
 
 - **Single flight:** one `inFlight` ref covers Next, Back, Skip, Finish, Retry and closing (Escape/X);
-  Skip and Back are also disabled while saving, so a double click sends one request.
+  Skip and Back are also disabled while saving, so a double click sends one request. The auth modals,
+  in-place `LoginForm` and `ProfilePage` use the same synchronous `inFlight` ref.
+- **Closing is not skipping:** X, Escape, the backdrop and browser Back only hide the wizard for this
+  visit (`isDismissed`, no request, offered again next time); the explicit "Skip for now" is the only
+  close that POSTs `onboarding-complete`. The step title is the Modal `title` (the dialog's name) and
+  focus opens on the step's first field (`hooks/useFocusFirstField.ts`, skipped on touch screens).
 - **Errors** keep the step and every value and show an inline alert: `parseApiError` text for a refused
   request (the next attempt sends the current form with a new key); for no response or a 502/503/504,
   `onboarding.saveUnconfirmed` with Retry, which resends the same body with the **same** key (the
@@ -664,13 +690,15 @@ A blank name never creates and never changes an existing entity.
 
 Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Skeleton` and `Tabs` wrap the unstyled primitives in `components/ui/primitives/` (vendored from the former `@klukvas/flux-b2c-ui` package, with `cn()` = `clsx` + `tailwind-merge`). Edit those files directly — there is no external UI package or private registry, so `yarn install` needs no token.
 - `Button.tsx` — primary, secondary, danger variants; loading state; icon support
-- `Modal.tsx` — centered overlay modal
-- `ConfirmModal.tsx` — yes/no dialog
-- `Drawer.tsx` — mobile side drawer
-- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`)
+- `Modal.tsx` — centered overlay modal (built on the vendored `Dialog`, which already moves focus in, traps Tab and restores focus; when dialogs stack, only the topmost handles Escape and Tab; it renders through a portal under `<body>`, so a dialog opened from a table cell does not inherit that cell's `text-align` or other styles)
+- `ConfirmModal.tsx` — yes/no dialog (X, Escape, backdrop and Back are ignored while `isLoading`, as in `common/DeleteConfirmation`); `itemName` shows what is being deleted, `dismissLabel` renames the dismiss button
+- `Drawer.tsx` — side drawer (focus trap, Escape and Back via `hooks/useFocusTrap.ts`, page scroll locked by `hooks/useBodyScrollLock.ts`, a shared counter so stacked overlays can close in any order, used by every overlay including `CreateOrderModal`, `TemplateCarouselModal` and the landing mobile menu, never `document.body.style.overflow` directly; labelled close button; `title` shows a heading, `ariaLabel` only names the dialog). The mobile sidebar (`layout/Sidebar.tsx`) is the same kind of modal below `lg` and `inert` while closed
+- `DataTable.tsx` — table with sorting, selection, pagination (uses `useServerPagination`). Loading shows `itemsPerPage` skeleton rows (card skeletons on `< lg`) after 200 ms (`useDelayedFlag`; the boxes are reserved from the start so nothing jumps), and a refetch overlay after 200 ms. On `< lg`, `selectable` adds a 44 px checkbox per card and a "Select all on this page" row. `ColumnDef.align: "right"` right-aligns numbers with `tabular-nums`; `isCompact` tightens cell padding; `rowLabel` names the checkboxes; `isOffline` (from `useServerPagination`, else the browser's online state) shows a `role="status"` notice with Retry. A zero-result search offers "Clear search"; an error with no rows shows only the alert card (a raw "status code" message becomes a friendly fallback). A failed load renders an alert with an optional Retry (`onRetry`, pages pass `pagination.queryResult.refetch`) and hides the "no data" empty state. While a query is in flight with no rows yet, the spinner shows instead of the "no data" empty state (so clearing a search does not flash "No suppliers yet"). `emptyAction` renders a call-to-action under the empty message (not while a search is active); `onRowClick` ignores clicks on buttons, links and inputs inside the row
+- **Back closes dialogs:** `hooks/useBackClosesDialog.ts` gives every open dialog one marker history entry (a copy of `history.state`, so react-router's `idx` and the settings unsaved-draft guard see no navigation), so the browser Back button / phone back gesture closes only the topmost dialog instead of leaving the page. A normal close (X, Esc, overlay, submit) removes its own marker with `history.go(-n)`; pushes wait while such a pop is in flight. It is applied in `primitives/dialog.tsx` (so `Modal`/`ConfirmModal`), `Drawer`, `useFocusTrap` (so `ProductForm`, `SupplierForm`, `RecipientForm`, `CreateOrderModal`), `OrderDetails`, `EditOrderForm` and `TemplateCarouselModal`. A new hand-rolled overlay must call it too. Known limit: if the router navigates (e.g. a link inside a dialog) while a dialog is open, its marker is buried and one later Back is a no-op. Spec: `e2e/back-closes-modal.spec.mjs`.
+- Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow
-- `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus
+- `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus. Both follow the menu pattern: trigger `aria-haspopup="menu"` + `aria-expanded`, `role="menu"` / `role="menuitem"`, Arrow Up/Down, Home/End, Escape closes and returns focus to the trigger. `PortalDropdown` moves real focus into the menu on open (roving over `DropdownItem`s); `DropdownMenu` highlights a virtual index
 - `Pagination.tsx` — page controls
 - `Combobox.tsx` — searchable select
 - `ThemeToggle.tsx` — dark/light switcher
@@ -874,19 +902,21 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
 
 ## Document configuration and shared draft
 
-`useDocumentDraft` reads `GET /settings/document-config` through Axios/React Query and owns the complete unsaved configuration, base revision, staged logo, and preview request version. `SettingsPage` keeps it mounted across Company, Receipt Design and Language tabs. The Advanced tab renders `AutoReceiptSetting`: a switch backed by `useAutoReceiptSetting` / `useUpdateAutoReceiptSetting` (query key `['settings', 'auto-receipt']`, `GET`/`POST /settings/auto-receipt`). When on, the backend queues a receipt on single and bulk order confirmation, so `useOrders` invalidates `['receipts']` as well as `['orders']` after confirm and batch-approve. `DocumentEditor` uses the existing semantic colors, typography, cards and template carousel. Subscription and interface language remain independent of the saved document configuration.
+`useDocumentDraft` reads `GET /settings/document-config` through Axios/React Query and owns the complete unsaved configuration, base revision, staged logo, and preview request version. `SettingsPage` has one **Documents** tab (plus Subscription and Advanced); the old `?tab=company|receipt|language` links map to it (`LEGACY_TAB_ALIASES`). The page stays mounted across tab switches so the draft survives.
 
-One **Save changes / Discard** bar covers all document fields and logo replacement/removal. Changes do not upload logos until an explicit save/generation/preset action. Reset design only changes the draft's appearance; company values, asset reference, terms and formatting are retained, and Discard reverses the reset. Failed saves keep drafts. Custom titles require non-whitespace text (native required/pattern handling and the shared draft payload guard); errors retain the current draft. Numeric legacy date style is labeled separately from explicit Short/Medium/Long, and the example includes the four-digit year. Revision conflicts offer saved-value comparison, reload of the saved base, and Discard; reloading alone keeps the draft.
+**One page, plain sections.** `DocumentEditor` stacks cards, each with one line on what it changes on the PDF: `DocumentCompanySection` (Your business: fields with a per-field *Show on document* switch, tax and bank details folded; Customer details: three switches), `DocumentTemplateSection` (template select plus a button for the visual previews, automatic/custom title) and `DocumentBrandSection` (accent colour, logo with thumbnail, logo size and position folded, *Reset the look*; both in `DocumentLookSections.tsx`), `DocumentTextSection` (closing lines; payment and delivery terms, folded into a closed group when the template prints none), `DocumentFormatSection` (document language buttons, one **Region** that sets number and date style, a live example, the individual fields under *Fine-tune*; the time zone is a text field with a datalist), `DocumentPresets` ("Saved sets of settings", a closed `Disclosure`). Shared pieces: `ui/Disclosure` (native `<details>`) and `settings/document-ui.tsx` (`DocumentSection`, `LabelledField`, `CheckField`, `FieldHint`). Copy avoids draft/retained/slot/IANA wording; every string lives under `document.*` in en/ru/uk. `CustomizeDocumentModal` renders the same editor with `documentOnly`, which switches `DocumentLayoutContext` to `"dialog"`: the groups become accordions in the order that matters for one order (template and title, language and formats, texts, colour and logo, business and customer details, saved sets), all closed at first with only the PDF preview open (`DocumentPreviewPanel defaultOpen`, on a phone too), under a line naming the order and a sentence that only this document changes; the replace and rebuild-an-older-document cases are plain-language warnings. The action bar stacks on a phone.
 
-The server owns template capabilities, returned by `/settings/templates`. Unsupported controls explain that values are retained. Accent applies only to Branded; terms only to Proforma. Logo alignment stays inside the real template slot. Manual sizing uses smaller Thermal bounds; automatic sizing retains the original template geometry. Contact visibility removes values before HTML/public metadata preparation.
+One **Save changes / Discard changes** bar covers all document fields and logo replacement/removal. Changes do not upload logos until an explicit save/generation/preset action. *Reset the look* only changes the draft (title, colour, closing lines, logo layout, what is shown); company values, asset reference, template and logo file stay.
 
-**Refresh preview** posts the complete unsaved multipart draft to `/receipts/preview` and displays actual PDF bytes. Draft changes mark it stale. AbortController, request sequence and draft version guard late responses; old blob URLs are revoked. Navigation links, indexed browser Back/Forward and browser unload warn about unsaved changes; cancelling Back/Forward restores the current route and draft. Opening the PDF in a new tab keeps the draft. Headless Chrome may show a dark native PDF iframe; verification uses valid PDF bytes/text and the Open PDF preview link, and does not treat that screenshot as proof of native viewer rendering.
+The server owns template capabilities, returned by `/settings/templates`. When the chosen template cannot show a field, the card says so ("The “X” template does not show this. What you enter is kept."). Accent applies only to templates that support it; terms only to Proforma. Logo alignment stays inside the real template slot.
+
+**Preview.** `DocumentPreviewPanel` posts the complete unsaved multipart draft to `/receipts/preview` and displays actual PDF bytes. `useAutoPreview` re-renders it shortly after the last change (2 s quiet, at least 4 s between runs, never two at once, skipped while a custom title is empty or after a failed render until the next edit), because a render is a real PDF on the server and the API allows 30 a minute; a 429 sets `previewPaused` with a message and **Update now**. Preview problems are `previewError` in the panel, not the page-wide `error`. On a phone the panel comes first and collapsed, and renders only once opened. Draft changes mark it stale. AbortController, request sequence and draft version guard late responses; old blob URLs are revoked. Navigation links, indexed browser Back/Forward and browser unload warn about unsaved changes; cancelling Back/Forward restores the current route and draft. Opening the PDF in a new tab keeps the draft. Headless Chrome may show a dark native PDF iframe; verification uses valid PDF bytes/text and the *Open the preview in a new tab* link, and does not treat that screenshot as proof of native viewer rendering.
 
 Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. Maximum 20 presets; names and revisions are validated by the server.
 
 The Orders action menu opens `CustomizeDocumentModal`, using the same editor with **This document only** scope. Generation sends a complete config and optional staged logo without saving defaults. Existing generated documents use explicit `replace`, expected active revision and a share-link replacement warning. Legacy reconstruction requires confirmation. Replacement status is separate from the active generated receipt; order polling recognizes it.
 
-`PublicReceiptPage` uses the frozen visible projection and formatting preferences. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
+`PublicReceiptPage` uses the frozen visible projection and formatting preferences. Its labels come from the `publicReceipt.*` keys and read in the seller's `documentLanguage` (`i18n.getFixedT`), not the visitor's interface language; `<html lang>` follows it while the page is open. The not-found state uses the visitor's language. Delivery omits money. Legacy documents without metadata offer their existing PDF without inventing historical company/recipient values.
 
 Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage, and runs in CI as `browser-documents`; the other browser specs (`node frontend/e2e/run.mjs`) run as `browser-regression`. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract; it no longer matches the current SettingsPage and is not run in CI.
 

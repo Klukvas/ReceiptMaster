@@ -35,7 +35,7 @@ export const OrderRowActions: React.FC<OrderRowActionsProps> = ({
  <div className="flex justify-end items-center gap-1">
  <button
  onClick={() => onView(order)}
- className="p-1.5 rounded-lg hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
+ className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
  title={t("orders.view")}
  >
  <Eye className="w-4 h-4" />

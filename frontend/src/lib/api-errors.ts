@@ -38,6 +38,9 @@ export const ErrorCode = {
 
   // Settings errors
   SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
+
+  // Idempotency
+  IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
   INVALID_SETTINGS: "INVALID_SETTINGS",
 
   // File errors
@@ -82,6 +85,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECEIPT_PRINT_FAILED]: "Failed to print receipt",
 
   // Product errors
+  [ErrorCode.IDEMPOTENCY_KEY_REUSED]:
+    "This request was already sent with different details. Please try again",
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
   [ErrorCode.PRODUCT_ALREADY_EXISTS]: "Product with this name already exists",
   [ErrorCode.PRODUCT_QUANTITY_CONFLICT]:
@@ -117,6 +122,26 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
 
+const HTTP_TOO_MANY_REQUESTS = 429;
+
+// Codes that say nothing specific on their own; the server's detail is the useful part.
+const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
+  ErrorCode.VALIDATION_ERROR,
+  ErrorCode.BAD_REQUEST,
+  ErrorCode.HTTP_EXCEPTION,
+]);
+
+// class-validator sends an array of messages; domain errors send a single string.
+function serverDetail(error: unknown): string | null {
+  const parts = Array.isArray(error) ? error : [error];
+  const text = parts
+    .filter((part): part is string => typeof part === "string")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("; ");
+  return text || null;
+}
+
 /**
  * Locale keys are camelCase while error codes are SCREAMING_SNAKE_CASE:
  * PRODUCT_ALREADY_EXISTS → errors.productAlreadyExists.
@@ -142,11 +167,29 @@ export function parseApiError(error: unknown): {
     };
   }
 
+  // Throttled (login/register allow 5 per minute): the body is a raw English exception.
+  if (
+    isAxiosError(error) &&
+    error.response?.status === HTTP_TOO_MANY_REQUESTS
+  ) {
+    return {
+      message: i18n.t("errors.tooManyRequests", {
+        defaultValue: "Too many attempts. Wait a minute and try again.",
+      }),
+      code: ErrorCode.HTTP_EXCEPTION,
+    };
+  }
+
   // Check if it's an Axios error with API error response
   if (isAxiosError(error) && error.response?.data) {
     const data = error.response.data as Partial<ApiErrorResponse>;
 
     if (data.error && data.errorCode) {
+      const detail = serverDetail(data.error);
+      if (GENERIC_ERROR_CODES.has(data.errorCode) && detail) {
+        return { message: detail, code: data.errorCode };
+      }
+
       // New format: { error, errorCode }
       const userFriendlyMessage = i18n.t(errorTranslationKey(data.errorCode), {
         defaultValue: ERROR_MESSAGES[data.errorCode] || data.error,
@@ -176,7 +219,9 @@ export function parseApiError(error: unknown): {
   // Network error
   if (isAxiosError(error) && !error.response) {
     return {
-      message: "Ошибка сети. Проверьте подключение к интернету",
+      message: i18n.t("errors.networkError", {
+        defaultValue: "Network error. Please check your internet connection",
+      }),
       code: ErrorCode.UNKNOWN_ERROR,
     };
   }

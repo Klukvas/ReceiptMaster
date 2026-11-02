@@ -1,3 +1,5 @@
+import { isProtectedPath, markSessionExpired } from "./session-expiry";
+import i18n from "./i18n";
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import {
   ACCESS_TOKEN_KEY,
@@ -127,6 +129,13 @@ const clearAuthAndRedirect = () => {
   document.cookie = "auth_token=; Max-Age=0; path=/; SameSite=Lax";
   clearStoredSession();
   delete api.defaults.headers.common["Authorization"];
+  markSessionExpired();
+  // On a private page, reload in place: the login screen appears there and
+  // signing in returns the user to the same URL.
+  if (isProtectedPath(window.location.pathname)) {
+    window.location.reload();
+    return;
+  }
   window.location.href = "/";
 };
 
@@ -312,14 +321,14 @@ export const suppliersApi = {
 
   getById: (id: string) => api.get<Supplier>(`/suppliers/${id}`),
 
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
   create: (
     data: Omit<
       Supplier,
       "id" | "created_at" | "updated_at" | "products" | "product_count"
-    > & {
-      productIds?: string[];
-    },
-  ) => api.post<Supplier>("/suppliers", data),
+    >,
+    options: CreateOptions = {},
+  ) => api.post<Supplier>("/suppliers", data, idempotencyConfig(options)),
 
   update: (
     id: string,
@@ -327,9 +336,7 @@ export const suppliersApi = {
       Omit<
         Supplier,
         "id" | "created_at" | "updated_at" | "products" | "product_count"
-      > & {
-        productIds?: string[];
-      }
+      >
     >,
   ) => api.patch<Supplier>(`/suppliers/${id}`, data),
 
@@ -348,12 +355,26 @@ export const ordersApi = {
     },
   ) => api.get<PaginatedResponse<Order>>("/orders", { params }),
 
+  /** Ids of every order the list would show for these filters (at most one batch of 500). */
+  getMatchingIds: (params: {
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    minAmount?: number;
+    maxAmount?: number;
+  }) => api.get<{ ids: string[]; total: number }>("/orders/ids", { params }),
+
   getById: (id: string) => api.get<Order>(`/orders/${id}`),
 
-  create: (data: {
-    recipientId: string;
-    items: { productId: string; qty: number; unitPriceCents?: number }[];
-  }) => api.post<Order>("/orders", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: {
+      recipientId: string;
+      items: { productId: string; qty: number; unitPriceCents?: number }[];
+    },
+    options: CreateOptions = {},
+  ) => api.post<Order>("/orders", data, idempotencyConfig(options)),
 
   update: (
     id: string,
@@ -424,6 +445,14 @@ export const receiptsApi = {
 
   create: (orderId: string) =>
     api.post<Receipt>(`/receipts/orders/${orderId}/receipt`),
+
+  /** Retention cap and the receipt the next one would replace (null while under the cap). */
+  getRetention: () =>
+    api.get<{
+      limit: number;
+      count: number;
+      replaces: { id: string; number: string; order_id: string } | null;
+    }>("/receipts/retention"),
 
   getById: (id: string) => api.get<Receipt>(`/receipts/${id}`),
 
@@ -588,9 +617,21 @@ export const formatCurrency = (cents: number, currency: string = "UAH") => {
   }).format(amount);
 };
 
-export const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString("ru-RU");
+// Dates follow the interface language (and the viewer's own time zone); they used to be
+// hard-wired to ru-RU for everyone.
+const DATE_LOCALES: Record<string, string> = {
+  ru: "ru-RU",
+  uk: "uk-UA",
+  en: "en-GB",
 };
+const dateLocale = (): string =>
+  DATE_LOCALES[i18n.language?.split("-")[0] ?? "en"] ?? "en-GB";
+
+export const formatDate = (dateString: string) =>
+  new Date(dateString).toLocaleString(dateLocale());
+
+export const formatDateOnly = (dateString: string | number | Date) =>
+  new Date(dateString).toLocaleDateString(dateLocale());
 
 // Parsing utilities
 export const amountToCents = (amount: string | number): number => {

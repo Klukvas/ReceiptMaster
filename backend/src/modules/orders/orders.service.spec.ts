@@ -14,6 +14,11 @@ import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { SettingsService } from "../settings/services/settings.service";
 
+// Numbering has its own spec; here the order simply gets the next number.
+jest.mock("./order-number", () => ({
+  nextOrderNumber: jest.fn().mockResolvedValue(7),
+}));
+
 describe("OrdersService", () => {
   let service: OrdersService;
   let ordersRepo: any;
@@ -496,6 +501,8 @@ describe("OrdersService", () => {
 
       expect(result.statusCode).toBe(HttpStatus.CREATED);
       expect(result.isFromCache).toBe(false);
+      // The mocked numbering hands out 7; it must end up on the stored order.
+      expect(result.data.order_number).toBe(7);
     });
   });
 

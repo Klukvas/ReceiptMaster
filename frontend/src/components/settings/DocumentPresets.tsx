@@ -10,13 +10,16 @@ import {
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import { Disclosure } from "../ui/Disclosure";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { Input } from "../ui/Input";
-import { selectClass } from "./DocumentFormatting";
+import { selectClass } from "./document-ui";
 export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState("");
   const [loaded, setLoaded] = useState<Preset>();
   const [name, setName] = useState("");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const presets = useQuery({
     queryKey: ["document-presets"],
     queryFn: async () =>
@@ -39,8 +42,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
         setName(value.name);
         model.usePreset(value.config);
       } else if (action === "delete") {
-        if (!loaded || !window.confirm(t("document.deletePresetConfirm")))
-          return;
+        if (!loaded) return;
         await api.delete(`/settings/document-presets/${loaded.id}`, {
           data: { expectedRevision: loaded.revision },
         });
@@ -73,8 +75,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
     }
   };
   return (
-    <section className="space-y-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4">
-      <h3 className="font-semibold text-content">{t("document.presets")}</h3>
+    <Disclosure summary={t("document.presets")}>
       <p className="text-sm text-content-tertiary">
         {t("document.presetsHelp")}
       </p>
@@ -143,11 +144,22 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
           type="button"
           variant="danger"
           disabled={!loaded || model.busy}
-          onClick={() => act("delete")}
+          onClick={() => setIsConfirmingDelete(true)}
         >
-          {t("common.delete")}
+          {t("document.deletePreset")}
         </Button>
       </div>
-    </section>
+      <ConfirmModal
+        isOpen={isConfirmingDelete}
+        onClose={() => setIsConfirmingDelete(false)}
+        onConfirm={() => {
+          setIsConfirmingDelete(false);
+          void act("delete");
+        }}
+        title={t("document.deletePreset")}
+        message={t("document.deletePresetConfirm")}
+        itemName={loaded?.name}
+      />
+    </Disclosure>
   );
 }

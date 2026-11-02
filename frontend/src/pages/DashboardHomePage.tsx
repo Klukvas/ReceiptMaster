@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatOrderNumber } from "../lib/order-number";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package,
@@ -7,7 +8,6 @@ import {
   Receipt,
   TrendingUp,
   DollarSign,
-  Calendar,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -18,10 +18,19 @@ import {
   dashboardApi,
   settingsApi,
   formatCurrency,
+  formatDateOnly,
 } from "../lib/api";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { StatCardSkeleton } from "../components/ui/Skeleton";
+import {
+  EntityStatCardSkeleton,
+  FinancialStatCardSkeleton,
+} from "../components/dashboard/DashboardSkeletons";
+import {
+  LatestListCard,
+  LatestRow,
+} from "../components/dashboard/LatestListCard";
+import { useHasFailedQuery } from "../components/dashboard/useHasFailedQuery";
 import { StatCard } from "../components/dashboard/StatCard";
 import { RevenueSparkline } from "../components/dashboard/RevenueSparkline";
 import { ProfitStatus } from "../components/dashboard/ProfitStatus";
@@ -31,6 +40,10 @@ import { LowStockWidget } from "../components/dashboard/LowStockWidget";
 import { OnboardingModal } from "../components/onboarding/OnboardingModal";
 import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../hooks/useAuth";
+
+const WIDGET_QUERY_ROOTS = ["lowStockProducts", "orderStatusSummary", "dailyRevenue"] as const;
+
+const UNKNOWN_VALUE = "—";
 
 export const DashboardHomePage = () => {
   const { t } = useTranslation();
@@ -60,38 +73,65 @@ export const DashboardHomePage = () => {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
-    queryClient.invalidateQueries({ queryKey: ["onboarding-status"] });
+    // The wizard created data behind the dashboard's back; without this the cards
+    // keep showing the zeros fetched before it ran until a full reload.
+    for (const queryKey of [
+      ["onboarding-status"],
+      ["products"],
+      ["recipients"],
+      ["subscription", "status"],
+      ["settings"],
+    ]) {
+      queryClient.invalidateQueries({ queryKey });
+    }
   };
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
+  const { data: productsData, isLoading: productsLoading, isError: productsDataFailed, refetch: refetchProducts } = useQuery({
     queryKey: ["products"],
     queryFn: () => productsApi.getAll({ limit: 5 }),
   });
 
-  const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
+  const { data: recipientsData, isLoading: recipientsLoading, isError: recipientsDataFailed, refetch: refetchRecipients } = useQuery({
     queryKey: ["recipients"],
     queryFn: () => recipientsApi.getAll({ limit: 5 }),
   });
 
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading, isError: ordersDataFailed, refetch: refetchOrders } = useQuery({
     queryKey: ["orders"],
     queryFn: () => ordersApi.getAll({ limit: 5 }),
   });
 
-  const { data: receiptsData, isLoading: receiptsLoading } = useQuery({
+  const { data: receiptsData, isLoading: receiptsLoading, isError: receiptsDataFailed } = useQuery({
     queryKey: ["receipts", "dashboard"],
     queryFn: () => receiptsApi.getAll({ limit: 5 }),
   });
 
-  const { data: totalRevenue, isLoading: revenueLoading } = useQuery({
+  const { data: totalRevenue, isLoading: revenueLoading, isError: totalRevenueFailed } = useQuery({
     queryKey: ["totalRevenue"],
     queryFn: () => dashboardApi.getTotalRevenue(),
   });
 
-  const { data: totalTurnover, isLoading: turnoverLoading } = useQuery({
+  const { data: totalTurnover, isLoading: turnoverLoading, isError: totalTurnoverFailed } = useQuery({
     queryKey: ["totalTurnover"],
     queryFn: () => dashboardApi.getTotalTurnover(),
   });
+
+  // The widgets own their queries; the banner still has to cover them.
+  const hasWidgetFailed = useHasFailedQuery(WIDGET_QUERY_ROOTS);
+
+  const hasLoadError =
+    hasWidgetFailed ||
+    productsDataFailed ||
+    recipientsDataFailed ||
+    ordersDataFailed ||
+    receiptsDataFailed ||
+    totalRevenueFailed ||
+    totalTurnoverFailed;
+
+  const retryFailedQueries = () =>
+    queryClient.refetchQueries({
+      predicate: (query) => query.state.status === "error",
+    });
 
   const statsLoading =
     productsLoading || recipientsLoading || ordersLoading || receiptsLoading;
@@ -99,7 +139,7 @@ export const DashboardHomePage = () => {
   const stats = [
     {
       name: t("navigation.products"),
-      value: productsData?.data?.total || 0,
+      value: productsDataFailed ? UNKNOWN_VALUE : productsData?.data?.total || 0,
       icon: Package,
       href: "/products",
       color: "text-accent-base",
@@ -107,7 +147,7 @@ export const DashboardHomePage = () => {
     },
     {
       name: t("navigation.recipients"),
-      value: recipientsData?.data?.total || 0,
+      value: recipientsDataFailed ? UNKNOWN_VALUE : recipientsData?.data?.total || 0,
       icon: Users,
       href: "/recipients",
       color: "text-success-base",
@@ -115,7 +155,7 @@ export const DashboardHomePage = () => {
     },
     {
       name: t("navigation.orders"),
-      value: ordersData?.data?.total || 0,
+      value: ordersDataFailed ? UNKNOWN_VALUE : ordersData?.data?.total || 0,
       icon: ShoppingCart,
       href: "/orders",
       color: "text-purple-600 dark:text-purple-400",
@@ -123,9 +163,9 @@ export const DashboardHomePage = () => {
     },
     {
       name: t("home.receipts"),
-      value: receiptsData?.data?.total || 0,
+      value: receiptsDataFailed ? UNKNOWN_VALUE : receiptsData?.data?.total || 0,
       icon: Receipt,
-      href: "/receipts",
+      href: "/orders",
       color: "text-warning-base",
       bgColor: "bg-[var(--color-warning-light)]",
     },
@@ -141,11 +181,27 @@ export const DashboardHomePage = () => {
         <p className="text-white/80 text-lg">{t("home.subtitle")}</p>
       </div>
 
+      {hasLoadError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-base bg-[var(--color-danger-light)] px-4 py-3 text-sm text-danger-base"
+        >
+          <span>{t("home.loadError")}</span>
+          <button
+            type="button"
+            onClick={retryFailedQueries}
+            className="font-medium underline hover:no-underline"
+          >
+            {t("common.retry")}
+          </button>
+        </div>
+      )}
+
       {/* Entity count cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {statsLoading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <StatCardSkeleton key={i} />
+              <EntityStatCardSkeleton key={i} />
             ))
           : stats.map((stat) => <StatCard key={stat.name} {...stat} />)}
       </div>
@@ -154,20 +210,22 @@ export const DashboardHomePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {revenueLoading || turnoverLoading ? (
           <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
+            <FinancialStatCardSkeleton />
+            <FinancialStatCardSkeleton />
           </>
         ) : (
           <>
             <StatCard
               name={t("home.totalRevenue")}
               value={
-                totalRevenue?.data
-                  ? formatProfit(
-                      totalRevenue.data.total_revenue_cents,
-                      totalRevenue.data.currency,
-                    )
-                  : formatCurrency(0)
+                totalRevenueFailed
+                  ? UNKNOWN_VALUE
+                  : totalRevenue?.data
+                    ? formatProfit(
+                        totalRevenue.data.total_revenue_cents,
+                        totalRevenue.data.currency,
+                      )
+                    : formatCurrency(0)
               }
               description={t("home.revenueDescription")}
               footer={
@@ -185,10 +243,14 @@ export const DashboardHomePage = () => {
             />
             <StatCard
               name={t("home.totalTurnover")}
-              value={formatCurrency(
-                totalTurnover?.data?.total_turnover_cents || 0,
-                totalTurnover?.data?.currency,
-              )}
+              value={
+                totalTurnoverFailed
+                  ? UNKNOWN_VALUE
+                  : formatCurrency(
+                      totalTurnover?.data?.total_turnover_cents || 0,
+                      totalTurnover?.data?.currency,
+                    )
+              }
               description={t("home.turnoverDescription")}
               icon={TrendingUp}
               color="text-accent-base"
@@ -201,7 +263,11 @@ export const DashboardHomePage = () => {
       {/* Charts row: sparkline + order status donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RevenueSparkline />
+          <RevenueSparkline
+            currency={
+              totalRevenue?.data?.currency ?? totalTurnover?.data?.currency
+            }
+          />
         </div>
         <OrderStatusSummary />
       </div>
@@ -211,135 +277,88 @@ export const DashboardHomePage = () => {
 
       {/* Latest data */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Latest products */}
-        <Card title={t("home.latestProducts")}>
-          {productsData?.data?.data && productsData.data.data.length > 0 ? (
-            <div className="space-y-3">
-              {productsData.data.data.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
-                >
-                  <div>
-                    <p className="font-medium text-content">{product.name}</p>
-                    <p className="text-sm text-content-tertiary">
-                      {formatCurrency(product.sale_price_cents)}
-                    </p>
-                  </div>
-                  <div className="text-sm text-content-tertiary">
-                    {product.quantity} {t("orders.pieces", "pcs")}
-                  </div>
-                </div>
-              ))}
-              <Link to="/products">
-                <Button variant="outline" className="w-full mt-4">
-                  {t("home.viewAllProducts")}
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Package className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
-              <p className="text-content-tertiary mb-4">
-                {t("home.noProducts", "No products yet")}
-              </p>
-              <Link to="/products">
-                <Button>{t("home.addFirstProduct")}</Button>
-              </Link>
-            </div>
-          )}
-        </Card>
+        <LatestListCard
+          title={t("home.latestProducts")}
+          isLoading={productsLoading}
+          isError={productsDataFailed}
+          onRetry={() => void refetchProducts()}
+          rows={(productsData?.data?.data ?? []).map((product) => (
+            <LatestRow key={product.id}>
+              <div className="min-w-0">
+                <p className="font-medium text-content">{product.name}</p>
+                <p className="text-sm text-content-tertiary tabular-nums">
+                  {formatCurrency(product.sale_price_cents)}
+                </p>
+              </div>
+              <div className="shrink-0 whitespace-nowrap text-sm text-content-tertiary tabular-nums">
+                {product.quantity} {t("orders.pieces", "pcs")}
+              </div>
+            </LatestRow>
+          ))}
+          emptyIcon={Package}
+          emptyMessage={t("home.noProducts", "No products yet")}
+          emptyAction={{ label: t("home.addFirstProduct"), to: "/products" }}
+          viewAll={{ label: t("home.viewAllProducts"), to: "/products" }}
+        />
 
-        {/* Latest recipients */}
-        <Card title={t("home.latestRecipients")}>
-          {recipientsData?.data?.data && recipientsData.data.data.length > 0 ? (
-            <div className="space-y-3">
-              {recipientsData.data.data.map((recipient) => (
-                <div
-                  key={recipient.id}
-                  className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
-                >
-                  <div>
-                    <p className="font-medium text-content">{recipient.name}</p>
-                    <p className="text-sm text-content-tertiary">
-                      {recipient.email}
-                    </p>
-                  </div>
-                  <div className="text-sm text-content-tertiary">
-                    {recipient.phone}
-                  </div>
-                </div>
-              ))}
-              <Link to="/recipients">
-                <Button variant="outline" className="w-full mt-4">
-                  {t("home.viewAllRecipients")}
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
-              <p className="text-content-tertiary mb-4">
-                {t("home.noRecipients", "No recipients yet")}
-              </p>
-              <Link to="/recipients">
-                <Button>{t("home.addFirstRecipient")}</Button>
-              </Link>
-            </div>
-          )}
-        </Card>
+        <LatestListCard
+          title={t("home.latestRecipients")}
+          isLoading={recipientsLoading}
+          isError={recipientsDataFailed}
+          onRetry={() => void refetchRecipients()}
+          rows={(recipientsData?.data?.data ?? []).map((recipient) => (
+            <LatestRow key={recipient.id}>
+              <div className="min-w-0">
+                <p className="font-medium text-content">{recipient.name}</p>
+                <p className="text-sm text-content-tertiary">{recipient.email}</p>
+              </div>
+              <div className="shrink-0 whitespace-nowrap text-sm text-content-tertiary tabular-nums">
+                {recipient.phone}
+              </div>
+            </LatestRow>
+          ))}
+          emptyIcon={Users}
+          emptyMessage={t("home.noRecipients", "No recipients yet")}
+          emptyAction={{ label: t("home.addFirstRecipient"), to: "/recipients" }}
+          viewAll={{ label: t("home.viewAllRecipients"), to: "/recipients" }}
+        />
       </div>
 
-      {/* Latest orders */}
-      <Card title={t("home.latestOrders")}>
-        {ordersData?.data?.data && ordersData.data.data.length > 0 ? (
-          <div className="space-y-3">
-            {ordersData.data.data.map((order) => (
-              <div
-                key={order.id}
-                className="flex items-center justify-between p-3 bg-surface-alt rounded-lg"
-              >
-                <div>
-                  <p className="font-medium text-content">
-                    {t("home.order", "Order")} #{order.id.slice(-8)}
-                  </p>
-                  <p className="text-sm text-content-tertiary">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-content">
-                    {formatCurrency(order.total_cents)}
-                  </p>
-                  <p className="text-sm text-content-tertiary">
-                    {order.status}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <Link to="/orders">
-              <Button variant="outline" className="w-full mt-4">
-                {t("home.viewAllOrders")}
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-4" />
-            <p className="text-content-tertiary mb-4">
-              {t("home.noOrders", "No orders yet")}
-            </p>
-            <Link to="/orders">
-              <Button>{t("home.createFirstOrder")}</Button>
-            </Link>
-          </div>
-        )}
-      </Card>
+      <LatestListCard
+        title={t("home.latestOrders")}
+        isLoading={ordersLoading}
+        isError={ordersDataFailed}
+        onRetry={() => void refetchOrders()}
+        rows={(ordersData?.data?.data ?? []).map((order) => (
+          <LatestRow key={order.id}>
+            <div className="min-w-0">
+              <p className="font-medium text-content">
+                {t("home.order", "Order")} {formatOrderNumber(order)}
+              </p>
+              <p className="text-sm text-content-tertiary tabular-nums">
+                {formatDateOnly(order.created_at)}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-medium text-content tabular-nums">
+                {formatCurrency(order.total_cents)}
+              </p>
+              <p className="text-sm text-content-tertiary">
+                {t(`orders.${order.status}`, order.status)}
+              </p>
+            </div>
+          </LatestRow>
+        ))}
+        emptyIcon={ShoppingCart}
+        emptyMessage={t("home.noOrders", "No orders yet")}
+        emptyAction={{ label: t("home.createFirstOrder"), to: "/orders" }}
+        viewAll={{ label: t("home.viewAllOrders"), to: "/orders" }}
+      />
 
       {/* Quick actions */}
       <Card title={t("home.quickActions")}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link to="/products">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Link to="/products?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -348,7 +367,7 @@ export const DashboardHomePage = () => {
               {t("home.addProduct")}
             </Button>
           </Link>
-          <Link to="/recipients">
+          <Link to="/recipients?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -357,7 +376,7 @@ export const DashboardHomePage = () => {
               {t("home.addRecipient")}
             </Button>
           </Link>
-          <Link to="/orders">
+          <Link to="/orders?create=1">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
@@ -366,13 +385,13 @@ export const DashboardHomePage = () => {
               {t("home.createOrder")}
             </Button>
           </Link>
-          <Link to="/dashboard">
+          <Link to="/analytics">
             <Button
               variant="outline"
               className="w-full h-20 flex flex-col items-center justify-center"
             >
-              <Calendar className="h-6 w-6 mb-2" />
-              {t("home.viewDashboard")}
+              <TrendingUp className="h-6 w-6 mb-2" />
+              {t("navigation.analytics")}
             </Button>
           </Link>
         </div>

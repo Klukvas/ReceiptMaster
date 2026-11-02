@@ -76,10 +76,11 @@ export const ProductDrawer = ({
 
   if (!product) return null;
 
+  // Same definition as ProductMarginBadge: (sale - purchase) / sale.
   const margin =
-    product.purchase_price_cents > 0
+    product.sale_price_cents > 0
       ? ((product.sale_price_cents - product.purchase_price_cents) /
-          product.purchase_price_cents) *
+          product.sale_price_cents) *
         100
       : 0;
 
@@ -96,7 +97,7 @@ export const ProductDrawer = ({
   };
 
   return (
-    <Drawer open={open} onClose={onClose}>
+    <Drawer open={open} onClose={onClose} ariaLabel={product.name}>
       <div className="space-y-1">
         {/* Header */}
         <div className="-mx-6 -mt-6 px-6 pt-5 pb-5 bg-gradient-to-b from-surface-alt to-elevated border-b border-[var(--color-border-light)]">
@@ -123,6 +124,9 @@ export const ProductDrawer = ({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
+                aria-label={t("orders.moreActions")}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
                 className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors"
               >
                 <MoreVertical className="w-4 h-4" />

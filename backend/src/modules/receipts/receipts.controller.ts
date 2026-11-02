@@ -163,6 +163,15 @@ export class ReceiptsController {
     return { ...result, data: result.data.map(receiptProjection) };
   }
 
+  // Declared before ":id" so "retention" is not read as a receipt id.
+  @Get("retention")
+  @ApiOperation({
+    summary: "Receipt retention cap and the receipt the next one would replace",
+  })
+  async retention(@Request() req: { user: User }) {
+    return this.receiptsService.getRetention(req.user);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить метаданные чека" })
   @ApiDataResponse(200, "ReceiptProjection", "Метаданные чека получены")
@@ -193,9 +202,7 @@ export class ReceiptsController {
       const isPdf = buffer.toString("ascii", 0, 4) === "%PDF";
       if (!isPdf) {
         this.logger.error("File is not a valid PDF:", filename);
-        return res
-          .status(400)
-          .json({ error: "Файл не является корректным PDF" });
+        return res.status(400).json({ error: "The file is not a valid PDF" });
       }
 
       res.set({
@@ -211,7 +218,7 @@ export class ReceiptsController {
       this.logger.error("Error serving PDF:", error);
       if (error instanceof HttpException || error instanceof ApiErrorResponse)
         throw error;
-      res.status(500).json({ error: "Ошибка при получении PDF файла" });
+      res.status(500).json({ error: "Could not read the PDF file" });
     }
   }
 

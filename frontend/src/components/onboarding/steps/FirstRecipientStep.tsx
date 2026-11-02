@@ -32,6 +32,7 @@ export const FirstRecipientStep = ({ data, onChange }: FirstRecipientStepProps) 
  label={t('recipients.email')}
  placeholder="email@example.com"
  type="email"
+ autoComplete="email"
  value={data.email}
  onChange={(e) => handleChange('email', e.target.value)}
  />
@@ -39,6 +40,7 @@ export const FirstRecipientStep = ({ data, onChange }: FirstRecipientStepProps) 
  label={t('recipients.phone')}
  placeholder="+380..."
  type="tel"
+ autoComplete="tel"
  value={data.phone}
  onChange={(e) => handleChange('phone', e.target.value)}
  />

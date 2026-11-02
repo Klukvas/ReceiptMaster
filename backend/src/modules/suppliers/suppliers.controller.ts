@@ -10,12 +10,15 @@ import {
   UseGuards,
   Request,
   ParseUUIDPipe,
+  Res,
 } from "@nestjs/common";
+import { Request as HttpRequest, Response } from "express";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiHeader,
 } from "@nestjs/swagger";
 import { SuppliersService } from "./suppliers.service";
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
@@ -25,6 +28,12 @@ import { PaginatedSupplierResponse } from "../../common/dto/paginated-response.d
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { Supplier } from "./entities/supplier.entity";
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IDEMPOTENCY_REPLAYED_HEADER,
+  idempotencyKeyOf,
+} from "../../common/idempotency/idempotent-create";
+import { ApiFailureResponses } from "../../openapi/api-docs.decorators";
 
 @ApiTags("suppliers")
 @ApiBearerAuth("bearer")
@@ -37,14 +46,31 @@ export class SuppliersController {
   @ApiOperation({ summary: "Создать поставщика" })
   @ApiResponse({
     status: 201,
-    description: "Поставщик успешно создан",
+    description:
+      "Поставщик успешно создан, or the stored 201 response replayed for a repeated Idempotency-Key (with X-Idempotency-Replayed: true)",
     type: Supplier,
   })
-  create(
+  @ApiFailureResponses({
+    400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
+    422: "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
+  })
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
+  async create(
     @Body() createSupplierDto: CreateSupplierDto,
-    @Request() req: { user: User },
-  ) {
-    return this.suppliersService.create(createSupplierDto, req.user);
+    @Request() req: Pick<HttpRequest, "headers"> & { user: User },
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Supplier | Readonly<Record<string, unknown>>> {
+    const idempotencyKey = idempotencyKeyOf(req.headers);
+    if (idempotencyKey === undefined) {
+      return this.suppliersService.create(createSupplierDto, req.user);
+    }
+    const result = await this.suppliersService.createWithIdempotencyKey(
+      createSupplierDto,
+      req.user,
+      idempotencyKey,
+    );
+    if (result.replayed) res.setHeader(IDEMPOTENCY_REPLAYED_HEADER, "true");
+    return result.data;
   }
 
   @Get()

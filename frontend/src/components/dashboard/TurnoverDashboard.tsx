@@ -1,7 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DollarSign, ShoppingCart, CalendarDays } from "lucide-react";
 import { dashboardApi, formatCurrency } from "../../lib/api";
-import { StatCardSkeleton } from "../ui/Skeleton";
+import { KpiPrimarySkeleton, KpiSecondarySkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
+import { AnalyticsUpdatingFrame } from "./UpdatingCue";
+import { buildPeriodLabel } from "./periodLabel";
 import { RevenueChart } from "./RevenueChart";
 import { TopProductsChart } from "./TopProductsChart";
 import { TopRecipientsList } from "./TopRecipientsList";
@@ -23,7 +26,7 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
     endDate: dateRange.endDate || undefined,
   };
 
-  const { data: totalTurnover, isLoading: totalTurnoverLoading } = useQuery({
+  const totalTurnoverQuery = useQuery({
     queryKey: [
       "dashboard",
       "total-turnover",
@@ -31,9 +34,10 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
       dateRange.endDate,
     ],
     queryFn: () => dashboardApi.getTotalTurnover(params),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: turnoverByProducts, isLoading: productsLoading } = useQuery({
+  const productsQuery = useQuery({
     queryKey: [
       "dashboard",
       "turnover-by-products",
@@ -41,9 +45,10 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
       dateRange.endDate,
     ],
     queryFn: () => dashboardApi.getTurnoverByProducts(params),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: turnoverByRecipients, isLoading: recipientsLoading } = useQuery(
+  const recipientsQuery = useQuery(
     {
       queryKey: [
         "dashboard",
@@ -52,10 +57,18 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
         dateRange.endDate,
       ],
       queryFn: () => dashboardApi.getTurnoverByRecipients(params),
+      placeholderData: keepPreviousData,
     },
   );
 
-  const summaryLoading = totalTurnoverLoading;
+  const totalTurnover = totalTurnoverQuery.data;
+  const turnoverByProducts = productsQuery.data;
+  const turnoverByRecipients = recipientsQuery.data;
+  const summaryLoading = totalTurnoverQuery.isLoading;
+  const summaryFailed = totalTurnoverQuery.isError;
+  const isUpdating = [totalTurnoverQuery, productsQuery, recipientsQuery].some(
+    (query) => query.isPlaceholderData,
+  );
 
   const productChartData = (turnoverByProducts?.data || []).map((p) => ({
     name: p.product_name,
@@ -77,82 +90,103 @@ export const TurnoverDashboard = ({ dateRange }: TurnoverDashboardProps) => {
     currency: r.currency,
   }));
 
-  const periodText =
-    dateRange.startDate && dateRange.endDate
-      ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
-      : t("dashboard.allTime", "All time");
+  const periodText = buildPeriodLabel(dateRange, t);
+  const productsCurrency =
+    totalTurnover?.data?.currency ?? turnoverByProducts?.data?.[0]?.currency;
+  const recipientsCurrency =
+    totalTurnover?.data?.currency ?? turnoverByRecipients?.data?.[0]?.currency;
 
   return (
-    <div className="space-y-6">
-      {/* KPI section */}
-      {summaryLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="sm:col-span-2">
-            <StatCardSkeleton />
+    <AnalyticsUpdatingFrame isUpdating={isUpdating}>
+      <div className="space-y-6">
+        {summaryFailed && (
+          <QueryErrorState onRetry={() => void totalTurnoverQuery.refetch()} />
+        )}
+
+        {/* KPI section */}
+        {summaryLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+              <KpiPrimarySkeleton hasFooter={false} />
+            </div>
+            <KpiSecondarySkeleton />
+            <KpiSecondarySkeleton />
           </div>
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="sm:col-span-2">
-            <KPIPrimaryCard
-              label={t("dashboard.totalTurnover", "Total Turnover")}
-              value={formatCurrency(
-                totalTurnover?.data?.total_turnover_cents || 0,
-                totalTurnover?.data?.currency,
-              )}
-              icon={<DollarSign className="h-5 w-5" />}
-              accentColor="purple"
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+              <KPIPrimaryCard
+                label={t("dashboard.totalTurnover", "Total Turnover")}
+                value={
+                  summaryFailed
+                    ? "—"
+                    : formatCurrency(
+                        totalTurnover?.data?.total_turnover_cents || 0,
+                        totalTurnover?.data?.currency,
+                      )
+                }
+                icon={<DollarSign className="h-5 w-5" />}
+                accentColor="purple"
+              />
+            </div>
+            <KPISecondaryCard
+              label={t("dashboard.totalOrders")}
+              value={summaryFailed ? "—" : String(totalTurnover?.data?.total_orders || 0)}
+              icon={<ShoppingCart className="h-4 w-4" />}
+            />
+            <KPISecondaryCard
+              label={t("dashboard.period", "Period")}
+              value={periodText}
+              icon={<CalendarDays className="h-4 w-4" />}
             />
           </div>
-          <KPISecondaryCard
-            label={t("dashboard.totalOrders")}
-            value={String(totalTurnover?.data?.total_orders || 0)}
-            icon={<ShoppingCart className="h-4 w-4" />}
+        )}
+
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <RevenueChart
+            title={t("dashboard.turnoverByProduct")}
+            data={productChartData}
+            isLoading={productsQuery.isLoading}
+            isError={productsQuery.isError}
+            onRetry={() => void productsQuery.refetch()}
+            currency={productsCurrency}
+            color="#8b5cf6"
+            emptyMessage={t("dashboard.noData")}
           />
-          <KPISecondaryCard
-            label={t("dashboard.period", "Period")}
-            value={periodText}
-            icon={<CalendarDays className="h-4 w-4" />}
+          <TopProductsChart
+            title={t("dashboard.topProductsByQty", "Top Products by Quantity")}
+            data={productChartData}
+            isLoading={productsQuery.isLoading}
+            isError={productsQuery.isError}
+            onRetry={() => void productsQuery.refetch()}
+            color="#a78bfa"
+            emptyMessage={t("dashboard.noData")}
           />
         </div>
-      )}
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <RevenueChart
-          title={t("dashboard.turnoverByProduct")}
-          data={productChartData}
-          isLoading={productsLoading}
-          color="#8b5cf6"
-          emptyMessage={t("dashboard.noData")}
-        />
-        <TopProductsChart
-          title={t("dashboard.topProductsByQty", "Top Products by Quantity")}
-          data={productChartData}
-          isLoading={productsLoading}
-          color="#a78bfa"
-          emptyMessage={t("dashboard.noData")}
-        />
+        {/* Recipients row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <RevenueChart
+            title={t("dashboard.turnoverByRecipient")}
+            data={recipientChartData}
+            isLoading={recipientsQuery.isLoading}
+            isError={recipientsQuery.isError}
+            onRetry={() => void recipientsQuery.refetch()}
+            currency={recipientsCurrency}
+            color="#8b5cf6"
+            emptyMessage={t("dashboard.noData")}
+          />
+          <TopRecipientsList
+            recipients={recipientListData}
+            isLoading={recipientsQuery.isLoading}
+            isError={recipientsQuery.isError}
+            onRetry={() => void recipientsQuery.refetch()}
+            emptyMessage={t("dashboard.noData")}
+            accentColor="purple"
+          />
+        </div>
       </div>
-
-      {/* Recipients row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <RevenueChart
-          title={t("dashboard.turnoverByRecipient")}
-          data={recipientChartData}
-          isLoading={recipientsLoading}
-          color="#8b5cf6"
-          emptyMessage={t("dashboard.noData")}
-        />
-        <TopRecipientsList
-          recipients={recipientListData}
-          isLoading={recipientsLoading}
-          emptyMessage={t("dashboard.noData")}
-          accentColor="purple"
-        />
-      </div>
-    </div>
+    </AnalyticsUpdatingFrame>
   );
 };

@@ -22,6 +22,7 @@ import {
 } from"../../lib/api";
 import { Drawer } from"../ui/Drawer";
 import { useTranslation } from"../../hooks/useTranslation";
+import toast from 'react-hot-toast';
 
 interface SupplierDrawerProps {
  supplier: Supplier | null;
@@ -55,11 +56,13 @@ export const SupplierDrawer = ({
  try {
  await navigator.clipboard.writeText(s.address);
  setAddressCopied(true);
+ toast.success(t("common.copied"));
  setTimeout(() => setAddressCopied(false), 2000);
  } catch {
- // clipboard API might not be available
+ // The clipboard API needs a secure context and permission; say so instead of doing nothing.
+ toast.error(t("common.copyFailed"));
  }
- }, [fullData?.data, supplier]);
+ }, [fullData?.data, supplier, t]);
 
  if (!supplier) return null;
 
@@ -73,7 +76,7 @@ export const SupplierDrawer = ({
  .slice(0, 2);
 
  return (
- <Drawer open={open} onClose={onClose}>
+ <Drawer open={open} onClose={onClose} ariaLabel={supplier.name}>
  <div className="space-y-1">
  {/* Profile Header */}
  <div className="-mx-6 -mt-6 px-6 pt-5 pb-5 bg-gradient-to-b from-surface-alt to-elevated border-b border-[var(--color-border-light)]">
@@ -107,6 +110,9 @@ export const SupplierDrawer = ({
  <div className="relative">
  <button
  onClick={() => setMenuOpen(!menuOpen)}
+ aria-label={t("orders.moreActions")}
+ aria-haspopup="menu"
+ aria-expanded={menuOpen}
  className="p-1.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors"
  >
  <MoreVertical className="w-4 h-4" />

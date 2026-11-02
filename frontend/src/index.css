@@ -7,6 +7,8 @@
 
 /* ---- Light Theme ---- */
 :root {
+  /* Native scrollbars and form controls follow the theme instead of staying bright on dark. */
+  color-scheme: light;
   /* Backgrounds */
   --color-bg: #F5F5F5;
   --color-bg-secondary: #EFEFEF;
@@ -14,8 +16,8 @@
 
   /* Text */
   --color-text: #202020;
-  --color-text-secondary: #6B6B6B;
-  --color-text-tertiary: #A0A0A0;
+  --color-text-secondary: #4F4F4F;
+  --color-text-tertiary: #6B6B6B;
   --color-text-inverse: #FFFFFF;
 
   /* Borders */
@@ -46,7 +48,8 @@
 
   /* Utility */
   --color-overlay: rgba(0, 0, 0, 0.5);
-  --color-ring: rgba(79, 70, 229, 0.4);
+  /* Opaque so the focus indicator keeps at least 3:1 against page and card backgrounds. */
+  --color-ring: #4F46E5;
   --color-shadow: rgba(0, 0, 0, 0.03);
   --color-shadow-hover: rgba(0, 0, 0, 0.06);
 
@@ -70,6 +73,7 @@
 
 /* ---- Dark Theme ---- */
 .dark {
+  color-scheme: dark;
   /* Backgrounds */
   --color-bg: #141414;
   --color-bg-secondary: #1A1A1A;
@@ -77,8 +81,8 @@
 
   /* Text */
   --color-text: #EFEFEF;
-  --color-text-secondary: #9A9A9A;
-  --color-text-tertiary: #5A5A5A;
+  --color-text-secondary: #B0B0B0;
+  --color-text-tertiary: #909090;
   --color-text-inverse: #141414;
 
   /* Borders */
@@ -87,7 +91,8 @@
   --color-border-light: #252525;
 
   /* Accent */
-  --color-accent: #6366F1;
+  /* Slightly deeper than indigo-500 so white text on accent fills reaches 4.5:1. */
+  --color-accent: #6064F0;
   --color-accent-hover: #4F46E5;
   --color-accent-light: rgba(99, 102, 241, 0.1);
   --color-accent-text: #FFFFFF;
@@ -109,7 +114,7 @@
 
   /* Utility */
   --color-overlay: rgba(0, 0, 0, 0.7);
-  --color-ring: rgba(99, 102, 241, 0.4);
+  --color-ring: #818CF8;
   --color-shadow: rgba(0, 0, 0, 0.2);
   --color-shadow-hover: rgba(0, 0, 0, 0.3);
 
@@ -161,6 +166,9 @@
   --color-danger-base-hover: var(--color-danger-hover);
   --color-success-base: var(--color-success);
   --color-success-base-hover: var(--color-success-hover);
+  /* Filled success surfaces under white text: reaches 4.5:1 in both themes (the base is tuned for borders/fills). */
+  --color-success-strong: #047857;
+  --color-success-strong-hover: #065F46;
   --color-warning-base: var(--color-warning);
   --color-warning-base-hover: var(--color-warning-hover);
   --color-content-inverse: var(--color-text-inverse);
@@ -324,9 +332,11 @@ a:focus-visible {
   animation: receipt-pulse 2s ease-in-out infinite;
 }
 
-/* Smooth scrolling for landing page */
-html {
-  scroll-behavior: smooth;
+/* Smooth scrolling only when the visitor has not asked for reduced motion */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Tabular nums for financial data */
@@ -371,6 +381,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --l-text: #202020;
   --l-muted: #6B6B6B;
   --l-faint: #A0A0A0;
+  --l-indigo-text: var(--l-indigo);
   --l-border: #E2E2E2;
   --l-nav-pill: #E8E8E8;
   --l-indigo: #4F46E5;
@@ -398,6 +409,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --l-border: #2E2E2E;
   --l-nav-pill: #252525;
   --l-indigo: #6366F1;
+  --l-indigo-text: #818CF8;
   --l-indigo-l: #1e1d3a;
   --l-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
   --l-steps-bg: #0D0D0D;
@@ -609,18 +621,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-bottom: 1px solid var(--l-border);
   display: flex; align-items: center; gap: 28px; background: transparent;
 }
-.landing-trusted-label { font-size: 13px; font-weight: 600; color: var(--l-indigo); white-space: nowrap; }
+.landing-trusted-label { font-size: 13px; font-weight: 600; color: var(--l-indigo-text); white-space: nowrap; }
 .landing-trusted-sep { width: 1px; height: 18px; background: var(--l-border); flex-shrink: 0; }
 .landing-trusted-items { display: flex; align-items: center; justify-content: center; gap: 36px; flex-wrap: wrap; }
 .landing-trusted-n { font-size: 16px; font-weight: 700; letter-spacing: -0.04em; display: block; }
 .landing-trusted-l { font-size: 11px; color: var(--l-faint); font-weight: 500; }
 
 /* Section common */
-.landing-section { padding: 96px 40px; }
+.landing-section { padding: 96px 40px; scroll-margin-top: 84px; }
 .landing-section-tag {
   font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.1em;
-  color: var(--l-indigo); margin-bottom: 18px;
+  color: var(--l-indigo-text); margin-bottom: 18px;
 }
 .landing-section h2,
 .landing-steps-section h2,
@@ -673,6 +685,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* Steps (How it works) */
 .landing-steps-section {
+  scroll-margin-top: 84px;
   background: var(--l-steps-bg); padding: 96px 40px;
   position: relative; overflow: hidden;
 }
@@ -753,7 +766,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* Telegram section */
-.landing-tg-section { padding: 96px 40px; }
+.landing-tg-section { padding: 96px 40px; scroll-margin-top: 84px; }
 .landing-tg-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
 .landing-tg-ui {
   background: var(--l-surface); border: 1px solid var(--l-border);
@@ -870,9 +883,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding: 34px 40px; display: flex; align-items: center; justify-content: space-between;
 }
 .landing-footer-links { display: flex; gap: 24px; }
-.landing-footer-links a { font-size: 13px; color: var(--l-faint); text-decoration: none; transition: color 0.15s; }
+.landing-footer-links a { font-size: 13px; color: var(--l-muted); text-decoration: none; transition: color 0.15s; }
 .landing-footer-links a:hover { color: var(--l-text); }
-.landing-footer-copy { font-size: 13px; color: var(--l-faint); }
+.landing-footer-copy { font-size: 13px; color: var(--l-muted); }
+@media (pointer: coarse) {
+  .landing-footer-links a { display: inline-flex; align-items: center; min-height: 44px; }
+  .landing-logo { min-height: 44px; }
+}
 
 /* Nav auth wrapper */
 .landing-nav-auth { display: flex; align-items: center; gap: 8px; }
@@ -948,7 +965,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .l-au { animation: none; opacity: 1; }
-  .landing-fc-receipt, .landing-fc-revenue, .landing-fc-orders { animation: none; }
+  .landing-fc-receipt, .landing-fc-revenue, .landing-fc-orders,
+  .landing-fc-products, .landing-fc-analytics { animation: none; }
+  .powered-by-badge__icon .fl1, .powered-by-badge__icon .fl2, .powered-by-badge__icon .fl3, .fl1, .fl2, .fl3 { animation: none; }
   .landing-page { transition: none; }
 
   /* App chrome: drop slides/scales/overshoot and looping motion; surfaces
@@ -993,9 +1012,41 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .landing-trusted-label { width: 100%; margin-bottom: 8px; }
   .landing-theme-toggle { width: 44px; height: 44px; }
 }
+/* Very narrow phones: the wordmark collided with the language switch; the logo icon alone stays. */
+@media (max-width: 400px) {
+  .landing-nav { padding: 0 12px; }
+  .landing-logo-name { display: none; }
+  .landing-nav-right { gap: 4px; }
+}
 @media (max-width: 640px) {
   .landing-feat-grid { grid-template-columns: 1fr; }
   .landing-trusted-items { gap: 20px; }
   .landing-hero-btns { flex-direction: column; align-items: stretch; }
   .landing-feat-card { padding: 28px 22px; }
+}
+
+/* ============================================
+   Status text colours
+   The accent/danger/success/warning tokens are tuned for fills and borders. As small
+   text on their own 8-10% tint they measured 2.6-4.3:1, so text gets its own tokens that
+   keep at least 4.5:1 on cards, the page and tinted chips in both themes.
+   ============================================ */
+:root {
+  --color-text-accent: var(--color-accent);
+  --color-text-danger: #B91C1C;
+  --color-text-success: #065F46;
+  --color-text-warning: #92400E;
+}
+.dark {
+  --color-text-accent: #818CF8;
+  --color-text-danger: #F87171;
+  --color-text-success: var(--color-success);
+  --color-text-warning: var(--color-warning);
+}
+/* In the utilities layer so hover:/dark: variants of other colours still win. */
+@layer utilities {
+  .text-accent-base { color: var(--color-text-accent); }
+  .text-danger-base { color: var(--color-text-danger); }
+  .text-success-base { color: var(--color-text-success); }
+  .text-warning-base { color: var(--color-text-warning); }
 }

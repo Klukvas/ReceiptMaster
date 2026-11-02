@@ -75,6 +75,28 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
+  // The menu is position: fixed, so it would stay behind while the page moves under it.
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const openedAt = buttonRef.current.getBoundingClientRect();
+    // Scroll and resize events are delivered a frame late, so one caused by the scroll that
+    // brought the trigger into view arrives after the menu opened. Only a trigger that has
+    // actually moved leaves the fixed menu behind.
+    const closeIfTriggerMoved = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && dropdownRef.current?.contains(target)) return;
+      const now = buttonRef.current?.getBoundingClientRect();
+      if (now && now.top === openedAt.top && now.left === openedAt.left) return;
+      setIsOpen(false);
+    };
+    window.addEventListener("scroll", closeIfTriggerMoved, true);
+    window.addEventListener("resize", closeIfTriggerMoved);
+    return () => {
+      window.removeEventListener("scroll", closeIfTriggerMoved, true);
+      window.removeEventListener("resize", closeIfTriggerMoved);
+    };
+  }, [isOpen]);
+
   const updatePosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
@@ -302,8 +324,10 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="p-1.5 rounded-lg hover:bg-surface-alt transition-colors"
+        className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors"
         title={t("orders.moreActions")}
+        aria-label={t("orders.moreActions")}
+        aria-haspopup="menu"
       >
         <MoreVertical className="w-4 h-4 text-content-tertiary" />
       </button>
@@ -329,7 +353,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
                   onClick={item.onClick}
                   disabled={item.disabled}
                   role="menuitem"
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 transition-colors ${
+                  className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors ${
                     item.className
                   } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
                     index === focusedIndex ? "bg-surface-alt" : ""

@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
+import toast from "react-hot-toast";
 import {
   productsApi,
   suppliersApi,
@@ -12,8 +13,10 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { Combobox } from "../ui/Combobox";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useSimilarProducts } from "../../hooks/useSimilarProducts";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import {
   buildProductUpdate,
   toProductFields,
@@ -26,6 +29,14 @@ interface ProductFormProps {
 }
 
 type QuantityConflict = { readonly server: number; readonly mine: number };
+
+// In form order, so the first problem is the one that gets focus.
+const FIELD_IDS = {
+  name: "product-name",
+  purchase_price_cents: "product-purchase-price",
+  sale_price_cents: "product-sale-price",
+  quantity: "product-quantity",
+} as const;
 
 export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormValues>({
@@ -40,18 +51,32 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const [backendError, setBackendError] = useState<string>("");
   // The stock a quantity edit replaces: the loaded value, or the server's after
   // a conflict, so saving again is an informed overwrite.
-  const [quantityBaseline, setQuantityBaseline] = useState<number | null>(
-    null,
-  );
+  const [quantityBaseline, setQuantityBaseline] = useState<number | null>(null);
   const [quantityConflict, setQuantityConflict] =
     useState<QuantityConflict | null>(null);
 
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
+  const keyFor = useIdempotencyKey();
+  // A fast double click fires twice before the button re-renders as disabled.
+  const isCreatingRef = useRef(false);
+
+  const purchasePrice = parseFloat(formData.purchase_price_cents);
+  const salePrice = parseFloat(formData.sale_price_cents);
+  // A warning, not an error: selling below cost is sometimes intentional.
+  const isBelowCost =
+    Number.isFinite(purchasePrice) &&
+    Number.isFinite(salePrice) &&
+    salePrice < purchasePrice;
 
   const similarProducts = useSimilarProducts(formData.name, !product);
 
-  const { data: suppliersData } = useQuery({
+  const {
+    data: suppliersData,
+    isError: isSuppliersError,
+    refetch: refetchSuppliers,
+  } = useQuery({
     queryKey: ["suppliers"],
     queryFn: () => suppliersApi.getAll({ limit: 100 }),
   });
@@ -92,15 +117,28 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   };
 
   const createMutation = useMutation({
-    mutationFn: productsApi.create,
+    mutationFn: (data: Parameters<typeof productsApi.create>[0]) =>
+      productsApi.create(data, { idempotencyKey: keyFor(data) }),
+    onSettled: () => {
+      isCreatingRef.current = false;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      // The header counter ("3/10") comes from the plan usage, not from the product list.
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      toast.success(t("products.productCreated"));
       onClose();
     },
     onError: (error: unknown) => {
+      const { code, message } = parseApiError(error);
+      // A taken name is a problem with that field, not with the form.
+      if (code === ErrorCode.PRODUCT_ALREADY_EXISTS) {
+        setErrors({ name: message });
+        document.getElementById(FIELD_IDS.name)?.focus();
+        return;
+      }
       setBackendError(
-        parseApiError(error).message ||
-          t("products.createError", "Error creating product"),
+        message || t("products.createError", "Error creating product"),
       );
     },
   });
@@ -110,6 +148,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       productsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success(t("products.productUpdated"));
       onClose();
     },
     onError: (error: unknown, { id, data }) => {
@@ -135,18 +174,24 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }
     const purchasePrice = parseFloat(formData.purchase_price_cents);
     if (isNaN(purchasePrice) || purchasePrice < 0) {
-      newErrors.purchase_price_cents = t("products.purchasePriceMustBePositive");
+      newErrors.purchase_price_cents = t(
+        "products.purchasePriceMustBePositive",
+      );
     }
     const salePrice = parseFloat(formData.sale_price_cents);
     if (isNaN(salePrice) || salePrice < 0) {
       newErrors.sale_price_cents = t("products.salePriceMustBePositive");
     }
-    const quantity = parseInt(formData.quantity);
-    if (isNaN(quantity) || quantity < 0) {
-      newErrors.quantity = t("products.quantityMustBeNonNegative");
+    // parseInt("1.5") is 1: reject fractions instead of silently storing a different number.
+    if (!/^\d+$/.test(formData.quantity.trim())) {
+      newErrors.quantity = t("products.quantityMustBeWhole");
     }
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const firstInvalid = (
+      Object.keys(FIELD_IDS) as (keyof typeof FIELD_IDS)[]
+    ).find((field) => newErrors[field]);
+    if (firstInvalid) document.getElementById(FIELD_IDS[firstInvalid])?.focus();
+    return !firstInvalid;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -157,6 +202,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     if (!validateForm()) return;
 
     if (!product) {
+      if (isCreatingRef.current) return;
+      isCreatingRef.current = true;
       createMutation.mutate(toProductFields(formData));
       return;
     }
@@ -175,8 +222,17 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50">
-      <Card className="w-full max-w-md mx-4">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={
+        product ? t("products.editProduct") : t("products.createProduct")
+      }
+      tabIndex={-1}
+      className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 outline-none"
+    >
+      <Card className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-content">
             {product ? t("products.editProduct") : t("products.createProduct")}
@@ -186,7 +242,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {backendError && (
             <div className="p-3 bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] rounded-lg">
               <div className="flex items-center">
@@ -198,6 +254,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div>
             <Input
+              id={FIELD_IDS.name}
               label={t("products.productName")}
               value={formData.name}
               onChange={(e) => {
@@ -224,7 +281,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
                     >
                       <div className="flex items-center gap-2">
                         <Package className="w-3 h-3 text-content-tertiary" />
-                        <span className="font-medium text-content">{sp.name}</span>
+                        <span className="font-medium text-content">
+                          {sp.name}
+                        </span>
                       </div>
                       <div className="text-content-tertiary">
                         {sp.quantity} {t("products.pcs", "pcs")}
@@ -238,6 +297,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
+              id={FIELD_IDS.purchase_price_cents}
               label={t("products.purchasePrice")}
               type="number"
               step="0.01"
@@ -246,13 +306,18 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               placeholder="0.00"
               value={formData.purchase_price_cents}
               onChange={(e) => {
-                setFormData({ ...formData, purchase_price_cents: e.target.value });
-                if (errors.purchase_price_cents) setErrors({ ...errors, purchase_price_cents: "" });
+                setFormData({
+                  ...formData,
+                  purchase_price_cents: e.target.value,
+                });
+                if (errors.purchase_price_cents)
+                  setErrors({ ...errors, purchase_price_cents: "" });
               }}
               required
               error={errors.purchase_price_cents}
             />
             <Input
+              id={FIELD_IDS.sale_price_cents}
               label={t("products.salePrice")}
               type="number"
               step="0.01"
@@ -262,18 +327,26 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               value={formData.sale_price_cents}
               onChange={(e) => {
                 setFormData({ ...formData, sale_price_cents: e.target.value });
-                if (errors.sale_price_cents) setErrors({ ...errors, sale_price_cents: "" });
+                if (errors.sale_price_cents)
+                  setErrors({ ...errors, sale_price_cents: "" });
               }}
               required
               error={errors.sale_price_cents}
             />
           </div>
+          {isBelowCost && (
+            <p role="status" className="-mt-2 text-xs text-warning-base">
+              {t("products.belowCostWarning")}
+            </p>
+          )}
 
           <div>
             <Input
+              id={FIELD_IDS.quantity}
               label={t("products.quantity")}
               type="number"
               min="0"
+              step="1"
               placeholder="0"
               value={formData.quantity}
               onChange={(e) => {
@@ -301,7 +374,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             <select
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
               value={formData.currency}
-              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, currency: e.target.value })
+              }
             >
               <option value="UAH">UAH</option>
             </select>
@@ -318,12 +393,30 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
             <Combobox
               options={supplierOptions}
               value={formData.supplier_id}
-              onChange={(value) => setFormData({ ...formData, supplier_id: value })}
+              onChange={(value) =>
+                setFormData({ ...formData, supplier_id: value })
+              }
               onClear={() => setFormData({ ...formData, supplier_id: "" })}
               placeholder={t("products.selectSupplier", "Select supplier")}
               searchPlaceholder={t("common.search", "Search...")}
               noResultsText={t("common.noResults", "Nothing found")}
+              ariaLabel={t("products.supplier", "Supplier")}
             />
+            {isSuppliersError && (
+              <p
+                role="alert"
+                className="mt-1 flex items-center gap-2 text-xs text-danger-base"
+              >
+                {t("products.suppliersLoadError")}
+                <button
+                  type="button"
+                  onClick={() => void refetchSuppliers()}
+                  className="font-medium underline pointer-coarse:min-h-11 pointer-coarse:px-2"
+                >
+                  {t("common.retry")}
+                </button>
+              </p>
+            )}
           </div>
 
           <div className="flex space-x-3 pt-4">

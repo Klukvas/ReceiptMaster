@@ -25,8 +25,13 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
 }) => {
  const { t } = useTranslation();
 
+ // X, Escape, backdrop and Back must not abandon a delete that is already running.
+ const handleClose = () => {
+ if (!isLoading) onClose();
+ };
+
  return (
- <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" showCloseButton>
+ <Modal isOpen={isOpen} onClose={handleClose} title={title} size="sm" showCloseButton>
  <div className="flex gap-4">
  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[var(--color-danger-light)] flex items-center justify-center">
  <AlertTriangle className="w-5 h-5 text-danger-base" aria-hidden />

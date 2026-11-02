@@ -2,6 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Apply the saved theme and language before first paint so a dark theme does not flash white. Keep in sync with getInitialTheme() and i18n. -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("theme");
+          if (!theme && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            theme = "dark";
+          }
+          if (theme === "dark") document.documentElement.classList.add("dark");
+          var language = localStorage.getItem("i18nextLng");
+          if (language) document.documentElement.lang = language.split("-")[0];
+        } catch (error) {
+          /* Storage can be blocked; the app sets both once it starts. */
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/logo-icon.svg" />
     <link rel="apple-touch-icon" href="/logo-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

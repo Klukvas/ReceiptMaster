@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsString, MinLength } from "class-validator";
+import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 export class ChangePasswordDto {
   @ApiProperty({
@@ -12,18 +13,22 @@ export class ChangePasswordDto {
   @ApiProperty({
     description: "Новый пароль",
     example: "newPassword123",
-    minLength: 6,
+    minLength: MIN_PASSWORD_LENGTH,
   })
   @IsString()
-  @MinLength(6, { message: "Пароль должен содержать минимум 6 символов" })
+  @MinLength(MIN_PASSWORD_LENGTH, {
+    message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
+  })
   newPassword: string;
 
   @ApiProperty({
     description: "Подтверждение нового пароля",
     example: "newPassword123",
-    minLength: 6,
+    minLength: MIN_PASSWORD_LENGTH,
   })
   @IsString()
-  @MinLength(6, { message: "Пароль должен содержать минимум 6 символов" })
+  @MinLength(MIN_PASSWORD_LENGTH, {
+    message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
+  })
   confirmPassword: string;
 }

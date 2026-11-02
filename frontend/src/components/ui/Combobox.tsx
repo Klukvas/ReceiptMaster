@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from './Button';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface ComboboxOption {
  value: string;
@@ -26,6 +27,8 @@ interface ComboboxProps {
  isLoading?: boolean;
  loadMoreText?: string;
  loadingText?: string;
+ /** Accessible name of the combobox (usually the visible field label). */
+ ariaLabel?: string;
 }
 
 export const Combobox = ({
@@ -45,7 +48,9 @@ export const Combobox = ({
  isLoading,
  loadMoreText,
  loadingText,
+ ariaLabel,
 }: ComboboxProps) => {
+ const { t } = useTranslation();
  const [isOpen, setIsOpen] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
  const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -169,6 +174,8 @@ export const Combobox = ({
  }
  break;
  case 'Escape':
+ // Only swallow the key while a list is open, so a second Esc can close the dialog around it.
+ if (isOpen) e.preventDefault();
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);
@@ -201,6 +208,8 @@ export const Combobox = ({
  }
  break;
  case 'Escape':
+ // Only swallow the key while a list is open, so a second Esc can close the dialog around it.
+ if (isOpen) e.preventDefault();
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);
@@ -253,6 +262,7 @@ export const Combobox = ({
  role="combobox"
  aria-expanded={isOpen}
  aria-haspopup="listbox"
+ aria-label={ariaLabel ?? placeholder}
  >
  <div className="flex-1 min-w-0">
  {isOpen ? (
@@ -280,9 +290,10 @@ export const Combobox = ({
  variant="secondary"
  size="sm"
  onClick={handleClear}
- className="p-1 h-auto hover:bg-surface-alt"
+ aria-label={t('common.clear')}
+ className="p-1 h-auto hover:bg-surface-alt pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:p-3"
  >
- <X className="w-3 h-3" />
+ <X className="w-3 h-3" aria-hidden="true" />
  </Button>
  )}
  <ChevronDown 

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { LandingPage } from "./LandingPage";
 import { SEO } from "../components/seo/SEO";
 import {
@@ -8,13 +7,6 @@ import {
 } from "../components/seo/JsonLd";
 
 export const HomePage = () => {
-  useEffect(() => {
-    document.documentElement.style.scrollBehavior = "smooth";
-    return () => {
-      document.documentElement.style.scrollBehavior = "auto";
-    };
-  }, []);
-
   return (
     <>
       <SEO

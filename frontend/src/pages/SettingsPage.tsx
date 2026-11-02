@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   Palette,
-  Globe,
   Wrench,
   Settings,
   CreditCard,
@@ -15,25 +15,27 @@ import {
 import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
+import { formatDateOnly } from "../lib/api";
+import { Button } from "../components/ui/Button";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
 
-type SettingsTab =
-  | "company"
-  | "receipt"
-  | "language"
-  | "subscription"
-  | "advanced";
+type SettingsTab = "documents" | "subscription" | "advanced";
 
 const VALID_TABS: readonly SettingsTab[] = [
-  "company",
-  "receipt",
-  "language",
+  "documents",
   "subscription",
   "advanced",
 ] as const;
+
+// The three document tabs became one page; old links keep working.
+const LEGACY_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
+  company: "documents",
+  receipt: "documents",
+  language: "documents",
+};
 
 type PlanKey = "free" | "pro" | "business";
 
@@ -61,7 +63,7 @@ const PLAN_COLORS: Record<
 
 const SubscriptionTab = () => {
   const { t } = useTranslation();
-  const { status, isLoading } = useSubscription();
+  const { status, isLoading, isError, refetch } = useSubscription();
   const {
     loading: upgrading,
     handleUpgrade,
@@ -78,6 +80,32 @@ const SubscriptionTab = () => {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-content-tertiary" />
+      </div>
+    );
+  }
+
+  // A failed status request must not pose as the Free plan: a paying user would see
+  // Free and Upgrade buttons.
+  if (isError && !status) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-[var(--color-border)] p-4 space-y-3"
+      >
+        <p className="text-sm text-content">
+          {t(
+            "subscription.loadFailed",
+            "Could not load your subscription. Your plan and usage are unknown until you retry.",
+          )}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+        >
+          {t("common.retry", "Retry")}
+        </Button>
       </div>
     );
   }
@@ -132,7 +160,7 @@ const SubscriptionTab = () => {
               "subscription.canceledNotice",
               "Your subscription will end on {{date}}",
               {
-                date: new Date(periodEnd).toLocaleDateString(),
+                date: formatDateOnly(periodEnd),
               },
             )}
           </p>
@@ -208,8 +236,8 @@ const SubscriptionTab = () => {
           periodEnd &&
           paddleStatus === "active" && (
             <p className="mt-4 text-xs text-content-tertiary">
-              {t("subscription.nextRenewal", "Next renewal")}:{""}
-              {new Date(periodEnd).toLocaleDateString()}
+              {t("subscription.nextRenewal", "Next renewal")}:{" "}
+              {formatDateOnly(periodEnd)}
             </p>
           )}
       </div>
@@ -269,7 +297,7 @@ const SubscriptionTab = () => {
                   <button
                     onClick={() => handleUpgrade(plan)}
                     disabled={!!upgrading}
-                    className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
+                    className={`w-full flex items-center justify-center gap-2 py-2 pointer-coarse:min-h-11 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
                       plan === "business"
                         ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
                         : "bg-accent-base hover:bg-accent-base-hover"
@@ -301,27 +329,49 @@ export const SettingsPage = () => {
   const documentDraft = useDocumentDraft();
   const { t } = useTranslation();
   // H3: Validate tab query parameter against known values
-  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get("tab") as SettingsTab;
-    return VALID_TABS.includes(tabParam) ? tabParam : "company";
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") ?? "";
+  const aliasedTab = LEGACY_TAB_ALIASES[tabParam] ?? (tabParam as SettingsTab);
+  const activeTab: SettingsTab = VALID_TABS.includes(aliasedTab)
+    ? aliasedTab
+    : "documents";
+  // Written back to the URL so reload keeps the tab; replace keeps Back from stepping
+  // through every tab the user clicked.
+  const setActiveTab = (tab: SettingsTab) =>
+    setSearchParams({ tab }, { replace: true });
+
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
+
+  const updateHiddenTabs = useCallback(() => {
+    const list = tabListRef.current;
+    if (!list) return;
+    setHasHiddenTabs(list.scrollLeft + list.clientWidth < list.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const list = tabListRef.current;
+    updateHiddenTabs();
+    list?.addEventListener("scroll", updateHiddenTabs, { passive: true });
+    window.addEventListener("resize", updateHiddenTabs);
+    return () => {
+      list?.removeEventListener("scroll", updateHiddenTabs);
+      window.removeEventListener("resize", updateHiddenTabs);
+    };
+  }, [updateHiddenTabs]);
+
+  // Keep the selected tab visible, e.g. when opened through ?tab=advanced on a phone.
+  useEffect(() => {
+    document
+      .getElementById(`settings-tab-${activeTab}`)
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeTab]);
 
   const tabs: { key: SettingsTab; label: string; icon: typeof Building2 }[] = [
     {
-      key: "company",
-      label: t("settings.tabCompany", "Company Info"),
-      icon: Building2,
-    },
-    {
-      key: "receipt",
-      label: t("settings.tabReceipt", "Receipt Design"),
+      key: "documents",
+      label: t("settings.tabDocuments", "Documents"),
       icon: Palette,
-    },
-    {
-      key: "language",
-      label: t("settings.tabLanguage", "Language"),
-      icon: Globe,
     },
     {
       key: "subscription",
@@ -334,6 +384,26 @@ export const SettingsPage = () => {
       icon: Wrench,
     },
   ];
+
+  // Roving tabindex: arrows, Home and End move between tabs, as in the ARIA tabs pattern.
+  const handleTabKeyDown = (event: React.KeyboardEvent) => {
+    const keys = tabs.map((tab) => tab.key);
+    const current = keys.indexOf(activeTab);
+    const target =
+      event.key === "ArrowRight"
+        ? (current + 1) % keys.length
+        : event.key === "ArrowLeft"
+          ? (current - 1 + keys.length) % keys.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? keys.length - 1
+              : -1;
+    if (target === -1) return;
+    event.preventDefault();
+    setActiveTab(keys[target]);
+    document.getElementById(`settings-tab-${keys[target]}`)?.focus();
+  };
 
   return (
     <div className="space-y-6">
@@ -358,18 +428,27 @@ export const SettingsPage = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-[var(--color-border)]">
-        <nav
+      <div className="relative border-b border-[var(--color-border)]">
+        <div
+          ref={tabListRef}
+          role="tablist"
           className="-mb-px flex gap-1 overflow-x-auto scrollbar-hide"
-          aria-label="Settings tabs"
+          aria-label={t("settings.tabsLabel")}
+          onKeyDown={handleTabKeyDown}
         >
           {tabs.map(({ key, label, icon: Icon }) => {
             const isActive = activeTab === key;
             return (
               <button
                 key={key}
+                id={`settings-tab-${key}`}
+                role="tab"
+                type="button"
+                aria-selected={isActive}
+                aria-controls="settings-tabpanel"
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(key)}
-                className={`group relative flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`group relative flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 pointer-coarse:min-h-11 text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-elevated text-accent-base border border-[var(--color-border)] border-b-elevated -mb-px"
                     : "text-content-tertiary hover:text-content-secondary hover:bg-surface-alt"
@@ -382,20 +461,25 @@ export const SettingsPage = () => {
               </button>
             );
           })}
-        </nav>
+        </div>
+        {/* Fade on the right edge while more tabs are scrolled out of view (narrow screens). */}
+        {hasHiddenTabs && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[var(--color-bg)] to-transparent"
+          />
+        )}
       </div>
 
       {/* Tab Content */}
-      <div className="space-y-5">
-        <div hidden={!["company", "receipt", "language"].includes(activeTab)}>
-          <DocumentEditor
-            model={documentDraft}
-            section={
-              activeTab === "company" || activeTab === "language"
-                ? activeTab
-                : "receipt"
-            }
-          />
+      <div
+        id="settings-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeTab}`}
+        className="space-y-5"
+      >
+        <div hidden={activeTab !== "documents"}>
+          <DocumentEditor model={documentDraft} />
         </div>
 
         {activeTab === "subscription" && <SubscriptionTab />}

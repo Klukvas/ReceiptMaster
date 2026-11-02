@@ -95,6 +95,12 @@ export const AutoReceiptSetting = () => {
               </span>
             </button>
           </div>
+          <p className="text-xs font-medium text-content-secondary">
+            {t(
+              "settings.autoReceiptInstant",
+              "This switch applies immediately; there is nothing to save.",
+            )}
+          </p>
           <p className="text-xs text-content-tertiary leading-relaxed">
             {t(
               "settings.autoReceiptHint",

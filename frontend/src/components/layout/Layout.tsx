@@ -5,6 +5,7 @@ import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Sidebar } from "./Sidebar";
+import { OfflineBanner } from "./OfflineBanner";
 import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
 
 interface LayoutProps {
@@ -20,11 +21,15 @@ export const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-surface-alt transition-colors duration-200">
       {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-elevated/80 backdrop-blur-lg border-b border-[var(--color-border)] transition-colors duration-200">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-elevated/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg border-b border-[var(--color-border)] transition-colors duration-200 motion-reduce:transition-none">
         <div className="flex h-14 items-center justify-between px-4">
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
+            aria-label={t("common.openSidebar")}
+            aria-expanded={sidebarOpen}
+            aria-controls="app-sidebar"
+            className="p-2 pointer-coarse:p-3 -ml-2 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -40,8 +45,9 @@ export const Layout = ({ children }: LayoutProps) => {
             </span>
             <button
               onClick={logout}
-              className="p-2 -mr-2 rounded-lg text-content-tertiary hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-colors duration-150"
-              title="Logout"
+              className="p-2 pointer-coarse:p-3.5 -mr-2 rounded-lg text-content-tertiary hover:text-danger-base hover:bg-[var(--color-danger-light)] transition-colors duration-150"
+              title={t("auth.logout")}
+              aria-label={t("auth.logout")}
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -60,12 +66,13 @@ export const Layout = ({ children }: LayoutProps) => {
       {/* Main content */}
       <div
         className={clsx(
-          "min-h-screen flex flex-col transition-all duration-300",
+          "min-h-screen flex flex-col transition-all duration-300 motion-reduce:transition-none",
           sidebarCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]",
         )}
       >
-        <main className="flex-1 py-6 pt-20 lg:pt-6 pb-8">
+        <main className="flex-1 py-6 pt-[calc(5rem+env(safe-area-inset-top))] lg:pt-6 pb-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <OfflineBanner />
             {children}
           </div>
         </main>

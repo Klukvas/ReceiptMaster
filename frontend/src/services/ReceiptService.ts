@@ -1,5 +1,6 @@
 import { receiptsApi, type Receipt } from "../lib/api";
-import { notificationService } from "./NotificationService";
+import toast from "react-hot-toast";
+import i18n from "../lib/i18n";
 import { parseApiError } from "../lib/api-errors";
 import { downloadPdf } from "../lib/pdf-utils";
 
@@ -19,7 +20,7 @@ export class ReceiptService {
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error loading printers:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
       return [];
     }
   }
@@ -51,11 +52,11 @@ export class ReceiptService {
       const response = await receiptsApi.getPdf(receiptId);
       const blob = new Blob([response.data], { type: "application/pdf" });
       downloadPdf(blob, `receipt-${receiptId}.pdf`);
-      notificationService.success("Receipt downloaded successfully");
+      toast.success(i18n.t("receipts.downloaded"));
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error downloading receipt:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
     }
   }
 
@@ -64,32 +65,37 @@ export class ReceiptService {
       const response = await receiptsApi.print(receiptId, printer);
 
       if (response.data.success) {
-        notificationService.success(response.data.message);
+        toast.success(response.data.message);
       } else {
-        notificationService.error(response.data.message);
+        toast.error(response.data.message);
       }
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error printing receipt:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
     }
   }
 
+  /**
+   * Starts generation. The PDF renders in the background, so resolving only
+   * means the request was accepted; a failed request rejects and the caller
+   * decides how to tell the user.
+   */
   async generateReceipt(orderId: string): Promise<void> {
     try {
       await receiptsApi.create(orderId);
-      notificationService.success("Receipt generated successfully");
     } catch (error) {
-      const apiError = parseApiError(error);
-      console.error("Error generating receipt:", apiError);
-      notificationService.error(apiError.message);
+      console.error("Error generating receipt:", parseApiError(error));
+      throw error;
     }
   }
 
   async handlePrintReceipt(receiptId: string): Promise<void> {
     if (this.availablePrinters.length > 1) {
       const printer = prompt(
-        `Available printers: ${this.availablePrinters.join(", ")}\nEnter printer name (or leave empty for default):`,
+        i18n.t("receipts.choosePrinter", {
+          printers: this.availablePrinters.join(", "),
+        }),
       );
       await this.printReceipt(receiptId, printer || undefined);
     } else {

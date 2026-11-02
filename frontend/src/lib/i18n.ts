@@ -37,12 +37,13 @@ i18n
     },
   });
 
-// Sync <html lang> on init and on every language change
-i18n.on("initialized", () => {
-  document.documentElement.lang = i18n.language.split("-")[0];
-});
-i18n.on("languageChanged", (lng) => {
-  document.documentElement.lang = lng.split("-")[0];
-});
+const syncHtmlLang = (language: string) => {
+  document.documentElement.lang = language.split("-")[0];
+};
+
+// Resources are bundled, so init() completes synchronously and its "initialized"
+// event fires before any listener could be attached: set the language directly.
+syncHtmlLang(i18n.language);
+i18n.on("languageChanged", syncHtmlLang);
 
 export default i18n;

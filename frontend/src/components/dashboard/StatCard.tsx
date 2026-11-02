@@ -24,7 +24,7 @@ export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, descri
  </div>
  <div className="ml-4">
  <p className="text-sm font-medium text-content-secondary">{name}</p>
- <p className="text-2xl font-bold text-content">{value}</p>
+ <p className="text-2xl font-bold text-content tabular-nums">{value}</p>
  {description && (
  <p className="text-xs text-content-tertiary mt-0.5">{description}</p>
  )}

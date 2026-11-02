@@ -188,6 +188,18 @@ describe("SubscriptionService", () => {
   // ─── assertCanCreateOrder ───
 
   describe("assertCanCreateOrder", () => {
+    it("does not count cancelled orders toward the monthly quota", async () => {
+      subscriptionRepo.findOne.mockResolvedValue(makeSubscription("free"));
+      orderRepo._qb.getCount.mockResolvedValue(3);
+
+      await service.assertCanCreateOrder(userId);
+
+      expect(orderRepo._qb.andWhere).toHaveBeenCalledWith(
+        "order.status <> :cancelled",
+        { cancelled: "cancelled" },
+      );
+    });
+
     it("should pass when under free limit", async () => {
       subscriptionRepo.findOne.mockResolvedValue(makeSubscription("free"));
       orderRepo._qb.getCount.mockResolvedValue(10);

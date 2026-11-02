@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, AlertCircle } from "lucide-react";
+import { Package } from "lucide-react";
 import { productsApi, formatCurrency, type Product } from "../lib/api";
 import { Button } from "../components/ui/Button";
 import { DataTable } from "../components/ui/DataTable";
@@ -8,6 +9,7 @@ import { ProductForm } from "../components/products/ProductForm";
 import { ProductStockBadge } from "../components/products/ProductStockBadge";
 import { ProductMarginBadge } from "../components/products/ProductMarginBadge";
 import { ProductActionsMenu } from "../components/products/ProductActionsMenu";
+import { ProductCard } from "../components/products/ProductCard";
 import { ProductDrawer } from "../components/products/ProductDrawer";
 import { BulkSelectionBar } from "../components/products/BulkSelectionBar";
 import { DeleteConfirmation } from "../components/common/DeleteConfirmation";
@@ -20,6 +22,10 @@ import { useSubscription } from "../hooks/useSubscription";
 import { isProductLimitReached } from "../lib/subscriptionApi";
 import { UsageBar } from "../components/subscription/UsageBar";
 import { UpgradeModal } from "../components/subscription/UpgradeModal";
+import { useCreateIntent } from "../hooks/useCreateIntent";
+
+// Long enough to read which products were skipped before it goes away.
+const PARTIAL_FAILURE_TOAST_MS = 7000;
 
 export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);
@@ -30,10 +36,6 @@ export const ProductsPage = () => {
   }>({ isOpen: false, product: null });
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [notification, setNotification] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [drawerProduct, setDrawerProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
@@ -59,6 +61,7 @@ export const ProductsPage = () => {
         key: "purchase_price_cents",
         header: t("products.purchasePrice"),
         sortable: true,
+        align: "right",
         render: (p) => (
           <div className="text-sm text-content-secondary tabular-nums">
             {formatCurrency(p.purchase_price_cents, p.currency)}
@@ -69,6 +72,7 @@ export const ProductsPage = () => {
         key: "sale_price_cents",
         header: t("products.salePrice"),
         sortable: true,
+        align: "right",
         render: (p) => (
           <div className="text-sm font-medium text-content tabular-nums">
             {formatCurrency(p.sale_price_cents, p.currency)}
@@ -90,12 +94,16 @@ export const ProductsPage = () => {
         key: "quantity",
         header: t("products.quantity"),
         sortable: true,
+        align: "right",
         render: (p) => <ProductStockBadge quantity={p.quantity} />,
       },
       {
         key: "currency",
         header: t("products.currency"),
         sortable: false,
+        // Every product is in UAH today; the column only costs width until that changes.
+        visible: false,
+        hideable: true,
         render: (p) => (
           <div className="text-sm text-content-tertiary">{p.currency}</div>
         ),
@@ -111,6 +119,8 @@ export const ProductsPage = () => {
     defaultSortBy: "created_at",
     defaultSortOrder: "DESC",
     storageKeyPrefix: "products",
+    // v2: the currency column is hidden by default now; older saved choices kept it visible.
+    columnsVersion: 2,
   });
 
   // Total worth of everything in stock (cost & retail). Keyed under "products"
@@ -124,18 +134,13 @@ export const ProductsPage = () => {
     mutationFn: productsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      setNotification({
-        type: "success",
-        message: t("products.productDeleted"),
-      });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+      toast.success(t("products.productDeleted"));
       setDeleteConfirmation({ isOpen: false, product: null });
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { message?: string } } };
-      setNotification({
-        type: "error",
-        message: err.response?.data?.message || t("products.deleteError"),
-      });
+      toast.error(err.response?.data?.message || t("products.deleteError"));
     },
   });
 
@@ -143,22 +148,21 @@ export const ProductsPage = () => {
     mutationFn: (ids: string[]) => productsApi.bulkDelete(ids),
     onSuccess: (resp) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setSelectedKeys(new Set());
       setBulkDeleteConfirm(false);
       const { deleted, skipped } = resp.data;
-      setNotification({
-        type: skipped.length > 0 ? "error" : "success",
-        message:
-          skipped.length > 0
-            ? t(
-                "products.bulkDeletePartial",
-                `Deleted ${deleted}, skipped ${skipped.length}`,
-              )
-            : t("products.productDeleted"),
-      });
+      if (skipped.length > 0) {
+        toast.error(
+          t("products.bulkDeletePartial", { deleted, skipped: skipped.length }),
+          { duration: PARTIAL_FAILURE_TOAST_MS },
+        );
+      } else {
+        toast.success(t("products.productDeleted"));
+      }
     },
     onError: () => {
-      setNotification({ type: "error", message: t("products.deleteError") });
+      toast.error(t("products.deleteError"));
     },
   });
 
@@ -188,6 +192,8 @@ export const ProductsPage = () => {
     }
     setShowForm(true);
   }, [subscriptionStatus]);
+  // Wait for the plan status so a deep link cannot skip the product limit.
+  useCreateIntent(handleCreateProduct, subscriptionStatus !== undefined);
 
   const handleFormClose = () => {
     setShowForm(false);
@@ -197,14 +203,6 @@ export const ProductsPage = () => {
   const handleBulkDelete = () => {
     bulkDeleteMutation.mutate(Array.from(selectedKeys));
   };
-
-  // Auto-hide notifications after 3 seconds
-  useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -221,31 +219,12 @@ export const ProductsPage = () => {
 
   const isEmptyState =
     !pagination.isLoading &&
+    !pagination.error &&
     pagination.items.length === 0 &&
     !pagination.searchQuery;
 
   return (
     <div className="space-y-6">
-      {/* Notification toast */}
-      {notification && (
-        <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm transition-all duration-300 ${
-            notification.type === "success"
-              ? "bg-[var(--color-success-light)] border border-[var(--color-success-light)] text-success-base"
-              : "bg-[var(--color-danger-light)]/90 border border-[var(--color-danger-light)]/50 text-danger-base"
-          }`}
-        >
-          <div className="flex items-center gap-2 text-sm font-medium">
-            {notification.type === "success" ? (
-              <div className="w-4 h-4 text-success-base">&#10003;</div>
-            ) : (
-              <AlertCircle className="w-4 h-4 text-danger-base" />
-            )}
-            {notification.message}
-          </div>
-        </div>
-      )}
-
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="space-y-1">
@@ -327,6 +306,7 @@ export const ProductsPage = () => {
           isLoading={pagination.isLoading}
           isFetching={pagination.isFetching}
           error={pagination.error}
+          onRetry={() => pagination.queryResult.refetch()}
           currentPage={pagination.currentPage}
           totalPages={pagination.totalPages}
           itemsPerPage={pagination.itemsPerPage}
@@ -350,7 +330,19 @@ export const ProductsPage = () => {
           emptyIcon={<Package className="w-10 h-10 text-content-tertiary" />}
           emptyMessage={t("products.noProducts")}
           emptySearchMessage={t("products.noProductsFound")}
+          isOffline={pagination.isOffline}
+          isCompact
+          rowLabel={(product) => product.name}
           onRowClick={(product) => setDrawerProduct(product)}
+          renderCard={(product) => (
+            <ProductCard
+              product={product}
+              onOpen={setDrawerProduct}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              isDeleting={deleteMutation.isPending}
+            />
+          )}
           renderActions={(product) => (
             <ProductActionsMenu
               product={product}
@@ -392,10 +384,9 @@ export const ProductsPage = () => {
         onClose={() => setBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
         title={t("products.deleteSelected", "Delete Selected")}
-        message={t(
-          "products.bulkDeleteMessage",
-          `Are you sure you want to delete ${selectedKeys.size} products?`,
-        )}
+        message={t("products.bulkDeleteMessage", {
+          count: selectedKeys.size,
+        })}
         isLoading={bulkDeleteMutation.isPending}
       />
 

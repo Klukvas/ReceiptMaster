@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { RevenueDashboard } from '../components/dashboard/RevenueDashboard';
 import { TurnoverDashboard } from '../components/dashboard/TurnoverDashboard';
 import { AnalyticsHeader } from '../components/dashboard/AnalyticsHeader';
 import { AnalyticsFilterBar } from '../components/dashboard/AnalyticsFilterBar';
+import { buildPeriodLabel } from '../components/dashboard/periodLabel';
 import { useTranslation } from '../hooks/useTranslation';
 import { dashboardApi } from '../lib/api';
 import { exportToCsv } from '../lib/csv-export';
@@ -40,13 +41,21 @@ export const DashboardPage = () => {
  setActivePreset(days);
  };
 
+ // ISO dates compare correctly as strings. Moving one end past the other drags the
+ // other end along instead of leaving a reversed range that silently shows zeros.
  const handleStartDateChange = (value: string) => {
- setDateRange((prev) => ({ ...prev, startDate: value }));
+ setDateRange((prev) => ({
+ startDate: value,
+ endDate: value && prev.endDate && value > prev.endDate ? value : prev.endDate,
+ }));
  setActivePreset(null);
  };
 
  const handleEndDateChange = (value: string) => {
- setDateRange((prev) => ({ ...prev, endDate: value }));
+ setDateRange((prev) => ({
+ startDate: value && prev.startDate && value < prev.startDate ? value : prev.startDate,
+ endDate: value,
+ }));
  setActivePreset(null);
  };
 
@@ -55,10 +64,7 @@ export const DashboardPage = () => {
  setActivePreset(null);
  };
 
- const periodLabel =
- dateRange.startDate && dateRange.endDate
- ? `${new Date(dateRange.startDate).toLocaleDateString()} — ${new Date(dateRange.endDate).toLocaleDateString()}`
- : t('dashboard.allTime', 'All time');
+ const periodLabel = buildPeriodLabel(dateRange, t);
 
  // CSV export data
  const params = {
@@ -66,15 +72,22 @@ export const DashboardPage = () => {
  endDate: dateRange.endDate || undefined,
  };
 
- const { data: revenueByProducts } = useQuery({
+ const { data: revenueByProducts, isPlaceholderData: isRevenueExportStale } = useQuery({
  queryKey: ['dashboard', 'revenue-by-products', dateRange.startDate, dateRange.endDate],
  queryFn: () => dashboardApi.getRevenueByProducts(params),
+ placeholderData: keepPreviousData,
  });
 
- const { data: turnoverByProducts } = useQuery({
+ const { data: turnoverByProducts, isPlaceholderData: isTurnoverExportStale } = useQuery({
  queryKey: ['dashboard', 'turnover-by-products', dateRange.startDate, dateRange.endDate],
  queryFn: () => dashboardApi.getTurnoverByProducts(params),
+ placeholderData: keepPreviousData,
  });
+
+ const exportRows = activeTab === 'revenue' ? revenueByProducts?.data : turnoverByProducts?.data;
+ // Kept-over rows of the previous period would be exported under the new period's name.
+ const isExportStale = activeTab === 'revenue' ? isRevenueExportStale : isTurnoverExportStale;
+ const canExport = (exportRows?.length ?? 0) > 0 && !isExportStale;
 
  const handleExportCsv = () => {
  if (activeTab === 'revenue' && revenueByProducts?.data) {
@@ -123,7 +136,11 @@ export const DashboardPage = () => {
  return (
  <div className="space-y-5">
  {/* Header */}
- <AnalyticsHeader onExportCsv={handleExportCsv} periodLabel={periodLabel} />
+ <AnalyticsHeader
+ onExportCsv={handleExportCsv}
+ canExport={canExport}
+ periodLabel={periodLabel}
+ />
 
  {/* Filter bar */}
  <AnalyticsFilterBar
@@ -140,8 +157,10 @@ export const DashboardPage = () => {
  {/* Segmented control */}
  <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-alt w-fit border border-[var(--color-border)]">
  <button
+ type="button"
+ aria-pressed={activeTab === 'revenue'}
  onClick={() => setActiveTab('revenue')}
- className={`relative px-5 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+ className={`relative px-5 py-2 pointer-coarse:min-h-11 text-sm font-semibold rounded-lg transition-all duration-200 motion-reduce:transition-none ${
  activeTab === 'revenue'
  ? 'bg-elevated text-content shadow-sm'
  : 'text-content-tertiary hover:text-content-secondary'
@@ -150,8 +169,10 @@ export const DashboardPage = () => {
  {t('dashboard.revenue')}
  </button>
  <button
+ type="button"
+ aria-pressed={activeTab === 'turnover'}
  onClick={() => setActiveTab('turnover')}
- className={`relative px-5 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+ className={`relative px-5 py-2 pointer-coarse:min-h-11 text-sm font-semibold rounded-lg transition-all duration-200 motion-reduce:transition-none ${
  activeTab === 'turnover'
  ? 'bg-elevated text-content shadow-sm'
  : 'text-content-tertiary hover:text-content-secondary'

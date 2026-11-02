@@ -1,4 +1,5 @@
 import { downloadBlob } from "./pdf-utils";
+import { neutralizeSpreadsheetFormula } from "./csv-safety";
 
 interface CsvColumn<T> {
   key: keyof T;
@@ -16,7 +17,9 @@ export function exportToCsv<T extends Record<string, unknown>>(
     columns
       .map((col) => {
         const raw = row[col.key];
-        const value = col.format ? col.format(raw) : String(raw ?? "");
+        const value = neutralizeSpreadsheetFormula(
+          col.format ? col.format(raw) : String(raw ?? ""),
+        );
         // Escape CSV values that contain commas, quotes, or newlines
         if (/[",\n\r]/.test(value)) {
           return `"${value.replace(/"/g, '""')}"`;
