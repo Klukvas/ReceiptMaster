@@ -144,6 +144,51 @@ describe("evaluateRequisites: act", () => {
   });
 });
 
+describe("evaluateRequisites: sales receipt", () => {
+  const check = (seller: ReturnType<typeof buildSeller>) =>
+    evaluateRequisites(DocumentType.SALES_RECEIPT, seller, buyer, {});
+
+  it("needs only the seller's name, and warns about tax id and VAT status", () => {
+    const bare = check(buildSeller(company({ companyTaxId: "" }), {}));
+    expect(bare.missing).toEqual([]);
+    expect(bare.warnings).toEqual(["seller.taxId", "seller.vatPayer"]);
+    expect(check(buildSeller(company(), { companyVatPayer: false }))).toEqual({
+      missing: [],
+      warnings: [],
+    });
+  });
+
+  it("refuses a seller without a name", () => {
+    expect(
+      check(buildSeller(company({ companyName: "" }), {})).missing,
+    ).toEqual(["seller.name"]);
+  });
+
+  it("requires the VAT number from a VAT payer", () => {
+    expect(
+      check(buildSeller(company(), { companyVatPayer: true })).missing,
+    ).toEqual(["seller.vatId"]);
+  });
+});
+
+describe("evaluateRequisites: packing list", () => {
+  const check = (seller: ReturnType<typeof buildSeller>) =>
+    evaluateRequisites(DocumentType.PACKING_LIST, seller, buyer, {});
+
+  it("needs only the seller's name and never warns", () => {
+    expect(
+      check(
+        buildSeller(company({ companyTaxId: "", companyIban: "" }), {
+          companyVatPayer: true,
+        }),
+      ),
+    ).toEqual({ missing: [], warnings: [] });
+    expect(
+      check(buildSeller(company({ companyName: "" }), {})).missing,
+    ).toEqual(["seller.name"]);
+  });
+});
+
 describe("buyerFingerprint", () => {
   it("changes with the buyer's IBAN and ignores the display name", () => {
     const base = buildBuyer({ name: "A", iban: VALID_IBAN });

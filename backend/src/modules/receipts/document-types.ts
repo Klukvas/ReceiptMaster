@@ -41,15 +41,38 @@ export type DocumentTypeSpec = {
   layout?: DocumentLayoutSpec;
 };
 
+/** Keys of the signature headings in the document labels. */
+export type SignatureLabelKey =
+  | "issuedBy"
+  | "fromContractor"
+  | "fromCustomer"
+  | "sellerSignature"
+  | "shippedBy"
+  | "receivedBy";
+
 export type DocumentLayoutSpec = {
-  sellerRole: "supplier" | "contractor";
-  buyerRole: "payer" | "customer";
+  sellerRole: "supplier" | "contractor" | "seller" | "shipper";
+  buyerRole: "payer" | "customer" | "buyer" | "consignee";
   /** Prints the "payment details" block (the seller's bank requisites). */
   payment: boolean;
   /** Prints the act's "work completed in full" statement. */
   completionStatement: boolean;
-  /** Reserves a signature column for the buyer. */
-  buyerSignature: boolean;
+  /**
+   * Prints prices, totals, VAT and the amount in words. When false the items table
+   * drops its price columns and the document shows line count and total quantity.
+   */
+  money: boolean;
+  /** Prints the "not a fiscal document" notice above the parties. */
+  nonFiscalNotice: boolean;
+  /** Which of the buyer's addresses leads: the legal one, or the delivery one. */
+  buyerAddress: "legal" | "delivery";
+  /** Signature columns; the buyer's is reserved only when `buyer` is set. */
+  signatures: {
+    seller: SignatureLabelKey;
+    buyer?: SignatureLabelKey;
+    /** Whether the caption asks for a seal ("Signature / Seal") next to the signature. */
+    stamp: boolean;
+  };
   /** HTML styles that carry the document's blocks; any other style is refused. */
   allowedStyles: readonly string[];
 };
@@ -71,7 +94,9 @@ const DOCUMENT_STYLES = [
 export type GeneratableDocumentType =
   | DocumentType.WAYBILL
   | DocumentType.INVOICE
-  | DocumentType.ACT;
+  | DocumentType.ACT
+  | DocumentType.SALES_RECEIPT
+  | DocumentType.PACKING_LIST;
 
 export const DOCUMENT_TYPE_SPECS: Record<
   GeneratableDocumentType,
@@ -109,7 +134,10 @@ export const DOCUMENT_TYPE_SPECS: Record<
       buyerRole: "payer",
       payment: true,
       completionStatement: false,
-      buyerSignature: false,
+      money: true,
+      nonFiscalNotice: false,
+      buyerAddress: "legal",
+      signatures: { seller: "issuedBy", stamp: true },
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -131,7 +159,68 @@ export const DOCUMENT_TYPE_SPECS: Record<
       buyerRole: "customer",
       payment: false,
       completionStatement: true,
-      buyerSignature: true,
+      money: true,
+      nonFiscalNotice: false,
+      buyerAddress: "legal",
+      signatures: {
+        seller: "fromContractor",
+        buyer: "fromCustomer",
+        stamp: true,
+      },
+      allowedStyles: DOCUMENT_STYLES,
+    },
+  },
+  [DocumentType.SALES_RECEIPT]: {
+    allowedOrderStatuses: [OrderStatus.CONFIRMED],
+    locking: true,
+    requiresMoney: true,
+    requiredSeller: ["name"],
+    requiredBuyer: [],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.vatPayer"],
+    title: {
+      uk: "Товарний чек",
+      ru: "Товарный чек",
+      en: "Sales Receipt",
+    },
+    layout: {
+      sellerRole: "seller",
+      buyerRole: "buyer",
+      payment: false,
+      completionStatement: false,
+      money: true,
+      nonFiscalNotice: true,
+      buyerAddress: "legal",
+      signatures: { seller: "sellerSignature", stamp: false },
+      allowedStyles: DOCUMENT_STYLES,
+    },
+  },
+  [DocumentType.PACKING_LIST]: {
+    allowedOrderStatuses: [OrderStatus.CONFIRMED],
+    locking: true,
+    requiresMoney: false,
+    requiredSeller: ["name"],
+    requiredBuyer: [],
+    requiresVatIdForPayer: false,
+    warnings: [],
+    title: {
+      uk: "Пакувальний лист",
+      ru: "Упаковочный лист",
+      en: "Packing List",
+    },
+    layout: {
+      sellerRole: "shipper",
+      buyerRole: "consignee",
+      payment: false,
+      completionStatement: false,
+      money: false,
+      nonFiscalNotice: false,
+      buyerAddress: "delivery",
+      signatures: {
+        seller: "shippedBy",
+        buyer: "receivedBy",
+        stamp: false,
+      },
       allowedStyles: DOCUMENT_STYLES,
     },
   },

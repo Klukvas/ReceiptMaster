@@ -54,7 +54,7 @@ const KEEP = { logoAction: "keep" } as const;
 // The real order, settings, snapshot and receipt services as a restricted role on a
 // fully migrated database. Chromium, object storage, the queue and the gateway are doubles.
 describeIsolatedPostgres(
-  "generic document generation: invoice, act and waybill on PostgreSQL",
+  "generic document generation: invoice, act, sales receipt, packing list and waybill on PostgreSQL",
   AUDIT_CLUSTER,
   (connection) => {
     let db: RestrictedAppDatabase;
@@ -289,6 +289,188 @@ describeIsolatedPostgres(
         expect(
           (await stored(waybill.id)).pending_snapshot as object,
         ).not.toHaveProperty("document");
+      });
+    });
+
+    describe("sales receipt and packing list", () => {
+      it.each([DocumentType.SALES_RECEIPT, DocumentType.PACKING_LIST])(
+        "%s is numbered on its own and locks the order",
+        async (type) => {
+          const order = await confirmedOrder();
+
+          const first = await generate(order, type);
+
+          expect(first.number).toBe(FIRST_NUMBER);
+          expect(first.document_type).toBe(type);
+          expect((await promote(first))?.status).toBe(ReceiptStatus.GENERATED);
+          expect(await isLocked(order)).toBe(true);
+          expect(await counter(type)).toBe(1);
+          expect(await counter(DocumentType.WAYBILL)).toBe(0);
+
+          await asTenant(() => receipts.voidReceipt(first.id, user, "t"));
+          expect(await isLocked(order)).toBe(false);
+        },
+      );
+
+      it("freezes the titles and no details", async () => {
+        const order = await confirmedOrder();
+        const receipt = await generate(order, DocumentType.SALES_RECEIPT);
+        const packing = await generate(order, DocumentType.PACKING_LIST);
+
+        expect(
+          (await stored(receipt.id)).pending_snapshot?.document,
+        ).toMatchObject({
+          type: DocumentType.SALES_RECEIPT,
+          title: "Товарний чек",
+          details: {},
+        });
+        expect(
+          (await stored(packing.id)).pending_snapshot?.document,
+        ).toMatchObject({
+          type: DocumentType.PACKING_LIST,
+          title: "Пакувальний лист",
+          details: {},
+        });
+      });
+
+      it("needs only the seller's name", async () => {
+        await db.admin.getRepository(UserSettings).update(
+          { userId: user.id },
+          {
+            companyTaxId: "",
+            companyIban: "",
+            companyVatPayer: null,
+            companyVatId: null,
+            companySignatoryName: null,
+          },
+        );
+        const order = await confirmedOrder();
+
+        const receipt = await generate(order, DocumentType.SALES_RECEIPT);
+        const packing = await generate(order, DocumentType.PACKING_LIST);
+
+        expect(
+          (await stored(receipt.id)).pending_snapshot?.document?.warnings,
+        ).toEqual(["seller.taxId", "seller.vatPayer"]);
+        expect(
+          (await stored(packing.id)).pending_snapshot?.document?.warnings,
+        ).toEqual([]);
+      });
+
+      it.each([DocumentType.SALES_RECEIPT, DocumentType.PACKING_LIST])(
+        "%s answers 422 without a seller name and burns no number",
+        async (type) => {
+          await db.admin
+            .getRepository(UserSettings)
+            .update({ userId: user.id }, { companyName: "" });
+          const order = await confirmedOrder();
+
+          const error = (await rejection(
+            generate(order, type),
+          )) as ApiErrorResponse;
+
+          expect(error.statusCode).toBe(422);
+          expect(error.toJSON()).toMatchObject({
+            errorCode: "DOCUMENT_REQUISITES_MISSING",
+            fields: ["seller.name"],
+          });
+          expect(await counter(type)).toBe(0);
+        },
+      );
+
+      it.each([DocumentType.SALES_RECEIPT, DocumentType.PACKING_LIST])(
+        "%s refuses the thermal style without burning a number",
+        async (type) => {
+          await db.admin
+            .getRepository(UserSettings)
+            .update({ userId: user.id }, { templateId: "thermal" });
+          const order = await confirmedOrder();
+
+          expect(await rejection(generate(order, type))).toMatchObject({
+            errorCode: "DOCUMENT_TEMPLATE_UNSUPPORTED",
+          });
+          expect(await counter(type)).toBe(0);
+        },
+      );
+
+      it.each([DocumentType.SALES_RECEIPT, DocumentType.PACKING_LIST])(
+        "%s answers 409 for a second document of the same type",
+        async (type) => {
+          const order = await confirmedOrder();
+          await promote(await generate(order, type));
+
+          expect(await rejection(generate(order, type))).toMatchObject({
+            errorCode: "DOCUMENT_ALREADY_EXISTS",
+            statusCode: 409,
+          });
+        },
+      );
+
+      it("refuses a draft order", async () => {
+        const order = await confirmedOrder();
+        await db.admin
+          .getRepository(Order)
+          .update({ id: order.id }, { status: OrderStatus.DRAFT });
+
+        expect(
+          await rejection(generate(order, DocumentType.PACKING_LIST)),
+        ).toMatchObject({ errorCode: "ORDER_CANNOT_BE_MODIFIED" });
+      });
+
+      it("shows no prices on the public link of a packing list, and does of a sales receipt", async () => {
+        const order = await confirmedOrder();
+        const publicOf = async (type: DocumentType) => {
+          const receipt = await generate(order, type);
+          await promote(receipt);
+          const { token } = await asTenant(() =>
+            receipts.generatePublicToken(receipt.id, user),
+          );
+          return JSON.stringify(await receipts.getPublicReceipt(token));
+        };
+
+        const packing = await publicOf(DocumentType.PACKING_LIST);
+        expect(packing).not.toMatch(/price|total|_cents|"money":true/);
+        expect(packing).toContain('"money":false');
+        const sales = await publicOf(DocumentType.SALES_RECEIPT);
+        expect(sales).toContain("_cents");
+      });
+
+      it("replaces a packing list in place with no prices in the new snapshot", async () => {
+        const order = await confirmedOrder();
+        const first = await generate(order, DocumentType.PACKING_LIST);
+        await promote(first);
+
+        await asTenant(() =>
+          receipts.regenerateReceiptPdf(first.id, user, {
+            mode: "replace",
+            expectedActiveRevision: 1,
+            confirmReconstruction: false,
+            selection: KEEP,
+          }),
+        );
+
+        const row = await stored(first.id);
+        expect(row.number).toBe(first.number);
+        expect(row.pending_snapshot?.document?.type).toBe(
+          DocumentType.PACKING_LIST,
+        );
+        expect(
+          JSON.stringify(row.pending_snapshot?.publicProjection),
+        ).not.toMatch(/_cents/);
+      });
+
+      it("retries a failed sales receipt on the same row and number", async () => {
+        const order = await confirmedOrder();
+        const receipt = await generate(order, DocumentType.SALES_RECEIPT);
+        await db.admin
+          .getRepository(Receipt)
+          .update({ id: receipt.id }, { status: ReceiptStatus.FAILED });
+
+        const retried = await generate(order, DocumentType.SALES_RECEIPT);
+
+        expect(retried.id).toBe(receipt.id);
+        expect(retried.number).toBe(receipt.number);
+        expect(await counter(DocumentType.SALES_RECEIPT)).toBe(1);
       });
     });
 

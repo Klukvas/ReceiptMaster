@@ -2170,7 +2170,7 @@
             }
           }
         },
-        "summary": "Generate a document of the given type (waybill, invoice or act) for an order",
+        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt or packing list) for an order",
         "parameters": [
           {
             "name": "orderId",
@@ -7196,6 +7196,84 @@
                 },
                 "additionalProperties": false,
                 "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "sales_receipt"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "packing_list"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
               }
             },
             "required": [

@@ -207,6 +207,8 @@ export class DocumentRenderService {
     const documentData = frozenDocument
       ? buildDocumentRenderData(frozenDocument, order, number, config)
       : undefined;
+    const hidesPrices = documentData?.view.hidesItemPrices === true;
+    const showsMoney = caps.money && !hidesPrices;
     const data = this.templates.prepareTemplateData(
       {
         ...order,
@@ -273,14 +275,15 @@ export class DocumentRenderService {
           config.documentLanguage,
           config.formatting,
         ),
+        // A document without money never formats a price, so none can reach its HTML.
         items: order.items.map((item) => ({
           productName: item.product_name,
           qty: item.qty,
-          unitPrice: money(item.unit_price_cents),
-          lineTotal: money(item.line_total_cents),
+          unitPrice: hidesPrices ? "" : money(item.unit_price_cents),
+          lineTotal: hidesPrices ? "" : money(item.line_total_cents),
         })),
-        subtotal: money(order.subtotal_cents),
-        total: money(order.total_cents),
+        subtotal: hidesPrices ? "" : money(order.subtotal_cents),
+        total: hidesPrices ? "" : money(order.total_cents),
       },
     );
     const publicProjection: PublicProjection = {
@@ -288,17 +291,17 @@ export class DocumentRenderService {
       order: {
         ...order,
         recipient,
-        subtotal_cents: caps.money ? order.subtotal_cents : undefined,
-        total_cents: caps.money ? order.total_cents : undefined,
+        subtotal_cents: showsMoney ? order.subtotal_cents : undefined,
+        total_cents: showsMoney ? order.total_cents : undefined,
         items: order.items.map((item) =>
-          caps.money
+          showsMoney
             ? item
             : { product_name: item.product_name, qty: item.qty },
         ),
       },
       formatting: config.formatting,
       documentLanguage: config.documentLanguage,
-      money: caps.money,
+      money: showsMoney,
     };
     const snapshot: RenderSnapshot = {
       config,

@@ -1,5 +1,6 @@
 import type { DocumentRequestBody } from "./api";
 import type { DocumentConfig } from "./document-config";
+import { DOCUMENT_TYPE_META, type CreatableType } from "./document-types";
 
 export const MAX_PAYMENT_TERM_DAYS = 365;
 export const MAX_CONTRACT_REF_LENGTH = 200;
@@ -24,9 +25,6 @@ export type DetailsErrors = Partial<Record<string, string>>;
 export type Built<Value> =
   | { ok: true; value: Value }
   | { ok: false; errors: DetailsErrors };
-
-/** The generatable types that ask for details; the waybill is created in one click. */
-export type DetailedDocumentType = "invoice" | "act";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -87,11 +85,14 @@ type TemplateId = DocumentConfig["templateId"];
 
 /** The POST /receipts/orders/:id/documents body for the chosen type and its form. */
 export function buildDocumentRequest(
-  type: DetailedDocumentType,
+  type: CreatableType,
   forms: DocumentForms,
   templateId?: TemplateId,
 ): Built<DocumentRequestBody> {
   const overrides = templateId ? { overrides: { templateId } } : {};
+  if (DOCUMENT_TYPE_META[type].details === null) {
+    return { ok: true, value: { type, ...overrides } };
+  }
   if (type === "invoice") {
     const built = buildInvoiceDetails(forms.invoice);
     return built.ok

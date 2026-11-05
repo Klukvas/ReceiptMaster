@@ -1,11 +1,19 @@
-import type { DocumentLanguage } from "../../document-types";
+import type {
+  DocumentLanguage,
+  GeneratableDocumentType,
+} from "../../document-types";
+import type { DocumentType } from "../../entities/receipt.entity";
 
 /** Wording of the invoice / act blocks. Key parity across languages is a compile-time check. */
 export type DocumentLabels = {
   supplier: string;
   contractor: string;
+  seller: string;
+  shipper: string;
   payer: string;
   customer: string;
+  buyer: string;
+  consignee: string;
   paymentDetails: string;
   paymentRecipient: string;
   bank: string;
@@ -27,9 +35,16 @@ export type DocumentLabels = {
   issuedBy: string;
   fromContractor: string;
   fromCustomer: string;
+  sellerSignature: string;
+  shippedBy: string;
+  receivedBy: string;
   signature: string;
   stamp: string;
   actStatement: string;
+  /** Printed on the sales receipt: the document has no fiscal standing. */
+  nonFiscalNotice: string;
+  linesCount: string;
+  totalQuantity: string;
   vatId: string;
   vatNonPayer: string;
   priceWithVat: string;
@@ -40,8 +55,12 @@ export const DOCUMENT_LABELS = {
   uk: {
     supplier: "Постачальник",
     contractor: "Виконавець",
+    seller: "Продавець",
+    shipper: "Відправник",
     payer: "Платник",
     customer: "Замовник",
+    buyer: "Покупець",
+    consignee: "Одержувач",
     paymentDetails: "Реквізити для оплати",
     paymentRecipient: "Одержувач",
     bank: "Банк",
@@ -62,10 +81,16 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Виписав(ла)",
     fromContractor: "Від Виконавця",
     fromCustomer: "Від Замовника",
+    sellerSignature: "Продавець",
+    shippedBy: "Відправив",
+    receivedBy: "Отримав",
     signature: "Підпис",
     stamp: "М.П.",
     actStatement:
       "Роботи виконано в повному обсязі, сторони претензій одна до одної не мають.",
+    nonFiscalNotice: "Не є фіскальним документом",
+    linesCount: "Найменувань",
+    totalQuantity: "Загальна кількість",
     vatId: "ІПН",
     vatNonPayer: "Не є платником ПДВ",
     priceWithVat: "Ціна з ПДВ",
@@ -74,8 +99,12 @@ export const DOCUMENT_LABELS = {
   ru: {
     supplier: "Поставщик",
     contractor: "Исполнитель",
+    seller: "Продавец",
+    shipper: "Отправитель",
     payer: "Плательщик",
     customer: "Заказчик",
+    buyer: "Покупатель",
+    consignee: "Получатель",
     paymentDetails: "Реквизиты для оплаты",
     paymentRecipient: "Получатель",
     bank: "Банк",
@@ -96,10 +125,16 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Выписал(а)",
     fromContractor: "От Исполнителя",
     fromCustomer: "От Заказчика",
+    sellerSignature: "Продавец",
+    shippedBy: "Отправил",
+    receivedBy: "Получил",
     signature: "Подпись",
     stamp: "М.П.",
     actStatement:
       "Работы выполнены в полном объёме, стороны претензий друг к другу не имеют.",
+    nonFiscalNotice: "Не является фискальным документом",
+    linesCount: "Наименований",
+    totalQuantity: "Общее количество",
     vatId: "ИНН плательщика НДС",
     vatNonPayer: "Не является плательщиком НДС",
     priceWithVat: "Цена с НДС",
@@ -108,8 +143,12 @@ export const DOCUMENT_LABELS = {
   en: {
     supplier: "Supplier",
     contractor: "Contractor",
+    seller: "Seller",
+    shipper: "Shipper",
     payer: "Payer",
     customer: "Customer",
+    buyer: "Buyer",
+    consignee: "Consignee",
     paymentDetails: "Payment details",
     paymentRecipient: "Beneficiary",
     bank: "Bank",
@@ -130,10 +169,16 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Issued by",
     fromContractor: "On behalf of the Contractor",
     fromCustomer: "On behalf of the Customer",
+    sellerSignature: "Seller",
+    shippedBy: "Shipped by",
+    receivedBy: "Received by",
     signature: "Signature",
     stamp: "Seal",
     actStatement:
       "The work has been completed in full; the parties have no claims against each other.",
+    nonFiscalNotice: "Not a fiscal document",
+    linesCount: "Line items",
+    totalQuantity: "Total quantity",
     vatId: "VAT ID",
     vatNonPayer: "Not a VAT payer",
     priceWithVat: "Price incl. VAT",
@@ -160,7 +205,7 @@ export type StyleLabelOverrides = Record<
  * purchase") that would be wrong on an invoice or an act.
  */
 export const STYLE_LABEL_OVERRIDES: Record<
-  "invoice" | "act",
+  Exclude<GeneratableDocumentType, DocumentType.WAYBILL>,
   Record<DocumentLanguage, StyleLabelOverrides>
 > = {
   invoice: {
@@ -205,6 +250,52 @@ export const STYLE_LABEL_OVERRIDES: Record<
       invoiceNo: "Act No:",
       invoiceDate: "Act date:",
       generatedAt: "Act generated:",
+      thankYou: "Thank you for your business!",
+      footerMessage: "If you have any questions, please contact us.",
+    },
+  },
+  sales_receipt: {
+    uk: {
+      invoiceNo: "Номер товарного чека:",
+      invoiceDate: "Дата:",
+      generatedAt: "Документ сформовано:",
+      thankYou: "Дякуємо за покупку!",
+      footerMessage: "Якщо у вас є питання, будь ласка, зв’яжіться з нами.",
+    },
+    ru: {
+      invoiceNo: "Номер товарного чека:",
+      invoiceDate: "Дата:",
+      generatedAt: "Документ сформирован:",
+      thankYou: "Спасибо за покупку!",
+      footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
+    },
+    en: {
+      invoiceNo: "Receipt No:",
+      invoiceDate: "Date:",
+      generatedAt: "Document generated:",
+      thankYou: "Thank you for your purchase!",
+      footerMessage: "If you have any questions, please contact us.",
+    },
+  },
+  packing_list: {
+    uk: {
+      invoiceNo: "Номер пакувального листа:",
+      invoiceDate: "Дата:",
+      generatedAt: "Документ сформовано:",
+      thankYou: "Дякуємо за співпрацю!",
+      footerMessage: "Якщо у вас є питання, будь ласка, зв’яжіться з нами.",
+    },
+    ru: {
+      invoiceNo: "Номер упаковочного листа:",
+      invoiceDate: "Дата:",
+      generatedAt: "Документ сформирован:",
+      thankYou: "Благодарим за сотрудничество!",
+      footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
+    },
+    en: {
+      invoiceNo: "Packing list No:",
+      invoiceDate: "Date:",
+      generatedAt: "Document generated:",
       thankYou: "Thank you for your business!",
       footerMessage: "If you have any questions, please contact us.",
     },

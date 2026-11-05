@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-02
+**Last Updated:** 2026-11-05
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -730,13 +730,13 @@ is the single pipeline (waybill = `generateReceipt`). Per-type rules are data in
 `receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`, kept consistent with `order-lock.ts` by a test).
 Everything that can refuse a request without a number (`ReceiptSnapshotService.preflight`: order status
 from the spec, template support, requisites, dates) runs before `nextDocumentNumber`, which sits outside the
-transaction. `RenderSnapshot.document` (invoice/act only) carries the frozen requisites; the four styles in
+transaction. `RenderSnapshot.document` (every typed document, i.e. all but the waybill) carries the frozen requisites; the four styles in
 `layout.allowedStyles` (standard, classic, minimal, corporate) carry five Handlebars slots, registered from
 `templates/document-blocks.ts` (`DOCUMENT_PARTIALS`): `documentStyles` (`doc-*` CSS, after `printLayout`),
 `documentParties` + `documentPayment` (where the style's recipient/company block was, which is wrapped in
 `{{#unless document}}`), `documentTotals` (replaces the style's totals via `{{#if document}}…{{else}}…{{/if}}`) and
 `documentClosing` (due date / act statement and signatures, before the footer). Templates read only ready flags
-(`document.payment`, `document.act`, `document.signatures.buyer`), never the document type; each block tag sits on
+(`document.payment`, `document.act`, `document.totals`, `document.quantities`, `document.notice`, `document.hidesItemPrices`, `document.signatures.buyer`/`caption`), never the document type. The layout flags in `DocumentLayoutSpec` (`money`, `nonFiscalNotice`, `buyerAddress`, `signatures`, `sellerRole`/`buyerRole`) decide which of them `buildDocumentRenderData` sets. `documentTotals` is wrapped in `{{#if document.totals}}` and adds a `{{#if document.quantities}}` summary for no-money documents; CSS that only some types need (`.doc-notice`, `.doc-quantities`) sits behind `{{#if}}` in `documentStyles` so the invoice/act goldens stay byte-identical. The four styles wrap their price/amount `<th>`/`<td>` in `{{#unless document.hidesItemPrices}}` (`@root.document` inside `{{#each items}}`); each block tag sits on
 its own line so Handlebars drops it and a waybill's HTML stays byte-identical (guarded by
 `services/waybill-html-golden.spec.ts`; change that digest list only when a waybill's output is meant to change).
 The other 11 styles carry no slot. Wording lives in `templates/translations/document-labels.ts`

@@ -9,12 +9,11 @@ import {
   DEFAULT_PAYMENT_TERM_DAYS,
   formFieldOf,
   type ActForm,
-  type DetailedDocumentType,
   type DetailsErrors,
   type InvoiceForm,
 } from "../../lib/document-details";
 import { forecastRequisites } from "../../lib/document-requisites";
-import { DOCUMENT_TYPE_META } from "../../lib/document-types";
+import { DOCUMENT_TYPE_META, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
@@ -28,7 +27,7 @@ import { RequisitesNotice } from "./RequisitesNotice";
 
 type CreateDocumentModalProps = {
   order: Order;
-  type: DetailedDocumentType;
+  type: CreatableType;
   onClose: () => void;
 };
 
@@ -65,7 +64,9 @@ export function CreateDocumentModal({
   const [replacement, setReplacement] = useState<Replacement | null>(null);
   const [isCheckingRetention, setIsCheckingRetention] = useState(false);
 
-  const label = t(DOCUMENT_TYPE_META[type].labelKey);
+  const meta: DocumentTypeMeta = DOCUMENT_TYPE_META[type];
+  const { labelKey, details, createNoteKey } = meta;
+  const label = t(labelKey);
   const isBusy = createDocument.isPending || isCheckingRetention;
   const recipient = order.recipient;
 
@@ -161,14 +162,20 @@ export function CreateDocumentModal({
           void submit();
         }}
       >
-        {type === "invoice" ? (
+        {details === "invoice" && (
           <InvoiceDetailsFields
             form={invoiceForm}
             errors={fieldErrors}
             onChange={setInvoiceEdits}
           />
-        ) : (
+        )}
+        {details === "act" && (
           <ActDetailsFields form={actForm} errors={fieldErrors} onChange={setActForm} />
+        )}
+        {createNoteKey && (
+          <p data-testid="document-create-note" className="rounded-lg bg-surface-alt p-3 text-sm text-content-secondary">
+            {t(createNoteKey)}
+          </p>
         )}
 
         <div className="space-y-1">

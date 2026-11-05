@@ -79,5 +79,7 @@ export const documentGenerationSchema = z
     generationBase(DocumentType.ACT).extend({
       details: actDetailsSchema.default({}),
     }),
+    generationBase(DocumentType.SALES_RECEIPT),
+    generationBase(DocumentType.PACKING_LIST),
   ])
   .refine((v) => !v.config || !v.presetId, "Choose a config or a preset");

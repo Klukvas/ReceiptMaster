@@ -317,7 +317,7 @@
     "noActivity": "No activity yet",
     "requisites": {
       "title": "Requisites for documents",
-      "hint": "Used on invoices and acts of completed work.",
+      "hint": "Used on some documents: invoices, acts of completed work and sales receipts.",
       "legalName": "Legal name",
       "taxId": "EDRPOU or RNOKPP",
       "taxIdKind": "Number kind",
@@ -496,7 +496,7 @@
     "autoReceiptDisabled": "Automatic waybills turned off",
     "requisites": {
       "title": "Requisites for documents",
-      "description": "Printed on invoices and acts of completed work. Saved separately from the document design.",
+      "description": "Printed on invoices, acts of completed work and sales receipts. Saved separately from the document design.",
       "taxIdKind": "Tax number kind",
       "taxIdKindAuto": "Detect by length",
       "taxIdKinds": {
@@ -1138,6 +1138,10 @@
     "create": "Create",
     "created": "Document is being created: {{type}}",
     "design": "Document design",
+    "notes": {
+      "sales_receipt": "This is not a fiscal document: it confirms a sale but does not replace a fiscal register receipt.",
+      "packing_list": "A packing list shows no prices. Once it is created, the order is locked against editing."
+    },
     "designFallback": "Your usual design cannot carry this document type, so another one is preselected.",
     "noDesign": "No design is available for this document type.",
     "paymentTerm": "Payment term",

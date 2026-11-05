@@ -20,11 +20,18 @@ const order: DocumentOrderInput = {
   currency: "UAH",
   total_cents: 120000,
   recipient: { address: "Київ, вул. Order 1" },
-  items: [{ line_total_cents: 70000 }, { line_total_cents: 50000 }],
+  items: [
+    { qty: 1, line_total_cents: 70000 },
+    { qty: 3, line_total_cents: 50000 },
+  ],
 };
 
 const frozenFor = (
-  type: DocumentType.INVOICE | DocumentType.ACT,
+  type:
+    | DocumentType.INVOICE
+    | DocumentType.ACT
+    | DocumentType.SALES_RECEIPT
+    | DocumentType.PACKING_LIST,
   vatPayer: boolean | null,
   overrides: Partial<FrozenDocument> = {},
 ): FrozenDocument => ({
@@ -33,10 +40,12 @@ const frozenFor = (
   details:
     type === DocumentType.INVOICE
       ? { dueDate: "2026-10-20" }
-      : {
-          contractRef: "Договір 7",
-          period: { from: "2026-10-01", to: "2026-10-31" },
-        },
+      : type === DocumentType.ACT
+        ? {
+            contractRef: "Договір 7",
+            period: { from: "2026-10-01", to: "2026-10-31" },
+          }
+        : {},
   issueDate: "2026-10-15",
   seller: buildSeller(
     {
@@ -263,6 +272,117 @@ describe("buildDocumentRenderData", () => {
       errorCode: "INTERNAL_SERVER_ERROR",
       message: "Document totals are inconsistent",
       statusCode: 500,
+    });
+  });
+  describe("sales receipt", () => {
+    const view = (vatPayer: boolean | null) =>
+      buildDocumentRenderData(
+        frozenFor(DocumentType.SALES_RECEIPT, vatPayer),
+        order,
+        "N",
+        config,
+      ).view;
+
+    it("carries the non-fiscal notice, and no other type does", () => {
+      expect(view(true).notice).toBe("Не є фіскальним документом");
+      for (const type of [
+        DocumentType.INVOICE,
+        DocumentType.ACT,
+        DocumentType.PACKING_LIST,
+      ] as const)
+        expect(
+          buildDocumentRenderData(frozenFor(type, true), order, "N", config)
+            .view.notice,
+        ).toBeUndefined();
+    });
+
+    it("splits the VAT like an invoice and has no payment block", () => {
+      const payer = view(true);
+      expect(payer.totals?.vat).toEqual({
+        label: "У тому числі ПДВ (20%)",
+        amount: money(20000),
+      });
+      expect(payer.payment).toBeUndefined();
+      expect(payer.hidesItemPrices).toBeUndefined();
+      expect(view(false).totals?.noVat).toBe("Без ПДВ");
+    });
+
+    it("has a seller-only signature captioned without a seal", () => {
+      const { signatures, seller, buyer } = view(true);
+      expect(signatures.seller.heading).toBe("Продавець");
+      expect(signatures.buyer).toBeUndefined();
+      expect(signatures.caption).toBe("Підпис");
+      expect(signatures.caption).not.toContain("М.П.");
+      expect([seller.role, buyer.role]).toEqual(["Продавець", "Покупець"]);
+    });
+  });
+
+  describe("packing list", () => {
+    const build = (vatPayer: boolean | null = true, input = order) =>
+      buildDocumentRenderData(
+        frozenFor(DocumentType.PACKING_LIST, vatPayer),
+        input,
+        "N",
+        config,
+      );
+
+    it("has no totals, VAT or amount in words, and no price columns", () => {
+      const { view, translationOverrides } = build(true);
+      expect(view.totals).toBeUndefined();
+      expect(view.hidesItemPrices).toBe(true);
+      expect(view.notice).toBeUndefined();
+      const { labels: _labels, ...printed } = view;
+      expect(JSON.stringify(printed)).not.toMatch(/ПДВ|ІПН|прописом|₴|грн/);
+      expect(translationOverrides.amount).toBeUndefined();
+      expect(translationOverrides.price).toBeUndefined();
+    });
+
+    it("counts line items and total quantity", () => {
+      expect(build().view.quantities).toEqual({ lines: "2", units: "4" });
+    });
+
+    it("signs as shipper and consignee with a plain caption", () => {
+      const { signatures, seller, buyer } = build().view;
+      expect(signatures.seller.heading).toBe("Відправив");
+      expect(signatures.buyer?.heading).toBe("Отримав");
+      expect(signatures.caption).toBe("Підпис");
+      expect([seller.role, buyer.role]).toEqual(["Відправник", "Одержувач"]);
+    });
+  });
+
+  describe("buyer address priority", () => {
+    it("puts the delivery address first for a packing list and the legal one for a receipt", () => {
+      const withLegal = (
+        type: DocumentType.PACKING_LIST | DocumentType.SALES_RECEIPT,
+      ) =>
+        buildDocumentRenderData(
+          frozenFor(type, true, {
+            buyer: buildBuyer({
+              name: "Іван",
+              legal_name: "ТОВ Покупець",
+              legal_address: "Львів, вул. Юридична 2",
+            }),
+          }),
+          order,
+          "N",
+          config,
+        ).view.buyer.address;
+      expect(withLegal(DocumentType.PACKING_LIST)).toBe("Київ, вул. Order 1");
+      expect(withLegal(DocumentType.SALES_RECEIPT)).toBe(
+        "Львів, вул. Юридична 2",
+      );
+    });
+
+    it("falls back to the legal address when the order has no delivery address", () => {
+      const view = buildDocumentRenderData(
+        frozenFor(DocumentType.PACKING_LIST, true, {
+          buyer: buildBuyer({ name: "Іван", legal_address: "Львів, 2" }),
+        }),
+        { ...order, recipient: {} },
+        "N",
+        config,
+      ).view;
+      expect(view.buyer.address).toBe("Львів, 2");
     });
   });
 });

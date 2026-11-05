@@ -26,7 +26,7 @@ export const COMPLETE_COMPANY = {
   defaultPaymentTermDays: 14,
 };
 
-const FULL = ["waybill", "invoice", "act"];
+const FULL = ["waybill", "invoice", "act", "sales_receipt", "packing_list"];
 const capabilities = (documentTypes) => ({
   revision: 2,
   companyFields: ["companyName", "companyAddress", "companyEmail", "companyPhone", "companyTaxId", "companyIban", "companySwift", "companyWebsite", "companyTagline"],

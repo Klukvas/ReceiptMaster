@@ -1,9 +1,10 @@
 /**
- * Partials printed by the styles that can carry an invoice or an act (see
+ * Partials printed by the styles that can carry a typed document (see
  * `allowedStyles` in document-types.ts). They read only the pre-formatted `document`
  * view, never the document type, and use `doc-*` classes so they cannot collide with a
  * style's own `.totals-section` / `.signature-section`. A waybill passes no `document`,
- * so none of this reaches its HTML. Block tags sit on their own lines so Handlebars
+ * so none of this reaches its HTML. Styles for blocks only some types print sit behind
+ * `{{#if}}` so the HTML of the other types stays byte-identical. Block tags sit on their own lines so Handlebars
  * drops them from the output.
  */
 
@@ -31,9 +32,18 @@ const documentStyles = `
   }
   .doc-totals { break-after: avoid; page-break-after: avoid; }
   .doc-closing { break-before: avoid; page-break-before: avoid; }
+  {{#if document.notice}}
+  .doc-notice { margin: 12px 0 0; padding: 6px 10px; border: 1px solid #111827; font-size: 12px; font-weight: 700; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+  {{/if}}
+  {{#if document.quantities}}
+  .doc-quantities { width: 55%; margin: 12px 0 8px auto; font-size: 12px; line-height: 1.6; break-inside: avoid; page-break-inside: avoid; }
+  {{/if}}
 `;
 
-const documentParties = `<div class="doc-parties">
+const documentParties = `{{#if document.notice}}
+<div class="doc-notice">{{document.notice}}</div>
+{{/if}}
+<div class="doc-parties">
   <div class="doc-party">
     <div class="doc-role">{{document.seller.role}}</div>
     <div class="doc-name">{{document.seller.name}}</div>
@@ -73,7 +83,8 @@ const documentPayment = `{{#if document.payment}}
 {{/if}}
 `;
 
-const documentTotals = `<div class="doc-totals">
+const documentTotals = `{{#if document.totals}}
+<div class="doc-totals">
   <div class="doc-total-row"><span>{{document.labels.total}}</span><span>{{document.totals.total}}</span></div>
   {{#if document.totals.vat}}
   <div class="doc-total-row"><span>{{document.totals.vat.label}}</span><span>{{document.totals.vat.amount}}</span></div>
@@ -84,6 +95,13 @@ const documentTotals = `<div class="doc-totals">
   <div class="doc-total-row doc-grand"><span>{{document.labels.grandTotal}}</span><span>{{document.totals.grandTotal}}</span></div>
 </div>
 <div class="doc-words"><span class="doc-label">{{document.labels.amountInWords}}:</span> {{document.totals.amountInWords}}</div>
+{{/if}}
+{{#if document.quantities}}
+<div class="doc-quantities">
+  <div class="doc-total-row"><span>{{document.labels.linesCount}}</span><span>{{document.quantities.lines}}</span></div>
+  <div class="doc-total-row doc-grand"><span>{{document.labels.totalQuantity}}</span><span>{{document.quantities.units}}</span></div>
+</div>
+{{/if}}
 `;
 
 const documentClosing = `<div class="doc-closing">
@@ -106,7 +124,7 @@ const documentClosing = `<div class="doc-closing">
       <div>{{document.signatures.seller.position}}</div>
       {{/if}}
       <div class="doc-sign-line"></div>
-      <div class="doc-sign-caption">{{document.labels.signature}} / {{document.labels.stamp}}</div>
+      <div class="doc-sign-caption">{{document.signatures.caption}}</div>
       {{#if document.signatures.seller.name}}
       <div class="doc-sign-name">{{document.signatures.seller.name}}</div>
       {{/if}}
@@ -116,7 +134,7 @@ const documentClosing = `<div class="doc-closing">
       <div class="doc-sign-heading">{{document.signatures.buyer.heading}}</div>
       <div>&nbsp;</div>
       <div class="doc-sign-line"></div>
-      <div class="doc-sign-caption">{{document.labels.signature}} / {{document.labels.stamp}}</div>
+      <div class="doc-sign-caption">{{document.signatures.caption}}</div>
       {{#if document.signatures.buyer.name}}
       <div class="doc-sign-name">{{document.signatures.buyer.name}}</div>
       {{/if}}

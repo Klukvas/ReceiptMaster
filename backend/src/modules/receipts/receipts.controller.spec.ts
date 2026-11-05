@@ -339,6 +339,27 @@ describe("ReceiptsController: POST orders/:orderId/documents", () => {
     );
   });
 
+  it.each(["sales_receipt", "packing_list"])(
+    "accepts %s without details and rejects details on it",
+    async (type) => {
+      await controller.createDocument("order-1", req, { type });
+      expect(service.generateDocument).toHaveBeenCalledWith(
+        "order-1",
+        req.user,
+        type,
+        expect.objectContaining({ logoAction: "keep" }),
+        undefined,
+        undefined,
+      );
+      await expect(
+        controller.createDocument("order-1", req, {
+          type,
+          details: { contractRef: "x" },
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+    },
+  );
+
   it("defaults the details of an act and gives a waybill none", async () => {
     await controller.createDocument("order-1", req, { type: "act" });
     expect(service.generateDocument.mock.calls[0][4]).toEqual({});
@@ -346,7 +367,7 @@ describe("ReceiptsController: POST orders/:orderId/documents", () => {
     expect(service.generateDocument.mock.calls[1][4]).toBeUndefined();
   });
 
-  it.each(["quote", "sales_receipt", "packing_list", "return_note"])(
+  it.each(["quote", "return_note"])(
     "refuses %s with DOCUMENT_TYPE_NOT_SUPPORTED",
     async (type) => {
       await expect(

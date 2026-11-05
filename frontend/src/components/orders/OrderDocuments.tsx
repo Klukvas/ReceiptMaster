@@ -2,8 +2,13 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import type { Order, Receipt } from "../../lib/api";
-import type { DetailedDocumentType } from "../../lib/document-details";
-import { canCreate, DOCUMENT_TYPE_META, documentsOf } from "../../lib/document-types";
+import {
+  canCreate,
+  CREATABLE_TYPES,
+  DOCUMENT_TYPE_META,
+  documentsOf,
+  type CreatableType,
+} from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { receiptService } from "../../services/ReceiptService";
 import { Button } from "../ui/Button";
@@ -11,8 +16,6 @@ import { CreateDocumentModal } from "./CreateDocumentModal";
 import { CustomizeDocumentModal } from "./CustomizeDocumentModal";
 import { DocumentCard } from "./DocumentCard";
 import { VoidDocumentModal } from "./VoidDocumentModal";
-
-const CREATABLE_TYPES: readonly DetailedDocumentType[] = ["invoice", "act"];
 
 type OrderDocumentsProps = {
   order: Order;
@@ -24,7 +27,7 @@ type OrderDocumentsProps = {
 /** Every document of the order with its own actions, plus entries to create the missing ones. */
 export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDocumentsProps) {
   const { t } = useTranslation();
-  const [creating, setCreating] = useState<DetailedDocumentType | null>(null);
+  const [creating, setCreating] = useState<CreatableType | null>(null);
   const [replacing, setReplacing] = useState<Receipt | null>(null);
   const [voiding, setVoiding] = useState<Receipt | null>(null);
   const queryClient = useQueryClient();

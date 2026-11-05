@@ -65,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
             )}
           </DialogHeader>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="whitespace-normal px-6 py-4 text-start">{children}</div>
       </DialogContent>
     </Dialog>
   );

@@ -18,13 +18,11 @@ import { useTranslation } from "../../hooks/useTranslation";
 import {
   activeDocument,
   canCreate,
+  CREATABLE_TYPES,
   DOCUMENT_TYPE_META,
+  type CreatableType,
   waybillOf,
 } from "../../lib/document-types";
-import type { DetailedDocumentType } from "../../lib/document-details";
-
-/** Types created through a form (the waybill stays a one-click item). */
-const DETAILED_TYPES: readonly DetailedDocumentType[] = ["invoice", "act"];
 
 interface MenuItem {
   icon: React.ElementType;
@@ -130,7 +128,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
-  const [creating, setCreating] = useState<DetailedDocumentType | null>(null);
+  const [creating, setCreating] = useState<CreatableType | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -286,7 +284,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         });
       }
 
-      DETAILED_TYPES.filter((type) => canCreate(order, type)).forEach(
+      CREATABLE_TYPES.filter((type) => canCreate(order, type)).forEach(
         (type, position) => {
           const meta = DOCUMENT_TYPE_META[type];
           items.push({

@@ -339,8 +339,10 @@
                 <tr>
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#unless document.hidesItemPrices}}
                     <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
                     <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/unless}}
                 </tr>
             </thead>
             <tbody>
@@ -353,8 +355,10 @@
                         {{/if}}
                     </td>
                     <td class="col-qty">{{qty}}</td>
+                    {{#unless @root.document.hidesItemPrices}}
                     <td class="col-unit-price">{{unitPrice}}</td>
                     <td class="col-amount">{{lineTotal}}</td>
+                    {{/unless}}
                 </tr>
                 {{/each}}
             </tbody>

@@ -1,9 +1,23 @@
-import { ClipboardCheck, FileText, Receipt as ReceiptIcon } from "lucide-react";
+import {
+  ClipboardCheck,
+  FileText,
+  Package,
+  Receipt as ReceiptIcon,
+  ShoppingBag,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Order, Receipt } from "./api-types";
 
 export type DocumentType = Receipt["document_type"];
-export type GeneratableType = "waybill" | "invoice" | "act";
+export type GeneratableType =
+  | "waybill"
+  | "invoice"
+  | "act"
+  | "sales_receipt"
+  | "packing_list";
+
+/** Types created through the create-document dialog (the waybill is one click). */
+export type CreatableType = Exclude<GeneratableType, "waybill">;
 
 /** Which `details` form a type asks for when it is created. */
 export type DocumentDetailsKind = "invoice" | "act";
@@ -19,6 +33,8 @@ export type DocumentTypeMeta = {
   requiresVatIdForPayer: boolean;
   /** Soft requisites: generation goes ahead, the response lists what is absent. */
   warnings: readonly string[];
+  /** Translation key of a short note shown in the create dialog, if the type needs one. */
+  createNoteKey?: string;
 };
 
 /**
@@ -59,11 +75,36 @@ export const DOCUMENT_TYPE_META = {
     requiresVatIdForPayer: false,
     warnings: ["buyer.legalName", "buyer.taxId", "details.contractRef"],
   },
+  sales_receipt: {
+    labelKey: "documentTypes.sales_receipt",
+    icon: ShoppingBag,
+    allowedOrderStatuses: ["confirmed"],
+    details: null,
+    requiredSeller: ["name"],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.vatPayer"],
+    createNoteKey: "documents.notes.sales_receipt",
+  },
+  packing_list: {
+    labelKey: "documentTypes.packing_list",
+    icon: Package,
+    allowedOrderStatuses: ["confirmed"],
+    details: null,
+    requiredSeller: ["name"],
+    requiresVatIdForPayer: false,
+    warnings: [],
+    createNoteKey: "documents.notes.packing_list",
+  },
 } as const satisfies Record<GeneratableType, DocumentTypeMeta>;
 
 export const GENERATABLE_TYPES = Object.keys(
   DOCUMENT_TYPE_META,
 ) as GeneratableType[];
+
+/** Types that open the create dialog, in the order their buttons appear. */
+export const CREATABLE_TYPES = GENERATABLE_TYPES.filter(
+  (type): type is CreatableType => type !== "waybill",
+);
 
 export function isGeneratableType(type: DocumentType): type is GeneratableType {
   return (GENERATABLE_TYPES as readonly DocumentType[]).includes(type);

@@ -12,6 +12,7 @@ export interface PrinterInfo {
 
 function retryBody(type: DocumentType): DocumentRequestBody {
   if (type === "act") return { type: "act", details: {} };
+  if (type === "sales_receipt" || type === "packing_list") return { type };
   return { type: "invoice", details: {} };
 }
 

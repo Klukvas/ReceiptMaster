@@ -288,7 +288,7 @@ const checkCreateGroup = async (results) => {
       const items = await menuOf(page);
       results.check(
         `${label}: a draft order offers no document creation`,
-        !items.some((item) => /^(Invoice|Act of Completed Work)…/.test(item)) &&
+        !items.some((item) => /^(Invoice|Act of Completed Work|Sales receipt|Packing list)…/.test(item)) &&
           (await page.getByRole("group", { name: "Create document" }).count()) === 0,
         `menu items: ${items.join(" | ")}`,
       );
@@ -298,10 +298,10 @@ const checkCreateGroup = async (results) => {
       const items = await menuOf(page);
       const group = page.getByRole("group", { name: "Create document" });
       results.check(
-        `${label}: a confirmed order lists invoice and act under "Create document", beside the one-click waybill`,
+        `${label}: a confirmed order lists invoice, act, sales receipt and packing list under "Create document", beside the one-click waybill`,
         items.includes("Generate waybill") &&
           (await group.getByRole("menuitem").allInnerTexts()).map((text) => text.trim()).join("|") ===
-            "Invoice…|Act of Completed Work…",
+            "Invoice…|Act of Completed Work…|Sales receipt…|Packing list…",
         `menu items: ${items.join(" | ")}`,
       );
       await page.keyboard.press("ArrowDown");
@@ -416,6 +416,37 @@ const checkActCreation = async (results) => {
   });
 };
 
+const checkDetaillessCreation = async (results) => {
+  const cases = [
+    { menu: "Sales receipt…", type: "sales_receipt", note: /not a fiscal document/i },
+    { menu: "Packing list…", type: "packing_list", note: /order is locked/i },
+  ];
+  for (const { menu, type, note } of cases) {
+    for (const { label, viewport } of VIEWPORTS) {
+      await withDocumentPage(viewport, {}, async (page, state) => {
+        const dialog = await openCreateDialog(page, menu);
+        results.check(
+          `${label}: the ${type} dialog has no detail fields, only the design picker and a note`,
+          (await dialog.getByLabel("Days to pay").count()) === 0 &&
+            (await dialog.getByLabel("Contract", { exact: true }).count()) === 0 &&
+            (await dialog.getByLabel("Document design").count()) === 1 &&
+            note.test(await dialog.getByTestId("document-create-note").innerText()),
+          await dialog.innerText(),
+        );
+        results.check(`${label}: the ${type} dialog fits the viewport`, await hasNoHorizontalOverflow(page), "horizontal overflow");
+        await dialog.getByRole("button", { name: "Create", exact: true }).click();
+        await settle(() => (state.created ?? []).length === 1);
+        const [sent] = state.created ?? [];
+        results.check(
+          `${label}: the ${type} request has the design and no details`,
+          sent?.type === type && !("details" in sent) && sent.overrides?.templateId === "standard",
+          JSON.stringify(sent),
+        );
+      });
+    }
+  }
+};
+
 const checkRequisitesBanner = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withDocumentPage(viewport, { refusal: true }, async (page, state) => {
@@ -467,7 +498,12 @@ const checkDocumentsSection = async (results) => {
     await withDocumentPage(viewport, {}, async (page, state) => {
       await openDetails(page);
       await page.evaluate(() => { window.__noReload = true; });
-      for (const [name, type] of [["Create: Invoice", "invoice"], ["Create: Act of Completed Work", "act"]]) {
+      for (const [name, type] of [
+        ["Create: Invoice", "invoice"],
+        ["Create: Act of Completed Work", "act"],
+        ["Create: Sales receipt", "sales_receipt"],
+        ["Create: Packing list", "packing_list"],
+      ]) {
         await page.getByRole("button", { name }).click();
         await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
         await settle(async () => (state.created ?? []).some((payload) => payload.type === type));
@@ -480,12 +516,12 @@ const checkDocumentsSection = async (results) => {
         cards.map((card) => card.getAttribute("data-document-type")),
       );
       results.check(
-        `${label}: the documents section shows both new documents without reloading the page`,
-        types.sort().join(",") === "act,invoice" && (await page.evaluate(() => window.__noReload === true)),
+        `${label}: the documents section shows all four new documents without reloading the page`,
+        types.sort().join(",") === "act,invoice,packing_list,sales_receipt" && (await page.evaluate(() => window.__noReload === true)),
         types.join(","),
       );
       results.check(
-        `${label}: nothing left to create once both exist`,
+        `${label}: nothing left to create once all exist`,
         (await page.getByRole("button", { name: /^Create: / }).count()) === 0,
         "create buttons still visible",
       );
@@ -625,6 +661,7 @@ export const run = async () => {
     await checkCreateGroup(results);
     await checkInvoiceCreation(results);
     await checkActCreation(results);
+    await checkDetaillessCreation(results);
     await checkRequisitesBanner(results);
     await checkDocumentsSection(results);
     await checkRetentionConfirm(results);

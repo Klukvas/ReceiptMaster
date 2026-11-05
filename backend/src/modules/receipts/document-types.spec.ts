@@ -17,18 +17,15 @@ describe("document type specs", () => {
     },
   );
 
-  it("generates exactly waybill, invoice and act", () => {
+  it("generates exactly waybill, invoice, act, sales receipt and packing list", () => {
     expect([...GENERATABLE_TYPES].sort()).toEqual([
       "act",
       "invoice",
+      "packing_list",
+      "sales_receipt",
       "waybill",
     ]);
-    for (const type of [
-      DocumentType.QUOTE,
-      DocumentType.SALES_RECEIPT,
-      DocumentType.PACKING_LIST,
-      DocumentType.RETURN_NOTE,
-    ])
+    for (const type of [DocumentType.QUOTE, DocumentType.RETURN_NOTE])
       expect(isGeneratableType(type)).toBe(false);
   });
 
@@ -41,11 +38,44 @@ describe("document type specs", () => {
     },
   );
 
-  it("gives invoice and act a heading in every language and the waybill none", () => {
+  it("gives every typed document a heading in every language and the waybill none", () => {
     expect(DOCUMENT_TYPE_SPECS[DocumentType.WAYBILL].title).toBeUndefined();
-    for (const type of [DocumentType.INVOICE, DocumentType.ACT])
+    for (const type of GENERATABLE_TYPES.filter(
+      (t) => t !== DocumentType.WAYBILL,
+    ))
       expect(Object.keys(DOCUMENT_TYPE_SPECS[type].title ?? {}).sort()).toEqual(
         ["en", "ru", "uk"],
       );
+  });
+
+  it("titles the two new documents", () => {
+    expect(DOCUMENT_TYPE_SPECS[DocumentType.SALES_RECEIPT].title).toEqual({
+      uk: "Товарний чек",
+      ru: "Товарный чек",
+      en: "Sales Receipt",
+    });
+    expect(DOCUMENT_TYPE_SPECS[DocumentType.PACKING_LIST].title).toEqual({
+      uk: "Пакувальний лист",
+      ru: "Упаковочный лист",
+      en: "Packing List",
+    });
+  });
+
+  it.each(GENERATABLE_TYPES.filter((t) => t !== DocumentType.WAYBILL))(
+    "%s prints money exactly when it requires money",
+    (type) => {
+      const spec = DOCUMENT_TYPE_SPECS[type];
+      expect(spec.layout?.money).toBe(spec.requiresMoney);
+    },
+  );
+
+  it("limits the new documents to the four document styles", () => {
+    for (const type of [DocumentType.SALES_RECEIPT, DocumentType.PACKING_LIST])
+      expect(DOCUMENT_TYPE_SPECS[type].layout?.allowedStyles).toEqual([
+        "standard",
+        "classic",
+        "minimal",
+        "corporate",
+      ]);
   });
 });

@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-02
+**Last Updated:** 2026-11-05
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -151,15 +151,17 @@ receipt can later be `VOID`. A receipt has a `document_type` (`DocumentType`: `w
 видаткова накладна). An order carries **at most one receipt row per type** (partial unique index
 `IDX_receipts_order_document_type` on `(order_id, document_type)`, excluding `return_note`, which an
 order may carry several of), so a retry reuses the same row rather than inserting a new one.
-`waybill`, `invoice` (рахунок на оплату) and `act` (акт виконаних робіт) are generated, through one pipeline
+`waybill`, `invoice` (рахунок на оплату), `act` (акт виконаних робіт), `sales_receipt` (товарний чек) and `packing_list` (пакувальний лист) are generated, through one pipeline
 (`ReceiptsService.generateDocument`; `generateReceipt` is the waybill wrapper): lookups, numbering, retention
-and the unique row are all per type. The other types are a schema capability that no endpoint produces yet
+and the unique row are all per type. `quote` and `return_note` are a schema capability that no endpoint produces yet
 (`POST /receipts/orders/:orderId/documents` answers `DOCUMENT_TYPE_NOT_SUPPORTED`). Per-type rules live in
 `receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`: allowed order statuses, locking, required requisites,
-warnings, heading, `layout`: party roles, payment block, completion statement, buyer signature, allowed HTML styles); invoice and act need a CONFIRMED order, lock it, are available on every plan, and are never
+warnings, heading, `layout`: party roles, payment block, completion statement, `money`, `nonFiscalNotice`, `buyerAddress`, `signatures` (seller/buyer heading keys and whether the caption mentions a seal), allowed HTML styles; invariant, tested: `requiresMoney === layout.money`); the four typed documents need a CONFIRMED order, lock it, are available on every plan, and are never
 auto-generated (only the waybill is, on confirm). Numbering is per type (see *Document numbers*); the retention cap is per type.
 
 **Invoice and act layout:** only `standard`, `classic`, `minimal` and `corporate` carry them (`layout.allowedStyles`; other styles are `DOCUMENT_TEMPLATE_UNSUPPORTED`). `services/document-view.ts::buildDocumentRenderData` turns the frozen document and the order into the `document` view the blocks print. Invoice: supplier and payer (code with its ЄДРПОУ/РНОКПП label, address, ІПН of a VAT payer), payment details (IBAN, bank, payment purpose "Оплата за рахунком № … від …"; SWIFT and МФО are not printed), totals, amount in words, due date, issuer signature. Act: contractor and customer, completion statement, contract, period, two signature columns, М.П. VAT: `seller.vatPayer === true` splits the (VAT-inclusive) total with `calculateVatBreakdown(mode: "included", rate)` and renames the price columns "… з ПДВ"; `false` prints "Без ПДВ"; unknown prints nothing about VAT. The rate is `UA_VAT_RATE_PERCENT` (20, assumed not configurable yet), frozen in `FrozenDocument.vatRatePercent`. The builder refuses an order whose `total_cents` differs from the sum of its lines. The document date shown is the frozen issue date, not the order date.
+
+**Sales receipt (товарний чек) and packing list (пакувальний лист):** both CONFIRMED-only, all plans, locking, never auto-generated, styles `standard`/`classic`/`minimal`/`corporate` only (`thermal`/`delivery` are `DOCUMENT_TEMPLATE_UNSUPPORTED`), no `details`. The sales receipt is explicitly **not a fiscal document**: it prints the notice "Не є фіскальним документом" (ru/en equivalents) above the parties, does not replace a РРО/ПРРО receipt and is never called a cash or fiscal receipt anywhere (a spec scans labels, templates and locales for those words). It has seller/buyer parties, the invoice's items, totals, VAT lines (payer: "У тому числі ПДВ (20%)", non-payer "Без ПДВ") and amount in words, no payment block, and a single seller signature captioned "Підпис" without a seal. Hard requisite: `seller.name` (plus `seller.vatId` for a VAT payer); warnings `seller.taxId`, `seller.vatPayer`. The packing list is a **no-money** document (`layout.money === false`): shipper/consignee parties (the consignee's address is the delivery address, then the legal one), items with quantities only, a summary "Найменувань / Загальна кількість", no VAT line of the seller, signatures "Відправив"/"Отримав". Hard requisite: `seller.name` only. `DocumentView.hidesItemPrices` makes the four styles drop the price and amount columns (`{{#unless document.hidesItemPrices}}`), and `DocumentRenderService.prepare` passes empty price strings to the template, so no price reaches the frozen HTML (and therefore the PDF). The public projection of a packing list is built with `money: false`: no `subtotal_cents`/`total_cents`, items reduced to `product_name` and `qty` (the same stripping the `delivery` style gets). Fixed headings: Товарний чек / Товарный чек / Sales Receipt; Пакувальний лист / Упаковочный лист / Packing List. A packing list locks its order although it carries no money.
 
 **Order lock (`orders.is_locked`):** promotion of a *locking* document (`waybill`, `invoice`, `act`, `sales_receipt`, `packing_list`; `receipts/order-lock.ts::LOCKING_DOCUMENT_TYPES`) sets it; `quote` and `return_note` do not. A manual void recomputes it with `syncOrderLock()`: the order unlocks only when no GENERATED locking document remains. The replace/repair/promotion gates that require a locked order apply to locking types only. Eviction by the retention cap does not recompute the lock (it would take the order row after the receipt row, the reverse of the void order); the evicted document's order stays locked, which is harmless for a CONFIRMED order.
 
@@ -413,7 +415,7 @@ IBAN/tax id, the VAT id and the signatory are never public; the seller's IBAN/ta
 template support, requisites, dates are pre-checked, and the number is drawn only after the logo is staged, so a bad logo file, quota or upload failure never burns one, and an unprintable order total or currency is refused in preflight (`DOCUMENT_AMOUNT_INVALID`); two parallel requests for one order and type are serialized in-process per tenant+order+type, so the second gets the first's row; across several backend processes the unique row index still keeps one row but a loser may burn a number) and again inside the transaction, where the buyer is
 also compared by `buyerFingerprint` and the seller columns by value. A FAILED retry with new `details` and a replacement both take the buyer from the frozen document.
 The retry sets `issueDate` anew, to the day of the retry; a replacement keeps the issue date and the resolved
-details and rebuilds the seller, configuration and heading. A voided invoice or act is not reissued for the same
+details and rebuilds the seller, configuration and heading. A voided invoice, act, sales receipt or packing list is not reissued for the same
 order (the per-type unique index applies, as for a waybill).
 
 The "Дата" line a typed document prints is `snapshot.document.issueDate` (formatted as a calendar date), not the

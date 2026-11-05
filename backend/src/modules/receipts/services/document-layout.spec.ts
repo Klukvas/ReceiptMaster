@@ -13,8 +13,19 @@ import { DOCUMENT_LABELS } from "../templates/translations/document-labels";
 import { DocumentRenderService, FrozenOrder } from "./document-render.service";
 import { ReceiptTemplate, TemplateService } from "./template.service";
 
-type TypedDocument = DocumentType.INVOICE | DocumentType.ACT;
+type TypedDocument =
+  | DocumentType.INVOICE
+  | DocumentType.ACT
+  | DocumentType.SALES_RECEIPT
+  | DocumentType.PACKING_LIST;
+// Invoice and act have golden digests; the later types are checked by content below.
 const TYPES: TypedDocument[] = [DocumentType.INVOICE, DocumentType.ACT];
+const ALL_TYPES: TypedDocument[] = [
+  ...TYPES,
+  DocumentType.SALES_RECEIPT,
+  DocumentType.PACKING_LIST,
+];
+const UNPRICED_TYPE = DocumentType.PACKING_LIST;
 const STYLES = ["standard", "classic", "minimal", "corporate"];
 const LANGUAGES: DocumentLanguage[] = ["uk", "ru", "en"];
 const SLOTS = [
@@ -275,19 +286,19 @@ describe("invoice and act layout", () => {
     });
 
     it("allowed styles come from the spec and the capabilities list them", () => {
-      for (const type of TYPES)
+      for (const type of ALL_TYPES)
         expect(DOCUMENT_TYPE_SPECS[type].layout?.allowedStyles).toEqual(STYLES);
       for (const style of Object.values(ReceiptTemplate)) {
         const types = getTemplateCapabilities(style).documentTypes;
         expect(types.includes("waybill")).toBe(true);
-        expect(types.includes("invoice")).toBe(STYLES.includes(style));
-        expect(types.includes("act")).toBe(STYLES.includes(style));
+        for (const type of ALL_TYPES)
+          expect(types.includes(type)).toBe(STYLES.includes(style));
       }
     });
 
     it("refuses every style outside the allowed list", () => {
       for (const style of Object.values(ReceiptTemplate))
-        for (const type of TYPES) {
+        for (const type of ALL_TYPES) {
           const check = () => assertTemplateSupportsDocument(type, style);
           if (STYLES.includes(style)) expect(check).not.toThrow();
           else expect(check).toThrow(/cannot carry this document type/);
@@ -301,6 +312,148 @@ describe("invoice and act layout", () => {
       for (const language of LANGUAGES)
         for (const value of Object.values(DOCUMENT_LABELS[language]))
           expect(value.trim()).not.toBe("");
+    });
+  });
+
+  describe("sales receipt and packing list", () => {
+    const CURRENCY = /₴|грн|UAH/;
+    const NOTICES = {
+      uk: "Не є фіскальним документом",
+      ru: "Не является фискальным документом",
+      en: "Not a fiscal document",
+    };
+    const cases = STYLES.flatMap((style) =>
+      LANGUAGES.map((language) => [style, language] as const),
+    );
+
+    it.each(cases)(
+      "packing list in %s / %s prints quantities and no money",
+      async (style, language) => {
+        const html = await render(UNPRICED_TYPE, style, language);
+        const labels = DOCUMENT_LABELS[language];
+        expect(html).toContain("doc-parties");
+        expect(html).toContain(labels.linesCount);
+        expect(html).toContain(labels.totalQuantity);
+        expect(html).toContain(labels.shippedBy);
+        expect(html).toContain(labels.receivedBy);
+        expect(html).not.toContain('class="doc-notice"');
+        expect(html).not.toContain('class="doc-totals"');
+        expect(html).not.toContain('class="doc-words"');
+        expect(html).not.toContain(labels.amountInWords);
+        expect(html).not.toContain(labels.vatIncluded);
+        expect(html).not.toContain(labels.stamp);
+        expect(html).not.toMatch(CURRENCY);
+        // The default 1 500,50 / 275,00 amounts of the fixture order.
+        expect(html).not.toMatch(
+          /1[\s\u00a0,.]?500[.,]50|2[\s\u00a0,.]?050[.,]50/,
+        );
+        expect(html).not.toContain("{{");
+      },
+    );
+
+    it.each(STYLES)(
+      "packing list in %s has no price or amount header",
+      async (s) => {
+        const html = await render(UNPRICED_TYPE, s, "uk");
+        const header = html.slice(
+          html.indexOf("<thead"),
+          html.indexOf("</thead>"),
+        );
+        expect(header.match(/<th\b/g)?.length).toBeLessThanOrEqual(3);
+        expect(header).not.toMatch(/Ціна|Сума|Price|Amount|Rate/i);
+      },
+    );
+
+    it("lists the delivery address for the consignee", async () => {
+      const html = await render(UNPRICED_TYPE, "standard", "uk");
+      expect(html).toContain("Київ, вул. Тестова 1");
+      expect(html).not.toContain("м. Львів");
+    });
+
+    it.each(cases)(
+      "sales receipt in %s / %s carries the notice, VAT and a seller-only signature",
+      async (style, language) => {
+        const html = await render(DocumentType.SALES_RECEIPT, style, language);
+        const labels = DOCUMENT_LABELS[language];
+        expect(html).toContain(NOTICES[language]);
+        expect(html).toContain('class="doc-totals"');
+        expect(html).toContain(`${labels.vatIncluded} (20%)`);
+        expect(html).toContain(labels.amountInWords);
+        expect(html).not.toContain(labels.paymentDetails);
+        expect(html).not.toContain(labels.stamp);
+        expect(html).not.toContain(labels.fromCustomer);
+        expect(html).not.toContain("{{");
+      },
+    );
+
+    it("keeps the notice out of the other types", async () => {
+      for (const type of [
+        DocumentType.INVOICE,
+        DocumentType.ACT,
+        DocumentType.PACKING_LIST,
+      ] as const) {
+        const html = await render(type, "standard", "uk");
+        expect(html).not.toContain(NOTICES.uk);
+      }
+    });
+
+    it("never names a receipt a cash or fiscal one", async () => {
+      for (const type of [
+        DocumentType.SALES_RECEIPT,
+        DocumentType.PACKING_LIST,
+      ] as const)
+        for (const language of LANGUAGES) {
+          const html = await render(type, "standard", language);
+          expect(
+            html.replace(
+              /Not a fiscal document|Не є фіскальним документом|Не является фискальным документом/g,
+              "",
+            ),
+          ).not.toMatch(
+            /касов|кассов|\bcash\b|fiscal receipt|фіскальн|фискальн/i,
+          );
+        }
+    });
+
+    it("strips prices from the public projection of a packing list only", async () => {
+      const config = configFor("standard", "uk");
+      const prepare = (type: TypedDocument) =>
+        renders.prepare(
+          "u1",
+          config,
+          order(),
+          "N",
+          undefined,
+          contextFor(type, config),
+        );
+      const packing = (await prepare(UNPRICED_TYPE)).snapshot.publicProjection;
+      expect(packing.money).toBe(false);
+      expect(packing.order.total_cents).toBeUndefined();
+      expect(packing.order.subtotal_cents).toBeUndefined();
+      expect(JSON.stringify(packing)).not.toMatch(
+        /unit_price_cents|line_total_cents|_cents"?:\d/,
+      );
+      expect(packing.order.items).toEqual([
+        { product_name: "Розробка сайту", qty: 1 },
+        { product_name: "Консультація", qty: 2 },
+      ]);
+      const receipt = (await prepare(DocumentType.SALES_RECEIPT)).snapshot
+        .publicProjection;
+      expect(receipt.money).toBe(true);
+      expect(receipt.order.total_cents).toBe(205050);
+    });
+
+    it("keeps prices out of the frozen HTML snapshot of a packing list", async () => {
+      const config = configFor("corporate", "en");
+      const { html } = await renders.prepare(
+        "u1",
+        config,
+        order(),
+        "N",
+        undefined,
+        contextFor(UNPRICED_TYPE, config),
+      );
+      expect(html).not.toMatch(/2,?050\.50|1,?500\.50/);
     });
   });
 

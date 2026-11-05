@@ -20,8 +20,9 @@ export enum ReceiptStatus {
 }
 
 /**
- * `waybill` (видаткова накладна), `invoice` (рахунок на оплату) and `act` (акт виконаних
- * робіт) are generated today; the rest are reserved.
+ * `waybill` (видаткова накладна), `invoice` (рахунок на оплату), `act` (акт виконаних
+ * робіт), `sales_receipt` (товарний чек, non-fiscal) and `packing_list` (пакувальний лист,
+ * no prices) are generated today; the rest are reserved.
  */
 export enum DocumentType {
   WAYBILL = "waybill",

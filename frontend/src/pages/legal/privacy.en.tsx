@@ -68,8 +68,8 @@ export const privacyEn: LegalContent = {
           name, tax ID, IBAN, bank name, legal address)
         </li>
         <li>
-          Documents you generate — delivery notes, payment invoices and acts of
-          completed work (stored as PDF files that contain the details of both
+          Documents you generate — delivery notes, payment invoices, acts of
+          completed work, sales receipts and packing lists (stored as PDF files that contain the details of both
           parties as they were when the document was generated), including a
           public link to a document if you choose to share one
         </li>
@@ -228,7 +228,7 @@ export const privacyEn: LegalContent = {
         <li>
           <strong>Documents:</strong> We keep the 10 most recent active (not
           voided) generated documents of each type (delivery note, payment
-          invoice, act of completed work) of your account. Generating a new one
+          invoice, act of completed work, sales receipt, packing list) of your account. Generating a new one
           permanently removes the oldest active document of the same type: its share link stops
           working at once and its PDF file is deleted from storage shortly
           afterwards. We are not an archive, so save copies of the documents

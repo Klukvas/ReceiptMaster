@@ -339,10 +339,16 @@
         {{#if document}}
         {{> documentStyles}}
         {{/if}}
+        {{#if document.hidesItemPrices}}
+        .items-table th:nth-child(1) { width: 8%; }
+        .items-table th:nth-child(2) { width: 72%; }
+        .items-table th:nth-child(3) { width: 20%; }
+        {{else}}
         .items-table th:nth-child(1) { width: 8%; }
         .items-table th:nth-child(2) { width: 42%; }
         .items-table th:nth-child(3) { width: 10%; }
         .items-table th:nth-child(4), .items-table th:nth-child(5) { width: 20%; }
+        {{/if}}
         img[alt="Logo"] { max-height: 80px; }
     </style>
 </head>
@@ -422,8 +428,10 @@
                     <th>{{#if translations.srNo}}{{translations.srNo}}{{else}}SrNo{{/if}}</th>
                     <th>{{#if translations.productName}}{{translations.productName}}{{else}}Product Name{{/if}}</th>
                     <th>{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#unless document.hidesItemPrices}}
                     <th>{{#if translations.rate}}{{translations.rate}}{{else}}Rate{{/if}}</th>
                     <th>{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/unless}}
                 </tr>
             </thead>
             <tbody class="items-body">
@@ -432,8 +440,10 @@
                     <td>{{add @index 1}}</td>
                     <td>{{productName}}</td>
                     <td>{{qty}}</td>
+                    {{#unless @root.document.hidesItemPrices}}
                     <td>{{unitPrice}}</td>
                     <td>{{lineTotal}}</td>
+                    {{/unless}}
                 </tr>
                 {{/each}}
                 {{#unless document}}

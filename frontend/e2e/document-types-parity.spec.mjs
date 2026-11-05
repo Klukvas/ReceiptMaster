@@ -15,12 +15,24 @@ const FRONTEND = resolve(ROOT, "frontend/src/lib/document-types.ts");
 const BACKEND_STUBS = {
   "../orders/entities/order.entity": { OrderStatus: { CONFIRMED: "confirmed" } },
   "./entities/receipt.entity": {
-    DocumentType: { WAYBILL: "waybill", INVOICE: "invoice", ACT: "act" },
+    DocumentType: {
+      WAYBILL: "waybill",
+      INVOICE: "invoice",
+      ACT: "act",
+      SALES_RECEIPT: "sales_receipt",
+      PACKING_LIST: "packing_list",
+    },
   },
 };
 // The frontend file only uses lucide icons at runtime; any placeholder will do.
 const FRONTEND_STUBS = {
-  "lucide-react": { FileText: "i", Receipt: "i", ClipboardCheck: "i" },
+  "lucide-react": {
+    FileText: "i",
+    Receipt: "i",
+    ClipboardCheck: "i",
+    ShoppingBag: "i",
+    Package: "i",
+  },
 };
 
 const sorted = (list) => JSON.stringify([...list].sort());

@@ -161,7 +161,7 @@ export class ReceiptsController {
   @Post("orders/:orderId/documents")
   @ApiOperation({
     summary:
-      "Generate a document of the given type (waybill, invoice or act) for an order",
+      "Generate a document of the given type (waybill, invoice, act, sales receipt or packing list) for an order",
   })
   @ApiDocumentDraftBody("DocumentGenerationRequest")
   @ApiDataResponse(201, "ReceiptProjection", "Document generation started")

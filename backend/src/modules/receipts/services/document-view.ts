@@ -7,7 +7,7 @@ import { amountInWords } from "../../../common/utils/amount-in-words.util";
 import { calculateVatBreakdown } from "../../../common/utils/vat.util";
 import type { DocumentConfig } from "../../settings/document-config";
 import { DocumentLanguage, specFor } from "../document-types";
-import { DocumentType } from "../entities/receipt.entity";
+import type { DocumentType } from "../entities/receipt.entity";
 import type { FrozenDocument } from "../frozen-document";
 import {
   DOCUMENT_LABELS,
@@ -21,7 +21,7 @@ export type DocumentOrderInput = {
   currency: string;
   total_cents: number;
   recipient: { address?: string };
-  items: ReadonlyArray<{ line_total_cents: number }>;
+  items: ReadonlyArray<{ qty: number; line_total_cents: number }>;
 };
 
 type PartyView = {
@@ -36,9 +36,13 @@ type PartyView = {
 
 type SignatoryView = { heading: string; position: string; name: string };
 
+/** Packing list summary under the items: how many lines and how many pieces in all. */
+type QuantitiesView = { lines: string; units: string };
+
 /**
- * Pre-formatted values for the invoice/act blocks. Templates read only these flags and
- * strings (`payment`, `act`, `signatures.buyer`); they never look at the document type.
+ * Pre-formatted values for the document blocks. Templates read only these flags and
+ * strings (`payment`, `act`, `totals`, `signatures.buyer`); they never look at the
+ * document type.
  */
 export type DocumentView = {
   labels: DocumentLabels;
@@ -51,18 +55,30 @@ export type DocumentView = {
     bank: string;
     purpose: string;
   };
-  totals: {
+  /** Heading-level notice above the parties (sales receipt: not a fiscal document). */
+  notice?: string;
+  /** The items table drops its price and amount columns. */
+  hidesItemPrices?: true;
+  /** Absent for a document that prints no money. */
+  totals?: {
     total: string;
     vat?: { label: string; amount: string };
     noVat?: string;
     grandTotal: string;
     amountInWords: string;
   };
+  /** Present instead of `totals` for a document without money. */
+  quantities?: QuantitiesView;
   /** Invoice only. */
   dueDate?: string;
   /** Act only. */
   act?: { statement: string; contractRef?: string; period?: string };
-  signatures: { seller: SignatoryView; buyer?: SignatoryView };
+  signatures: {
+    seller: SignatoryView;
+    buyer?: SignatoryView;
+    /** "Signature / Seal" or just "Signature", per the layout. */
+    caption: string;
+  };
 };
 
 export type DocumentRenderData = {
@@ -87,6 +103,14 @@ function assertTotalsAgree(order: DocumentOrderInput): void {
   );
   if (linesTotal !== order.total_cents)
     throw ApiErrors.INTERNAL_SERVER_ERROR("Document totals are inconsistent");
+}
+
+function styleLabelOverrides(type: DocumentType, language: DocumentLanguage) {
+  if (!(type in STYLE_LABEL_OVERRIDES))
+    throw new Error(`Document type ${type} has no label set`);
+  return STYLE_LABEL_OVERRIDES[type as keyof typeof STYLE_LABEL_OVERRIDES][
+    language
+  ];
 }
 
 const joined = (...parts: string[]) => parts.filter(Boolean).join(" ");
@@ -143,14 +167,17 @@ export function buildDocumentRenderData(
       codeLabel: taxLabel(seller.taxIdKind),
       code: seller.taxId,
       address: seller.address,
-      vatLine,
+      vatLine: layout.money ? vatLine : "",
     },
     buyer: {
       role: labels[layout.buyerRole],
       name: buyerName,
       codeLabel: taxLabel(buyer.taxIdKind),
       code: buyer.taxId,
-      address: buyer.legalAddress || order.recipient.address || "",
+      address:
+        layout.buyerAddress === "delivery"
+          ? order.recipient.address || buyer.legalAddress
+          : buyer.legalAddress || order.recipient.address || "",
       vatLine: "",
     },
     ...(layout.payment
@@ -163,20 +190,35 @@ export function buildDocumentRenderData(
           },
         }
       : {}),
-    totals: {
-      total: money(order.total_cents),
-      ...(vat
-        ? {
-            vat: {
-              label: `${labels.vatIncluded} (${rate}%)`,
-              amount: money(vat.vat),
-            },
-          }
-        : {}),
-      ...(seller.vatPayer === false ? { noVat: labels.noVat } : {}),
-      grandTotal: money(order.total_cents),
-      amountInWords: amountInWords(order.total_cents, order.currency, language),
-    },
+    ...(layout.nonFiscalNotice ? { notice: labels.nonFiscalNotice } : {}),
+    ...(layout.money
+      ? {
+          totals: {
+            total: money(order.total_cents),
+            ...(vat
+              ? {
+                  vat: {
+                    label: `${labels.vatIncluded} (${rate}%)`,
+                    amount: money(vat.vat),
+                  },
+                }
+              : {}),
+            ...(seller.vatPayer === false ? { noVat: labels.noVat } : {}),
+            grandTotal: money(order.total_cents),
+            amountInWords: amountInWords(
+              order.total_cents,
+              order.currency,
+              language,
+            ),
+          },
+        }
+      : {
+          hidesItemPrices: true as const,
+          quantities: {
+            lines: String(order.items.length),
+            units: String(order.items.reduce((sum, item) => sum + item.qty, 0)),
+          },
+        }),
     ...(details.dueDate ? { dueDate: day(details.dueDate) } : {}),
     ...(layout.completionStatement
       ? {
@@ -195,30 +237,28 @@ export function buildDocumentRenderData(
       : {}),
     signatures: {
       seller: {
-        heading: layout.completionStatement
-          ? labels.fromContractor
-          : labels.issuedBy,
+        heading: labels[layout.signatures.seller],
         position: seller.signatoryPosition,
         name: seller.signatoryName,
       },
-      ...(layout.buyerSignature
+      ...(layout.signatures.buyer
         ? {
             buyer: {
-              heading: labels.fromCustomer,
+              heading: labels[layout.signatures.buyer],
               position: "",
               name: buyerName,
             },
           }
         : {}),
+      caption: layout.signatures.stamp
+        ? `${labels.signature} / ${labels.stamp}`
+        : labels.signature,
     },
   };
 
-  const overrides =
-    STYLE_LABEL_OVERRIDES[frozen.type === DocumentType.ACT ? "act" : "invoice"][
-      language
-    ];
+  const overrides = styleLabelOverrides(frozen.type, language);
   const vatHeaders =
-    seller.vatPayer === true
+    layout.money && seller.vatPayer === true
       ? {
           price: labels.priceWithVat,
           unitPrice: labels.priceWithVat,

@@ -4,7 +4,7 @@ import type { LegalContent } from "./types";
 export const termsEn: LegalContent = {
   title: "Terms of Service",
   seoDescription:
-    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, payment invoices and acts of completed work.",
+    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, payment invoices, acts of completed work, sales receipts and packing lists.",
   body: (
     <>
       <h2>1. Introduction</h2>
@@ -23,8 +23,8 @@ export const termsEn: LegalContent = {
       <p>
         ReceiptMaster is a cloud-based platform that allows businesses to
         create, manage, and share business documents as PDF files: a delivery
-        note, a payment invoice and an act of completed work or services. The
-        Service includes product catalog management, order processing,
+        note, a payment invoice, an act of completed work or services, a sales
+        receipt and a packing list. The Service includes product catalog management, order processing,
         document generation with customizable templates, and analytics
         dashboards.
       </p>
@@ -50,6 +50,14 @@ export const termsEn: LegalContent = {
           The documents are not fiscal receipts or settlement documents issued
           through a registrar of settlement operations (RRO/PRRO) and do not
           replace them where the law requires one.
+        </li>
+        <li>
+          A sales receipt is a non-fiscal document that confirms a sale. It is
+          not a settlement document of an RRO/PRRO and does not replace one.
+        </li>
+        <li>
+          A packing list contains no prices and is not a primary document
+          confirming payment.
         </li>
         <li>
           A payment invoice is a request for payment. It is generally not a
