@@ -474,6 +474,79 @@ describeIsolatedPostgres(
       });
     });
 
+    describe("reissue after void", () => {
+      it.each([DocumentType.INVOICE, DocumentType.ACT])(
+        "a voided %s is replaced by a new one with the next number and the void row stays as history",
+        async (type) => {
+          const order = await confirmedOrder();
+          const first = await generate(order, type);
+          await promote(first);
+          await asTenant(() => receipts.generatePublicToken(first.id, user));
+          await asTenant(() => receipts.voidReceipt(first.id, user, "typo"));
+          expect(await isLocked(order)).toBe(false);
+
+          const second = await generate(order, type);
+
+          expect(second.id).not.toBe(first.id);
+          expect(first.number).toBe(FIRST_NUMBER);
+          expect(second.number).toBe(`${new Date().getUTCFullYear()}-000002`);
+          expect((await promote(second))?.status).toBe(ReceiptStatus.GENERATED);
+          expect(await isLocked(order)).toBe(true);
+          expect(await counter(type)).toBe(2);
+
+          const history = await db.admin
+            .getRepository(Receipt)
+            .findOneByOrFail({ id: first.id });
+          expect(history.status).toBe(ReceiptStatus.VOID);
+          expect(history.number).toBe(FIRST_NUMBER);
+          expect(history.pdf_path).toBeTruthy();
+          expect(history.public_token).toBeNull();
+
+          // The live row blocks a third one again; the void row never matters.
+          expect(await rejection(generate(order, type))).toMatchObject({
+            errorCode: "DOCUMENT_ALREADY_EXISTS",
+            statusCode: 409,
+          });
+        },
+      );
+
+      it("a reissue can be voided and issued again, leaving every void row", async () => {
+        const order = await confirmedOrder();
+        for (let round = 1; round <= 3; round++) {
+          const issued = await generate(order, DocumentType.INVOICE);
+          await promote(issued);
+          if (round < 3)
+            await asTenant(() => receipts.voidReceipt(issued.id, user, "t"));
+        }
+
+        const invoices = await db.admin.getRepository(Receipt).find({
+          where: { order_id: order.id, document_type: DocumentType.INVOICE },
+          order: { number: "ASC" },
+        });
+        expect(invoices.map((r) => r.status)).toEqual([
+          ReceiptStatus.VOID,
+          ReceiptStatus.VOID,
+          ReceiptStatus.GENERATED,
+        ]);
+      });
+
+      it.each([
+        DocumentType.WAYBILL,
+        DocumentType.SALES_RECEIPT,
+        DocumentType.PACKING_LIST,
+      ])("a voided %s still cannot be issued again", async (type) => {
+        const order = await confirmedOrder();
+        const first = await generate(order, type);
+        await promote(first);
+        await asTenant(() => receipts.voidReceipt(first.id, user, "t"));
+
+        expect(await rejection(generate(order, type))).toMatchObject({
+          statusCode: 409,
+        });
+        expect(await counter(type)).toBe(1);
+      });
+    });
+
     describe("refusals", () => {
       it.each([OrderStatus.DRAFT, OrderStatus.CANCELLED])(
         "refuses an invoice for a %s order without burning a number",

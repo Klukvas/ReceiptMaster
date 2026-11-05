@@ -260,6 +260,18 @@ export class DocumentRenderService {
               },
             }
           : {}),
+        // Minimal's footer is only a rule when nothing fills it; on a typed document that
+        // rule can fall alone onto an otherwise blank last page.
+        footerHidden:
+          Boolean(frozenDocument) &&
+          ![
+            data.footerTitle,
+            data.footerSubtitle,
+            data.companyIban,
+            data.companyEmail,
+            data.companyPhone,
+            data.companyWebsite,
+          ].some(Boolean),
         recipientEmail: recipient.email,
         recipientPhone: recipient.phone,
         recipientAddress: recipient.address,

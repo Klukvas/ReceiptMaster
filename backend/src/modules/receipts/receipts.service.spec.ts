@@ -49,6 +49,7 @@ import { ReceiptOutboxService } from "./receipt-outbox.service";
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { RECEIPT_GENERATION_QUEUE } from "./receipt-generation.processor";
 import * as fs from "fs/promises";
+import { Not, QueryFailedError } from "typeorm";
 
 describe("ReceiptsService", () => {
   let service: ReceiptsService;
@@ -66,6 +67,7 @@ describe("ReceiptsService", () => {
   };
   let snapshots: {
     internal: jest.Mock;
+    preflight: jest.Mock;
     prepare: jest.Mock;
     validatePrepared: jest.Mock;
     candidate: jest.Mock;
@@ -103,6 +105,7 @@ describe("ReceiptsService", () => {
       find: jest.fn().mockResolvedValue([mockReceipt]),
       findAndCount: jest.fn().mockResolvedValue([[mockReceipt], 1]),
       findOne: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
       findOneOrFail: jest.fn().mockResolvedValue(mockReceipt),
       save: jest.fn((data) => Promise.resolve(data)),
       update: jest.fn().mockImplementation(async (_where, values) => {
@@ -128,6 +131,7 @@ describe("ReceiptsService", () => {
     };
     snapshots = {
       internal: jest.fn(),
+      preflight: jest.fn().mockResolvedValue(undefined),
       prepare: jest.fn(),
       validatePrepared: jest.fn(),
       candidate: jest.fn().mockReturnValue({ pending_id: "candidate" }),
@@ -411,15 +415,15 @@ describe("ReceiptsService", () => {
         "public_token",
       );
     });
-    it.each([ReceiptStatus.GENERATED, ReceiptStatus.VOID])(
-      "refuses an existing %s receipt",
-      async (status) => {
-        receiptsRepo.findOne.mockResolvedValue({ ...mockReceipt, status });
-        await expect(
-          service.generateReceipt("order-1", mockUser),
-        ).rejects.toThrow(ApiErrorResponse);
-      },
-    );
+    it("refuses an existing generated receipt", async () => {
+      receiptsRepo.findOne.mockResolvedValue({
+        ...mockReceipt,
+        status: ReceiptStatus.GENERATED,
+      });
+      await expect(
+        service.generateReceipt("order-1", mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+    });
     it("hands the number back when the final transaction fails", async () => {
       const manager = transaction();
       receiptsRepo.findOne.mockResolvedValue(null);
@@ -459,6 +463,200 @@ describe("ReceiptsService", () => {
         service.generateReceipt("order-1", mockUser),
       ).rejects.toThrow("Order changed");
       expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reissue of voided documents", () => {
+    const liveOnly = expect.objectContaining({
+      where: expect.objectContaining({ status: Not(ReceiptStatus.VOID) }),
+    });
+    function transaction(existing: Partial<Receipt> | null = null) {
+      const manager = {
+        findOne: jest.fn(async (entity) =>
+          entity === Order ? mockOrder : existing,
+        ),
+        findOneOrFail: jest.fn(async () => ({
+          ...existing,
+          status: ReceiptStatus.PROCESSING,
+        })),
+        create: jest.fn((_entity, value) => value),
+        save: jest.fn(async (_entity, value) => ({ id: "new-row", ...value })),
+        query: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      };
+      snapshots.prepare.mockImplementation(
+        async (_user, _order, number: () => Promise<string>) => ({
+          html: "frozen",
+          number: await number(),
+          snapshot: { config: legacyConfig(null) },
+        }),
+      );
+      snapshots.validatePrepared.mockResolvedValue(mockOrder);
+      dataSource.transaction.mockImplementation(async (callback) =>
+        callback(manager),
+      );
+      return manager;
+    }
+
+    it.each([DocumentType.INVOICE, DocumentType.ACT])(
+      "creates a new %s row with a new number when only a voided one exists",
+      async (type) => {
+        const manager = transaction();
+        receiptsRepo.findOne.mockResolvedValue(null);
+        dataSource.manager.query.mockResolvedValue([{ value: 2 }]);
+
+        const result = await service.generateDocument(
+          "order-1",
+          mockUser,
+          type,
+        );
+
+        expect(receiptsRepo.findOne).toHaveBeenCalledWith(liveOnly);
+        expect(manager.findOne).toHaveBeenCalledWith(Receipt, liveOnly);
+        expect(receiptsRepo.count).not.toHaveBeenCalled();
+        expect(manager.update).not.toHaveBeenCalled();
+        expect(manager.save).toHaveBeenCalledWith(
+          Receipt,
+          expect.objectContaining({
+            document_type: type,
+            status: ReceiptStatus.PROCESSING,
+            number: expect.stringMatching(/2$/),
+          }),
+        );
+        expect(result.id).toBe("new-row");
+        expect(receiptQueue.dispatch).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each([
+      DocumentType.WAYBILL,
+      DocumentType.SALES_RECEIPT,
+      DocumentType.PACKING_LIST,
+    ])("keeps a voided %s closed", async (type) => {
+      transaction();
+      receiptsRepo.findOne.mockResolvedValue(null);
+      receiptsRepo.count.mockResolvedValue(1);
+
+      await expect(
+        service.generateDocument("order-1", mockUser, type),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(receiptsRepo.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          document_type: type,
+          status: ReceiptStatus.VOID,
+        }),
+      });
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it("re-checks a voided closed type inside the transaction", async () => {
+      const manager = transaction();
+      receiptsRepo.findOne.mockResolvedValue(null);
+      manager.count.mockResolvedValue(1);
+
+      await expect(
+        service.generateDocument(
+          "order-1",
+          mockUser,
+          DocumentType.PACKING_LIST,
+        ),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(manager.save).not.toHaveBeenCalledWith(Receipt, expect.anything());
+    });
+
+    it("retries a failed invoice on its own live row and keeps its number", async () => {
+      const failed = {
+        ...mockReceipt,
+        id: "live-invoice",
+        document_type: DocumentType.INVOICE,
+        status: ReceiptStatus.FAILED,
+        generation_id: "old",
+      };
+      const manager = transaction(failed);
+      receiptsRepo.findOne.mockResolvedValue(failed);
+      snapshots.internal.mockResolvedValue({
+        ...failed,
+        pending_html: "frozen",
+        pending_snapshot: {},
+      });
+
+      await service.generateDocument("order-1", mockUser, DocumentType.INVOICE);
+
+      expect(manager.update).toHaveBeenCalledWith(
+        Receipt,
+        { id: "live-invoice", user_id: "user-1" },
+        expect.objectContaining({ status: ReceiptStatus.PROCESSING }),
+      );
+      expect(dataSource.manager.query).not.toHaveBeenCalled();
+    });
+
+    it("returns the live pending row for a concurrent reissue", async () => {
+      const pending = {
+        ...mockReceipt,
+        id: "live-invoice",
+        document_type: DocumentType.INVOICE,
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "g1",
+      };
+      receiptsRepo.findOne.mockResolvedValue(pending);
+
+      expect(
+        await service.generateDocument(
+          "order-1",
+          mockUser,
+          DocumentType.INVOICE,
+        ),
+      ).toEqual(pending);
+      expect(snapshots.prepare).not.toHaveBeenCalled();
+    });
+
+    it("answers a lost cross-process race with the winner's pending row", async () => {
+      const manager = transaction();
+      const winner = {
+        ...mockReceipt,
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "g1",
+      };
+      receiptsRepo.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(winner);
+      manager.save.mockRejectedValueOnce(
+        Object.assign(
+          new QueryFailedError("insert", [], {
+            code: "23505",
+            constraint: "IDX_receipts_order_document_type",
+          } as any),
+          {},
+        ),
+      );
+
+      expect(
+        await service.generateDocument(
+          "order-1",
+          mockUser,
+          DocumentType.INVOICE,
+        ),
+      ).toEqual(winner);
+      expect(receiptQueue.dispatch).not.toHaveBeenCalled();
+    });
+
+    it("reports the race as already existing when the winner is not pending", async () => {
+      const manager = transaction();
+      receiptsRepo.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+        ...mockReceipt,
+        status: ReceiptStatus.GENERATED,
+      });
+      manager.save.mockRejectedValueOnce(
+        new QueryFailedError("insert", [], {
+          code: "23505",
+          constraint: "IDX_receipts_order_document_type",
+        } as any),
+      );
+
+      await expect(
+        service.generateDocument("order-1", mockUser, DocumentType.INVOICE),
+      ).rejects.toThrow(ApiErrorResponse);
     });
   });
 

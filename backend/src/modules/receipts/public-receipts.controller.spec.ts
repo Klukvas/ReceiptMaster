@@ -40,6 +40,15 @@ describe("PublicReceiptsController", () => {
     });
   });
 
+  it("marks the JSON endpoint noindex", () => {
+    expect(
+      Reflect.getMetadata(
+        "__headers__",
+        PublicReceiptsController.prototype.getPublicReceipt,
+      ),
+    ).toEqual([{ name: "X-Robots-Tag", value: "noindex, nofollow" }]);
+  });
+
   describe("getPublicReceiptPdf", () => {
     it("should serve PDF buffer with correct headers", async () => {
       const pdfBuffer = Buffer.from("%PDF-1.4 content");
@@ -63,6 +72,10 @@ describe("PublicReceiptsController", () => {
           "Content-Disposition": 'inline; filename="receipt-2025-000001.pdf"',
         }),
       );
+      expect(mockRes.set).toHaveBeenCalledWith(
+        "X-Robots-Tag",
+        "noindex, nofollow",
+      );
       expect(mockRes.send).toHaveBeenCalledWith(pdfBuffer);
     });
 
@@ -83,6 +96,10 @@ describe("PublicReceiptsController", () => {
       expect(mockRes.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Receipt not found" }),
       );
+      expect(mockRes.set).toHaveBeenCalledWith(
+        "X-Robots-Tag",
+        "noindex, nofollow",
+      );
     });
 
     it("should return 500 for unknown errors", async () => {
@@ -100,6 +117,10 @@ describe("PublicReceiptsController", () => {
       await controller.getPublicReceiptPdf("token", mockRes);
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.set).toHaveBeenCalledWith(
+        "X-Robots-Tag",
+        "noindex, nofollow",
+      );
     });
   });
 });

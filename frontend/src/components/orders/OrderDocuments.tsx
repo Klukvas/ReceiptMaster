@@ -6,7 +6,8 @@ import {
   canCreate,
   CREATABLE_TYPES,
   DOCUMENT_TYPE_META,
-  documentsOf,
+  currentDocumentsOf,
+  voidedDocumentsOf,
   type CreatableType,
 } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -15,6 +16,7 @@ import { Button } from "../ui/Button";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 import { CustomizeDocumentModal } from "./CustomizeDocumentModal";
 import { DocumentCard } from "./DocumentCard";
+import { VoidedDocumentHistory } from "./VoidedDocumentHistory";
 import { VoidDocumentModal } from "./VoidDocumentModal";
 
 type OrderDocumentsProps = {
@@ -37,7 +39,7 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
     await queryClient.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  const documents = documentsOf(order);
+  const documents = currentDocumentsOf(order);
   const creatable = CREATABLE_TYPES.filter((type) => canCreate(order, type));
   if (documents.length === 0 && creatable.length === 0) return null;
 
@@ -63,6 +65,12 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
               key={document.id}
               document={document}
               actions={{ onDownload, onPrint, onShare, onReplace: setReplacing, onVoid: setVoiding, onRetry: retry }}
+              footer={
+                <VoidedDocumentHistory
+                  documents={voidedDocumentsOf(order, document.document_type)}
+                  onDownload={onDownload}
+                />
+              }
             />
           ))}
         </ul>

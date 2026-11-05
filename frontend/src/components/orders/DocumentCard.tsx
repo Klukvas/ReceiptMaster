@@ -1,15 +1,10 @@
 import { Ban, Download, Loader2, Printer, RefreshCw, Share2, TriangleAlert } from "lucide-react";
-import type { TFunction } from "i18next";
+import type { ReactNode } from "react";
 import { formatDate, type Receipt } from "../../lib/api";
 import { documentLabelKey } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
-
-/** Reasons the system itself writes (backend ORDER_CANCELLED_VOID_REASON); anything else was typed by a person. */
-const SYSTEM_VOID_REASONS: ReadonlySet<string> = new Set(["order_cancelled"]);
-
-const voidReasonText = (t: TFunction, reason: string): string =>
-  SYSTEM_VOID_REASONS.has(reason) ? t(`documents.voidReasons.${reason}`) : reason;
+import { voidReasonText } from "./void-reason";
 
 export type DocumentCardActions = {
   onDownload: (documentId: string) => void;
@@ -75,7 +70,14 @@ function GeneratedActions({ document, actions }: { document: Receipt; actions: D
   );
 }
 
-export function DocumentCard({ document, actions }: { document: Receipt; actions: DocumentCardActions }) {
+type DocumentCardProps = {
+  document: Receipt;
+  actions: DocumentCardActions;
+  /** Rendered at the bottom of the card, e.g. the voided history of the same type. */
+  footer?: ReactNode;
+};
+
+export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
   const { t } = useTranslation();
   return (
     <li
@@ -107,6 +109,7 @@ export function DocumentCard({ document, actions }: { document: Receipt; actions
           </Button>
         </div>
       )}
+      {footer}
     </li>
   );
 }

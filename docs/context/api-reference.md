@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-11-05
+**Last Updated:** 2026-11-06
 
 **Total Endpoints:** 105 routes across 15 controllers; 104 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -1163,7 +1163,7 @@ An invoice's due date is `issueDate` (the generation day in the document's time 
 - 400 `DOCUMENT_TEMPLATE_UNSUPPORTED` — the selected style is not in the type's `layout.allowedStyles` (invoice, act, sales receipt and packing list: `standard`, `classic`, `minimal`, `corporate`; every other style, including `delivery` which prints no amounts and `compact` which cannot show the IBAN, is refused). `GET /settings/templates` lists the types a style can carry in `capabilities.documentTypes`
 - 402 `TEMPLATE_PLAN_RESTRICTED`
 - 404 `ORDER_NOT_FOUND`
-- 409 `DOCUMENT_ALREADY_EXISTS` (invoice/act/sales receipt/packing list already issued or voided; a voided one is not reissued because of the unique index) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
+- 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, or a voided sales receipt/packing list: those types are not reissued; a voided invoice or act is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
 - 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
 - 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`; sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`. `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
 
@@ -1985,7 +1985,8 @@ File: `backend/src/modules/receipts/public-receipts.controller.ts` (2 endpoints)
 
 Retrieves receipt data using a 64-character hexadecimal share token (no auth). Access is limited
 to the generated receipt and its order/items/recipient; the token grants no writes or access to
-other data from the owner. Malformed, revoked and void tokens return 404.
+other data from the owner. Malformed, revoked and void tokens return 404. Both public endpoints send
+`X-Robots-Tag: noindex, nofollow`, on error responses of the PDF endpoint too (set before the lookup). The share page `/r/:token` carries `<meta name="robots" content="noindex">`; `robots.txt` deliberately does not disallow `/r/` (a crawler blocked there never sees the noindex), only `/api/`.
 
 **Path Params:**
 - `token` (string) — Public share token from `/receipts/:id/share`

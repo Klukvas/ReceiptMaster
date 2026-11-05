@@ -1,8 +1,19 @@
-import { Controller, Get, Param, Res, Logger, UseGuards } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Header,
+  Param,
+  Res,
+  Logger,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { ThrottlerGuard, Throttle } from "@nestjs/throttler";
 import { Response } from "express";
 import { ReceiptsService } from "./receipts.service";
+
+// Share links are capability URLs; they must not be indexed.
+const ROBOTS_NOINDEX = "noindex, nofollow";
 
 @ApiTags("public-receipts")
 @Controller("public/receipts")
@@ -14,6 +25,7 @@ export class PublicReceiptsController {
   constructor(private readonly receiptsService: ReceiptsService) {}
 
   @Get(":token")
+  @Header("X-Robots-Tag", ROBOTS_NOINDEX)
   @ApiOperation({ summary: "Get public receipt data by token (no auth)" })
   @ApiResponse({ status: 200, description: "Receipt data returned" })
   @ApiResponse({ status: 404, description: "Receipt not found or revoked" })
@@ -29,6 +41,9 @@ export class PublicReceiptsController {
     @Param("token") token: string,
     @Res() res: Response,
   ) {
+    // Set before the lookup: with @Res() Nest does not apply @Header, and error
+    // responses must carry it too.
+    res.set("X-Robots-Tag", ROBOTS_NOINDEX);
     try {
       const { buffer, filename } =
         await this.receiptsService.getPublicReceiptPdf(token);

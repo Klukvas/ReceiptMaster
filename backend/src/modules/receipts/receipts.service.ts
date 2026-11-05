@@ -9,8 +9,16 @@ import { ReceiptSnapshotService } from "./services/receipt-snapshot.service";
 import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { Injectable, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
+import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
-import { Repository, DataSource, EntityManager, IsNull, Not } from "typeorm";
+import {
+  Repository,
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  IsNull,
+  Not,
+} from "typeorm";
 import {
   DocumentType,
   Receipt,
@@ -21,6 +29,7 @@ import {
   GeneratableDocumentType,
   hasDocumentBlock,
   isGeneratableType,
+  isReissuableType,
   specFor,
 } from "./document-types";
 import type { DocumentDetailsInput, DocumentRequest } from "./frozen-document";
@@ -92,6 +101,28 @@ function documentAlreadyExists(orderId: string, type: DocumentType) {
   return type === DocumentType.WAYBILL
     ? ApiErrors.RECEIPT_ALREADY_EXISTS(orderId)
     : ApiErrors.DOCUMENT_ALREADY_EXISTS(orderId, type);
+}
+
+const ORDER_TYPE_UNIQUE_INDEX = "IDX_receipts_order_document_type";
+
+/**
+ * A voided document stays on its order as history. For an invoice or act it frees the slot
+ * for a reissue; any other type stays closed, so a voided one still blocks a new one.
+ */
+async function hasClosedVoidedDocument(
+  countRows: (where: FindOptionsWhere<Receipt>) => Promise<number>,
+  userId: string,
+  orderId: string,
+  type: DocumentType,
+): Promise<boolean> {
+  if (isReissuableType(type)) return false;
+  const voided = await countRows({
+    order_id: orderId,
+    user_id: userId,
+    document_type: type,
+    status: ReceiptStatus.VOID,
+  });
+  return voided > 0;
 }
 
 @Injectable()
@@ -228,18 +259,27 @@ export class ReceiptsService {
     file?: Express.Multer.File,
   ): Promise<Receipt> {
     const spec = specFor(type);
+    // Voided rows are history, never a row to resume: a reissue starts fresh.
     const prior = await this.receiptsRepository.findOne({
       where: {
         order_id: orderId,
         user_id: user.id,
         document_type: type,
+        status: Not(ReceiptStatus.VOID),
       },
     });
     if (prior?.status === ReceiptStatus.PROCESSING && prior.generation_id)
       return prior;
+    if (prior?.status === ReceiptStatus.GENERATED)
+      throw documentAlreadyExists(orderId, type);
     if (
-      prior &&
-      [ReceiptStatus.GENERATED, ReceiptStatus.VOID].includes(prior.status)
+      !prior &&
+      (await hasClosedVoidedDocument(
+        (where) => this.receiptsRepository.count({ where }),
+        user.id,
+        orderId,
+        type,
+      ))
     )
       throw documentAlreadyExists(orderId, type);
     const previous = prior
@@ -329,6 +369,7 @@ export class ReceiptsService {
             order_id: orderId,
             user_id: user.id,
             document_type: type,
+            status: Not(ReceiptStatus.VOID),
           },
         });
         if (
@@ -336,11 +377,16 @@ export class ReceiptsService {
           existing.generation_id
         )
           return existing;
+        if (existing?.status === ReceiptStatus.GENERATED)
+          throw documentAlreadyExists(orderId, type);
         if (
-          existing &&
-          [ReceiptStatus.GENERATED, ReceiptStatus.VOID].includes(
-            existing.status,
-          )
+          !existing &&
+          (await hasClosedVoidedDocument(
+            (where) => manager.count(Receipt, { where }),
+            user.id,
+            orderId,
+            type,
+          ))
         )
           throw documentAlreadyExists(orderId, type);
         if (previous && existing?.generation_id !== previous.generation_id)
@@ -399,6 +445,20 @@ export class ReceiptsService {
       });
     } catch (error) {
       await this.releaseDrawnNumber(user.id, type, drawnNumber);
+      // Another process won the slot between our check and insert (the mutex is per process).
+      if (isUniqueViolationOf(error, ORDER_TYPE_UNIQUE_INDEX)) {
+        const winner = await this.receiptsRepository.findOne({
+          where: {
+            order_id: orderId,
+            user_id: user.id,
+            document_type: type,
+            status: Not(ReceiptStatus.VOID),
+          },
+        });
+        if (winner?.status === ReceiptStatus.PROCESSING && winner.generation_id)
+          return winner;
+        throw documentAlreadyExists(orderId, type);
+      }
       throw error;
     }
     if (drawnNumber && receipt.number !== drawnNumber)

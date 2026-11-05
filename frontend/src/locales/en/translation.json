@@ -597,10 +597,10 @@
       "blog": "Blog"
     },
     "hero": {
-      "line1": "Orders, Receipts",
+      "line1": "Orders, Documents",
       "line2": "Analytics",
       "line3": "in one place",
-      "subtitle": "Manage products, customers and orders, and create PDF receipts in a few clicks.",
+      "subtitle": "Manage products, customers and orders, and create PDF documents — waybills, invoices, acts and packing lists — in a few clicks.",
       "startFree": "Start for free",
       "seeDemo": "See features ↓",
       "welcomeBack": "Welcome back",
@@ -612,14 +612,14 @@
       "languagesValue": "EN / UK / RU",
       "languages": "Languages",
       "templatesValue": "15",
-      "templates": "Receipt templates",
+      "templates": "Document templates",
       "botValue": "Telegram",
       "bot": "Sales bot"
     },
     "grid": {
       "label": "Platform features",
       "title": "Tools for running your sales",
-      "subtitle": "From products and customers to PDF receipts you can download, print or share.",
+      "subtitle": "From products and customers to PDF documents you can download, print or share.",
       "products": {
         "title": "Products",
         "description": "Keep purchase and sale prices, see your margin at a glance, get low-stock alerts and delete several products at once.",
@@ -642,8 +642,8 @@
         "tag3": "no duplicates"
       },
       "receipts": {
-        "title": "PDF receipts",
-        "description": "Receipts are made in the background as PDFs with your company details. Pick one of 15 templates, then download, print or share a link.",
+        "title": "PDF documents",
+        "description": "Waybills, invoices, acts of completed work, non-fiscal sales receipts and packing lists are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
         "tag1": "15 templates",
         "tag2": "SHA256 hash",
         "tag3": "public link"
@@ -666,7 +666,7 @@
     "howItWorks": {
       "label": "How it works",
       "title": "Up and running in minutes",
-      "subtitle": "Register, add your company details, and start creating orders and receipts right away.",
+      "subtitle": "Register, add your company details, and start creating orders and documents right away.",
       "step1": {
         "title": "Add your products and customers",
         "description": "Add products with prices and stock levels. Add customers by hand, or let the Telegram bot add them when they place their first order."
@@ -676,8 +676,8 @@
         "description": "Build orders with several items and their own prices. Confirm them, track payment, and filter by date, status or amount."
       },
       "step3": {
-        "title": "Generate and share receipts",
-        "description": "Click \"Generate Receipt\" and a PDF with your company details is made in the background. Download it, print it or share a link."
+        "title": "Generate and share documents",
+        "description": "Choose a document for a confirmed order and a PDF with your company details is made in the background. Download it, print it or share a link."
       }
     },
     "telegram": {
@@ -732,9 +732,9 @@
       }
     },
     "templates": {
-      "label": "Receipt templates",
-      "title": "15 receipt templates",
-      "subtitle": "From minimal invoices to branded corporate receipts. Every receipt can be issued in English, Russian or Ukrainian.",
+      "label": "Document templates",
+      "title": "15 waybill templates",
+      "subtitle": "From minimal layouts to branded corporate designs. Every document can be issued in English, Russian or Ukrainian.",
       "modern": {
         "name": "Modern",
         "category": "Creative"
@@ -1185,6 +1185,10 @@
     "voidReason": "Reason (optional)",
     "voided": "Document voided: {{type}}",
     "voidedBecause": "Reason: {{reason}}",
+    "history": "Voided ({{count}})",
+    "voidedOn": "voided {{date}}",
+    "reissueNote": "Voided {{number}} stays in the history. A new number will be issued.",
+    "voidMessageReissuable": "The document will be voided and its public link turned off. It stays in the order's history, and you can issue a new {{type}} with a new number.",
     "voidReasons": {
       "order_cancelled": "The order was cancelled"
     }

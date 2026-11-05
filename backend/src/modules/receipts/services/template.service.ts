@@ -71,6 +71,8 @@ export interface TemplateData {
   // Footer customization
   footerTitle?: string;
   footerSubtitle?: string;
+  /** Typed documents only: true when nothing would fill the footer. Absent means shown. */
+  footerHidden?: boolean;
 
   // Branded template
   primaryColor?: string;

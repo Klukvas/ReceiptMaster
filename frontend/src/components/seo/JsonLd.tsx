@@ -72,7 +72,7 @@ export const SoftwareAppJsonLd: React.FC<SoftwareAppJsonLdProps> = ({
         priceCurrency,
       },
       description:
-        "Cloud-based platform for creating, managing, and sharing digital receipts and invoices.",
+        "Cloud-based platform for creating, managing and sharing PDF business documents: waybills, invoices, acts of completed work, sales receipts and packing lists.",
     }}
   />
 );

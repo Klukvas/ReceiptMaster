@@ -106,6 +106,16 @@ export const CREATABLE_TYPES = GENERATABLE_TYPES.filter(
   (type): type is CreatableType => type !== "waybill",
 );
 
+/**
+ * Mirror of REISSUABLE_DOCUMENT_TYPES in backend/src/modules/receipts/document-types.ts:
+ * types that may be issued again, with a new number, after the previous one was voided.
+ */
+export const REISSUABLE_DOCUMENT_TYPES: readonly GeneratableType[] = ["invoice", "act"];
+
+export function isReissuable(type: DocumentType): boolean {
+  return (REISSUABLE_DOCUMENT_TYPES as readonly DocumentType[]).includes(type);
+}
+
 export function isGeneratableType(type: DocumentType): type is GeneratableType {
   return (GENERATABLE_TYPES as readonly DocumentType[]).includes(type);
 }
@@ -128,14 +138,47 @@ export function documentsOf(order: Pick<OrderWithDocuments, "receipts">): Receip
   );
 }
 
-/** The newest document of a type, whatever its status. */
+const newestFirst = (a: Receipt, b: Receipt): number =>
+  b.created_at.localeCompare(a.created_at);
+
+/**
+ * The document of a type the order currently stands on: the newest one that is not void,
+ * else the newest void one (so a voided waybill stays "the waybill").
+ */
 export function documentOf(
   order: Pick<OrderWithDocuments, "receipts">,
   type: DocumentType,
 ): Receipt | undefined {
-  return documentsOf(order)
+  const ofType = documentsOf(order)
     .filter((doc) => doc.document_type === type)
-    .at(-1);
+    .sort(newestFirst);
+  return ofType.find((doc) => doc.status !== "void") ?? ofType[0];
+}
+
+/** Void documents of a type that were superseded by the current one, newest first. */
+export function voidedDocumentsOf(
+  order: Pick<OrderWithDocuments, "receipts">,
+  type: DocumentType,
+): Receipt[] {
+  const current = documentOf(order, type);
+  return documentsOf(order)
+    .filter(
+      (doc) =>
+        doc.document_type === type && doc.status === "void" && doc.id !== current?.id,
+    )
+    .sort(newestFirst);
+}
+
+/** The current document of every type the order has, oldest first. */
+export function currentDocumentsOf(
+  order: Pick<OrderWithDocuments, "receipts">,
+): Receipt[] {
+  const history = new Set(
+    [...new Set(documentsOf(order).map((doc) => doc.document_type))].flatMap((type) =>
+      voidedDocumentsOf(order, type).map((doc) => doc.id),
+    ),
+  );
+  return documentsOf(order).filter((doc) => !history.has(doc.id));
 }
 
 /** The order's waybill: the document the download/print/share/customize buttons act on. */
@@ -151,14 +194,16 @@ export function activeDocument(doc: Receipt | undefined): doc is Receipt {
 
 /**
  * A new document of this type may be requested: the order status allows it and the
- * order has none of that type yet. A voided one still counts: the backend keeps one
- * row per order and type (DOCUMENT_ALREADY_EXISTS), so only a failed attempt is retried.
+ * order has none of that type, the current one failed, or it is void and the type is
+ * reissuable (the voided row stays as history and the new one gets a new number).
  */
 export function canCreate(order: OrderWithDocuments, type: GeneratableType): boolean {
   const meta: DocumentTypeMeta = DOCUMENT_TYPE_META[type];
   const existing = documentOf(order, type);
   return (
     meta.allowedOrderStatuses.includes(order.status) &&
-    (!existing || existing.status === "failed")
+    (!existing ||
+      existing.status === "failed" ||
+      (existing.status === "void" && isReissuable(type)))
   );
 }

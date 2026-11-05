@@ -56,11 +56,11 @@ const GOLDEN_SHA256: Record<string, string> = {
   "invoice.classic.en":
     "de41a254bb9acd434af3021cd463c65639d749d97b5f7efc04eff864532ff980",
   "invoice.minimal.uk":
-    "bc61ae605bca79751cacf78091a2a37f40df87d598b2b0f394c3b7484dcf8873",
+    "b8dd1aa45f140b365ed647aa379f96a62448755eb2a8a2d25e010faf9b5afea1",
   "invoice.minimal.ru":
-    "d769d6ae2a1aa7989044ef1c720f970587cb7c3a7d5cae05c2d84de30a4cbd91",
+    "af03e3b1df44c1224b0814858fb461dc7333b951b0b2697a20c76fd3da6cb87d",
   "invoice.minimal.en":
-    "8c759fd07165bd2a6ae63a5e92b0be1879a351e37f6455c0076e5934901a0654",
+    "c4cd600e559815ef1ae40273cf9f6cdad1b1e9841dd27f919d3c4ae599b09a0c",
   "invoice.corporate.uk":
     "bb810feec2e292e656c7dc8ac282f60bff5b5c0a2ba34f1e9157bd9bc0351743",
   "invoice.corporate.ru":
@@ -80,11 +80,11 @@ const GOLDEN_SHA256: Record<string, string> = {
   "act.classic.en":
     "091b5991991ca45605cf16c56bbe0b2f9ea07b49cf6a5f6ae15e4ec748ca0a50",
   "act.minimal.uk":
-    "103b742865196361e14e329919c279b7a4902099d7420a279b83a49f3cb82963",
+    "6449f814df81483d8f09caea879df88796febe69b8b6132897098e5b0db1c23e",
   "act.minimal.ru":
-    "eabd21e21bd953fa5db8c31c5f84816ef400d05d194f509a6b9ead2929477b93",
+    "0658b5f48fb06a91e53fb755e4dc6ce2aefb98f574cfe59e75fcbe81f1e218b6",
   "act.minimal.en":
-    "8dd4d2940d36fe22d28b8324b9512bd7c3d6b4d33139642e8fb0fa78aeb0f354",
+    "525fdaef98c042e544cdffde62e2bb92b43965caafbf0febd41a01bdb99e43e6",
   "act.corporate.uk":
     "45a576c0c8f7af07ccc3b0927c09b8b8a2fd7d6713d582ce69694128a116165d",
   "act.corporate.ru":
@@ -363,6 +363,36 @@ describe("invoice and act layout", () => {
         expect(header).not.toMatch(/Ціна|Сума|Price|Amount|Rate/i);
       },
     );
+
+    describe("minimal's empty footer", () => {
+      const prepareMinimal = async (type: TypedDocument, footerTitle = "") => {
+        const base = configFor("minimal", "uk");
+        const config = { ...base, footerTitle };
+        return (
+          await renders.prepare(
+            "u1",
+            config,
+            order(),
+            "2026-000007",
+            undefined,
+            contextFor(type, config),
+          )
+        ).html;
+      };
+
+      it.each(ALL_TYPES)(
+        "drops the lone rule under a %s so it cannot start a blank page",
+        async (type) => {
+          expect(await prepareMinimal(type)).not.toContain('class="footer"');
+        },
+      );
+
+      it("keeps the footer whenever the account wrote one", async () => {
+        const html = await prepareMinimal(DocumentType.INVOICE, "Дякуємо!");
+        expect(html).toContain('class="footer"');
+        expect(html).toContain("Дякуємо!");
+      });
+    });
 
     it("lists the delivery address for the consignee", async () => {
       const html = await render(UNPRICED_TYPE, "standard", "uk");

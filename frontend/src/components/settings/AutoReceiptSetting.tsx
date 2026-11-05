@@ -104,7 +104,7 @@ export const AutoReceiptSetting = () => {
           <p className="text-xs text-content-tertiary leading-relaxed">
             {t(
               "settings.autoReceiptHint",
-              "Your account keeps the 10 most recent receipts. Approving many orders at once replaces the oldest ones.",
+              "The 10 most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
             )}
           </p>
         </div>

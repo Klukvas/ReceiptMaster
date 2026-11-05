@@ -13,7 +13,7 @@ import {
   type InvoiceForm,
 } from "../../lib/document-details";
 import { forecastRequisites } from "../../lib/document-requisites";
-import { DOCUMENT_TYPE_META, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
+import { DOCUMENT_TYPE_META, documentOf, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
@@ -69,6 +69,8 @@ export function CreateDocumentModal({
   const label = t(labelKey);
   const isBusy = createDocument.isPending || isCheckingRetention;
   const recipient = order.recipient;
+  const current = documentOf(order, type);
+  const voidedNumber = current?.status === "void" ? current.number : null;
 
   const forecast =
     company.data &&
@@ -171,6 +173,11 @@ export function CreateDocumentModal({
         )}
         {details === "act" && (
           <ActDetailsFields form={actForm} errors={fieldErrors} onChange={setActForm} />
+        )}
+        {voidedNumber && (
+          <p data-testid="document-reissue-note" className="rounded-lg bg-surface-alt p-3 text-sm text-content-secondary">
+            {t("documents.reissueNote", { number: voidedNumber })}
+          </p>
         )}
         {createNoteKey && (
           <p data-testid="document-create-note" className="rounded-lg bg-surface-alt p-3 text-sm text-content-secondary">

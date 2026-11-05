@@ -35,10 +35,11 @@ export enum DocumentType {
 }
 
 @Entity("receipts")
-// A return note is the one type an order may carry several of (partial returns).
+// A return note is the one type an order may carry several of (partial returns). A voided
+// invoice or act is history and frees its slot for a reissue; any other voided type keeps it.
 @Index("IDX_receipts_order_document_type", ["order_id", "document_type"], {
   unique: true,
-  where: `"document_type" <> 'return_note'`,
+  where: `"document_type" <> 'return_note' AND ("status" <> 'void' OR "document_type" NOT IN ('invoice', 'act'))`,
 })
 @Index(
   "IDX_receipts_user_type_number",

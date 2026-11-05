@@ -236,6 +236,20 @@ export function isGeneratableType(
   return (GENERATABLE_TYPES as readonly DocumentType[]).includes(type);
 }
 
+/**
+ * Types whose voided document frees the order's slot: the order may carry a fresh one
+ * under a new number, while the voided row stays as history. Every other type is closed
+ * once issued, voided or not.
+ */
+export const REISSUABLE_DOCUMENT_TYPES: readonly DocumentType[] = [
+  DocumentType.INVOICE,
+  DocumentType.ACT,
+];
+
+export function isReissuableType(type: DocumentType): boolean {
+  return REISSUABLE_DOCUMENT_TYPES.includes(type);
+}
+
 /** Specs for the types generated today; throws for a type that has none. */
 export function specFor(type: DocumentType): DocumentTypeSpec {
   if (!isGeneratableType(type))

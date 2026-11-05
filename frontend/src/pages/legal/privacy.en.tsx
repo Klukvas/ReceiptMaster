@@ -88,7 +88,8 @@ export const privacyEn: LegalContent = {
         document is removed under the storage limit. We do not set an expiry
         date. The PDF opened through the link may contain details of both
         parties, such as tax numbers, the seller's bank account number (IBAN)
-        and addresses.
+        and addresses. We ask search engines not to index these pages, but
+        anyone who has the link can still open it.
       </p>
 
       <h3>3.3 Usage Data</h3>
@@ -231,7 +232,9 @@ export const privacyEn: LegalContent = {
           invoice, act of completed work, sales receipt, packing list) of your account. Generating a new one
           permanently removes the oldest active document of the same type: its share link stops
           working at once and its PDF file is deleted from storage shortly
-          afterwards. We are not an archive, so save copies of the documents
+          afterwards. Voided and failed documents do not count towards this
+          limit; we keep them, with their numbers, for as long as your account
+          exists. We are not an archive, so save copies of the documents
           you are required to keep.
         </li>
         <li>

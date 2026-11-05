@@ -10,6 +10,7 @@ import { Download, FileText, AlertCircle } from "lucide-react";
 import { downloadPdf } from "../lib/pdf-utils";
 import i18n from "../lib/i18n";
 import { useTranslation } from "../hooks/useTranslation";
+import { SEO } from "../components/seo/SEO";
 
 const SUPPORTED_LANGUAGES = ["en", "ru", "uk"];
 
@@ -65,7 +66,7 @@ interface PublicReceiptData {
   };
 }
 
-export const PublicReceiptPage = () => {
+const PublicReceiptContent = () => {
   const { token } = useParams<{ token: string }>();
   const { t: interfaceT } = useTranslation();
   const [data, setData] = useState<PublicReceiptData | null>(null);
@@ -336,3 +337,11 @@ export const PublicReceiptPage = () => {
     </div>
   );
 };
+
+// The link is a private capability URL: keep it out of search results.
+export const PublicReceiptPage = () => (
+  <>
+    <SEO noindex />
+    <PublicReceiptContent />
+  </>
+);

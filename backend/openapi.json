@@ -2223,7 +2223,7 @@
             }
           },
           "409": {
-            "description": "A document of this type already exists (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill), or the order/defaults changed while preparing",
+            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice or act can be issued again under a new number. Also returned when the order/defaults changed while preparing",
             "content": {
               "application/json": {
                 "schema": {

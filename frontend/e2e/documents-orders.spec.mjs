@@ -9,7 +9,8 @@
 //  - a missing-requisites 422 becomes a banner with links, not a toast;
 //  - the documents section of the details shows new documents without a reload;
 //  - the retention confirmation names the document that would be replaced;
-//  - voiding any document warns that it cannot be issued again; a voided waybill is not
+//  - a voided invoice or act can be issued again: the voided one moves to a "Voided (n)" history
+//    under the new current document; voiding any other document closes its type; a voided waybill is not
 //    offered for generation, and system void reasons are translated;
 //  - replacing an invoice never offers (or starts from) a design that cannot carry it.
 
@@ -564,8 +565,8 @@ const checkVoid = async (results) => {
     const confirm = page.getByRole("dialog", { name: "Void: Invoice" });
     await confirm.waitFor({ state: "visible" });
     results.check(
-      "voiding an invoice warns that another one cannot be issued",
-      (await confirm.innerText()).includes("cannot issue another document of this type"),
+      "voiding an invoice says a new one can be issued under a new number",
+      (await confirm.innerText()).includes("you can issue a new Invoice with a new number"),
       await confirm.innerText(),
     );
     await confirm.getByLabel("Reason (optional)").fill("Wrong amount");
@@ -579,6 +580,68 @@ const checkVoid = async (results) => {
   });
 };
 
+
+const checkReissueAfterVoid = async (results) => {
+  const voidedInvoice = plainOrder({
+    receipts: [
+      { ...document("inv-1", "invoice", "void", "2026-02-01T10:05:00.000Z"), number: "INV-OLD", void_reason: "Wrong amount", voided_at: "2026-02-02T10:00:00.000Z" },
+    ],
+  });
+  for (const { label, viewport } of VIEWPORTS) {
+    await withDocumentPage(viewport, { order: voidedInvoice }, async (page, state) => {
+      await openDetails(page);
+      const card = page.locator('[data-document-type="invoice"]');
+      await page.getByRole("button", { name: "Create: Invoice" }).click();
+      const dialog = page.getByRole("dialog");
+      results.check(
+        `${label}: reissuing over a voided invoice names the voided number`,
+        (await dialog.getByTestId("document-reissue-note").innerText()).includes("INV-OLD"),
+        await dialog.innerText(),
+      );
+      await dialog.getByRole("button", { name: "Create", exact: true }).click();
+      await settle(() => (state.created ?? []).length === 1);
+      await page.locator('[data-document-type="invoice"] >> text=INVOICE-0001').waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+      const cards = await page.locator('[data-testid="document-card"][data-document-type="invoice"]').count();
+      results.check(
+        `${label}: the new invoice is the only invoice card, and Create is gone again`,
+        cards === 1 && (await page.getByRole("button", { name: "Create: Invoice" }).count()) === 0,
+        `cards: ${cards}`,
+      );
+      const history = page.getByTestId("document-history");
+      const summary = await history.locator("summary").innerText();
+      await history.locator("summary").click();
+      const entry = await history.getByTestId("voided-document").innerText();
+      results.check(
+        `${label}: the voided invoice sits under "Voided (1)" with number, date and reason`,
+        summary.includes("Voided (1)") && entry.includes("INV-OLD") && entry.includes("Wrong amount") && entry.includes("voided"),
+        `${summary} | ${entry}`,
+      );
+      results.check(
+        `${label}: the history offers download only`,
+        (await history.getByRole("button").allInnerTexts()).map((text) => text.trim()).join(",") === "Download",
+        await history.innerText(),
+      );
+      results.check(
+        `${label}: the new invoice card does not show the old number as current`,
+        !(await card.first().locator("p.text-xs").first().innerText()).includes("INV-OLD"),
+        await card.first().innerText(),
+      );
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      results.check(`${label}: the history does not widen the page`, overflow <= 0, `overflow: ${overflow}px`);
+    });
+  }
+
+  const superseded = plainOrder({
+    receipts: [
+      { ...document("inv-old", "invoice", "void", "2026-02-01T10:05:00.000Z"), number: "INV-OLD" },
+      { ...document("inv-new", "invoice", "generated", "2026-02-03T10:05:00.000Z"), number: "INV-NEW" },
+    ],
+  });
+  await withDocumentPage(DESKTOP, { order: superseded }, async (page) => {
+    const badges = await page.locator("text=/Invoice · Voided|Voided/").locator("visible=true").count();
+    results.check("a superseded void invoice shows no 'Voided' chip next to the live one", badges === 0, `chips: ${badges}`);
+  });
+};
 
 const checkReplaceDesign = async (results) => {
   const withInvoice = plainOrder({
@@ -624,8 +687,8 @@ const checkVoidedWaybill = async (results) => {
     await withDocumentPage(viewport, { order: voided }, async (page) => {
       const items = await menuOf(page);
       results.check(
-        `${label}: a voided waybill cannot be generated again from the menu`,
-        !items.includes("Generate waybill") && !items.includes("Invoice…") && items.includes("Act of Completed Work…"),
+        `${label}: a voided waybill cannot be generated again from the menu, a voided invoice can`,
+        !items.includes("Generate waybill") && items.includes("Invoice…") && items.includes("Act of Completed Work…"),
         `menu items: ${items.join(" | ")}`,
       );
       await page.keyboard.press("Escape");
@@ -666,6 +729,7 @@ export const run = async () => {
     await checkDocumentsSection(results);
     await checkRetentionConfirm(results);
     await checkVoid(results);
+    await checkReissueAfterVoid(results);
     await checkReplaceDesign(results);
     await checkVoidedWaybill(results);
   } finally {

@@ -2,7 +2,7 @@ import React from 'react';
 import { FileText, Loader2, Lock } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { Order } from '../../lib/api';
-import { documentLabelKey, documentsOf } from '../../lib/document-types';
+import { currentDocumentsOf, documentLabelKey } from '../../lib/document-types';
 
 interface OrderStatusBadgeProps {
  order: Order;
@@ -11,7 +11,7 @@ interface OrderStatusBadgeProps {
 export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ order }) => {
  const { t } = useTranslation();
 
- const documents = documentsOf(order);
+ const documents = currentDocumentsOf(order);
  const hasReceipt = documents.some((doc) => doc.status === 'generated');
  const indicators = documents.filter(
  (doc) => doc.status === 'processing' || doc.status === 'void',

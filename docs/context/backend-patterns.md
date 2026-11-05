@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-05
+**Last Updated:** 2026-11-06
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -1235,6 +1235,16 @@ pushes, and `build-and-deploy` needs it, so a failing gate test stops publicatio
 real-Compose tests skip without `docker`, so the job checks for the Compose CLI first and fails
 instead. Run the file locally before pushing a gate change; it needs `python3`, `node` and
 `docker compose`, and it never contacts production.
+
+## Rolling back the image after a document reissue
+
+`ReissueVoidedDocuments1793100000000` only loosens a unique index, so it is additive and the deploy
+script keeps it on a failed release. The old image does not know voided rows free a slot: once an
+invoice or act has been reissued, an order holds two rows of that type (the void one and the live
+one) and the previous code, which looks up `(order, document_type)` without a status filter, may pick
+either. Roll the image back before the first reissue is harmless; after it, either keep the new
+image or revert the migration (its `down` refuses while such orders exist, and the voided history is
+never deleted to make it pass).
 
 ## Settings writes and logo images
 

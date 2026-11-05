@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-11-05
+**Last Updated:** 2026-11-06
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you

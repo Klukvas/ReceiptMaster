@@ -12,7 +12,7 @@ Running a small business means wearing many hats. But manual bookkeeping and inv
 
 ## 1. Automate Receipt Generation
 
-Stop creating invoices in Word or Google Docs. With platforms like receiptmaster, you generate professional PDF receipts from confirmed orders with a single click. The system handles formatting, branding, calculations, and digital signatures — all in the background.
+Stop creating invoices in Word or Google Docs. With platforms like receiptmaster, you generate professional PDF documents — waybills, invoices, acts and packing lists — from confirmed orders with a single click. The system handles formatting, branding and calculations in the background. The documents are not signed electronically, so sign and stamp them yourself where your process requires it.
 
 **Time saved**: 15–30 minutes per receipt.
 
@@ -30,7 +30,7 @@ Every customer interaction — orders, receipts, spending totals — should live
 
 ## 5. Use Digital Integrity Verification
 
-Paper receipts get lost. PDFs can be tampered with. But a receipt with a **SHA256 hash** can be verified at any time — proving the document hasn't been modified since generation. This matters for tax audits, dispute resolution, and EU compliance.
+Paper receipts get lost. PDFs can be tampered with. But a receipt with a **SHA256 hash** can be verified at any time — proving the document hasn't been modified since generation. This can help in disputes and when you need to show a file has not changed; it is not an electronic signature and does not by itself make a document compliant with tax or EU rules.
 
 ## The Bottom Line
 

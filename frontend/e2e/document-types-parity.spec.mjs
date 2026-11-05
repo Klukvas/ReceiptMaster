@@ -40,7 +40,15 @@ const sorted = (list) => JSON.stringify([...list].sort());
 export const run = async () => {
   const results = new Results("document types parity");
   const specs = loadTsModule(BACKEND, BACKEND_STUBS).DOCUMENT_TYPE_SPECS;
-  const meta = loadTsModule(FRONTEND, FRONTEND_STUBS).DOCUMENT_TYPE_META;
+  const frontend = loadTsModule(FRONTEND, FRONTEND_STUBS);
+  const meta = frontend.DOCUMENT_TYPE_META;
+  const backendReissuable = loadTsModule(BACKEND, BACKEND_STUBS).REISSUABLE_DOCUMENT_TYPES;
+  results.check(
+    "same set of reissuable types (voided, then issued again under a new number)",
+    sorted(backendReissuable) === sorted(frontend.REISSUABLE_DOCUMENT_TYPES) &&
+      backendReissuable.every((type) => type in specs),
+    `${backendReissuable} vs ${frontend.REISSUABLE_DOCUMENT_TYPES}`,
+  );
 
   results.check(
     "same set of generatable types",

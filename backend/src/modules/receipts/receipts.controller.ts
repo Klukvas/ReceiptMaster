@@ -169,7 +169,7 @@ export class ReceiptsController {
     400: "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order not CONFIRMED (ORDER_CANNOT_BE_MODIFIED), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
     402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
     404: "Order not found",
-    409: "A document of this type already exists (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill), or the order/defaults changed while preparing",
+    409: "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice or act can be issued again under a new number. Also returned when the order/defaults changed while preparing",
     413: "Request above 6 MiB or logo above 5 MiB",
     422: "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them",
   })

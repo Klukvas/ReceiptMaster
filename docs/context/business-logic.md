@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-05
+**Last Updated:** 2026-11-06
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -148,9 +148,15 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 **Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
 receipt can later be `VOID`. A receipt has a `document_type` (`DocumentType`: `waybill`,
 `invoice`, `quote`, `act`, `sales_receipt`, `packing_list`, `return_note`; default `waybill`, the
-видаткова накладна). An order carries **at most one receipt row per type** (partial unique index
+видаткова накладна). An order carries **one live receipt row per type** (partial unique index
 `IDX_receipts_order_document_type` on `(order_id, document_type)`, excluding `return_note`, which an
-order may carry several of), so a retry reuses the same row rather than inserting a new one.
+order may carry several of, and excluding `VOID` invoice and act rows, which are history and free the slot for a reissue; a voided waybill, sales receipt or packing list keeps its slot, so the database itself refuses to issue those again), so a retry reuses the same
+live row rather than inserting a new one. A voided **invoice or act** frees its slot: generating the
+type again inserts a fresh row with a new number from the type's counter, the buyer and seller read
+from current data, never from the voided document, which stays untouched (PDF kept, share link
+revoked). A voided waybill, sales receipt or packing list stays closed and still answers
+`DOCUMENT_ALREADY_EXISTS` (`REISSUABLE_DOCUMENT_TYPES` in `receipts/document-types.ts`). Every lookup by
+`(order, type)` in the generation path filters out `VOID` rows, so a retry resumes only its own live row.
 `waybill`, `invoice` (рахунок на оплату), `act` (акт виконаних робіт), `sales_receipt` (товарний чек) and `packing_list` (пакувальний лист) are generated, through one pipeline
 (`ReceiptsService.generateDocument`; `generateReceipt` is the waybill wrapper): lookups, numbering, retention
 and the unique row are all per type. `quote` and `return_note` are a schema capability that no endpoint produces yet
@@ -415,8 +421,10 @@ IBAN/tax id, the VAT id and the signatory are never public; the seller's IBAN/ta
 template support, requisites, dates are pre-checked, and the number is drawn only after the logo is staged, so a bad logo file, quota or upload failure never burns one, and an unprintable order total or currency is refused in preflight (`DOCUMENT_AMOUNT_INVALID`); two parallel requests for one order and type are serialized in-process per tenant+order+type, so the second gets the first's row; across several backend processes the unique row index still keeps one row but a loser may burn a number) and again inside the transaction, where the buyer is
 also compared by `buyerFingerprint` and the seller columns by value. A FAILED retry with new `details` and a replacement both take the buyer from the frozen document.
 The retry sets `issueDate` anew, to the day of the retry; a replacement keeps the issue date and the resolved
-details and rebuilds the seller, configuration and heading. A voided invoice, act, sales receipt or packing list is not reissued for the same
-order (the per-type unique index applies, as for a waybill).
+details and rebuilds the seller, configuration and heading. A voided invoice or act can be issued again for the same
+order under a new number (the void row is history and no longer counts for the per-type unique index, whose predicate is `document_type <> 'return_note' AND (status <> 'void' OR document_type NOT IN ('invoice','act'))`);
+a voided sales receipt or packing list is not reissued, as for a waybill. A cross-process race on the
+slot ends in a `23505` that is answered with the winner's pending row, or `DOCUMENT_ALREADY_EXISTS`.
 
 The "Дата" line a typed document prints is `snapshot.document.issueDate` (formatted as a calendar date), not the
 order's date. Rendering uses the `document-blocks` partials (parties, payment, totals, closing with signatures)

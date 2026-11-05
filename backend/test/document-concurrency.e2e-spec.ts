@@ -60,6 +60,8 @@ describeIsolatedPostgres(
     let db: RestrictedAppDatabase;
     let orders: OrdersService;
     let receipts: ReceiptsService;
+    // A second instance has its own in-process mutex, like a second server process.
+    let buildReceipts: () => ReceiptsService;
     let snapshots: ReceiptSnapshotService;
     let artifacts: ReceiptArtifactService;
     let user: User;
@@ -105,20 +107,22 @@ describeIsolatedPostgres(
         renders,
         new DocumentArtifactsService(app, storage as never),
       );
-      receipts = new ReceiptsService(
-        app.getRepository(Receipt),
-        app.getRepository(Order),
-        undefined,
-        storage as never,
-        app,
-        { get: () => "https://example.test" } as never,
-        undefined,
-        { dispatch: async () => undefined } as never,
-        snapshots,
-        artifacts,
-        configs,
-        renders,
-      );
+      buildReceipts = () =>
+        new ReceiptsService(
+          app.getRepository(Receipt),
+          app.getRepository(Order),
+          undefined,
+          storage as never,
+          app,
+          { get: () => "https://example.test" } as never,
+          undefined,
+          { dispatch: async () => undefined } as never,
+          snapshots,
+          artifacts,
+          configs,
+          renders,
+        );
+      receipts = buildReceipts();
       orders = new OrdersService(
         app.getRepository(Order),
         app.getRepository(OrderItem),
@@ -251,9 +255,10 @@ describeIsolatedPostgres(
     describe("refusals after preflight", () => {
       it("an order currency that cannot be printed is refused in preflight without moving the counter", async () => {
         const order = await confirmedOrder();
-        await db.admin.query(`UPDATE orders SET currency = 'uah' WHERE id = $1`, [
-          order.id,
-        ]);
+        await db.admin.query(
+          `UPDATE orders SET currency = 'uah' WHERE id = $1`,
+          [order.id],
+        );
 
         const error = await rejection(generate(order, DocumentType.INVOICE));
 
@@ -344,6 +349,117 @@ describeIsolatedPostgres(
         expect(await counter(DocumentType.INVOICE)).toBe(1);
         for (const r of results)
           if (r.status === "fulfilled") expect(r.value.id).toBe(invoices[0].id);
+      });
+
+      it.each([DocumentType.INVOICE, DocumentType.ACT])(
+        "two concurrent %s reissues leave exactly one live row next to the void one",
+        async (type) => {
+          const order = await confirmedOrder();
+          const first = await generate(order, type);
+          await promote(first);
+          await asTenant(() => receipts.voidReceipt(first.id, user, "typo"));
+
+          const results = await Promise.allSettled([
+            generate(order, type),
+            generate(order, type),
+          ]);
+
+          expect(results.map((r) => r.status)).toEqual([
+            "fulfilled",
+            "fulfilled",
+          ]);
+          const typed = (await rows(order)).filter(
+            (r) => r.document_type === type,
+          );
+          const live = typed.filter((r) => r.status !== ReceiptStatus.VOID);
+          expect(typed).toHaveLength(2);
+          expect(live).toHaveLength(1);
+          for (const r of results)
+            if (r.status === "fulfilled") expect(r.value.id).toBe(live[0].id);
+          expect(live[0].number).toBe(`${new Date().getUTCFullYear()}-000002`);
+          expect(await counter(type)).toBe(2);
+        },
+      );
+
+      it.each([DocumentType.INVOICE, DocumentType.ACT])(
+        "two service instances without a shared mutex still leave one live %s",
+        async (type) => {
+          const order = await confirmedOrder();
+          const other = buildReceipts();
+
+          const results = await Promise.allSettled([
+            asTenant(() =>
+              receipts.generateDocument(order.id, user, type, KEEP),
+            ),
+            asTenant(() => other.generateDocument(order.id, user, type, KEEP)),
+          ]);
+
+          const typed = (await rows(order)).filter(
+            (r) => r.document_type === type,
+          );
+          expect(typed).toHaveLength(1);
+          expect(results.some((r) => r.status === "fulfilled")).toBe(true);
+          for (const r of results) {
+            if (r.status === "fulfilled") expect(r.value.id).toBe(typed[0].id);
+            else
+              expect(String((r.reason as Error).message)).not.toMatch(
+                /duplicate key|violates/i,
+              );
+          }
+        },
+      );
+
+      it("two service instances racing a reissue keep one live row next to the void one", async () => {
+        const order = await confirmedOrder();
+        const first = await generate(order, DocumentType.INVOICE);
+        await promote(first);
+        await asTenant(() => receipts.voidReceipt(first.id, user, "typo"));
+        const other = buildReceipts();
+
+        const results = await Promise.allSettled([
+          generate(order, DocumentType.INVOICE),
+          asTenant(() =>
+            other.generateDocument(order.id, user, DocumentType.INVOICE, KEEP),
+          ),
+        ]);
+
+        const typed = (await rows(order)).filter(
+          (r) => r.document_type === DocumentType.INVOICE,
+        );
+        const live = typed.filter((r) => r.status !== ReceiptStatus.VOID);
+        expect(typed).toHaveLength(2);
+        expect(live).toHaveLength(1);
+        for (const r of results)
+          if (r.status === "rejected")
+            expect(String((r.reason as Error).message)).not.toMatch(
+              /duplicate key|violates/i,
+            );
+      });
+
+      it("void racing a generate of the same type never leaves two live rows or a database error", async () => {
+        const order = await confirmedOrder();
+        const first = await generate(order, DocumentType.INVOICE);
+        await promote(first);
+
+        const results = await Promise.allSettled([
+          asTenant(() => receipts.voidReceipt(first.id, user, "race")),
+          generate(order, DocumentType.INVOICE),
+        ]);
+
+        const typed = (await rows(order)).filter(
+          (r) => r.document_type === DocumentType.INVOICE,
+        );
+        const live = typed.filter((r) => r.status !== ReceiptStatus.VOID);
+        // Either order is valid: generate saw the live invoice (nothing new), or the void
+        // landed first and generate issued a replacement under the next number.
+        expect(live.length).toBeLessThanOrEqual(1);
+        expect(typed.length).toBeLessThanOrEqual(2);
+        for (const r of results)
+          if (r.status === "rejected")
+            expect(String((r.reason as Error).message)).not.toMatch(
+              /duplicate key|violates/i,
+            );
+        expect(results[0].status).toBe("fulfilled");
       });
 
       it("parallel invoices for different orders get distinct consecutive numbers", async () => {
