@@ -4,6 +4,7 @@ import { Order, OrderStatus } from "../../orders/entities/order.entity";
 import { DocumentConfig, DocumentDraft } from "../../settings/document-config";
 import { DocumentAssetsService } from "../../settings/services/document-assets.service";
 import { TemplateService, ReceiptTemplate } from "./template.service";
+import { buildDocumentRenderData } from "./document-view";
 import {
   PlaywrightPdfGenerator,
   PdfOptions,
@@ -17,6 +18,12 @@ import {
   formatDocumentMoney,
 } from "../../../common/utils/document-formatting.util";
 import { resolveReceiptTitle } from "../templates/translations/defaults";
+import {
+  buildFrozenDocument,
+  DocumentContext,
+  FrozenDocument,
+} from "../frozen-document";
+import { assertTemplateSupportsDocument } from "../document-template-support";
 
 export type FrozenOrder = {
   id: string;
@@ -59,7 +66,10 @@ export type RenderSnapshot = {
   sourceRevision: number;
   sourcePreset?: { id: string; revision: number };
   reconstructed?: boolean;
+  /** Invoices and acts only; a waybill snapshot has no such key. Never public. */
+  document?: FrozenDocument;
 };
+
 export function captureOrder(order: Order): FrozenOrder {
   return {
     id: order.id,
@@ -149,9 +159,12 @@ export class DocumentRenderService {
     order: FrozenOrder,
     number: string,
     logo?: Buffer,
+    document?: DocumentContext,
   ) {
     await this.templates.ready;
     const caps = getTemplateCapabilities(config.templateId);
+    if (document)
+      assertTemplateSupportsDocument(document.request.type, config.templateId);
     const visibleCompany = Object.fromEntries(
       Object.entries(config.company).map(([key, value]) => [
         key,
@@ -176,14 +189,24 @@ export class DocumentRenderService {
         ]),
       ),
     };
-    const title = resolveReceiptTitle(
-      config.title.mode === "custom" ? config.title.text : null,
-      config.templateId,
-      config.documentLanguage,
-    );
-    const capturedAt = new Date().toISOString();
+    const now = new Date();
+    const capturedAt = now.toISOString();
+    const frozenDocument = document
+      ? buildFrozenDocument(document, config, now)
+      : undefined;
+    // A typed document has a fixed heading; the user's custom title only applies to waybills.
+    const title =
+      frozenDocument?.title ||
+      resolveReceiptTitle(
+        config.title.mode === "custom" ? config.title.text : null,
+        config.templateId,
+        config.documentLanguage,
+      );
     const money = (cents: number) =>
       formatDocumentMoney(cents, order.currency, config.formatting);
+    const documentData = frozenDocument
+      ? buildDocumentRenderData(frozenDocument, order, number, config)
+      : undefined;
     const data = this.templates.prepareTemplateData(
       {
         ...order,
@@ -191,7 +214,8 @@ export class DocumentRenderService {
         recipient,
       } as unknown as Order,
       number,
-      visibleCompany,
+      // The document blocks print the tax id, IBAN and SWIFT themselves.
+      { ...visibleCompany, ...documentData?.headerCompany },
       Boolean(config.logo.visible && logo),
       config.logo.visible && logo
         ? `data:image/png;base64,${logo.toString("base64")}`
@@ -203,7 +227,7 @@ export class DocumentRenderService {
       caps.accent ? config.primaryColor : undefined,
       caps.terms ? config.paymentTerms : undefined,
       caps.terms ? config.deliveryTerms : undefined,
-      config.title.mode === "custom",
+      Boolean(frozenDocument) || config.title.mode === "custom",
       config.formatting,
     );
     // Automatic mode keeps the original template/shared print CSS geometry.
@@ -224,14 +248,26 @@ export class DocumentRenderService {
         ...data,
         logoStyle,
         logoSlotStyle,
+        ...(frozenDocument && documentData
+          ? {
+              documentTitle: frozenDocument.title,
+              document: documentData.view,
+              translations: {
+                ...data.translations,
+                ...documentData.translationOverrides,
+              },
+            }
+          : {}),
         recipientEmail: recipient.email,
         recipientPhone: recipient.phone,
         recipientAddress: recipient.address,
-        orderDate: formatDocumentDate(
-          order.created_at,
-          config.documentLanguage,
-          config.formatting,
-        ),
+        orderDate:
+          documentData?.orderDate ??
+          formatDocumentDate(
+            order.created_at,
+            config.documentLanguage,
+            config.formatting,
+          ),
         generatedAt: formatDocumentDate(
           capturedAt,
           config.documentLanguage,
@@ -273,6 +309,7 @@ export class DocumentRenderService {
       htmlHash: createHash("sha256").update(html).digest("hex"),
       publicProjection,
       sourceRevision: 0,
+      ...(frozenDocument ? { document: frozenDocument } : {}),
     };
     return { html, snapshot };
   }

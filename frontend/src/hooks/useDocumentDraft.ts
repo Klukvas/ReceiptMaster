@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
 import { api } from "../lib/api";
 import {
-  documentError,
   documentEnvelope,
   isDocumentRevisionConflict,
   type ConfigVersion,
   type DocumentConfig,
   type DocumentDraft,
 } from "../lib/document-config";
+import { localizedDocumentError } from "../lib/document-error";
 export const DOCUMENT_CONFIG_KEY = ["settings", "document-config"] as const;
+/** The account's saved document design; shared by the editor and the create-document form. */
+export const documentConfigQuery = queryOptions({
+  queryKey: DOCUMENT_CONFIG_KEY,
+  queryFn: async () =>
+    (await api.get<{ data: ConfigVersion }>("/settings/document-config")).data
+      .data,
+  retry: false,
+  refetchOnWindowFocus: false,
+  staleTime: Infinity,
+});
 export function useDocumentDraft(orderId?: string) {
   const cache = useQueryClient();
   const { t } = useTranslation();
@@ -20,15 +30,7 @@ export function useDocumentDraft(orderId?: string) {
     const label = t(key);
     return label === key ? undefined : label;
   };
-  const query = useQuery({
-    queryKey: DOCUMENT_CONFIG_KEY,
-    queryFn: async () =>
-      (await api.get<{ data: ConfigVersion }>("/settings/document-config")).data
-        .data,
-    retry: false,
-    refetchOnWindowFocus: false,
-    staleTime: Infinity,
-  });
+  const query = useQuery(documentConfigQuery);
   const [base, setBase] = useState<ConfigVersion>();
   const [draft, setDraft] = useState<DocumentConfig>();
   const [logoAction, setLogoAction] =
@@ -186,14 +188,16 @@ export function useDocumentDraft(orderId?: string) {
       setDraft(undefined);
       setLogoAction("keep");
       setFile(undefined);
-      await cache.invalidateQueries({
-        queryKey: ["settings", "receipt-design"],
-      });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["settings", "receipt-design"] }),
+        // The seller requisites of the company tab read the same stored values.
+        cache.invalidateQueries({ queryKey: ["companyInfo"] }),
+      ]);
       // The save bar disappears once nothing is pending, so confirm the save here.
       toast.success(t("document.saved"));
     } catch (value) {
       setIsConflict(isDocumentRevisionConflict(value));
-      setError(await documentError(value, fieldLabel));
+      setError(await localizedDocumentError(value, fieldLabel));
     } finally {
       setBusy(false);
     }
@@ -208,7 +212,7 @@ export function useDocumentDraft(orderId?: string) {
         setIsConflict(false);
       }
     } catch (value) {
-      setError(await documentError(value, fieldLabel));
+      setError(await localizedDocumentError(value, fieldLabel));
     }
   };
   const refreshPreview = async () => {
@@ -243,7 +247,7 @@ export function useDocumentDraft(orderId?: string) {
       }
     } catch (value) {
       if (!abort.signal.aborted && request === sequence.current)
-        setError(await documentError(value, fieldLabel));
+        setError(await localizedDocumentError(value, fieldLabel));
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }

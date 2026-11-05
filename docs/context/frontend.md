@@ -260,6 +260,19 @@ Cancelling an order (`useOrders`) invalidates everything it changes on the serve
 `['totalRevenue']`, `['totalTurnover']`, `['dailyRevenue']`, `['orderStatusSummary']` (the default
 `staleTime` is 5 minutes, so without this the dashboards would keep pre-cancel figures).
 
+### Documents on an order (waybill, invoice, act)
+
+An order carries several documents; `lib/document-types.ts` holds the per-type meta (mirror of the backend specs, kept in sync by `e2e/document-types-parity.spec.mjs`), `documentsOf/documentOf/waybillOf/canCreate`. `canCreate` is false while the order has a document of the type that is generated, processing **or void**: the backend keeps one row per order and type (`DOCUMENT_ALREADY_EXISTS`), so only a failed attempt can be created again.
+
+- **Menu** (`OrderActionsMenu`): "Generate waybill" stays one click. A flat group "Create document" (`role="group"`, heading `documents.createGroup`) lists "Invoice…" / "Act…" for a CONFIRMED order without that type; arrow keys walk the flat index. Items open `CreateDocumentModal`.
+- **`CreateDocumentModal`** (`components/orders/`): invoice sends exactly one of `details.dueDate` / `details.paymentTermDays` (default `defaultPaymentTermDays ?? 5` from the `['companyInfo']` cache, `hooks/useCompanyInfo.ts`); act sends `contractRef` (≤200) and an optional `period` (both dates, from ≤ to). Details are built and validated in `lib/document-details.ts`. The design list comes from `['document-templates']` (`useDocumentTemplates`), filtered by `capabilities.documentTypes` (the backend reports it per style) and `!locked`; the account's design is preselected when it fits (`useTemplateChoice`). The request carries `overrides.templateId`.
+- **Requisites**: before sending, `lib/document-requisites.ts#forecastRequisites` mirrors `DOCUMENT_TYPE_META.requiredSeller/warnings` against company info and the order's recipient (the server only reports soft `warnings` inside the 422, never on success). A 422 `DOCUMENT_REQUISITES_MISSING` (`fields`/`warnings` at the body root, `parseRequisitesError`) is shown by `RequisitesNotice` as a banner, not a toast. `seller.*` links to `/settings?tab=company&highlight=seller.iban,…`; `buyer.*` to `/recipients?edit=<id>&highlight=buyer.taxId,…`. `useHighlightedFields` marks and focuses the named inputs (`id="requisite-<key>"`); `RecipientsPage` opens the edit form from `?edit=`.
+- **Retention**: `GET /receipts/retention?type=` runs first; if a document would be evicted a `ConfirmModal` names its number ("`{{limit}}` most recent kept").
+- **Details section** (`OrderDocuments` + `DocumentCard`): one card per document with status, Download / Print / Share (`ShareReceiptModal`), Replace (`CustomizeDocumentModal` with a `document` prop) and Void (`VoidDocumentModal`, `receiptsApi.void`; invoice/act warn that another of the type cannot be issued). `OrdersPage` keeps the clicked order only as a fallback and shows the copy from the loaded list, so a new document appears without reopening.
+- **Voiding is final for every type**: the backend keeps one row per order and type and refuses a new one once it is generated or void (`RECEIPT_ALREADY_EXISTS` / `DOCUMENT_ALREADY_EXISTS`). `VoidDocumentModal` always uses the final wording, and the waybill's "Generate waybill" entries (menu, details) follow `canCreate(order, "waybill")`, so they vanish after a void but stay for no waybill or a failed one. `DocumentCard` translates system void reasons (`order_cancelled`, `documents.voidReasons.*`) and shows typed ones as typed.
+- **Replacing an invoice/act**: `CustomizeDocumentModal` passes `documentType` to `DocumentEditor`, which disables (select) or hides (carousel) designs whose `capabilities.documentTypes` lacks the type; if the account's design does not fit, the draft is switched to one that does. `/receipts/preview` renders the waybill layout only, so the preview is replaced by an explanation for invoice/act. `documentError` maps `DOCUMENT_TEMPLATE_UNSUPPORTED`, `DOCUMENT_TYPE_NOT_SUPPORTED`, `DOCUMENT_ALREADY_EXISTS`, `RECEIPT_ALREADY_EXISTS` to `errors.*`.
+- Errors `documentRequisitesMissing`, `documentAlreadyExists`, `documentTemplateUnsupported`, `documentTypeNotSupported` are in `errors.*`.
+
 ### Orders: cancel warning
 
 `OrdersPage` resolves the cancel target's status from the loaded list. Cancelling a confirmed order
@@ -453,6 +466,8 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 
 **Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
 
+**Wording:** user-facing strings outside the landing say "document" (or "waybill" where the waybill is meant) instead of receipt/квитанція/чек; type names are `documentTypes.{waybill,invoice,act}`, requisite labels `documentFields.{seller,buyer,details}.*`, document UI `documents.*`. Code identifiers keep the `receipt*` names. `avgOrderValue` ("Середній чек") is a retail term and stays.
+
 ### Legal pages
 
 `TermsPage`, `PrivacyPage`, `RefundPolicyPage` and `CookiePolicyPage` are thin wrappers: they pick the text for the interface language with `pickLegalContent` (`pages/legal/types.ts`; `ru`/`uk` or English for anything else) and render it inside `LegalLayout`. The texts are per-language content modules, `pages/legal/<slug>.{en,ru,uk}.tsx`, each exporting a `LegalContent` (`title`, `seoDescription`, `body` JSX); `<SEO>` gets the translated title/description and `lang`. Page chrome (the "Last updated" line, its date format, the footer links) uses the `legal.*` locale keys. The `ru`/`uk` texts are **unreviewed translations** of the English originals; the English text is the source of truth, so a change there must be mirrored in the other two files with the same section structure (`e2e/legal-pages.spec.mjs` compares headings, lists, tables and links across languages). They need a legal review before being relied on.
@@ -493,6 +508,16 @@ useReceiptSocket({
 - `receipt.failed` — error state, also invalidates queries
 
 **Used by** OrdersPage (via ReceiptProgressPanel component) to show real-time status.
+
+**Retry of a failed document.** `ReceiptProgressPanel` resolves the failed card's document type from
+`useDocumentTypes(receipts)` (a receiptId → `document_type` map filled from `GET /receipts/:id` as
+cards appear) or, failing that, a fresh lookup; if the type is still unknown it shows
+`receipts.retryTypeUnknown` and does nothing — it never assumes a waybill. `receiptService.retryDocument(orderId, type)`
+sends the waybill through its own endpoint and invoice/act to `POST /receipts/orders/:id/documents` with empty
+`details` (the server repeats the frozen candidate; without one it answers 409 `RECONSTRUCTION_REQUIRED`,
+shown translated via `errors.reconstructionRequired`). A failed `DocumentCard` in the order details has the same explicit
+Retry button (`OrderDocuments` calls `retryDocument`, then refreshes `['orders']`).
+`CreateDocumentModal` cannot be closed while a request is in flight and refreshes `['orders']` on `DOCUMENT_ALREADY_EXISTS`.
 
 **The socket is an accelerator, not the source of truth.** Nothing may depend on an
 event actually arriving — it can be blocked, dropped, or missed across a reconnect:
@@ -699,7 +724,7 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 - Overlays that are not built on `Dialog` (`CreateOrderModal`, `SupplierForm`, `RecipientForm`, `ProductForm`, `Drawer`) use `useFocusTrap(active, onEscape?)`: focus moves inside on open, Tab stays inside, Escape closes unless a child already handled it, focus returns to the opener. `Combobox` only swallows Escape while its list is open
 - `Tabs.tsx` — tab navigation
 - `Card.tsx` — card container with shadow
-- `DropdownMenu.tsx`, `PortalDropdown.tsx` — menus
+- `PortalDropdown.tsx` — menus
 - `Pagination.tsx` — page controls
 - `Combobox.tsx` — searchable select
 - `ThemeToggle.tsx` — dark/light switcher
@@ -920,3 +945,10 @@ The Orders action menu opens `CustomizeDocumentModal`, using the same editor wit
 Current verification: `frontend/e2e/template-features.cjs` drives the real SettingsPage and order action/editor, Axios and Query against `backend/test/serve-template-features.ts`. It uses production Nest services/HTML/Chrome with explicitly synthetic DB/storage, and runs in CI as `browser-documents`; the other browser specs (`node frontend/e2e/run.mjs`) run as `browser-regression`. See `frontend/e2e/README.md`. The earlier settings-regressions fixture/suite retains its pre-unified-save contract; it no longer matches the current SettingsPage and is not run in CI.
 
 Closing Orders customization through Escape, Close or successful generation/retry restores focus to the surviving More actions button. Cancelling unsaved-draft confirmation leaves focus trapped inside the open editor.
+
+## Seller and buyer requisites
+
+`CompanyRequisitesCard` (Company tab of `DocumentEditor`, hidden in the per-document modal) saves tax-number kind, legal form, bank, VAT payer (tri-state), VAT number (ІПН, 10/12 digits), signatory name and position and the default payment term (1–365 days) with its own **Save requisites** button: `POST /settings/company-info` with only those keys (`updateFromForm` in `lib/company-requisites-form.ts`), so it never collides with the design draft's revision. The request body is typed by hand (`CompanyInfoUpdate` in `lib/api.ts`; the OpenAPI document does not describe it). Server validation errors are pinned to the field through `validationField`. The company IBAN / tax-id inputs live in the draft form; `CompanyFieldNote` warns (never blocks) when the IBAN is not a Ukrainian one or the tax id is not 8/10 digits. Saving the draft invalidates `['companyInfo']`.
+
+`RecipientForm` has a collapsible "Requisites for documents" block (`RecipientRequisitesFields`): legal name, tax id + kind, IBAN, bank, legal address. Validation uses `lib/ua-requisites.ts` (copy of the backend util); create sends filled fields, update only changed ones (`lib/recipient-requisites.ts`), `null` clears. The tax-id kind always follows the number's length on the server (and the DB check requires both or neither), so the kind select is only a consistency check; the form starts on "by length" and there is nothing to reset. `ReceiptService` toasts and the printer prompt use `receipts.*` keys.
+

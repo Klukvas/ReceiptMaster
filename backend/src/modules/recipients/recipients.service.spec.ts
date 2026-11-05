@@ -273,6 +273,93 @@ describe("RecipientsService", () => {
     );
   });
 
+  describe("counterparty requisites", () => {
+    const withRequisites = {
+      id: "rec-1",
+      name: "John Doe",
+      user_id: "user-1",
+      tax_id: "12345678",
+      tax_id_kind: "edrpou",
+      iban: "UA213223130000026007233566001",
+    };
+
+    it("derives the kind from the tax id length on create", async () => {
+      await service.create({ name: "A", tax_id: "1234567890" }, mockUser);
+
+      expect(recipientsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: "1234567890",
+          tax_id_kind: "rnokpp",
+        }),
+      );
+    });
+
+    it("rejects a kind that disagrees with the tax id", async () => {
+      await expect(
+        service.create(
+          { name: "A", tax_id: "12345678", tax_id_kind: "rnokpp" },
+          mockUser,
+        ),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("rejects a kind without a tax id", async () => {
+      await expect(
+        service.create({ name: "A", tax_id_kind: "edrpou" }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+    });
+
+    it("recomputes the kind when a new tax id arrives without one", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id: "1234567890" }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: "1234567890",
+          tax_id_kind: "rnokpp",
+        }),
+      );
+    });
+
+    it("clears the kind together with the tax id on null", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id: null, iban: null }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: null,
+          tax_id_kind: null,
+          iban: null,
+        }),
+      );
+    });
+
+    it("refuses to change or clear the kind alone", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await expect(
+        service.update("rec-1", { tax_id_kind: "rnokpp" }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+      await expect(
+        service.update("rec-1", { tax_id_kind: null }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("accepts a kind alone when it matches the stored tax id", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id_kind: "edrpou" }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ tax_id: "12345678", tax_id_kind: "edrpou" }),
+      );
+    });
+  });
+
   describe("remove", () => {
     beforeEach(() => {
       recipientsRepo.findOne.mockResolvedValue(mockRecipient);

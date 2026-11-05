@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-02
 
-**Total Endpoints:** 104 routes across 15 controllers; 103 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
+**Total Endpoints:** 105 routes across 15 controllers; 104 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -530,6 +530,12 @@ concurrent repeats create one recipient, only successful creates are stored; sto
   email?: string,             // normalised to lowercase, max 255, unique per user (case-insensitive)
   phone?: string,             // digits, spaces and + ( ) . - only, max 50
   address?: string,           // max 1000
+  legal_name?: string,        // max 255; counterparty requisites below are all optional
+  tax_id?: string,            // 8 digits (ЄДРПОУ) or 10 digits (РНОКПП); checksum not verified
+  tax_id_kind?: "edrpou" | "rnokpp", // derived from the tax_id length when omitted
+  iban?: string,              // UA + 27 digits, mod-97 checked; spaces/NBSP/case normalised, stored compact
+  bank_name?: string,         // max 200
+  legal_address?: string,     // max 1000
   city?: string,
   postal_code?: string,
   country?: string,
@@ -541,7 +547,8 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 **Errors:**
 - 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
-- 400 validation errors — blank name, over-long values, malformed phone or email
+- 400 validation errors — blank name, over-long values, malformed phone or email, invalid IBAN or tax ID
+- 400 `VALIDATION_ERROR` — `tax_id_kind` that disagrees with the `tax_id` length, or a kind without a `tax_id`
 
 ---
 
@@ -580,8 +587,11 @@ Paginated list of user's recipients.
 
 Updates recipient details.
 
-**Request Body:** Same fields as Create (all optional); `null` clears `email`, `phone` or `address`
-(the onboarding wizard sends only changed fields this way)
+**Request Body:** Same fields as Create (all optional); `null` clears `email`, `phone`, `address` or any
+requisite (`legal_name`, `tax_id`, `iban`, `bank_name`, `legal_address`); the onboarding wizard sends
+only changed fields this way. A new `tax_id` without a kind recomputes the kind; `tax_id: null` clears
+both. `tax_id_kind` alone is accepted only when it matches the stored `tax_id` (400 `VALIDATION_ERROR`
+otherwise, and it cannot be cleared on its own).
 
 **Response** (200): `Recipient`
 
@@ -1050,7 +1060,7 @@ Total order count (optionally date-filtered).
 
 Primary receipt management. All endpoints require JWT auth unless noted. Scoped to authenticated user.
 
-File: `backend/src/modules/receipts/receipts.controller.ts` (13 endpoints)
+File: `backend/src/modules/receipts/receipts.controller.ts` (14 endpoints)
 
 ### Create Receipt (Default Template)
 
@@ -1125,6 +1135,42 @@ Forces standard template regardless of user's template setting.
 
 ---
 
+### Create Document (waybill, invoice, act)
+
+**POST** `/receipts/orders/:orderId/documents`
+
+Generic generation for the supported types. `/receipts/orders/:orderId/receipt*` stay as they were and always create a waybill. The body is the JSON/multipart draft envelope (`payload` field + optional `logo`), validated by `documentGenerationSchema`:
+
+```typescript
+{
+  type: "waybill" | "invoice" | "act",     // required
+  // design fields, as in POST /receipts/orders/:orderId/receipt
+  config?, presetId?, presetRevision?, overrides?, logoAction?: "keep" | "replace" | "remove",
+  details?: InvoiceDetails | ActDetails    // not accepted for a waybill; defaults to {}
+}
+InvoiceDetails = { dueDate?: "YYYY-MM-DD", paymentTermDays?: 1..365 }  // at most one of the two
+ActDetails     = { contractRef?: string (1..200, trimmed), period?: { from, to } }  // ISO dates, from <= to
+```
+
+`type` is read first: an unknown value is `400 VALIDATION_ERROR`; `quote`, `sales_receipt`, `packing_list` and `return_note` are `400 DOCUMENT_TYPE_NOT_SUPPORTED`. An invoice or act needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), on any plan. Each type has its own number series, one document per type and order, and its own 10-document retention.
+
+An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 VALIDATION_ERROR`. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate; `{}` retries the frozen candidate.
+
+**Response** (201): `ReceiptProjection` (`document_type` set; PDF is produced asynchronously, as for a waybill). The PDF file name is `invoice-<number>.pdf` / `act-<number>.pdf`; a waybill stays `receipt-<number>.pdf`.
+
+**Errors:**
+- 400 `DOCUMENT_TYPE_NOT_SUPPORTED`, `VALIDATION_ERROR`, `ORDER_CANNOT_BE_MODIFIED`
+- 400 `DOCUMENT_TEMPLATE_UNSUPPORTED` — the selected style is not in the type's `layout.allowedStyles` (invoice and act: `standard`, `classic`, `minimal`, `corporate`; every other style, including `delivery` which prints no amounts and `compact` which cannot show the IBAN, is refused). `GET /settings/templates` lists the types a style can carry in `capabilities.documentTypes`
+- 402 `TEMPLATE_PLAN_RESTRICTED`
+- 404 `ORDER_NOT_FOUND`
+- 409 `DOCUMENT_ALREADY_EXISTS` (invoice/act already issued or voided; a voided one is not reissued because of the unique index) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
+- 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
+- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`. `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
+
+The requisites, issue/due dates, title and the VAT rate (`vatRatePercent`, 20 today, kept by a replacement) are frozen in `snapshot.document`, which is never part of the public projection. The public **JSON** (`GET /public/receipts/:token`) is unchanged: it shows the seller's IBAN and tax code only as the style's visibility settings allow, exactly as for a waybill, and never the buyer's IBAN/tax id, the seller's VAT id (ІПН), the signatory, VAT amounts or the amount in words. The **PDF** behind `GET /public/receipts/:token/pdf` is the document itself and carries every requisite the invoice or act prints (both parties' codes and addresses, the payment details, the ІПН, the signatory); anyone holding the link can download it, so revoke the share token to withdraw it.
+
+---
+
 ### List Receipts
 
 **GET** `/receipts`
@@ -1137,6 +1183,7 @@ Paginated list of all user's generated receipts.
 |-------|------|---------|-------|
 | offset | number | 0 | |
 | limit | number | 20 | At most 100 |
+| type | `DocumentType` | all | Only documents of this type; an unknown value is `400 VALIDATION_ERROR` |
 
 **Response** (200): `ReceiptListResponse`
 ```typescript
@@ -1754,6 +1801,9 @@ Returns all company/business information.
 **Response** (200): See `backend/src/modules/settings/dto/settings-response.dto.ts` CompanyInfoResponseDto
 - companyName, companyAddress, companyEmail, companyPhone
 - companyTaxId, companyIban, companySwift, companyWebsite, companyTagline
+- Requisites, `null` when not filled: companyTaxIdKind (`edrpou` | `rnokpp`), companyLegalForm,
+  companyBankName, companyVatPayer, companyVatId, companySignatoryName, companySignatoryPosition,
+  defaultPaymentTermDays
 
 ---
 
@@ -1774,9 +1824,21 @@ Updates only supplied company fields. At least one recognized field is required;
   companyIban?: string,
   companySwift?: string,
   companyWebsite?: string,
-  companyTagline?: string
+  companyTagline?: string,
+  // Requisites: null (or "" for text) clears. Stored in columns, never in the document config.
+  companyTaxIdKind?: "edrpou" | "rnokpp" | null,
+  companyLegalForm?: string | null,          // trimmed, max 64
+  companyBankName?: string | null,           // max 200
+  companyVatPayer?: boolean | null,
+  companyVatId?: string | null,              // 10 or 12 digits
+  companySignatoryName?: string | null,      // max 255
+  companySignatoryPosition?: string | null,  // max 255
+  defaultPaymentTermDays?: number | null     // integer 1..365
 }
 ```
+
+When `companyTaxIdKind` and `companyTaxId` arrive in one request, the number must match the kind
+(8 digits ЄДРПОУ, 10 РНОКПП; 400 otherwise). `companyTaxId` and `companyIban` stay free text.
 
 **Response** (200):
 ```typescript
@@ -2110,10 +2172,11 @@ All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 {
   error: string,      // User-friendly message (no SQL, stack traces, or internals)
   errorCode: string   // Machine-readable code (e.g., "ORDER_NOT_FOUND", "PRODUCT_LIMIT_EXCEEDED")
+  // Some errors add machine-readable fields, e.g. DOCUMENT_REQUISITES_MISSING: fields[], warnings[]
 }
 ```
 
-`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
+`GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. An `ApiErrorResponse` with `details` (e.g. `DOCUMENT_REQUISITES_MISSING`) spreads them into the body. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
 
 Common HTTP status codes:
 
@@ -2228,7 +2291,7 @@ Formatting `dateStyle` is `numeric | short | medium | long`. Legacy defaults use
 
 Account Save needs a complete config; preset create/update use complete copies. Generation/replacement can use `config` or `presetId`+`presetRevision`, followed by partial `overrides`. Effective template entitlement is enforced. Presets have 1–80 character trimmed names, maximum 20 per tenant and bounded revisions. Foreign-tenant preset/logo IDs are rejected. Saving/selecting presets does not change defaults.
 
-`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
+`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, `documentTypes` (the document types the style can carry: always `waybill`, plus `invoice` and `act` for standard/classic/minimal/corporate), logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
 
 Receipt list/create/get/void/share-revoke responses use small allowlisted projections; internal HTML/config/pending assets are private. New public metadata uses frozen visible values and formatting, with Delivery money omitted. Legacy metadata is explicitly unavailable when historical projection cannot be trusted; existing PDF access is preserved.
 

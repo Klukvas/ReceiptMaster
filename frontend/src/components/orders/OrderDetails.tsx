@@ -21,6 +21,8 @@ import { Button } from"../ui/Button";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
 import { formatOrderNumber } from"../../lib/order-number";
+import { canCreate, waybillOf } from"../../lib/document-types";
+import { OrderDocuments } from"./OrderDocuments";
 
 interface OrderDetailsProps {
  order: Order;
@@ -68,12 +70,11 @@ export const OrderDetails = ({
  setTimeout(() => setIdCopied(false), 2000);
  };
 
- const receipt = order.receipts?.[0];
+ // The buttons below act on the waybill; invoices and acts have their own entry points.
+ const receipt = waybillOf(order);
  const hasGeneratedReceipt = receipt?.status ==="generated";
- const hasNoReceipt =
- !order.receipts ||
- order.receipts.length === 0 ||
- receipt?.status ==="void";
+ // A voided waybill is final in the backend, so only "none" or "failed" may be generated.
+ const canGenerateWaybill = canCreate(order,"waybill");
 
  // Initials for avatar
  const initials = order.recipient?.name
@@ -279,6 +280,14 @@ export const OrderDetails = ({
  </section>
  </div>
  </div>
+ {onDownloadReceipt && onPrintReceipt && onShareReceipt && (
+ <OrderDocuments
+ order={order}
+ onDownload={onDownloadReceipt}
+ onPrint={onPrintReceipt}
+ onShare={onShareReceipt}
+ />
+ )}
  </div>
 
  {/* ─── Action Footer ─── */}
@@ -318,7 +327,7 @@ export const OrderDetails = ({
 
  {/* Confirmed — no receipt */}
  {order.status ==="confirmed" &&
- hasNoReceipt &&
+ canGenerateWaybill &&
  onGenerateReceipt && (
  <Button
  size="sm"

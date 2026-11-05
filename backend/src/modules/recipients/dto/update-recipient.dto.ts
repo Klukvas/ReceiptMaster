@@ -1,4 +1,8 @@
 import { ApiPropertyOptional, PartialType } from "@nestjs/swagger";
+import {
+  TAX_ID_KINDS,
+  TaxIdKind,
+} from "../../../common/utils/ua-requisites.util";
 import { CreateRecipientDto } from "./create-recipient.dto";
 
 /**
@@ -29,4 +33,42 @@ export class UpdateRecipientDto extends PartialType(CreateRecipientDto) {
     nullable: true,
   })
   address?: string | null;
+
+  @ApiPropertyOptional({
+    description: "Юридическое название; null очищает",
+    nullable: true,
+  })
+  legal_name?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      "ЄДРПОУ (8) или РНОКПП (10); вид пересчитывается; null очищает и вид",
+    nullable: true,
+  })
+  tax_id?: string | null;
+
+  @ApiPropertyOptional({
+    description: "Вид налогового номера; сам по себе очистить нельзя",
+    enum: TAX_ID_KINDS,
+    nullable: true,
+  })
+  tax_id_kind?: TaxIdKind | null;
+
+  @ApiPropertyOptional({
+    description: "IBAN (UA...); null очищает",
+    nullable: true,
+  })
+  iban?: string | null;
+
+  @ApiPropertyOptional({
+    description: "Название банка; null очищает",
+    nullable: true,
+  })
+  bank_name?: string | null;
+
+  @ApiPropertyOptional({
+    description: "Юридический адрес; null очищает",
+    nullable: true,
+  })
+  legal_address?: string | null;
 }

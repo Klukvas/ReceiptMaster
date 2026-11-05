@@ -139,9 +139,9 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 
 ### 2. Receipt & Invoice PDF Generation
 
-**Retention cap:** an account keeps its 10 most recent generated documents **of each document type** (`DOCUMENTS_RETAINED_PER_TYPE` in `receipts/document-retention.ts`, the single source of the number). Generating the 11th document of a type retires the oldest one of that same type and its public link stops working; documents of other types are never counted or evicted by it. Only waybills are generated today, so the cap behaves as before. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`, which accepts `?type=`, default `waybill`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
+**Retention cap:** an account keeps its 10 most recent generated documents **of each document type** (`DOCUMENTS_RETAINED_PER_TYPE` in `receipts/document-retention.ts`, the single source of the number). Generating the 11th document of a type retires the oldest one of that same type and its public link stops working; documents of other types are never counted or evicted by it. Waybills, invoices and acts are generated today, each with its own ten. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`, which accepts `?type=`, default `waybill`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
 
-**Document numbers** (`"2026-000007"`) are per account **and per document type**: `receipts/receipt-number.ts::nextDocumentNumber(manager, userId, type)` upserts the `(user_id, document_type)` row of `document_counters` in one statement (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, so concurrent generations queue on that row, including the first insert, and never collide; a number is never reused, even after the retention cap evicts its document, and a failed generation leaves a gap). An invoice and a waybill may therefore both be `2026-000001`; the type is not part of the number yet (a display prefix such as `РФ-` is a later decision). Uniqueness is `(user_id, document_type, number)`; nothing looks a document up by number (public links use `public_token`, the API uses ids), so only the download file name (`receipt-<number>.pdf`) can coincide across types. Waybill numbers also keep `users.receipt_counter` in step for one release so an image rolled back without reverting the migration cannot reissue a number. Migration `DocumentCounters1792900000000` seeded each account's waybill counter with the higher of its old `receipt_counter` and the highest number it holds, so numbering continues above history. `PerAccountReceiptNumbers1792700000000` earlier made numbers per account (the old global `generate_receipt_number()` function and sequence remain unused).
+**Document numbers** (`"2026-000007"`) are per account **and per document type**: `receipts/receipt-number.ts::nextDocumentNumber(manager, userId, type)` upserts the `(user_id, document_type)` row of `document_counters` in one statement (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, so concurrent generations queue on that row, including the first insert, and never collide; a number is never reused, even after the retention cap evicts its document, and a generation that fails after drawing a number hands it back with a compare-and-set decrement (`releaseDocumentNumber`), which only works while no later number was drawn — otherwise a gap stays). An invoice and a waybill may therefore both be `2026-000001`; the type is not part of the number yet (a display prefix such as `РФ-` is a later decision). Uniqueness is `(user_id, document_type, number)`; nothing looks a document up by number (public links use `public_token`, the API uses ids), so only the download file name (`receipt-<number>.pdf`) can coincide across types. Waybill numbers also keep `users.receipt_counter` in step for one release so an image rolled back without reverting the migration cannot reissue a number. Migration `DocumentCounters1792900000000` seeded each account's waybill counter with the higher of its old `receipt_counter` and the highest number it holds, so numbering continues above history. `PerAccountReceiptNumbers1792700000000` earlier made numbers per account (the old global `generate_receipt_number()` function and sequence remain unused).
 
 **Dates in documents:** the live render path (`DocumentRenderService.prepare`) formats order date and "generated at" with `formatDocumentDate` and the saved document formatting (language, locale, style, hour cycle, one time zone for both). `TemplateService.prepareTemplateData` takes the same `Formatting` (default `DEFAULT_DOCUMENT_FORMATTING`, UTC) so the dev `pdf-test` endpoints and legacy `PdfGeneratorService` cannot drift to the server's locale/time zone. The old React-PDF `standard`/`compact` templates were unreachable and are deleted. The Telegram bot's order confirmation is Russian-only by design (`ru-RU`).
 
@@ -151,8 +151,15 @@ receipt can later be `VOID`. A receipt has a `document_type` (`DocumentType`: `w
 видаткова накладна). An order carries **at most one receipt row per type** (partial unique index
 `IDX_receipts_order_document_type` on `(order_id, document_type)`, excluding `return_note`, which an
 order may carry several of), so a retry reuses the same row rather than inserting a new one.
-Only `waybill` is generated today: `generateReceipt` filters and creates by `waybill`, so other types
-are a schema capability that no endpoint produces yet. Numbering is per type (see *Document numbers*); the retention cap is per type.
+`waybill`, `invoice` (рахунок на оплату) and `act` (акт виконаних робіт) are generated, through one pipeline
+(`ReceiptsService.generateDocument`; `generateReceipt` is the waybill wrapper): lookups, numbering, retention
+and the unique row are all per type. The other types are a schema capability that no endpoint produces yet
+(`POST /receipts/orders/:orderId/documents` answers `DOCUMENT_TYPE_NOT_SUPPORTED`). Per-type rules live in
+`receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`: allowed order statuses, locking, required requisites,
+warnings, heading, `layout`: party roles, payment block, completion statement, buyer signature, allowed HTML styles); invoice and act need a CONFIRMED order, lock it, are available on every plan, and are never
+auto-generated (only the waybill is, on confirm). Numbering is per type (see *Document numbers*); the retention cap is per type.
+
+**Invoice and act layout:** only `standard`, `classic`, `minimal` and `corporate` carry them (`layout.allowedStyles`; other styles are `DOCUMENT_TEMPLATE_UNSUPPORTED`). `services/document-view.ts::buildDocumentRenderData` turns the frozen document and the order into the `document` view the blocks print. Invoice: supplier and payer (code with its ЄДРПОУ/РНОКПП label, address, ІПН of a VAT payer), payment details (IBAN, bank, payment purpose "Оплата за рахунком № … від …"; SWIFT and МФО are not printed), totals, amount in words, due date, issuer signature. Act: contractor and customer, completion statement, contract, period, two signature columns, М.П. VAT: `seller.vatPayer === true` splits the (VAT-inclusive) total with `calculateVatBreakdown(mode: "included", rate)` and renames the price columns "… з ПДВ"; `false` prints "Без ПДВ"; unknown prints nothing about VAT. The rate is `UA_VAT_RATE_PERCENT` (20, assumed not configurable yet), frozen in `FrozenDocument.vatRatePercent`. The builder refuses an order whose `total_cents` differs from the sum of its lines. The document date shown is the frozen issue date, not the order date.
 
 **Order lock (`orders.is_locked`):** promotion of a *locking* document (`waybill`, `invoice`, `act`, `sales_receipt`, `packing_list`; `receipts/order-lock.ts::LOCKING_DOCUMENT_TYPES`) sets it; `quote` and `return_note` do not. A manual void recomputes it with `syncOrderLock()`: the order unlocks only when no GENERATED locking document remains. The replace/repair/promotion gates that require a locked order apply to locking types only. Eviction by the retention cap does not recompute the lock (it would take the order row after the receipt row, the reverse of the void order); the evicted document's order stays locked, which is harmless for a CONFIRMED order.
 
@@ -383,6 +390,36 @@ File: `backend/src/modules/telegram/telegram.controller.ts`
 
 - `User`: Email, hashed password, active/inactive status
 - Related: Products, Recipients, Orders, Receipts
+
+### Counterparty requisites and typed documents
+
+Both sides of a document may carry optional legal requisites. Seller: `user_settings` columns
+`companyTaxIdKind`, `companyLegalForm`, `companyBankName`, `companyVatPayer`, `companyVatId`
+(10 or 12 digits), `companySignatoryName`/`Position`, `defaultPaymentTermDays` (1..365). Buyer:
+`recipients.legal_name`, `tax_id` + `tax_id_kind` (8 digits ЄДРПОУ / 10 digits РНОКПП, always set
+together, kind derived from the length), `iban` (UA, mod-97), `bank_name`, `legal_address`. Nothing is
+mandatory to save. They are deliberately outside `DocumentConfig` and `FrozenOrder`/`captureOrder`
+(so `orderFingerprint` and waybill snapshots are unchanged). Tax-id checksums are not verified.
+
+An **invoice** or **act** reads them at generation time: `receipts/document-requisites.ts` builds the seller
+(resolved config company + the columns) and the buyer (the order's recipient), `receipts/frozen-document.ts`
+checks them and resolves the issue date (generation day in `formatting.timeZone`), the invoice due date
+(request date, request days, `defaultPaymentTermDays`, else 5 days; `details.dueDateSource` records which) and
+the fixed heading. The result is `snapshot.document` (`type, title, details, issueDate, seller, buyer,
+warnings, buyerFingerprint`); a waybill snapshot has no such key. It is not in `publicProjection`, so the buyer's
+IBAN/tax id, the VAT id and the signatory are never public; the seller's IBAN/tax code appear publicly only via
+`companyInfo` under the usual visibility switches. Missing hard requisites are `422 DOCUMENT_REQUISITES_MISSING`
+(see api-reference); the check runs before a number is allocated (a refusal never burns one: order status,
+template support, requisites, dates are pre-checked, and the number is drawn only after the logo is staged, so a bad logo file, quota or upload failure never burns one, and an unprintable order total or currency is refused in preflight (`DOCUMENT_AMOUNT_INVALID`); two parallel requests for one order and type are serialized in-process per tenant+order+type, so the second gets the first's row; across several backend processes the unique row index still keeps one row but a loser may burn a number) and again inside the transaction, where the buyer is
+also compared by `buyerFingerprint` and the seller columns by value. A FAILED retry with new `details` and a replacement both take the buyer from the frozen document.
+The retry sets `issueDate` anew, to the day of the retry; a replacement keeps the issue date and the resolved
+details and rebuilds the seller, configuration and heading. A voided invoice or act is not reissued for the same
+order (the per-type unique index applies, as for a waybill).
+
+The "Дата" line a typed document prints is `snapshot.document.issueDate` (formatted as a calendar date), not the
+order's date. Rendering uses the `document-blocks` partials (parties, payment, totals, closing with signatures)
+in the four styles listed under *Invoice and act layout*; every other style is `400 DOCUMENT_TEMPLATE_UNSUPPORTED`.
+On such documents corporate omits its own empty footer note.
 
 **Flows:**
 

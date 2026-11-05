@@ -439,6 +439,67 @@ describe("SettingsService", () => {
     });
   });
 
+  describe("company requisites", () => {
+    const makeWithDocuments = () => {
+      const documents = { patchLegacy: jest.fn() };
+      const cache = { del: jest.fn() };
+      return {
+        documents,
+        service: new SettingsService(
+          settingsRepo,
+          cache as any,
+          documents as any,
+        ),
+      };
+    };
+
+    it("hands requisites to patchLegacy as passthrough next to document fields", async () => {
+      const { documents, service: withDocuments } = makeWithDocuments();
+
+      await withDocuments.updateCompanyInfo("user-1", {
+        companyName: "New",
+        companyVatId: "1234567890",
+        defaultPaymentTermDays: 10,
+      });
+
+      expect(documents.patchLegacy).toHaveBeenCalledWith(
+        "user-1",
+        { companyName: "New" },
+        { companyVatId: "1234567890", defaultPaymentTermDays: 10 },
+      );
+    });
+
+    it("upserts requisite-only saves without touching the document config", async () => {
+      const { documents, service: withDocuments } = makeWithDocuments();
+
+      await withDocuments.updateCompanyInfo("user-1", {
+        companyTaxIdKind: "edrpou",
+        companyVatPayer: null,
+      });
+
+      expect(documents.patchLegacy).not.toHaveBeenCalled();
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
+        { companyTaxIdKind: "edrpou", companyVatPayer: null, userId: "user-1" },
+        ["userId"],
+      );
+    });
+
+    it("returns null for requisites that were never filled", async () => {
+      settingsRepo.findOne.mockResolvedValue({ ...mockSettings });
+
+      await expect(service.getCompanyInfo("user-1")).resolves.toMatchObject({
+        companyTaxIdKind: null,
+        companyLegalForm: null,
+        companyBankName: null,
+        companyVatPayer: null,
+        companyVatId: null,
+        companySignatoryName: null,
+        companySignatoryPosition: null,
+        defaultPaymentTermDays: null,
+      });
+    });
+  });
+
   describe("autoGenerateReceipt", () => {
     it("defaults to false when the user has no settings row", async () => {
       settingsRepo.findOne.mockResolvedValue(null);

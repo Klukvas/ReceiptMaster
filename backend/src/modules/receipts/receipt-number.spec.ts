@@ -1,5 +1,5 @@
 import { DocumentType } from "./entities/receipt.entity";
-import { nextDocumentNumber } from "./receipt-number";
+import { nextDocumentNumber, releaseDocumentNumber } from "./receipt-number";
 
 describe("nextDocumentNumber", () => {
   beforeEach(() => {
@@ -43,5 +43,60 @@ describe("nextDocumentNumber", () => {
     await expect(
       nextDocumentNumber(manager as never, "u", DocumentType.WAYBILL),
     ).rejects.toThrow("DB error");
+  });
+});
+
+describe("releaseDocumentNumber", () => {
+  it("steps the counter back only while it still stands at that number", async () => {
+    const manager = { query: jest.fn().mockResolvedValue([{ value: 41 }]) };
+
+    expect(
+      await releaseDocumentNumber(
+        manager as never,
+        "user-1",
+        DocumentType.INVOICE,
+        "2026-000042",
+      ),
+    ).toBe(true);
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('"value" = $3'),
+      ["user-1", DocumentType.INVOICE, 42],
+    );
+  });
+
+  it("leaves the gap when a later number was already handed out", async () => {
+    const manager = { query: jest.fn().mockResolvedValue([]) };
+    expect(
+      await releaseDocumentNumber(
+        manager as never,
+        "u",
+        DocumentType.ACT,
+        "2026-000007",
+      ),
+    ).toBe(false);
+  });
+
+  it("steps the legacy counter back together with the waybill counter", async () => {
+    const manager = { query: jest.fn().mockResolvedValue([{ value: 6 }]) };
+    await releaseDocumentNumber(
+      manager as never,
+      "u",
+      DocumentType.WAYBILL,
+      "2026-000007",
+    );
+    expect(manager.query.mock.calls[0][0]).toContain('"receipt_counter"');
+  });
+
+  it("ignores a number it cannot read", async () => {
+    const manager = { query: jest.fn() };
+    expect(
+      await releaseDocumentNumber(
+        manager as never,
+        "u",
+        DocumentType.ACT,
+        "HAND-EDITED",
+      ),
+    ).toBe(false);
+    expect(manager.query).not.toHaveBeenCalled();
   });
 });

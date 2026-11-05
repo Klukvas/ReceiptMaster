@@ -16,12 +16,20 @@ import {
   Receipt,
   ReceiptStatus,
 } from "./entities/receipt.entity";
-import { Order, OrderStatus } from "../orders/entities/order.entity";
+import { Order } from "../orders/entities/order.entity";
+import {
+  GeneratableDocumentType,
+  hasDocumentBlock,
+  isGeneratableType,
+  specFor,
+} from "./document-types";
+import type { DocumentDetailsInput, DocumentRequest } from "./frozen-document";
 import {
   PdfGeneratorService,
   ReceiptStyle,
 } from "./services/pdf-generator.service";
-import { nextDocumentNumber } from "./receipt-number";
+import { KeyedMutex } from "../../common/utils/keyed-mutex.util";
+import { nextDocumentNumber, releaseDocumentNumber } from "./receipt-number";
 import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
 import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
@@ -67,9 +75,29 @@ function voidedReceiptFields(reason: string, voidedAt: Date) {
   };
 }
 
+/** The waybill keeps its historical file name; the other types are named by type. */
+export function documentFilename(receipt: {
+  document_type?: DocumentType;
+  number: string;
+}): string {
+  // Rows from before document types existed are waybills.
+  const type = receipt.document_type ?? DocumentType.WAYBILL;
+  return type === DocumentType.WAYBILL
+    ? `receipt-${receipt.number}.pdf`
+    : `${type}-${receipt.number}.pdf`;
+}
+
+/** The waybill route keeps its original error and wording whichever endpoint asks. */
+function documentAlreadyExists(orderId: string, type: DocumentType) {
+  return type === DocumentType.WAYBILL
+    ? ApiErrors.RECEIPT_ALREADY_EXISTS(orderId)
+    : ApiErrors.DOCUMENT_ALREADY_EXISTS(orderId, type);
+}
+
 @Injectable()
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
+  private readonly generationMutex = new KeyedMutex();
   /** A PROCESSING receipt older than this is treated as stuck and may be retried. */
 
   constructor(
@@ -136,11 +164,75 @@ export class ReceiptsService {
     selection: ConfigSelection = { logoAction: "keep" },
     file?: Express.Multer.File,
   ): Promise<Receipt> {
+    return this.generateDocument(
+      orderId,
+      user,
+      DocumentType.WAYBILL,
+      selection,
+      undefined,
+      file,
+    );
+  }
+
+  /**
+   * One generation pipeline for every generatable type. Each type has its own row per
+   * order (unique index), its own numbering and its own retention.
+   */
+  async generateDocument(
+    orderId: string,
+    user: User,
+    type: DocumentType,
+    selection: ConfigSelection = { logoAction: "keep" },
+    details?: DocumentDetailsInput,
+    file?: Express.Multer.File,
+  ): Promise<Receipt> {
+    if (!isGeneratableType(type))
+      throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
+    if (!hasDocumentBlock(type))
+      return this.runGeneration(orderId, user, type, selection, details, file);
+    // Two requests for the same order and type must not both allocate a number: the second
+    // waits, then finds the first one's PROCESSING row and returns it. In-process on purpose:
+    // a lock-holding transaction around logo upload would pin a pooled connection per request.
+    // Across processes the unique row index still allows one row; a rare loser may burn a number.
+    return this.generationMutex.runExclusive(
+      `${user.id}:${orderId}:${type}`,
+      () => this.runGeneration(orderId, user, type, selection, details, file),
+    );
+  }
+
+  private async releaseDrawnNumber(
+    userId: string,
+    type: DocumentType,
+    number: string | undefined,
+  ): Promise<void> {
+    if (!number) return;
+    try {
+      await releaseDocumentNumber(
+        this.dataSource.manager,
+        userId,
+        type,
+        number,
+      );
+    } catch (error) {
+      // The original failure matters more; a leftover gap is harmless.
+      this.logger.warn(`Could not release ${type} number ${number}: ${error}`);
+    }
+  }
+
+  private async runGeneration(
+    orderId: string,
+    user: User,
+    type: GeneratableDocumentType,
+    selection: ConfigSelection,
+    details?: DocumentDetailsInput,
+    file?: Express.Multer.File,
+  ): Promise<Receipt> {
+    const spec = specFor(type);
     const prior = await this.receiptsRepository.findOne({
       where: {
         order_id: orderId,
         user_id: user.id,
-        document_type: DocumentType.WAYBILL,
+        document_type: type,
       },
     });
     if (prior?.status === ReceiptStatus.PROCESSING && prior.generation_id)
@@ -149,7 +241,7 @@ export class ReceiptsService {
       prior &&
       [ReceiptStatus.GENERATED, ReceiptStatus.VOID].includes(prior.status)
     )
-      throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
+      throw documentAlreadyExists(orderId, type);
     const previous = prior
       ? await this.snapshots.internal(prior.id, user.id)
       : undefined;
@@ -158,7 +250,9 @@ export class ReceiptsService {
         selection.presetId ||
         selection.overrides ||
         file ||
-        selection.logoAction !== "keep",
+        selection.logoAction !== "keep" ||
+        // `{}` is the schema default, not an instruction to rebuild.
+        (details && Object.keys(details).length > 0),
     );
     const retryFrozen =
       previous?.pending_snapshot && previous.pending_html && !explicitConfig;
@@ -168,115 +262,147 @@ export class ReceiptsService {
         message:
           "No frozen candidate exists. Customize this document explicitly to reconstruct it.",
       });
-    const number =
-      prior?.number ||
-      (await nextDocumentNumber(
+    const frozenBuyer = previous?.pending_snapshot?.document?.buyer;
+    const request: DocumentRequest | undefined = hasDocumentBlock(type)
+      ? {
+          type,
+          details: details ?? {},
+          carryOver: frozenBuyer ? { buyer: frozenBuyer } : undefined,
+        }
+      : undefined;
+    // Every refusal that can be known without a number comes first, so it never burns one.
+    if (request && !retryFrozen)
+      await this.snapshots.preflight(user.id, orderId, selection, request);
+    // A number drawn here but never committed is handed back below, so a late refusal
+    // does not leave a gap in the sequence.
+    let drawnNumber: string | undefined;
+    const allocateNumber = async () => {
+      if (prior?.number) return prior.number;
+      drawnNumber = await nextDocumentNumber(
         this.dataSource.manager,
         user.id,
-        DocumentType.WAYBILL,
-      ));
-    const prepared = retryFrozen
-      ? undefined
-      : await this.snapshots.prepare(
-          user.id,
-          orderId,
-          number,
-          selection,
-          file,
-          previous?.pending_snapshot?.order,
-        );
-    if (prepared && previous && !previous.pending_snapshot?.order)
-      prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
-    const receipt = await this.dataSource.transaction(async (manager) => {
-      // Serialize tenant quota, then order identity and source validation. No external I/O here.
-      await manager.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
-        [user.id],
+        type,
       );
-      const order = prepared
-        ? await this.snapshots.validatePrepared(
+      return drawnNumber;
+    };
+    let receipt: Receipt;
+    try {
+      // A waybill takes its number first, as it always did. Invoice and act take it only after
+      // the logo is staged (bad file, quota, upload failure) so those refusals never burn one.
+      const eagerNumber = request ? undefined : await allocateNumber();
+      const prepared = retryFrozen
+        ? undefined
+        : await this.snapshots.prepare(
             user.id,
             orderId,
-            prepared,
-            manager,
-          )
-        : await manager.findOne(Order, {
-            where: { id: orderId, user_id: user.id },
-            lock: { mode: "pessimistic_write" },
-          });
-      if (!order || order.status !== OrderStatus.CONFIRMED)
-        throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
-      const existing = await manager.findOne(Receipt, {
-        where: {
-          order_id: orderId,
-          user_id: user.id,
-          document_type: DocumentType.WAYBILL,
-        },
-      });
-      if (
-        existing?.status === ReceiptStatus.PROCESSING &&
-        existing.generation_id
-      )
-        return existing;
-      if (
-        existing &&
-        [ReceiptStatus.GENERATED, ReceiptStatus.VOID].includes(existing.status)
-      )
-        throw ApiErrors.RECEIPT_ALREADY_EXISTS(orderId);
-      if (previous && existing?.generation_id !== previous.generation_id)
-        throw new ConflictException("Generation changed; refresh and retry");
-      const generationId = crypto.randomUUID();
-      const candidate = prepared
-        ? this.snapshots.candidate(prepared, existing?.active_revision || 0)
-        : {};
-      let result: Receipt;
-      if (existing) {
-        await manager.update(
-          Receipt,
-          { id: existing.id, user_id: user.id },
-          {
-            ...candidate,
-            status: ReceiptStatus.PROCESSING,
-            progress: 0,
-            error_message: null,
-            generation_id: generationId,
-            generation_started_at: new Date(),
-          },
+            eagerNumber ?? allocateNumber,
+            selection,
+            file,
+            previous?.pending_snapshot?.order,
+            request,
+          );
+      const number =
+        eagerNumber ?? prepared?.number ?? (await allocateNumber());
+      if (prepared && previous && !previous.pending_snapshot?.order)
+        prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
+      receipt = await this.dataSource.transaction(async (manager) => {
+        // Serialize tenant quota, then order identity and source validation. No external I/O here.
+        await manager.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
+          [user.id],
         );
-        result = await manager.findOneOrFail(Receipt, {
-          where: { id: existing.id, user_id: user.id },
-        });
-      } else {
-        await this.cleanupOldReceipts(manager, user.id, DocumentType.WAYBILL);
-        result = await manager.save(
-          Receipt,
-          manager.create(Receipt, {
-            ...candidate,
+        const order = prepared
+          ? await this.snapshots.validatePrepared(
+              user.id,
+              orderId,
+              prepared,
+              manager,
+            )
+          : await manager.findOne(Order, {
+              where: { id: orderId, user_id: user.id },
+              lock: { mode: "pessimistic_write" },
+            });
+        if (!order || !spec.allowedOrderStatuses.includes(order.status))
+          throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
+        const existing = await manager.findOne(Receipt, {
+          where: {
             order_id: orderId,
-            document_type: DocumentType.WAYBILL,
-            number,
-            status: ReceiptStatus.PROCESSING,
-            active_revision: 0,
-            progress: 0,
+            user_id: user.id,
+            document_type: type,
+          },
+        });
+        if (
+          existing?.status === ReceiptStatus.PROCESSING &&
+          existing.generation_id
+        )
+          return existing;
+        if (
+          existing &&
+          [ReceiptStatus.GENERATED, ReceiptStatus.VOID].includes(
+            existing.status,
+          )
+        )
+          throw documentAlreadyExists(orderId, type);
+        if (previous && existing?.generation_id !== previous.generation_id)
+          throw new ConflictException("Generation changed; refresh and retry");
+        const generationId = crypto.randomUUID();
+        const candidate = prepared
+          ? this.snapshots.candidate(prepared, existing?.active_revision || 0)
+          : {};
+        let result: Receipt;
+        if (existing) {
+          await manager.update(
+            Receipt,
+            { id: existing.id, user_id: user.id },
+            {
+              ...candidate,
+              status: ReceiptStatus.PROCESSING,
+              progress: 0,
+              error_message: null,
+              generation_id: generationId,
+              generation_started_at: new Date(),
+            },
+          );
+          result = await manager.findOneOrFail(Receipt, {
+            where: { id: existing.id, user_id: user.id },
+          });
+        } else {
+          await this.cleanupOldReceipts(manager, user.id, type);
+          result = await manager.save(
+            Receipt,
+            manager.create(Receipt, {
+              ...candidate,
+              order_id: orderId,
+              document_type: type,
+              number,
+              status: ReceiptStatus.PROCESSING,
+              active_revision: 0,
+              progress: 0,
+              user_id: user.id,
+              generation_id: generationId,
+              generation_started_at: new Date(),
+            }),
+          );
+        }
+        await manager.save(
+          ReceiptGenerationOutbox,
+          manager.create(ReceiptGenerationOutbox, {
+            id: crypto.randomUUID(),
+            receipt_id: result.id,
+            order_id: orderId,
             user_id: user.id,
             generation_id: generationId,
-            generation_started_at: new Date(),
+            published_at: null,
           }),
         );
-      }
-      await manager.save(
-        ReceiptGenerationOutbox,
-        manager.create(ReceiptGenerationOutbox, {
-          id: crypto.randomUUID(),
-          receipt_id: result.id,
-          order_id: orderId,
-          user_id: user.id,
-          generation_id: generationId,
-          published_at: null,
-        }),
-      );
-      return result;
-    });
+        return result;
+      });
+    } catch (error) {
+      await this.releaseDrawnNumber(user.id, type, drawnNumber);
+      throw error;
+    }
+    if (drawnNumber && receipt.number !== drawnNumber)
+      await this.releaseDrawnNumber(user.id, type, drawnNumber);
     void this.receiptOutbox.dispatch();
     return receipt;
   }
@@ -409,7 +535,7 @@ export class ReceiptsService {
 
   async findAll(
     user: User,
-    options?: { offset?: number; limit?: number },
+    options?: { offset?: number; limit?: number; type?: DocumentType },
   ): Promise<{
     data: Receipt[];
     total: number;
@@ -420,7 +546,10 @@ export class ReceiptsService {
     const limit = Math.min(options?.limit ?? 20, 100);
 
     const [data, total] = await this.receiptsRepository.findAndCount({
-      where: { user_id: user.id },
+      where: {
+        user_id: user.id,
+        ...(options?.type ? { document_type: options.type } : {}),
+      },
       relations: ["order", "order.recipient"],
       order: { created_at: "DESC" },
       skip: offset,
@@ -482,7 +611,7 @@ export class ReceiptsService {
   ): Promise<{ buffer: Buffer; filename: string }> {
     const receipt = await this.findOne(id, user);
 
-    const filename = `receipt-${receipt.number}.pdf`;
+    const filename = documentFilename(receipt);
     if (!receipt.pdf_path)
       return {
         buffer: await this.artifacts.repair(receipt.id, user.id),
@@ -572,6 +701,7 @@ export class ReceiptsService {
             input.selection || { logoAction: "keep" },
             file,
             original.active_snapshot?.order || original.pending_snapshot?.order,
+            this.replacementRequest(original),
           )
         : undefined;
     if (
@@ -656,6 +786,30 @@ export class ReceiptsService {
     });
     void this.receiptOutbox.dispatch();
     return result;
+  }
+
+  /**
+   * A replacement keeps what makes it the same document: buyer, issue date, the
+   * resolved details and the VAT rate. Seller, configuration and heading are rebuilt from today's settings.
+   */
+  private replacementRequest(original: Receipt): DocumentRequest | undefined {
+    if (!hasDocumentBlock(original.document_type)) return undefined;
+    if (!isGeneratableType(original.document_type))
+      throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(original.document_type);
+    const frozen =
+      original.active_snapshot?.document ?? original.pending_snapshot?.document;
+    return {
+      type: original.document_type,
+      details: {},
+      carryOver: frozen
+        ? {
+            buyer: frozen.buyer,
+            issueDate: frozen.issueDate,
+            details: frozen.details,
+            vatRatePercent: frozen.vatRatePercent,
+          }
+        : undefined,
+    };
   }
 
   /** Retire immutable keys transactionally; the scheduled collector handles storage after grace. */
@@ -1021,7 +1175,7 @@ export class ReceiptsService {
       buffer = await fs.readFile(receipt.pdf_path);
     }
 
-    const filename = `receipt-${receipt.number}.pdf`;
+    const filename = documentFilename(receipt);
     return { buffer, filename };
   }
 

@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import {
-  documentError,
   documentEnvelope,
   type Preset,
   type PresetSummary,
 } from "../../lib/document-config";
+import { localizedDocumentError } from "../../lib/document-error";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
@@ -68,7 +68,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
       }
       await presets.refetch();
     } catch (error) {
-      model.setError(await documentError(error));
+      model.setError(await localizedDocumentError(error));
     } finally {
       model.setBusy(false);
     }

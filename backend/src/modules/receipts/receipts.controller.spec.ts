@@ -312,3 +312,79 @@ describe("ReceiptsController", () => {
     });
   });
 });
+
+describe("ReceiptsController: POST orders/:orderId/documents", () => {
+  const user = { id: "user-1" } as User;
+  const req = { user };
+  const service = {
+    generateDocument: jest.fn().mockResolvedValue({ id: "r1" }),
+    findAll: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+  };
+  const controller = new ReceiptsController(service as never);
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("passes the type, the design selection and the details to the service", async () => {
+    await controller.createDocument("order-1", req, {
+      type: "invoice",
+      details: { paymentTermDays: 7 },
+    });
+    expect(service.generateDocument).toHaveBeenCalledWith(
+      "order-1",
+      user,
+      DocumentType.INVOICE,
+      expect.objectContaining({ logoAction: "keep" }),
+      { paymentTermDays: 7 },
+      undefined,
+    );
+  });
+
+  it("defaults the details of an act and gives a waybill none", async () => {
+    await controller.createDocument("order-1", req, { type: "act" });
+    expect(service.generateDocument.mock.calls[0][4]).toEqual({});
+    await controller.createDocument("order-1", req, { type: "waybill" });
+    expect(service.generateDocument.mock.calls[1][4]).toBeUndefined();
+  });
+
+  it.each(["quote", "sales_receipt", "packing_list", "return_note"])(
+    "refuses %s with DOCUMENT_TYPE_NOT_SUPPORTED",
+    async (type) => {
+      await expect(
+        controller.createDocument("order-1", req, { type }),
+      ).rejects.toMatchObject({
+        errorCode: "DOCUMENT_TYPE_NOT_SUPPORTED",
+        statusCode: 400,
+      });
+      expect(service.generateDocument).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([{ type: "contract" }, {}, { type: 5 }])(
+    "refuses %j as a validation error",
+    async (body) => {
+      await expect(
+        controller.createDocument("order-1", req, body),
+      ).rejects.toMatchObject({ errorCode: "VALIDATION_ERROR" });
+    },
+  );
+
+  it("judges the details only after the type is known", async () => {
+    await expect(
+      controller.createDocument("order-1", req, {
+        type: "invoice",
+        details: { dueDate: "2026-02-30" },
+      }),
+    ).rejects.toMatchObject({ errorCode: "VALIDATION_ERROR" });
+  });
+
+  it("filters the list by a known type and rejects an unknown one", async () => {
+    await controller.findAll(req, undefined, undefined, "invoice");
+    expect(service.findAll).toHaveBeenCalledWith(
+      user,
+      expect.objectContaining({ type: DocumentType.INVOICE }),
+    );
+    await expect(
+      controller.findAll(req, undefined, undefined, "nope"),
+    ).rejects.toBeInstanceOf(ApiErrorResponse);
+  });
+});

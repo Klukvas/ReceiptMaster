@@ -34,6 +34,10 @@ const SPECS = [
   { name: "auth-inline-errors", load: () => import("./auth-inline-errors.spec.mjs") },
   { name: "orders-select-all", load: () => import("./orders-select-all.spec.mjs") },
   { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
+  { name: "requisites-parity", load: () => import("./requisites-parity.spec.mjs") },
+  { name: "document-types-parity", load: () => import("./document-types-parity.spec.mjs") },
+  { name: "documents-orders", load: () => import("./documents-orders.spec.mjs") },
+  { name: "requisites-forms", load: () => import("./requisites-forms.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

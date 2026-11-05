@@ -4,7 +4,7 @@ import type { LegalContent } from "./types";
 export const termsEn: LegalContent = {
   title: "Terms of Service",
   seoDescription:
-    "Terms of Service for ReceiptMaster — cloud-based platform for digital receipts and invoices.",
+    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, payment invoices and acts of completed work.",
   body: (
     <>
       <h2>1. Introduction</h2>
@@ -22,10 +22,77 @@ export const termsEn: LegalContent = {
       <h2>2. Description of Service</h2>
       <p>
         ReceiptMaster is a cloud-based platform that allows businesses to
-        create, manage, and share digital receipts and invoices. The Service
-        includes product catalog management, order processing, receipt
-        generation with customizable templates, and analytics dashboards.
+        create, manage, and share business documents as PDF files: a delivery
+        note, a payment invoice and an act of completed work or services. The
+        Service includes product catalog management, order processing,
+        document generation with customizable templates, and analytics
+        dashboards.
       </p>
+
+      <h3>2.1 Documents and your responsibility</h3>
+      <p>
+        The documents are generated from the data you enter. Please note:
+      </p>
+      <ul>
+        <li>
+          You are responsible for the accuracy of everything that appears in a
+          document: names, tax numbers, bank details, addresses, prices,
+          quantities and VAT, and for whether a given document is suitable and
+          sufficient for your situation under applicable law.
+        </li>
+        <li>
+          The documents are PDF files. The Service does not sign them with a
+          qualified electronic signature (QES) or any other electronic
+          signature. If you need a signed document, print and sign it by hand,
+          or sign the file yourself using other tools.
+        </li>
+        <li>
+          The documents are not fiscal receipts or settlement documents issued
+          through a registrar of settlement operations (RRO/PRRO) and do not
+          replace them where the law requires one.
+        </li>
+        <li>
+          A payment invoice is a request for payment. It is generally not a
+          primary accounting document and does not by itself confirm that goods
+          were delivered or services were performed.
+        </li>
+        <li>
+          The Service does not generate tax invoices and does not register them
+          in the Unified Register of Tax Invoices.
+        </li>
+        <li>
+          If you mark yourself as a VAT payer in your company settings, the
+          documents show VAT at a fixed rate of 20% as included in the prices;
+          other rates are not supported and the rate cannot be changed at this
+          time. If you mark yourself as not
+          a VAT payer, they state "without VAT". Please check with your
+          accountant that this fits your case.
+        </li>
+        <li>
+          The Service does not provide accounting, tax or legal advice and does
+          not verify that a document meets the requirements that apply to you.
+        </li>
+      </ul>
+
+      <h3>2.2 Storage and sharing of documents</h3>
+      <ul>
+        <li>
+          The Service is not an archive of your accounting records. It keeps
+          the 10 most recent active (not voided) documents of each type.
+          Generating a new one permanently removes the oldest active document
+          of the same type, together with its PDF file and public link. You are responsible for saving
+          copies of the documents you are required to keep.
+        </li>
+        <li>
+          You can share a document through a public link. Anyone who has the
+          link can open the document, and it may contain details of both
+          parties, such as tax numbers, the seller's bank account number (IBAN)
+          and addresses. You decide whom to give a link to. You can revoke a
+          link in the Service; it also stops working when the document is
+          voided, its order is cancelled, or the document is removed under the
+          storage limit.
+        </li>
+      </ul>
 
       <h2>3. Account Registration</h2>
       <p>
@@ -131,7 +198,7 @@ export const termsEn: LegalContent = {
           Interfere with or disrupt the integrity or performance of the Service
         </li>
         <li>Upload or transmit malicious code, viruses, or harmful data</li>
-        <li>Use the Service to generate fraudulent receipts or documents</li>
+        <li>Use the Service to generate fraudulent or falsified documents</li>
         <li>
           Resell, sublicense, or redistribute the Service without our written
           consent

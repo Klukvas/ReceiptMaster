@@ -2,6 +2,7 @@ import { OpenAPIObject } from "@nestjs/swagger";
 import { documentConfigSchema } from "../modules/settings/document-config";
 import {
   Receipt,
+  DocumentType,
   ReceiptStatus,
 } from "../modules/receipts/entities/receipt.entity";
 import { receiptProjection } from "../modules/receipts/services/receipt-projection";
@@ -31,6 +32,7 @@ describe("shared OpenAPI components", () => {
     const receipt = {
       id: "0b8c6f35-6cc4-4c2a-9b2c-6f7e0c1d2e3f",
       order_id: "1c9d7a46-7dd5-4d3b-8c3d-7a8f1d2e3f40",
+      document_type: DocumentType.WAYBILL,
       number: "2026-000001",
       pdf_url: null,
       hash: "abc",

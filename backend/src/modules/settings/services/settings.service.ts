@@ -19,6 +19,19 @@ const NON_DOCUMENT_KEYS: ReadonlySet<string> = new Set([
   "autoGenerateReceipt",
 ]);
 
+// Counterparty requisites are plain columns outside the versioned document configuration:
+// snapshots and their hashes must not depend on them, and document_config is parsed strictly.
+export const REQUISITE_KEYS = [
+  "companyTaxIdKind",
+  "companyLegalForm",
+  "companyBankName",
+  "companyVatPayer",
+  "companyVatId",
+  "companySignatoryName",
+  "companySignatoryPosition",
+  "defaultPaymentTermDays",
+] as const satisfies readonly (keyof UserSettings)[];
+
 @Injectable()
 export class SettingsService {
   constructor(
@@ -73,19 +86,23 @@ export class SettingsService {
 
   // PostgreSQL ON CONFLICT updates only the supplied columns. Independent settings
   // saves cannot write an older SELECT snapshot over another setting.
+  // `requisites` ride along with a document patch inside its transaction and lock, but
+  // never enter the document configuration.
   private async patchSettings(
     userId: string,
     updates: Partial<UserSettings>,
+    requisites: Partial<UserSettings> = {},
   ): Promise<void> {
     if (
       this.documents &&
       !Object.keys(updates).every((key) => NON_DOCUMENT_KEYS.has(key))
     ) {
-      await this.documents.patchLegacy(userId, updates);
+      await this.documents.patchLegacy(userId, updates, requisites);
     } else {
-      await this.userSettingsRepository.upsert({ ...updates, userId }, [
-        "userId",
-      ]);
+      await this.userSettingsRepository.upsert(
+        { ...updates, ...requisites, userId },
+        ["userId"],
+      );
     }
     await this.invalidateCache(userId);
   }
@@ -197,6 +214,14 @@ export class SettingsService {
       companySwift: settings?.companySwift || "",
       companyWebsite: settings?.companyWebsite || "",
       companyTagline: settings?.companyTagline || "",
+      companyTaxIdKind: settings?.companyTaxIdKind ?? null,
+      companyLegalForm: settings?.companyLegalForm ?? null,
+      companyBankName: settings?.companyBankName ?? null,
+      companyVatPayer: settings?.companyVatPayer ?? null,
+      companyVatId: settings?.companyVatId ?? null,
+      companySignatoryName: settings?.companySignatoryName ?? null,
+      companySignatoryPosition: settings?.companySignatoryPosition ?? null,
+      defaultPaymentTermDays: settings?.defaultPaymentTermDays ?? null,
     };
   }
 
@@ -224,7 +249,13 @@ export class SettingsService {
     if (companyInfo.companyTagline !== undefined)
       companyFields.companyTagline = companyInfo.companyTagline;
 
-    await this.patchSettings(userId, companyFields);
+    const requisites = Object.fromEntries(
+      REQUISITE_KEYS.filter((key) => companyInfo[key] !== undefined).map(
+        (key) => [key, companyInfo[key]],
+      ),
+    );
+
+    await this.patchSettings(userId, companyFields, requisites);
   }
 
   async getOnboardingStatus(userId: string): Promise<{ completed: boolean }> {

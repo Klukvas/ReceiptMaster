@@ -17,7 +17,9 @@ import {
 import { clsx } from "clsx";
 import { useReceiptSocket } from "../../hooks/useReceiptSocket";
 import { receiptService } from "../../services/ReceiptService";
+import { notificationService } from "../../services/NotificationService";
 import { useTranslation } from "../../hooks/useTranslation";
+import { documentLabelKey, type DocumentType } from "../../lib/document-types";
 import type {
   ReceiptProgressPayload,
   ReceiptCompletedPayload,
@@ -178,6 +180,32 @@ const useStaleReceiptWatchdog = (
   }, [isAnyProcessing, markCompleted, markFailed, setReceipts]);
 };
 
+/**
+ * Socket events do not say what kind of document a receipt is, so each new
+ * card asks the server once; a failed lookup just leaves the card untitled.
+ */
+const useDocumentTypes = (receipts: ReceiptMap) => {
+  const [types, setTypes] = useState<ReadonlyMap<string, DocumentType>>(
+    new Map(),
+  );
+  const requested = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    for (const receiptId of receipts.keys()) {
+      if (requested.current.has(receiptId)) continue;
+      requested.current.add(receiptId);
+      void receiptService.fetchReceipt(receiptId).then((receipt) => {
+        if (!receipt) return;
+        setTypes((prev) =>
+          new Map(prev).set(receiptId, receipt.document_type),
+        );
+      });
+    }
+  }, [receipts]);
+
+  return types;
+};
+
 export const ReceiptProgressPanel = () => {
   const { t } = useTranslation();
   const [receipts, setReceipts] = useState<Map<string, ReceiptProgress>>(
@@ -316,6 +344,7 @@ export const ReceiptProgressPanel = () => {
   });
 
   useStaleReceiptWatchdog(receipts, markCompleted, markFailed, setReceipts);
+  const documentTypes = useDocumentTypes(receipts);
 
   const dismissReceipt = (receiptId: string) => {
     cancelDismiss(receiptId);
@@ -326,9 +355,22 @@ export const ReceiptProgressPanel = () => {
     });
   };
 
-  const handleRetry = (orderId: string, receiptId: string) => {
-    receiptService.generateReceipt(orderId);
+  const handleRetry = async (orderId: string, receiptId: string) => {
+    const type =
+      documentTypes.get(receiptId) ??
+      (await receiptService.fetchReceipt(receiptId))?.document_type;
+    if (!type) {
+      // Guessing a type could issue a different document than the one that failed.
+      notificationService.error(t("receipts.retryTypeUnknown"));
+      return;
+    }
+    void receiptService.retryDocument(orderId, type);
     dismissReceipt(receiptId);
+  };
+
+  const typeLabelOf = (receiptId: string): string | null => {
+    const type = documentTypes.get(receiptId);
+    return type ? t(documentLabelKey(type)) : null;
   };
 
   if (receipts.size === 0) return null;
@@ -367,6 +409,11 @@ export const ReceiptProgressPanel = () => {
                     ? t("receipts.receiptFailed")
                     : t("receipts.generatingReceipt")}
               </span>
+              {typeLabelOf(receipt.receiptId) && (
+                <span className="text-xs text-content-tertiary truncate">
+                  {typeLabelOf(receipt.receiptId)}
+                </span>
+              )}
             </div>
             <button
               onClick={() => dismissReceipt(receipt.receiptId)}

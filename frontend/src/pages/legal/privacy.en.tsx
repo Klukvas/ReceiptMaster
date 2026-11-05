@@ -59,10 +59,37 @@ export const privacyEn: LegalContent = {
         </li>
         <li>Supplier information</li>
         <li>
-          Receipts and other documents you generate (stored as PDF files),
-          including a public link to a receipt if you choose to share one
+          Your company's details used in documents (tax ID, legal form,
+          bank name, IBAN/SWIFT, VAT number, name and position of the person
+          who signs, default payment term)
+        </li>
+        <li>
+          Details of your customers and counterparties that you enter (legal
+          name, tax ID, IBAN, bank name, legal address)
+        </li>
+        <li>
+          Documents you generate — delivery notes, payment invoices and acts of
+          completed work (stored as PDF files that contain the details of both
+          parties as they were when the document was generated), including a
+          public link to a document if you choose to share one
         </li>
       </ul>
+      <p>
+        <strong>Data of your customers and counterparties.</strong> You enter
+        this data yourself. For it you act as the controller, and we process it
+        on your behalf to provide the Service and keep it secure (including
+        the security log described in section 3.3). You are responsible for
+        having a legal basis for entering it and for informing the people
+        concerned.
+      </p>
+      <p>
+        <strong>Public links.</strong> A link works for anyone who has it until
+        you revoke it, the document is voided, its order is cancelled, or the
+        document is removed under the storage limit. We do not set an expiry
+        date. The PDF opened through the link may contain details of both
+        parties, such as tax numbers, the seller's bank account number (IBAN)
+        and addresses.
+      </p>
 
       <h3>3.3 Usage Data</h3>
       <p>
@@ -74,8 +101,9 @@ export const privacyEn: LegalContent = {
         <li>Browser type and version (user agent)</li>
         <li>Date and time of the request</li>
         <li>
-          The data submitted with the request (passwords and tokens are
-          removed)
+          The data submitted with the request, except passwords, tokens and
+          counterparty and bank details (tax numbers, IBAN, bank names,
+          legal names, addresses), which are masked before saving
         </li>
       </ul>
       <p>
@@ -198,9 +226,13 @@ export const privacyEn: LegalContent = {
           are only hidden from you until then.
         </li>
         <li>
-          <strong>Receipts:</strong> We keep the 10 most recent generated
-          receipts of your account. Generating a new one permanently removes the
-          oldest, together with its PDF and share link.
+          <strong>Documents:</strong> We keep the 10 most recent active (not
+          voided) generated documents of each type (delivery note, payment
+          invoice, act of completed work) of your account. Generating a new one
+          permanently removes the oldest active document of the same type: its share link stops
+          working at once and its PDF file is deleted from storage shortly
+          afterwards. We are not an archive, so save copies of the documents
+          you are required to keep.
         </li>
         <li>
           <strong>Security logs:</strong> Kept while your account exists and

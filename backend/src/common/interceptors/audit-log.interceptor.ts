@@ -65,19 +65,37 @@ export class AuditLogInterceptor implements NestInterceptor {
 
   private sanitize(body: Record<string, any>): Record<string, any> | undefined {
     if (!body || typeof body !== "object") return undefined;
-    const sanitized = { ...body };
-    const sensitiveFields = [
-      "password",
-      "currentPassword",
-      "newPassword",
-      "confirmPassword",
-      "refresh_token",
-    ];
-    for (const field of sensitiveFields) {
-      if (field in sanitized) {
-        sanitized[field] = "***";
-      }
-    }
-    return sanitized;
+    return maskSensitive(body, 0) as Record<string, any>;
   }
+}
+
+const MASKED = "***";
+const MAX_DEPTH = 8;
+const SECRET_KEYS = new Set([
+  "password",
+  "currentpassword",
+  "newpassword",
+  "confirmpassword",
+  "refreshtoken",
+]);
+// Counterparty and bank requisites: kept out of the log, the field name still shows that it changed.
+const REQUISITE_KEY =
+  /iban|taxid|legalname|legaladdress|bankname|vatid|signatory|contractref|companyaddress/;
+
+const normalizeKey = (key: string): string =>
+  key.toLowerCase().replace(/[_-]/g, "");
+
+function maskSensitive(value: unknown, depth: number): unknown {
+  if (depth > MAX_DEPTH) return MASKED;
+  if (Array.isArray(value))
+    return value.map((item) => maskSensitive(item, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      const normalized = normalizeKey(key);
+      const isSensitive =
+        SECRET_KEYS.has(normalized) || REQUISITE_KEY.test(normalized);
+      return [key, isSensitive ? MASKED : maskSensitive(item, depth + 1)];
+    }),
+  );
 }

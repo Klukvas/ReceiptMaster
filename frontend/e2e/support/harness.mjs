@@ -37,6 +37,12 @@ export const installApiMocks = async (page, state) => {
 
     state.requests.push(`${method} ${path}`);
 
+    // A spec's own handlers go first; one that returns true has answered the request.
+    for (const handler of state.handlers ?? []) {
+      const request = { path, method, search: url.search, body: route.request().postData() ?? "" };
+      if (await handler(route, request, json)) return;
+    }
+
     if (path === "/auth/profile") return json(route, USER);
     if (path === "/subscription/status") return json(route, SUBSCRIPTION_STATUS);
     if (path === "/products") return json(route, paginated(PRODUCTS));
@@ -118,4 +124,5 @@ export const createState = (orders = []) => ({
   receipts: {},
   requests: [],
   generateRequests: [],
+  handlers: [],
 });

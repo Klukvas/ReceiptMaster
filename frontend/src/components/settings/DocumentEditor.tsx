@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
 import {
   companyFields,
   contactFields,
@@ -8,9 +6,15 @@ import {
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { CompanyRequisitesCard } from "./CompanyRequisitesCard";
+import { CompanyFieldNote } from "./CompanyFieldNote";
+import { HIGHLIGHT_CLASS, useHighlightedFields } from "../../hooks/useHighlightedFields";
+import { requisiteFieldId } from "../../lib/document-requisites";
+import type { GeneratableType } from "../../lib/document-types";
 import { DocumentFormatting, selectClass } from "./DocumentFormatting";
 import { DocumentPresets } from "./DocumentPresets";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
@@ -18,30 +22,38 @@ import { TemplateCarouselModal } from "./TemplateCarouselModal";
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export type EditorSection = "company" | "receipt" | "language";
+/** Company inputs that double as seller requisites of invoices and acts. */
+const SELLER_FIELD_KEY: Partial<Record<(typeof companyFields)[number], string>> = {
+  companyName: "seller.name",
+  companyTaxId: "seller.taxId",
+  companyIban: "seller.iban",
+};
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
 export function DocumentEditor({
   model,
   section,
   documentOnly = false,
+  documentType,
   onCommit,
   commitLabel,
 }: {
   model: DocumentDraftModel;
   section: EditorSection;
   documentOnly?: boolean;
+  /** The type being customized; designs that cannot carry it are not offered. */
+  documentType?: GeneratableType;
   onCommit?: () => Promise<void>;
   commitLabel?: string;
 }) {
   const { t } = useTranslation();
   const [gallery, setGallery] = useState(false);
-  const templates = useQuery({
-    queryKey: ["document-templates"],
-    queryFn: async () =>
-      (await api.get<{ data: DocumentTemplate[] }>("/settings/templates")).data
-        .data,
-    retry: false,
-  });
+  const templates = useDocumentTemplates();
+  const fitsType = (template: DocumentTemplate) =>
+    !documentType || template.capabilities.documentTypes.includes(documentType);
+  // The preview endpoint renders the waybill layout only, so it would mislead for the other types.
+  const canPreview = !documentType || documentType === "waybill";
+  const highlighted = useHighlightedFields(Boolean(model.config));
   const config = model.config;
   if (!config)
     return (
@@ -91,6 +103,7 @@ export function DocumentEditor({
     </label>
   );
   return (
+    <>
     <form
       onSubmit={(event) => {
         event.preventDefault();
@@ -155,6 +168,12 @@ export function DocumentEditor({
                   {companyFields.map((field) => (
                     <div key={field}>
                       <Input
+                        id={SELLER_FIELD_KEY[field] && requisiteFieldId(SELLER_FIELD_KEY[field])}
+                        className={
+                          SELLER_FIELD_KEY[field] && highlighted.has(SELLER_FIELD_KEY[field])
+                            ? HIGHLIGHT_CLASS
+                            : undefined
+                        }
                         label={t(`settings.${field}`)}
                         value={config.company[field]}
                         type={field === "companyEmail" ? "email" : "text"}
@@ -180,6 +199,7 @@ export function DocumentEditor({
                           })
                         }
                       />
+                      <CompanyFieldNote field={field} value={config.company[field]} />
                       {caps && !caps.companyFields.includes(field) && retained}
                     </div>
                   ))}
@@ -239,7 +259,7 @@ export function DocumentEditor({
                       <option
                         key={value.id}
                         value={value.id}
-                        disabled={value.locked}
+                        disabled={value.locked || !fitsType(value)}
                       >
                         {value.name}
                         {value.locked ? " 🔒" : ""}
@@ -446,6 +466,8 @@ export function DocumentEditor({
           <DocumentPresets model={model} />
         </div>
         <section className="rounded-xl border border-[var(--color-border)] bg-elevated p-4 min-w-0 self-start lg:sticky lg:top-4">
+          {canPreview ? (
+            <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold">{t("document.pdfPreview")}</h3>
             <Button
@@ -486,6 +508,15 @@ export function DocumentEditor({
             <div className="flex h-80 items-center justify-center rounded-lg bg-surface-alt p-6 text-sm text-content-tertiary">
               {t("document.previewHelp")}
             </div>
+          )}
+            </>
+          ) : (
+            <>
+              <h3 className="font-semibold">{t("document.pdfPreview")}</h3>
+              <p role="status" className="my-3 text-sm text-content-tertiary">
+                {t("document.previewUnavailableForType")}
+              </p>
+            </>
           )}
         </section>
       </fieldset>
@@ -532,7 +563,7 @@ export function DocumentEditor({
         isOpen={gallery}
         language={config.documentLanguage}
         onClose={() => setGallery(false)}
-        templates={templates.data?.filter((value) => !value.locked) || []}
+        templates={templates.data?.filter((value) => !value.locked && fitsType(value)) || []}
         initialTemplateId={config.templateId}
         onSelectTemplate={(templateId) => {
           patch({ templateId: templateId as TemplateId });
@@ -540,5 +571,7 @@ export function DocumentEditor({
         }}
       />
     </form>
+    {section === "company" && !documentOnly && <CompanyRequisitesCard />}
+    </>
   );
 }

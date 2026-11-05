@@ -40,4 +40,43 @@ describe("UpdateRecipientDto", () => {
     }
     expect(update.name.nullable).toBeUndefined();
   });
+
+  it("accepts null for the requisites, which clears them", async () => {
+    expect(
+      await errorsFor({
+        legal_name: null,
+        tax_id: null,
+        tax_id_kind: null,
+        iban: null,
+        bank_name: null,
+        legal_address: null,
+      }),
+    ).toEqual([]);
+  });
+
+  it("validates requisite values", async () => {
+    expect(await errorsFor({ tax_id: "123" })).toEqual(["tax_id"]);
+    expect(await errorsFor({ tax_id: "12345678" })).toEqual([]);
+    expect(await errorsFor({ tax_id_kind: "vat" })).toEqual(["tax_id_kind"]);
+    expect(await errorsFor({ iban: "UA00" })).toEqual(["iban"]);
+    expect(await errorsFor({ legal_address: "x".repeat(1001) })).toEqual([
+      "legal_address",
+    ]);
+  });
+
+  it("documents null for the requisites in the update contract only", () => {
+    const update = schemas.UpdateRecipientDto.properties;
+    const create = schemas.CreateRecipientDto.properties;
+    for (const field of [
+      "legal_name",
+      "tax_id",
+      "tax_id_kind",
+      "iban",
+      "bank_name",
+      "legal_address",
+    ]) {
+      expect(update[field].nullable).toBe(true);
+      expect(create[field].nullable).toBeUndefined();
+    }
+  });
 });

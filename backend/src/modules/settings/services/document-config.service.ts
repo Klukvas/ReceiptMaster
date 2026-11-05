@@ -133,9 +133,15 @@ export class DocumentConfigService {
     await this.cache.del(`settings:${userId}`).catch(() => undefined);
     return committed;
   }
+  /**
+   * `passthrough` columns are written in the same transaction and under the same lock, but
+   * stay out of the document configuration: only the company fields `legacyConfig` reads
+   * survive the round trip through it, so anything else would be silently dropped.
+   */
   async patchLegacy(
     userId: string,
     updates: Partial<UserSettings>,
+    passthrough: Partial<UserSettings> = {},
   ): Promise<void> {
     const current = await this.read(userId);
     const legacyAssetId =
@@ -167,6 +173,9 @@ export class DocumentConfigService {
         row.document_config_revision || 0,
         manager,
       );
+      if (Object.keys(passthrough).length > 0) {
+        await manager.update(UserSettings, { id: row.id, userId }, passthrough);
+      }
     });
     await this.cache.del(`settings:${userId}`).catch(() => undefined);
   }

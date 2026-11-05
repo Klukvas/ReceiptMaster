@@ -16,6 +16,10 @@ import {
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
 import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
+import {
+  inferTaxIdKind,
+  TaxIdKind,
+} from "../../common/utils/ua-requisites.util";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -32,7 +36,68 @@ const CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
   "email",
   "phone",
   "address",
+  "legal_name",
+  "tax_id",
+  "tax_id_kind",
+  "iban",
+  "bank_name",
+  "legal_address",
 ]);
+
+type TaxIdPair = { tax_id: string | null; tax_id_kind: TaxIdKind | null };
+
+/** The kind follows the number's length; a kind that disagrees with it is a client error. */
+function resolveTaxId(input: {
+  tax_id?: string | null;
+  tax_id_kind?: TaxIdKind | null;
+}): Partial<TaxIdPair> {
+  const { tax_id: taxId, tax_id_kind: kind } = input;
+  if (taxId === undefined || taxId === null) {
+    if (kind) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "tax_id_kind",
+        "tax_id_kind requires tax_id",
+      );
+    }
+    return {};
+  }
+  const inferred = inferTaxIdKind(taxId);
+  if (kind && kind !== inferred) {
+    throw ApiErrors.VALIDATION_ERROR(
+      "tax_id_kind",
+      `tax_id_kind ${kind} does not match the length of tax_id`,
+    );
+  }
+  return { tax_id: taxId, tax_id_kind: inferred };
+}
+
+/** PATCH semantics: tax_id and its kind always move together, and null clears both. */
+function resolveTaxIdChange(
+  input: UpdateRecipientDto,
+  current: Pick<Recipient, "tax_id">,
+): Partial<TaxIdPair> {
+  if (input.tax_id === null) {
+    if (input.tax_id_kind) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "tax_id_kind",
+        "tax_id_kind requires tax_id",
+      );
+    }
+    return { tax_id: null, tax_id_kind: null };
+  }
+  if (input.tax_id !== undefined) return resolveTaxId(input);
+  if (input.tax_id_kind === undefined) return {};
+  if (input.tax_id_kind === null || !current.tax_id) {
+    throw ApiErrors.VALIDATION_ERROR(
+      "tax_id_kind",
+      "tax_id_kind cannot be set or cleared without tax_id",
+    );
+  }
+  return resolveTaxId({
+    tax_id: current.tax_id,
+    tax_id_kind: input.tax_id_kind,
+  });
+}
 
 @Injectable()
 export class RecipientsService {
@@ -48,6 +113,7 @@ export class RecipientsService {
     await this.assertEmailAvailable(createRecipientDto.email, user);
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
+      ...resolveTaxId(createRecipientDto),
       user_id: user.id,
     });
     return this.recipientsRepository.save(recipient);
@@ -88,6 +154,7 @@ export class RecipientsService {
           manager.save(
             manager.create(Recipient, {
               ...createRecipientDto,
+              ...resolveTaxId(createRecipientDto),
               user_id: user.id,
             }),
           ),
@@ -171,7 +238,11 @@ export class RecipientsService {
     assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
     await this.assertEmailAvailable(updateRecipientDto.email, user, id);
-    Object.assign(recipient, updateRecipientDto);
+    Object.assign(
+      recipient,
+      updateRecipientDto,
+      resolveTaxIdChange(updateRecipientDto, recipient),
+    );
     return this.recipientsRepository.save(recipient);
   }
 

@@ -1,9 +1,13 @@
 import { ConflictException, Injectable } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, EntityManager } from "typeorm";
-import { Receipt } from "../entities/receipt.entity";
-import { Order, OrderStatus } from "../../orders/entities/order.entity";
-import { ConfigSelection } from "../../settings/document-config";
+import { DocumentType, Receipt } from "../entities/receipt.entity";
+import { Order } from "../../orders/entities/order.entity";
+import { UserSettings } from "../../settings/entities/user-settings.entity";
+import {
+  ConfigSelection,
+  DocumentConfig,
+} from "../../settings/document-config";
 import { DocumentConfigService } from "../../settings/services/document-config.service";
 import { DocumentAssetsService } from "../../settings/services/document-assets.service";
 import {
@@ -13,7 +17,22 @@ import {
   RenderSnapshot,
 } from "./document-render.service";
 import { ApiErrors } from "../../../common/errors/ApiError";
+import { amountInWords } from "../../../common/utils/amount-in-words.util";
+import { formatDocumentMoney } from "../../../common/utils/document-formatting.util";
 import { legacyPdfOptions } from "./legacy-pdf-options";
+import { specFor } from "../document-types";
+import {
+  buildBuyer,
+  buildSeller,
+  buyerFingerprint,
+  evaluateRequisites,
+} from "../document-requisites";
+import {
+  buildFrozenDocument,
+  DocumentContext,
+  DocumentRequest,
+} from "../frozen-document";
+import { assertTemplateSupportsDocument } from "../document-template-support";
 import { createHash, randomUUID } from "crypto";
 
 export const PRIVATE_RECEIPT_COLUMNS = [
@@ -56,21 +75,73 @@ export class ReceiptSnapshotService {
     if (!row) throw ApiErrors.RECEIPT_NOT_FOUND(id);
     return row;
   }
-  async prepare(
-    userId: string,
-    orderId: string,
-    number: string,
-    selection: ConfigSelection,
-    file?: Express.Multer.File,
-    frozenOrder?: RenderSnapshot["order"],
-  ) {
+  /** Only a type whose spec admits the order's status can be issued for it. */
+  private assertOrderStatus(order: Order, type: DocumentType): void {
+    if (!specFor(type).allowedOrderStatuses.includes(order.status))
+      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(order.id);
+  }
+  private async loadOrder(userId: string, orderId: string): Promise<Order> {
     const order = await this.db.manager.findOne(Order, {
       where: { id: orderId, user_id: userId },
       relations: ["recipient", "items"],
     });
     if (!order) throw ApiErrors.ORDER_NOT_FOUND(orderId);
-    if (order.status !== OrderStatus.CONFIRMED)
-      throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
+    return order;
+  }
+  private async documentContext(
+    userId: string,
+    order: Order,
+    request: DocumentRequest,
+    config: DocumentConfig,
+    manager: EntityManager = this.db.manager,
+  ): Promise<DocumentContext> {
+    const columns = await manager.findOne(UserSettings, { where: { userId } });
+    return {
+      request,
+      seller: buildSeller(config.company, columns ?? {}),
+      buyer: request.carryOver?.buyer ?? buildBuyer(order.recipient),
+      defaultPaymentTermDays: columns?.defaultPaymentTermDays ?? null,
+    };
+  }
+  /**
+   * Every refusal that does not depend on the number (status, template, requisites, dates)
+   * without staging anything, so a refused request never burns a document number.
+   */
+  async preflight(
+    userId: string,
+    orderId: string,
+    selection: ConfigSelection,
+    request: DocumentRequest,
+  ): Promise<void> {
+    const order = await this.loadOrder(userId, orderId);
+    this.assertOrderStatus(order, request.type);
+    const { config } = await this.configs.resolve(userId, selection);
+    assertTemplateSupportsDocument(request.type, config.templateId);
+    await this.configs.assertTemplate(userId, config.templateId);
+    buildFrozenDocument(
+      await this.documentContext(userId, order, request, config),
+      config,
+      new Date(),
+    );
+    // The amount in words is drawn at render time; a bad currency or total must be refused now.
+    try {
+      amountInWords(order.total_cents, order.currency, config.documentLanguage);
+      formatDocumentMoney(order.total_cents, order.currency, config.formatting);
+    } catch {
+      throw ApiErrors.DOCUMENT_AMOUNT_INVALID(orderId);
+    }
+  }
+  async prepare(
+    userId: string,
+    orderId: string,
+    number: string | (() => Promise<string>),
+    selection: ConfigSelection,
+    file?: Express.Multer.File,
+    frozenOrder?: RenderSnapshot["order"],
+    request?: DocumentRequest,
+  ) {
+    const order = await this.loadOrder(userId, orderId);
+    this.assertOrderStatus(order, request?.type ?? DocumentType.WAYBILL);
     const resolved = await this.configs.resolve(userId, selection);
     const assetId = await this.assets.stage(
       userId,
@@ -95,21 +166,33 @@ export class ReceiptSnapshotService {
       logo: { ...resolved.config.logo, assetId },
     };
     const logo = assetId ? await this.assets.read(userId, assetId) : undefined;
+    const context = request
+      ? await this.documentContext(userId, order, request, config)
+      : undefined;
+    // A lazy number is drawn only now, after everything that can fail for lack of a file.
+    const resolvedNumber = typeof number === "string" ? number : await number();
     const prepared = await this.renders.prepare(
       userId,
       config,
       frozenOrder || captureOrder(order),
-      number,
+      resolvedNumber,
       logo,
+      context,
     );
     return {
       ...prepared,
+      number: resolvedNumber,
       snapshot: {
         ...prepared.snapshot,
         sourceRevision: resolved.revision,
         sourcePreset: resolved.preset,
       },
       fingerprint: orderFingerprint(order),
+      // Set only when the buyer is read live; a frozen buyer is not compared to the recipient.
+      liveBuyerFingerprint:
+        request && !request.carryOver?.buyer
+          ? buyerFingerprint(buildBuyer(order.recipient))
+          : null,
     };
   }
   async validatePrepared(
@@ -136,9 +219,18 @@ export class ReceiptSnapshotService {
     if (
       !full ||
       orderFingerprint(full) !== prepared.fingerprint ||
-      full.status !== OrderStatus.CONFIRMED
+      !specFor(
+        prepared.snapshot.document?.type ?? DocumentType.WAYBILL,
+      ).allowedOrderStatuses.includes(full.status)
     )
       throw new ConflictException("Order changed. Refresh and generate again.");
+    if (
+      prepared.liveBuyerFingerprint !== null &&
+      buyerFingerprint(buildBuyer(full.recipient)) !==
+        prepared.liveBuyerFingerprint
+    )
+      throw new ConflictException("Order changed. Refresh and generate again.");
+    await this.recheckRequisites(userId, prepared.snapshot, manager);
     if (
       (await this.configs.read(userId, manager)).revision !==
       prepared.snapshot.sourceRevision
@@ -168,6 +260,32 @@ export class ReceiptSnapshotService {
       manager,
     );
     return full;
+  }
+  /**
+   * Second requisites check, inside the transaction and under the settings lock: the
+   * snapshot was built outside it. Seller columns are compared by value, not by revision.
+   */
+  private async recheckRequisites(
+    userId: string,
+    snapshot: RenderSnapshot,
+    manager: EntityManager,
+  ): Promise<void> {
+    const document = snapshot.document;
+    if (!document) return;
+    const columns = await manager.findOne(UserSettings, { where: { userId } });
+    const seller = buildSeller(snapshot.config.company, columns ?? {});
+    const { missing, warnings } = evaluateRequisites(
+      document.type,
+      seller,
+      document.buyer,
+      document.details,
+    );
+    if (missing.length > 0)
+      throw ApiErrors.DOCUMENT_REQUISITES_MISSING(
+        document.type,
+        missing,
+        warnings,
+      );
   }
   candidate(
     prepared: { html: string; snapshot: RenderSnapshot },

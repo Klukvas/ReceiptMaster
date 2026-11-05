@@ -90,4 +90,28 @@ export class CompanyInfoResponseDto {
 
   @ApiProperty()
   companyTagline: string;
+
+  @ApiProperty({ enum: ["edrpou", "rnokpp"], nullable: true })
+  companyTaxIdKind: "edrpou" | "rnokpp" | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  companyLegalForm: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  companyBankName: string | null;
+
+  @ApiProperty({ type: Boolean, nullable: true })
+  companyVatPayer: boolean | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  companyVatId: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  companySignatoryName: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  companySignatoryPosition: string | null;
+
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 365 })
+  defaultPaymentTermDays: number | null;
 }

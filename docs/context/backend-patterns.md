@@ -283,7 +283,7 @@ stays with the writers (`OrdersService` above, and `TelegramService` for bot-cre
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write (read side in `OrdersDashboardService`, invalidation in the writing service)
-- Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it
+- Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it (an optional 4th constructor argument `details` is spread into the body, e.g. `DOCUMENT_REQUISITES_MISSING` adds `fields`/`warnings`)
 - Never `save()` a whole entity loaded without a lock: write only the changed columns with a
   conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
   precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
@@ -624,7 +624,7 @@ export class AuditLogInterceptor implements NestInterceptor {
 
 **Behavior:**
 - Logs all mutations (POST/PUT/PATCH/DELETE) to the `audit_log` table
-- Sanitizes sensitive fields (password, refresh_token, etc.)
+- Sanitizes the body recursively: passwords/tokens and counterparty/bank requisites (any key containing `iban`, `taxId`, `legalName`, `legalAddress`, `bankName`, `vatId`, `signatory`, `contractRef`, `companyAddress`, snake or camel case) are stored as `***`, so `audit_logs` shows that a field changed but not its value
 - Runs after the handler returns (in `tap()`), so it has the response data
 
 ### Filters (Global Exception Handler)
@@ -639,7 +639,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof ApiErrorResponse) {
       // Our custom errors
-      return response.status(exception.statusCode).json(exception.toJSON());
+      return response.status(exception.statusCode).json(exception.toJSON()); // includes details
     }
 
     if (exception instanceof HttpException) {
@@ -725,6 +725,27 @@ the shared Handlebars `printLayout` partial from `templates/print-layout.ts` for
 containment, logo bounds and print fragmentation. Preview fixtures use the same data
 preparation and dictionaries as production.
 
+**Typed documents:** `ReceiptsService.generateDocument(orderId, user, type, selection, details?, file?)`
+is the single pipeline (waybill = `generateReceipt`). Per-type rules are data in
+`receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`, kept consistent with `order-lock.ts` by a test).
+Everything that can refuse a request without a number (`ReceiptSnapshotService.preflight`: order status
+from the spec, template support, requisites, dates) runs before `nextDocumentNumber`, which sits outside the
+transaction. `RenderSnapshot.document` (invoice/act only) carries the frozen requisites; the four styles in
+`layout.allowedStyles` (standard, classic, minimal, corporate) carry five Handlebars slots, registered from
+`templates/document-blocks.ts` (`DOCUMENT_PARTIALS`): `documentStyles` (`doc-*` CSS, after `printLayout`),
+`documentParties` + `documentPayment` (where the style's recipient/company block was, which is wrapped in
+`{{#unless document}}`), `documentTotals` (replaces the style's totals via `{{#if document}}…{{else}}…{{/if}}`) and
+`documentClosing` (due date / act statement and signatures, before the footer). Templates read only ready flags
+(`document.payment`, `document.act`, `document.signatures.buyer`), never the document type; each block tag sits on
+its own line so Handlebars drops it and a waybill's HTML stays byte-identical (guarded by
+`services/waybill-html-golden.spec.ts`; change that digest list only when a waybill's output is meant to change).
+The other 11 styles carry no slot. Wording lives in `templates/translations/document-labels.ts`
+(`DOCUMENT_LABELS`, `STYLE_LABEL_OVERRIDES` for receipt-only labels, `TAX_ID_LABELS`); the render service blanks
+`companyTaxId/Iban/Swift` in the style header for typed documents because the blocks print them.
+`services/document-layout.spec.ts` holds the sha256 goldens for type x style x language. The heading comes from `TemplateData.documentTitle`, which
+wins over every title rule in `renderTemplate()`. Lock order is unchanged (tenant advisory → settings row →
+order → recipient FOR SHARE → receipts); the buyer is compared by `buyerFingerprint` in `validatePrepared`.
+
 `PlaywrightPdfGenerator` waits for `document.fonts.ready` before PDF capture. Thermal
 metadata requests `contentBasedHeight`: the generator lays out at the printable roll
 width and measures body height plus page margins. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
@@ -752,6 +773,8 @@ export interface ReceiptGenerationJobData {
 `receipts.document_type` (enum `receipts_document_type_enum`, default `waybill`, migration `AddReceiptDocumentType1792800000000`) replaced the unique `order_id` with the partial unique index `(order_id, document_type) WHERE document_type <> 'return_note'`. Any code that looks a receipt up by `order_id` must also say which type; `voidForCancellation` and file cleanup intentionally act on all types of an order. `orders.service` loads `order.receipts` (all types), so consumers that take `receipts[0]` must filter by `waybill` once other types exist.
 
 `document_counters(user_id, document_type, value)` (entity `DocumentCounter`, migration `DocumentCounters1792900000000`) holds the per-account, per-type number counter. It has FORCE RLS with the usual `tenant_isolation` policy, so `nextDocumentNumber` must run with the tenant context set (it does: generation is behind the tenant interceptor). The migration backfilled before enabling RLS because `rm_owner` has no `BYPASSRLS`; `down()` refuses while non-waybill documents exist and runs `NO FORCE` before reading the table back into `users.receipt_counter`. `db/roles/04-verify.sql` lists the table among the RLS/FORCE tables.
+
+Counterparty requisites (migration `AddCounterpartyRequisites1793000000000`) add nullable, default-free columns with CHECKs to `user_settings` (seller) and `recipients` (buyer); `down()` drops the constraints and columns. Add the migration name to both `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` in `scripts/deploy-production.sh`. Validators are pure functions in `common/utils/ua-requisites.util.ts` (`normalizeIban`, `isValidUaIban`, `inferTaxIdKind`, ...) shared by the class-validator decorators in `common/dto/ua-requisites.ts` (`@NormalizedIban`, `@IsUaIban`, `@IsUaTaxId`) and the Zod `settingsInput.company` schema.
 
 Snapshot/HTML/pending-asset entity columns use `select: false`; internal services explicitly select them. Receipt controllers return an allowlist, and nested order receipts cannot load the large private columns by default. Public metadata explicitly selects and projects frozen visible values; it never queries live settings for new documents.
 
@@ -1215,7 +1238,7 @@ instead. Run the file locally before pushing a gate change; it needs `python3`, 
 
 ## Settings writes and logo images
 
-Settings use a partial TypeORM `upsert` on the existing unique `userId`: only supplied columns participate in `ON CONFLICT DO UPDATE`, so independent field saves cannot replay stale whole-row snapshots. All settings request bodies use Zod schemas in `settings/dto/settings-input.ts` and map validation issues to the existing API error envelope. Combined footer updates validate both fields before one upsert. Regression tests exercise detached in-memory snapshots, actual generated PostgreSQL SQL without a connection, and the real Nest HTTP controller against synthetic repositories.
+Settings use a partial TypeORM `upsert` on the existing unique `userId`: only supplied columns participate in `ON CONFLICT DO UPDATE`, so independent field saves cannot replay stale whole-row snapshots. All settings request bodies use Zod schemas in `settings/dto/settings-input.ts` and map validation issues to the existing API error envelope. Combined footer updates validate both fields before one upsert. Seller requisites (`REQUISITE_KEYS` in `SettingsService`) are not document fields: `updateCompanyInfo` splits them off, and `DocumentConfigService.patchLegacy(userId, updates, passthrough)` writes them in the same transaction and lock after the config commit. They must never go through `updates`, because `legacyConfig` reads only the company fields it knows and `document_config` is parsed strictly; a requisite-only save is a plain upsert. Regression tests exercise detached in-memory snapshots, actual generated PostgreSQL SQL without a connection, and the real Nest HTTP controller against synthetic repositories.
 
 LogoStorageService accepts validated PNG/JPEG/GIF/static SVG buffers and normalizes them through the backend runtime `sharp` dependency. Both uploads and legacy reads return real PNG bytes at the historical fixed key; reads do not mutate storage. SVG is decoded from memory without a base file, rejects active/external content, and is never served raw. Pixel/dimension/byte limits and a decoder timeout reduce abuse; they are not a hard process memory/CPU sandbox for native SVG metadata parsing.
 

@@ -30,6 +30,43 @@ export async function nextDocumentNumber(
   return `${year}-${String(rows[0].value).padStart(6, "0")}`;
 }
 
+/**
+ * Gives back a number that never reached a committed document, so a refused or failed
+ * generation does not leave a gap in the sequence. Only possible while the counter still
+ * stands at that number: if another generation took the next one in the meantime, the gap
+ * stays (renumbering later documents would be worse).
+ */
+export async function releaseDocumentNumber(
+  manager: EntityManager,
+  userId: string,
+  type: DocumentType,
+  number: string,
+): Promise<boolean> {
+  const value = Number(/^\d{4}-(\d+)$/.exec(number)?.[1]);
+  if (!Number.isSafeInteger(value) || value < 1) return false;
+  const rows: unknown[] = await manager.query(
+    type === DocumentType.WAYBILL ? RELEASE_WAYBILL_COUNTER : RELEASE_COUNTER,
+    [userId, type, value],
+  );
+  return rows.length > 0;
+}
+
+const RELEASE_COUNTER = `
+  UPDATE "document_counters" SET "value" = "value" - 1
+  WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
+  RETURNING "value"`;
+
+const RELEASE_WAYBILL_COUNTER = `
+  WITH released AS (
+    UPDATE "document_counters" SET "value" = "value" - 1
+    WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
+    RETURNING "value"
+  ), legacy AS (
+    UPDATE "users" SET "receipt_counter" = "receipt_counter" - 1
+    WHERE "id" = $1 AND "receipt_counter" = $3 AND EXISTS (SELECT 1 FROM released)
+  )
+  SELECT "value" FROM released`;
+
 const BUMP_COUNTER = `
   INSERT INTO "document_counters" ("user_id", "document_type", "value")
   VALUES ($1, $2, 1)

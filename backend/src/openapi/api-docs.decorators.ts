@@ -24,6 +24,7 @@ export type SharedSchemaName =
   | "DocumentPresetUpdateRequest"
   | "DocumentRevisionRequest"
   | "DocumentSelectionRequest"
+  | "DocumentGenerationRequest"
   | "ReceiptRegenerationRequest"
   | "DocumentPreviewRequest"
   | "DocumentConfigVersion"

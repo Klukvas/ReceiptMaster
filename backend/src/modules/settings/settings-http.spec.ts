@@ -35,6 +35,16 @@ describe("settings real Nest HTTP / storage contract (isolated memory)", () => {
     companyWebsite: "example.com",
     companyTagline: "Tagline",
   };
+  const emptyRequisites = {
+    companyTaxIdKind: null,
+    companyLegalForm: null,
+    companyBankName: null,
+    companyVatPayer: null,
+    companyVatId: null,
+    companySignatoryName: null,
+    companySignatoryPosition: null,
+    defaultPaymentTermDays: null,
+  };
   beforeEach(async () => {
     row = { userId: "fixture", templateLanguage: "ru", ...company };
     object = undefined;
@@ -150,7 +160,7 @@ describe("settings real Nest HTTP / storage contract (isolated memory)", () => {
           .get("/settings/company-info")
           .expect(200)
       ).body,
-    ).toEqual({ data: company });
+    ).toEqual({ data: { ...company, ...emptyRequisites } });
     await request(app.getHttpServer())
       .post("/settings/company-info")
       .send({ companyName: "New LLC" })
@@ -158,7 +168,65 @@ describe("settings real Nest HTTP / storage contract (isolated memory)", () => {
     expect(
       (await request(app.getHttpServer()).get("/settings/company-info")).body
         .data,
-    ).toEqual({ ...company, companyName: "New LLC" });
+    ).toEqual({ ...company, ...emptyRequisites, companyName: "New LLC" });
+  });
+  it("saves and clears requisites without touching the legacy company fields", async () => {
+    await request(app.getHttpServer())
+      .post("/settings/company-info")
+      .send({
+        companyTaxIdKind: "edrpou",
+        companyTaxId: "12345678",
+        companyVatPayer: true,
+        companyVatId: "123456789012",
+        defaultPaymentTermDays: 30,
+        companyLegalForm: "  ТОВ ",
+      })
+      .expect(201);
+    const saved = (
+      await request(app.getHttpServer()).get("/settings/company-info")
+    ).body.data;
+    expect(saved).toMatchObject({
+      ...company,
+      companyTaxId: "12345678",
+      companyTaxIdKind: "edrpou",
+      companyVatPayer: true,
+      companyVatId: "123456789012",
+      defaultPaymentTermDays: 30,
+      companyLegalForm: "ТОВ",
+    });
+    await request(app.getHttpServer())
+      .post("/settings/company-info")
+      .send({ companyVatId: null, companyLegalForm: "" })
+      .expect(201);
+    const cleared = (
+      await request(app.getHttpServer()).get("/settings/company-info")
+    ).body.data;
+    expect(cleared.companyVatId).toBeNull();
+    expect(cleared.companyLegalForm).toBeNull();
+    expect(cleared.companyVatPayer).toBe(true);
+  });
+  it.each([
+    { companyVatId: "12345" },
+    { defaultPaymentTermDays: 0 },
+    { defaultPaymentTermDays: 366 },
+    { defaultPaymentTermDays: 1.5 },
+    { companyTaxIdKind: "other" },
+    { companyTaxIdKind: "edrpou", companyTaxId: "1234567890" },
+    { companyTaxIdKind: "rnokpp", companyTaxId: "12345678" },
+    { companySignatoryName: "x".repeat(256) },
+  ])("rejects invalid requisites %j", async (body) => {
+    const before = { ...row };
+    await request(app.getHttpServer())
+      .post("/settings/company-info")
+      .send(body)
+      .expect(400);
+    expect(row).toEqual(before);
+  });
+  it("does not enforce the kind against the historical free-text tax id when only one is sent", async () => {
+    await request(app.getHttpServer())
+      .post("/settings/company-info")
+      .send({ companyTaxIdKind: "edrpou" })
+      .expect(201);
   });
   it.each([
     ["template", { templateId: "unknown" }],

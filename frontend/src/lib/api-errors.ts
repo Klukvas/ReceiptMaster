@@ -25,6 +25,12 @@ export const ErrorCode = {
   RECEIPT_ALREADY_EXISTS: "RECEIPT_ALREADY_EXISTS",
   RECEIPT_GENERATION_FAILED: "RECEIPT_GENERATION_FAILED",
   RECEIPT_PRINT_FAILED: "RECEIPT_PRINT_FAILED",
+  DOCUMENT_REQUISITES_MISSING: "DOCUMENT_REQUISITES_MISSING",
+  DOCUMENT_ALREADY_EXISTS: "DOCUMENT_ALREADY_EXISTS",
+  DOCUMENT_TEMPLATE_UNSUPPORTED: "DOCUMENT_TEMPLATE_UNSUPPORTED",
+  DOCUMENT_TYPE_NOT_SUPPORTED: "DOCUMENT_TYPE_NOT_SUPPORTED",
+  DOCUMENT_AMOUNT_INVALID: "DOCUMENT_AMOUNT_INVALID",
+  RECONSTRUCTION_REQUIRED: "RECONSTRUCTION_REQUIRED",
 
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
@@ -80,6 +86,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECEIPT_ALREADY_EXISTS]: "Receipt for this order already exists",
   [ErrorCode.RECEIPT_GENERATION_FAILED]: "Failed to generate receipt",
   [ErrorCode.RECEIPT_PRINT_FAILED]: "Failed to print receipt",
+  [ErrorCode.DOCUMENT_REQUISITES_MISSING]:
+    "Some requisites required for this document are missing",
+  [ErrorCode.DOCUMENT_ALREADY_EXISTS]:
+    "A document of this type already exists for this order",
+  [ErrorCode.DOCUMENT_TEMPLATE_UNSUPPORTED]:
+    "This design cannot be used for this document type",
+  [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
 
   // Product errors
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
@@ -245,4 +258,45 @@ export function getErrorMessage(errorCode: string, fallback?: string): string {
 export function isErrorCode(error: unknown, code: ErrorCode): boolean {
   const parsed = parseApiError(error);
   return parsed.code === code;
+}
+
+export type RequisitesError = {
+  /** Requisite keys that must be filled in, e.g. `seller.iban`. */
+  fields: string[];
+  /** Soft requisites the document goes ahead without. */
+  warnings: string[];
+};
+
+const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/** The missing-requisites 422 of document creation, or null for any other error. */
+export function parseRequisitesError(error: unknown): RequisitesError | null {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  if (typeof body !== "object" || body === null) return null;
+  const { errorCode, fields, warnings } = body as Record<string, unknown>;
+  if (errorCode !== ErrorCode.DOCUMENT_REQUISITES_MISSING) return null;
+  return {
+    fields: isStringList(fields) ? fields : [],
+    warnings: isStringList(warnings) ? warnings : [],
+  };
+}
+
+/**
+ * The field a "Validation error for X: …" response blames, as the full dotted
+ * path (e.g. `details.contractRef`), or null when the error is not of that shape.
+ */
+export function validationField(error: unknown): string | null {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  if (typeof body !== "object" || body === null) return null;
+  const message = (body as { error?: unknown }).error;
+  const parts = Array.isArray(message) ? message : [message];
+  for (const part of parts) {
+    if (typeof part !== "string") continue;
+    const match = /^Validation error for ([\w.[\]]+): /.exec(part);
+    if (match) return match[1];
+  }
+  return null;
 }

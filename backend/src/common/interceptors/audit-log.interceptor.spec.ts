@@ -216,4 +216,38 @@ describe("AuditLogInterceptor", () => {
       },
     });
   });
+
+  it("masks requisites at any depth but keeps their field names", (done) => {
+    const context = createMockContext(
+      "PUT",
+      "SettingsController",
+      "update",
+      { id: "u1" },
+      {},
+      {
+        password: "secret",
+        iban: "UA213223130000026007233566001",
+        tax_id: "12345678",
+        legal_address: "Kyiv",
+        details: { contractRef: "No 5" },
+        config: { company: { companyVatId: "123", companyName: "Acme" } },
+        recipients: [{ legalName: "LLC", name: "Bob" }],
+      },
+    );
+
+    interceptor.intercept(context, createMockNext()).subscribe({
+      complete: () => {
+        expect(auditLogService.log.mock.calls[0][0].newValues).toEqual({
+          password: "***",
+          iban: "***",
+          tax_id: "***",
+          legal_address: "***",
+          details: { contractRef: "***" },
+          config: { company: { companyVatId: "***", companyName: "Acme" } },
+          recipients: [{ legalName: "***", name: "Bob" }],
+        });
+        done();
+      },
+    });
+  });
 });

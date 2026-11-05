@@ -86,7 +86,7 @@ export const OrdersPage = () => {
  setShowForm,
  editingOrder,
  setEditingOrder,
- selectedOrder,
+ selectedOrder: viewedOrder,
  setSelectedOrder,
  confirmAction,
  handleConfirmAction,
@@ -240,6 +240,13 @@ export const OrdersPage = () => {
  extraParams,
  storageKeyPrefix:"orders",
  });
+
+ // The details show the order as the list last loaded it, so a document created
+ // from there appears without reopening; the clicked snapshot only covers an order
+ // that left the loaded page (filter, paging).
+ const selectedOrder = viewedOrder
+ ? (pagination.items.find((order) => order.id === viewedOrder.id) ?? viewedOrder)
+ : null;
 
  // Keep the "generating" chips honest even when no socket event lands
  useReceiptGenerationPolling(pagination.items);

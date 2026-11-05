@@ -235,6 +235,9 @@
             }
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
     </style>
 </head>
 <body>
@@ -266,6 +269,7 @@
                 <span class="info-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
                 <span class="info-value">{{orderDate}}</span>
             </div>
+            {{#unless document}}
             <div class="info-row">
                 <span class="info-label">{{#if translations.recipient}}{{translations.recipient}}{{else}}Recipient:{{/if}}</span>
                 <span class="info-value">{{recipientName}}</span>
@@ -288,9 +292,14 @@
                 <span class="info-value">{{recipientAddress}}</span>
             </div>
             {{/if}}
+            {{/unless}}
         </div>
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead>
                 <tr>
@@ -313,6 +322,9 @@
         </table>
         
         <!-- Totals -->
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="totals-section">
             <div class="subtotal-row">
                 <span class="subtotal-label">{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
@@ -323,7 +335,11 @@
                 <span class="total-value">{{total}}</span>
             </div>
         </div>
+        {{/if}}
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
         <!-- Footer -->
         <div class="footer">
             {{#if footerTitle}}

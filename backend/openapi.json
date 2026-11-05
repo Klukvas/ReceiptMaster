@@ -2131,6 +2131,138 @@
         ]
       }
     },
+    "/receipts/orders/{orderId}/documents": {
+      "post": {
+        "operationId": "ReceiptsController_createDocument",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentGenerationRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentGenerationRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Generate a document of the given type (waybill, invoice or act) for an order",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Document generation started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order not CONFIRMED (ORDER_CANNOT_BE_MODIFIED), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A document of this type already exists (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill), or the order/defaults changed while preparing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/receipts": {
       "get": {
         "operationId": "ReceiptsController_findAll",
@@ -2151,6 +2283,24 @@
             "in": "query",
             "description": "Limit (max 100)",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Only documents of this type (default: all types)",
+            "schema": {
+              "enum": [
+                "waybill",
+                "invoice",
+                "quote",
+                "act",
+                "sales_receipt",
+                "packing_list",
+                "return_note"
+              ],
               "type": "string"
             }
           }
@@ -4828,6 +4978,40 @@
             "type": "string",
             "description": "Адрес получателя",
             "example": "г. Москва, ул. Тверская, д. 1"
+          },
+          "legal_name": {
+            "type": "string",
+            "description": "Юридическое название (для документов)",
+            "example": "ТОВ \"Ромашка\"",
+            "maxLength": 255
+          },
+          "tax_id": {
+            "type": "string",
+            "description": "ЄДРПОУ (8 цифр) или РНОКПП (10 цифр); вид определяется по длине",
+            "example": "12345678"
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "description": "Вид налогового номера; должен совпадать с длиной tax_id",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ]
+          },
+          "iban": {
+            "type": "string",
+            "description": "IBAN украинского счёта; пробелы и регистр нормализуются, хранится компактно",
+            "example": "UA213223130000026007233566001"
+          },
+          "bank_name": {
+            "type": "string",
+            "description": "Название банка",
+            "maxLength": 200
+          },
+          "legal_address": {
+            "type": "string",
+            "description": "Юридический адрес",
+            "maxLength": 1000
           }
         },
         "required": [
@@ -4863,6 +5047,34 @@
           },
           "last_name": {
             "type": "string"
+          },
+          "legal_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tax_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ]
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "bank_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "legal_address": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "format": "date-time",
@@ -4930,6 +5142,46 @@
             "type": "string",
             "description": "Адрес получателя; null очищает",
             "example": "г. Москва, ул. Тверская, д. 1",
+            "nullable": true
+          },
+          "legal_name": {
+            "type": "string",
+            "description": "Юридическое название; null очищает",
+            "example": "ТОВ \"Ромашка\"",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "tax_id": {
+            "type": "string",
+            "description": "ЄДРПОУ (8) или РНОКПП (10); вид пересчитывается; null очищает и вид",
+            "example": "12345678",
+            "nullable": true
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "description": "Вид налогового номера; сам по себе очистить нельзя",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ],
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "description": "IBAN (UA...); null очищает",
+            "example": "UA213223130000026007233566001",
+            "nullable": true
+          },
+          "bank_name": {
+            "type": "string",
+            "description": "Название банка; null очищает",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "legal_address": {
+            "type": "string",
+            "description": "Юридический адрес; null очищает",
+            "maxLength": 1000,
             "nullable": true
           }
         }
@@ -5687,6 +5939,44 @@
           },
           "companyTagline": {
             "type": "string"
+          },
+          "companyTaxIdKind": {
+            "type": "string",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ],
+            "nullable": true
+          },
+          "companyLegalForm": {
+            "type": "string",
+            "nullable": true
+          },
+          "companyBankName": {
+            "type": "string",
+            "nullable": true
+          },
+          "companyVatPayer": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "companyVatId": {
+            "type": "string",
+            "nullable": true
+          },
+          "companySignatoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "companySignatoryPosition": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultPaymentTermDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 365
           }
         },
         "required": [
@@ -5698,7 +5988,15 @@
           "companyIban",
           "companySwift",
           "companyWebsite",
-          "companyTagline"
+          "companyTagline",
+          "companyTaxIdKind",
+          "companyLegalForm",
+          "companyBankName",
+          "companyVatPayer",
+          "companyVatId",
+          "companySignatoryName",
+          "companySignatoryPosition",
+          "defaultPaymentTermDays"
         ]
       },
       "RegisterDto": {
@@ -5924,6 +6222,18 @@
           },
           "errorCode": {
             "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -6730,6 +7040,170 @@
           }
         },
         "additionalProperties": false
+      },
+      "DocumentGenerationRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "waybill"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invoice"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "dueDate": {
+                    "type": "string"
+                  },
+                  "paymentTermDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "act"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "contractRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "period": {
+                    "type": "object",
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
       "ReceiptRegenerationRequest": {
         "type": "object",

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
@@ -15,6 +16,8 @@ interface ConfirmModalProps {
   dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
   isLoading?: boolean;
+  /** Extra content under the message, e.g. a field the confirmation collects. */
+  children?: ReactNode;
 }
 
 export const ConfirmModal = ({
@@ -28,6 +31,7 @@ export const ConfirmModal = ({
   dismissLabel,
   variant = "danger",
   isLoading = false,
+  children,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
 
@@ -56,6 +60,7 @@ export const ConfirmModal = ({
               {itemName}
             </p>
           )}
+          {children}
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6">

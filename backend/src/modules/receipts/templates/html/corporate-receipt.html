@@ -336,6 +336,9 @@
             }
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
         .items-table th:nth-child(1) { width: 8%; }
         .items-table th:nth-child(2) { width: 42%; }
         .items-table th:nth-child(3) { width: 10%; }
@@ -385,6 +388,7 @@
         
         <!-- Client Details -->
         <div class="client-details">
+            {{#unless document}}
             <div class="client-info">
                 <div class="client-label">{{translations.billToLabel}}</div>
                 <div class="client-data">
@@ -394,6 +398,7 @@
                     {{#if recipientEmail}}{{recipientEmail}}{{/if}}
                 </div>
             </div>
+            {{/unless}}
             <div class="invoice-info">
                 <div class="invoice-row">
                     <span class="invoice-label">{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No :{{/if}}</span>
@@ -407,6 +412,10 @@
         </div>
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead class="items-header">
                 <tr>
@@ -427,14 +436,19 @@
                     <td>{{lineTotal}}</td>
                 </tr>
                 {{/each}}
+                {{#unless document}}
                 <tr class="subtotal-row">
                     <td colspan="4">{{#if translations.subTotal}}{{translations.subTotal}}{{else}}Sub Total:{{/if}}</td>
                     <td>{{subtotal}}</td>
                 </tr>
+                {{/unless}}
             </tbody>
         </table>
         
         <!-- Tax and Total Section -->
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="tax-total-section">
             <div class="tax-info">
                 {{#if companyTaxId}}
@@ -452,8 +466,13 @@
                 </div>
             </div>
         </div>
+        {{/if}}
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
         <!-- Footer Section -->
+        {{#unless document}}
         <div class="footer-section">
             {{#if footerTitle}}
             <div class="note-section" style="margin-bottom: 16px;">
@@ -470,6 +489,7 @@
                 <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
                 {{/if}}
         </div>
+        {{/unless}}
     </div>
 </body>
 </html>

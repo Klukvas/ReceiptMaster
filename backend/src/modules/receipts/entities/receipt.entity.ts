@@ -19,7 +19,10 @@ export enum ReceiptStatus {
   FAILED = "failed",
 }
 
-/** `waybill` is the видаткова накладна, the only type generated today. */
+/**
+ * `waybill` (видаткова накладна), `invoice` (рахунок на оплату) and `act` (акт виконаних
+ * робіт) are generated today; the rest are reserved.
+ */
 export enum DocumentType {
   WAYBILL = "waybill",
   INVOICE = "invoice",

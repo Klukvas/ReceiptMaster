@@ -26,7 +26,7 @@ const DB_ERROR = {
 };
 const STEP_HEADINGS = [
   "Company Information",
-  "Receipt Design",
+  "Document Design",
   "First Product",
   "First Customer",
 ];

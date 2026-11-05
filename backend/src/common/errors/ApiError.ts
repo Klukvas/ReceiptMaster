@@ -1,6 +1,7 @@
 export interface ApiError {
   error: string;
   errorCode: string;
+  [detail: string]: unknown;
 }
 
 export class ApiErrorResponse extends Error {
@@ -8,17 +9,27 @@ export class ApiErrorResponse extends Error {
   public readonly errorCode: string;
   public readonly statusCode: number;
 
-  constructor(error: string, errorCode: string, statusCode: number = 400) {
+  /** Machine-readable extras (e.g. the missing `fields`), merged into the response body. */
+  public readonly details?: Record<string, unknown>;
+
+  constructor(
+    error: string,
+    errorCode: string,
+    statusCode: number = 400,
+    details?: Record<string, unknown>,
+  ) {
     super(error);
     this.error = error;
     this.errorCode = errorCode;
     this.statusCode = statusCode;
+    this.details = details;
   }
 
   toJSON(): ApiError {
     return {
       error: this.error,
       errorCode: this.errorCode,
+      ...this.details,
     };
   }
 }
@@ -91,6 +102,41 @@ export const ApiErrors = {
       `Receipt for order ${orderId} already exists`,
       "RECEIPT_ALREADY_EXISTS",
       409,
+    ),
+  DOCUMENT_ALREADY_EXISTS: (orderId: string, type: string) =>
+    new ApiErrorResponse(
+      `A ${type} for order ${orderId} already exists`,
+      "DOCUMENT_ALREADY_EXISTS",
+      409,
+    ),
+  DOCUMENT_TYPE_NOT_SUPPORTED: (type: string) =>
+    new ApiErrorResponse(
+      `Document type "${type}" cannot be generated yet`,
+      "DOCUMENT_TYPE_NOT_SUPPORTED",
+      400,
+    ),
+  DOCUMENT_TEMPLATE_UNSUPPORTED: (type: string, templateId: string) =>
+    new ApiErrorResponse(
+      `Template "${templateId}" cannot carry this document type (${type}); choose another template`,
+      "DOCUMENT_TEMPLATE_UNSUPPORTED",
+      400,
+    ),
+  DOCUMENT_AMOUNT_INVALID: (orderId: string) =>
+    new ApiErrorResponse(
+      `The total or currency of order ${orderId} cannot be printed on a document; check the order's currency and amounts`,
+      "DOCUMENT_AMOUNT_INVALID",
+      422,
+    ),
+  DOCUMENT_REQUISITES_MISSING: (
+    type: string,
+    fields: string[],
+    warnings: string[],
+  ) =>
+    new ApiErrorResponse(
+      `Cannot generate a ${type}: fill in ${fields.join(", ")}`,
+      "DOCUMENT_REQUISITES_MISSING",
+      422,
+      { fields, warnings },
     ),
   RECEIPT_GENERATION_FAILED: (orderId: string) =>
     new ApiErrorResponse(

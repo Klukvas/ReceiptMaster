@@ -283,6 +283,9 @@
             margin-top: 10px;
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
     </style>
 </head>
 <body>
@@ -319,6 +322,7 @@
         </div>
         
         <!-- Company Info -->
+        {{#unless document}}
         <div class="company-info">
             <div class="info-section">
                 <div class="section-title">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
@@ -363,8 +367,13 @@
                 </div>
             </div>
         </div>
+        {{/unless}}
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead>
                 <tr>
@@ -392,6 +401,9 @@
         </table>
         
         <!-- Totals -->
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="totals-section">
             <table class="totals-table">
                 <tr>
@@ -422,8 +434,12 @@
                 </tr>
             </table>
         </div>
+        {{/if}}
         
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
         <!-- Footer -->
         <div class="footer">
             {{#if footerTitle}}

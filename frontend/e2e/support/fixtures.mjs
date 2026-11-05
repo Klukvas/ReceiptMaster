@@ -125,6 +125,7 @@ export const makeOrder = ({
         {
           id: receiptId,
           order_id: id,
+          document_type: "waybill",
           number: receiptNumber,
           status: receiptStatus,
           progress: receiptStatus === "processing" ? 40 : 100,

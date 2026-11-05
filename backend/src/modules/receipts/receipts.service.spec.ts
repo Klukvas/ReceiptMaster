@@ -420,6 +420,38 @@ describe("ReceiptsService", () => {
         ).rejects.toThrow(ApiErrorResponse);
       },
     );
+    it("hands the number back when the final transaction fails", async () => {
+      const manager = transaction();
+      receiptsRepo.findOne.mockResolvedValue(null);
+      manager.save.mockRejectedValueOnce(new Error("write failed"));
+      await expect(
+        service.generateReceipt("order-1", mockUser),
+      ).rejects.toThrow("write failed");
+      const sql: string[] = dataSource.manager.query.mock.calls.map(
+        (call: unknown[]) => call[0],
+      );
+      expect(sql[0]).toContain("+ 1");
+      expect(sql[1]).toContain('"value" - 1');
+    });
+    it("keeps the number of a retried document and releases nothing", async () => {
+      const existing = {
+        ...mockReceipt,
+        status: ReceiptStatus.FAILED,
+        generation_id: "old",
+      };
+      transaction(existing);
+      receiptsRepo.findOne.mockResolvedValue(existing);
+      snapshots.internal.mockResolvedValue({
+        ...existing,
+        pending_html: "frozen",
+        pending_snapshot: {},
+      });
+      dataSource.transaction.mockRejectedValueOnce(new Error("write failed"));
+      await expect(
+        service.generateReceipt("order-1", mockUser),
+      ).rejects.toThrow("write failed");
+      expect(dataSource.manager.query).not.toHaveBeenCalled();
+    });
     it("propagates authoritative preparation failure without durable writes", async () => {
       transaction();
       snapshots.prepare.mockRejectedValue(new Error("Order changed"));

@@ -66,8 +66,8 @@ export const refundPolicyEn: LegalContent = {
         <li>
           <strong>Your data is kept</strong> — downgrading does not delete it.
           Free plan limits apply to new products and orders, and each account
-          keeps only its 10 most recent receipts (a new receipt replaces the
-          oldest)
+          keeps only its 10 most recent active documents of each type (a new document
+          replaces the oldest active one of the same type)
         </li>
       </ul>
 

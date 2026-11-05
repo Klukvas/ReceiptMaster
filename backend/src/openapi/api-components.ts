@@ -11,6 +11,7 @@ import {
 } from "../modules/settings/document-config";
 import { settingsInput } from "../modules/settings/dto/settings-input";
 import {
+  documentGenerationSchema,
   previewSchema,
   regenerationSchema,
 } from "../modules/receipts/document-schemas";
@@ -71,6 +72,9 @@ export const SHARED_SCHEMAS = {
   ApiErrorResponse: z.object({
     error: z.union([z.string(), z.array(z.string())]),
     errorCode: z.string(),
+    // DOCUMENT_REQUISITES_MISSING: what blocks generation, and what is only advisory.
+    fields: z.array(z.string()).optional(),
+    warnings: z.array(z.string()).optional(),
   }),
   MessageResponse: z.object({ message: z.string() }),
   DocumentConfig: documentConfigSchema,
@@ -81,6 +85,7 @@ export const SHARED_SCHEMAS = {
   DocumentPresetUpdateRequest: presetUpdateSchema,
   DocumentRevisionRequest: revisionSchema,
   DocumentSelectionRequest: selectionSchema,
+  DocumentGenerationRequest: documentGenerationSchema,
   ReceiptRegenerationRequest: regenerationSchema,
   DocumentPreviewRequest: previewSchema,
   DocumentConfigVersion: configVersion,

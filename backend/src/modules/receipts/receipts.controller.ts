@@ -8,7 +8,13 @@ import {
   documentPayload,
 } from "../settings/document-multipart";
 import { receiptProjection } from "./services/receipt-projection";
-import { regenerationSchema } from "./document-schemas";
+import {
+  documentGenerationSchema,
+  documentTypeProbe,
+  regenerationSchema,
+} from "./document-schemas";
+import { isGeneratableType } from "./document-types";
+import type { DocumentDetailsInput } from "./frozen-document";
 import {
   ApiDataResponse,
   ApiDocumentDraftBody,
@@ -41,6 +47,15 @@ import { User } from "../users/entities/user.entity";
 
 function isDocumentType(value: string): value is DocumentType {
   return (Object.values(DocumentType) as string[]).includes(value);
+}
+
+function parseDocumentType(value: string): DocumentType {
+  if (!isDocumentType(value))
+    throw ApiErrors.VALIDATION_ERROR(
+      "type",
+      `type must be one of: ${Object.values(DocumentType).join(", ")}`,
+    );
+  return value;
 }
 
 @ApiTags("receipts")
@@ -143,16 +158,72 @@ export class ReceiptsController {
     );
   }
 
+  @Post("orders/:orderId/documents")
+  @ApiOperation({
+    summary:
+      "Generate a document of the given type (waybill, invoice or act) for an order",
+  })
+  @ApiDocumentDraftBody("DocumentGenerationRequest")
+  @ApiDataResponse(201, "ReceiptProjection", "Document generation started")
+  @ApiFailureResponses({
+    400: "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order not CONFIRMED (ORDER_CANNOT_BE_MODIFIED), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+    402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+    404: "Order not found",
+    409: "A document of this type already exists (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill), or the order/defaults changed while preparing",
+    413: "Request above 6 MiB or logo above 5 MiB",
+    422: "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them",
+  })
+  @UseInterceptors(DocumentMultipart())
+  async createDocument(
+    @Param("orderId", ParseUUIDPipe) orderId: string,
+    @Request() req: { user: User },
+    @Body() body: unknown = {},
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    // The type is read first so an unsupported one is refused before details are judged.
+    const { type } = documentPayload(documentTypeProbe, body, file);
+    if (!isGeneratableType(type))
+      throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
+    const parsed = documentPayload(documentGenerationSchema, body, file);
+    const details: DocumentDetailsInput | undefined =
+      "details" in parsed ? parsed.details : undefined;
+    return receiptProjection(
+      await this.receiptsService.generateDocument(
+        orderId,
+        req.user,
+        type,
+        {
+          config: parsed.config,
+          presetId: parsed.presetId,
+          presetRevision: parsed.presetRevision,
+          overrides: parsed.overrides,
+          logoAction: parsed.logoAction,
+        },
+        details,
+        file,
+      ),
+    );
+  }
+
   @Get()
   @ApiOperation({ summary: "Получить список всех чеков" })
   @ApiDataResponse(200, "ReceiptListResponse", "Список чеков получен")
   @ApiQuery({ name: "offset", required: false, description: "Offset" })
   @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
+  @ApiQuery({
+    name: "type",
+    required: false,
+    enum: DocumentType,
+    description: "Only documents of this type (default: all types)",
+  })
   async findAll(
     @Request() req: { user: User },
     @Query("offset") offset?: string,
     @Query("limit") limit?: string,
+    @Query("type") type?: string,
   ) {
+    const documentType =
+      type === undefined ? undefined : parseDocumentType(type);
     const parsedOffset = offset ? parseInt(offset, 10) : undefined;
     const parsedLimit = limit ? parseInt(limit, 10) : undefined;
     const result = await this.receiptsService.findAll(req.user, {
@@ -164,6 +235,7 @@ export class ReceiptsController {
         Number.isFinite(parsedLimit) && parsedLimit! > 0
           ? parsedLimit
           : undefined,
+      type: documentType,
     });
     return { ...result, data: result.data.map(receiptProjection) };
   }

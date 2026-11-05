@@ -47,6 +47,8 @@ export type TemplateCapabilities = {
   terms: boolean;
   generatedAt: boolean;
   paper: "A4" | "thermal";
+  /** Document types the style can carry (backend: documentTypesFor in templates/metadata.ts). */
+  documentTypes: string[];
   logo: {
     minWidth: number;
     maxWidth: number;
@@ -146,10 +148,38 @@ export function readableValidationMessage(
   return label ? `${label}: ${match[2]}` : match[2];
 }
 
+/** Looks up a localized message; injected so this module stays free of the i18n runtime. */
+export type Translate = (key: string) => string;
+
+/** Domain refusals that have a localized message (`errors.<camelCase code>`). */
+const LOCALIZED_ERROR_CODES: ReadonlySet<string> = new Set([
+  "DOCUMENT_TEMPLATE_UNSUPPORTED",
+  "DOCUMENT_TYPE_NOT_SUPPORTED",
+  "DOCUMENT_ALREADY_EXISTS",
+  "DOCUMENT_AMOUNT_INVALID",
+  "RECONSTRUCTION_REQUIRED",
+  "RECEIPT_ALREADY_EXISTS",
+]);
+
+function localizedRefusal(
+  body: object,
+  translate: Translate | undefined,
+): string | undefined {
+  if (!translate) return undefined;
+  const code = "errorCode" in body ? body.errorCode : undefined;
+  if (typeof code !== "string" || !LOCALIZED_ERROR_CODES.has(code))
+    return undefined;
+  const camel = code
+    .toLowerCase()
+    .replace(/_([a-z0-9])/g, (_, next: string) => next.toUpperCase());
+  return translate(`errors.${camel}`);
+}
+
 /** Keep validation/conflict details, including PDF endpoints' blob error responses. */
 export async function documentError(
   error: unknown,
   fieldLabel?: FieldLabel,
+  translate?: Translate,
 ): Promise<string> {
   if (isAxiosError(error)) {
     let body: unknown = error.response?.data;
@@ -161,6 +191,8 @@ export async function documentError(
       }
     }
     if (body && typeof body === "object") {
+      const refusal = localizedRefusal(body, translate);
+      if (refusal) return refusal;
       const value =
         "error" in body
           ? body.error
