@@ -1,5 +1,5 @@
 import { receiptsApi, type DocumentRequestBody, type Receipt } from "../lib/api";
-import type { DocumentType } from "../lib/document-types";
+import { isGeneratableType, type DocumentType, type GeneratableType } from "../lib/document-types";
 import { notificationService } from "./NotificationService";
 import { parseApiError } from "../lib/api-errors";
 import i18n from "../lib/i18n";
@@ -10,10 +10,22 @@ export interface PrinterInfo {
   isDefault: boolean;
 }
 
-function retryBody(type: DocumentType): DocumentRequestBody {
-  if (type === "act") return { type: "act", details: {} };
-  if (type === "sales_receipt" || type === "packing_list") return { type };
-  return { type: "invoice", details: {} };
+function retryBody(type: GeneratableType): DocumentRequestBody {
+  switch (type) {
+    case "waybill":
+      return { type };
+    case "invoice":
+    case "act":
+    case "quote":
+      return { type, details: {} };
+    case "sales_receipt":
+    case "packing_list":
+      return { type };
+    default: {
+      const unreachable: never = type;
+      return unreachable;
+    }
+  }
 }
 
 export class ReceiptService {
@@ -109,6 +121,8 @@ export class ReceiptService {
    */
   async retryDocument(orderId: string, type: DocumentType): Promise<void> {
     if (type === "waybill") return this.generateReceipt(orderId);
+    // A type the server cannot generate must never be retried as some other document.
+    if (!isGeneratableType(type)) return;
     try {
       await receiptsApi.createDocument(orderId, retryBody(type));
       notificationService.success(i18n.t("receipts.generateStarted"));

@@ -177,6 +177,13 @@ export function parseConfig<S extends z.ZodTypeAny>(
 ): RequiredShape<z.output<S>> {
   return parseSettingsInput(schema, value) as RequiredShape<z.output<S>>;
 }
+/**
+ * Calendar day boundaries (issue date, quotation validity) follow this zone until the user
+ * picks one. The server's own zone is not used: a UTC host would roll the day over at 02:00
+ * or 03:00 Kyiv time, so a quotation issued late in the evening would carry tomorrow's date.
+ */
+export const DEFAULT_DOCUMENT_TIME_ZONE = "Europe/Kyiv";
+
 export function legacyConfig(settings: UserSettings | null): DocumentConfig {
   const language = ["en", "ru", "uk"].includes(settings?.templateLanguage)
     ? (settings.templateLanguage as DocumentConfig["documentLanguage"])
@@ -207,7 +214,7 @@ export function legacyConfig(settings: UserSettings | null): DocumentConfig {
       dateStyle: "numeric",
       timeStyle: "medium",
       hourCycle: language === "en" ? "h12" : "h23",
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      timeZone: DEFAULT_DOCUMENT_TIME_ZONE,
     },
   };
 }

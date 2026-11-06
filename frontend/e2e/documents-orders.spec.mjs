@@ -1,11 +1,15 @@
-// Regression for orders that carry several documents (waybill, invoice, act),
+// Regression for orders that carry several documents (waybill, quote, invoice, act),
 // at 1280px and 375px:
 //  - download / print / share / customize keep acting on the waybill, never on
 //    an invoice or act that happens to come first in `order.receipts`;
 //  - a processing invoice shows its own chip and does not hide the waybill;
 //  - retrying a failed invoice goes to POST .../documents, not the waybill route;
-//  - the "Create document" menu group (invoice, act) follows the order status and the
+//  - the "Create document" menu group (quote, invoice, act, ...) follows the order status and the
 //    documents it already has; creating sends one of dueDate / paymentTermDays;
+//    a quote is offered for drafts too, suggests a validity date and sends it only when changed;
+//    the suggestion counts "today" in the account's document time zone, not the browser's;
+//  - editing a draft order that has an issued quote warns that the quote will not be updated (before and after
+//    saving); a voided or failed quote raises no warning;
 //  - a missing-requisites 422 becomes a banner with links, not a toast;
 //  - the documents section of the details shows new documents without a reload;
 //  - the retention confirmation names the document that would be replaced;
@@ -22,8 +26,13 @@ import {
   withPage,
 } from "./support/harness.mjs";
 import { Results, settle, waitFor } from "./support/runner.mjs";
-import { makeOrder } from "./support/fixtures.mjs";
+import { PRODUCTS, makeOrder } from "./support/fixtures.mjs";
 import { COMPLETE_COMPANY, documentHandlers } from "./support/document-mocks.mjs";
+import { loadTsModule } from "./support/transpile.mjs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const LIB = resolve(dirname(fileURLToPath(import.meta.url)), "../src/lib");
 
 const DESKTOP = { width: 1280, height: 900 };
 const MOBILE = { width: 375, height: 812 };
@@ -166,6 +175,7 @@ const checkProcessingInvoice = async (results) => {
 const checkRetryRouting = async (results, socket) => {
   for (const { type, expectDocuments } of [
     { type: "invoice", expectDocuments: true },
+    { type: "quote", expectDocuments: true },
     { type: "waybill", expectDocuments: false },
   ]) {
     await withPage({ viewport: DESKTOP }, async (page) => {
@@ -197,8 +207,8 @@ const checkRetryRouting = async (results, socket) => {
       );
       if (expectDocuments) {
         results.check(
-          "the invoice retry sends its type with empty details",
-          bodies.some((body) => body.includes('"type":"invoice"') && body.includes('"details":{}')),
+          `the ${type} retry sends its own type with empty details`,
+          bodies.some((body) => body.includes(`"type":"${type}"`) && body.includes('"details":{}')),
           JSON.stringify(bodies),
         );
       }
@@ -268,11 +278,12 @@ const plainOrder = (overrides = {}) => ({
 });
 
 /** A page with the document mocks installed over a one-order list. */
-const withDocumentPage = async (viewport, { order = plainOrder(), ...stateOverrides }, run) =>
+const withDocumentPage = async (viewport, { order = plainOrder(), clockAt, ...stateOverrides }, run) =>
   withPage({ viewport }, async (page) => {
     const state = createState([order]);
     Object.assign(state, stateOverrides);
     state.handlers = documentHandlers(state);
+    if (clockAt) await page.clock.setFixedTime(new Date(clockAt));
     await installApiMocks(page, state);
     await gotoOrders(page);
     return run(page, state);
@@ -288,9 +299,12 @@ const checkCreateGroup = async (results) => {
     await withDocumentPage(viewport, { order: plainOrder({ status: "draft" }) }, async (page) => {
       const items = await menuOf(page);
       results.check(
-        `${label}: a draft order offers no document creation`,
+        `${label}: a draft order offers only the quote under "Create document"`,
         !items.some((item) => /^(Invoice|Act of Completed Work|Sales receipt|Packing list)…/.test(item)) &&
-          (await page.getByRole("group", { name: "Create document" }).count()) === 0,
+          (await page.getByRole("group", { name: "Create document" }).getByRole("menuitem").allInnerTexts())
+            .map((text) => text.trim())
+            .join("|") === "Quote…" &&
+          !items.includes("Generate waybill"),
         `menu items: ${items.join(" | ")}`,
       );
     });
@@ -299,10 +313,10 @@ const checkCreateGroup = async (results) => {
       const items = await menuOf(page);
       const group = page.getByRole("group", { name: "Create document" });
       results.check(
-        `${label}: a confirmed order lists invoice, act, sales receipt and packing list under "Create document", beside the one-click waybill`,
+        `${label}: a confirmed order lists quote, invoice, act, sales receipt and packing list under "Create document", beside the one-click waybill`,
         items.includes("Generate waybill") &&
           (await group.getByRole("menuitem").allInnerTexts()).map((text) => text.trim()).join("|") ===
-            "Invoice…|Act of Completed Work…|Sales receipt…|Packing list…",
+            "Quote…|Invoice…|Act of Completed Work…|Sales receipt…|Packing list…",
         `menu items: ${items.join(" | ")}`,
       );
       await page.keyboard.press("ArrowDown");
@@ -448,6 +462,323 @@ const checkDetaillessCreation = async (results) => {
   }
 };
 
+// The mocked account's document time zone is UTC, so "today" is the UTC day whatever zone this machine is in.
+const daysFromToday = (days) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+const submitCreate = (dialog) => dialog.getByRole("button", { name: "Create", exact: true }).click();
+
+const checkQuoteDialog = async (results) => {
+  for (const { label, viewport } of VIEWPORTS) {
+    await withDocumentPage(viewport, { order: plainOrder({ status: "draft" }) }, async (page, state) => {
+      const dialog = await openCreateDialog(page, "Quote…");
+      const until = dialog.getByLabel("Valid until");
+      results.check(
+        `${label}: the quote suggests today + 14 days and explains the default`,
+        (await until.inputValue()) === daysFromToday(14) &&
+          (await dialog.getByText("Defaults to 14 days from the issue date.").count()) === 1,
+        await until.inputValue(),
+      );
+      results.check(
+        `${label}: the quote dialog has the note, no invoice fields, and fits the viewport`,
+        /does not lock the order/i.test(await dialog.getByTestId("document-create-note").innerText()) &&
+          (await dialog.getByLabel("Days to pay").count()) === 0 &&
+          (await hasNoHorizontalOverflow(page)),
+        await dialog.innerText(),
+      );
+      await submitCreate(dialog);
+      await settle(() => (state.created ?? []).length === 1);
+      const [sent] = state.created ?? [];
+      results.check(
+        `${label}: an untouched date is not sent (the server counts it in the account's time zone)`,
+        sent?.type === "quote" && JSON.stringify(sent.details) === "{}" && sent.overrides?.templateId === "standard",
+        JSON.stringify(sent),
+      );
+      results.check(
+        `${label}: retention was looked up for the quote type`,
+        (state.retentionQueries ?? []).some((search) => search.includes("type=quote")),
+        JSON.stringify(state.retentionQueries),
+      );
+    });
+  }
+
+  await withDocumentPage(DESKTOP, {}, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await dialog.getByLabel("Valid until").fill(daysFromToday(30));
+    await dialog.getByLabel("Payment terms").fill("  50% upfront  ");
+    await dialog.getByLabel("Delivery terms").fill("   ");
+    await submitCreate(dialog);
+    await settle(() => (state.created ?? []).length === 1);
+    results.check(
+      "a changed date is sent; terms are trimmed and blank ones are left out",
+      JSON.stringify(state.created?.[0]?.details) ===
+        JSON.stringify({ validUntil: daysFromToday(30), paymentTerms: "50% upfront" }),
+      JSON.stringify(state.created),
+    );
+  });
+
+  await withDocumentPage(DESKTOP, {}, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await dialog.getByLabel("Valid until").fill(daysFromToday(-1));
+    await submitCreate(dialog);
+    results.check(
+      "a date in the past is refused on the client, under the date field, without a request",
+      (await dialog.getByText("The date cannot be before today").count()) === 1 &&
+        (state.created ?? []).length === 0 &&
+        !requested(state, "GET /receipts/retention"),
+      JSON.stringify(state.created),
+    );
+    await dialog.getByLabel("Valid until").fill(daysFromToday(400));
+    await submitCreate(dialog);
+    results.check(
+      "a date more than 365 days away is refused on the client",
+      (await dialog.getByText("At most 365 days from today").count()) === 1 && (state.created ?? []).length === 0,
+      await dialog.innerText(),
+    );
+  });
+
+  const serverRefusal = {
+    status: 400,
+    body: { error: "Validation error for details.validUntil: must not be before the issue date", errorCode: "VALIDATION_ERROR" },
+  };
+  await withDocumentPage(DESKTOP, { createError: serverRefusal }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await submitCreate(dialog);
+    await settle(() => (state.createAttempts ?? []).length === 1);
+    const field = dialog.locator("#document-valid-until");
+    await settle(async () => (await field.getAttribute("aria-invalid")) === "true");
+    results.check(
+      "a server 400 on details.validUntil is shown under the date field",
+      (await field.getAttribute("aria-invalid")) === "true" &&
+        (await dialog.getByText("Check this field").count()) === 1 &&
+        (await page.getByRole("dialog").count()) === 1,
+      await dialog.innerText(),
+    );
+  });
+
+  const sellerOnly = { error: "Required requisites are missing", errorCode: "DOCUMENT_REQUISITES_MISSING", fields: ["seller.name"], warnings: [] };
+  await withDocumentPage(DESKTOP, { refusal: sellerOnly }, async (page) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await submitCreate(dialog);
+    const banner = dialog.getByTestId("requisites-missing");
+    await banner.waitFor({ state: "visible" });
+    const text = await banner.innerText();
+    results.check(
+      "a quote refused for requisites names only the seller name",
+      text.includes("Seller name") && !text.includes("IBAN") && !text.includes("tax ID"),
+      text,
+    );
+  });
+};
+
+const checkQuoteClock = async (results) => {
+  const { documentToday, DEFAULT_DOCUMENT_TIME_ZONE } = loadTsModule(resolve(LIB, "document-clock.ts"));
+  const details = loadTsModule(resolve(LIB, "document-details.ts"), {
+    "./document-clock": { documentToday },
+    "./document-types": { DOCUMENT_TYPE_META: {} },
+  });
+  // Same formula as the backend's issueDateIn (frozen-document.ts), the date a document is issued on.
+  const serverDay = (now, timeZone) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+
+  const nearMidnight = new Date("2026-11-06T22:30:00Z");
+  results.check(
+    "documentToday follows the zone around midnight: Kyiv is already on the next day, UTC and Los Angeles are not",
+    documentToday("Europe/Kyiv", nearMidnight) === "2026-11-07" &&
+      documentToday("UTC", nearMidnight) === "2026-11-06" &&
+      documentToday("America/Los_Angeles", nearMidnight) === "2026-11-06",
+    [documentToday("Europe/Kyiv", nearMidnight), documentToday("UTC", nearMidnight)].join(" "),
+  );
+  results.check(
+    "documentToday handles the Kyiv DST switch (UTC+2 to UTC+3 on 2026-03-29)",
+    documentToday("Europe/Kyiv", new Date("2026-03-28T21:30:00Z")) === "2026-03-28" &&
+      documentToday("Europe/Kyiv", new Date("2026-03-28T22:00:00Z")) === "2026-03-29" &&
+      documentToday("Europe/Kyiv", new Date("2026-10-24T20:59:00Z")) === "2026-10-24" &&
+      documentToday("Europe/Kyiv", new Date("2026-10-24T21:00:00Z")) === "2026-10-25",
+    "DST boundary mismatch",
+  );
+  const zones = ["UTC", "Europe/Kyiv", "Pacific/Auckland", "America/New_York", "Asia/Kolkata"];
+  const instants = ["2026-01-01T00:00:00Z", "2026-06-30T23:59:59Z", "2026-11-06T12:00:00Z", "2026-12-31T23:30:00Z"];
+  results.check(
+    "documentToday equals the day the backend takes as the issue date, for several zones and instants",
+    zones.every((zone) => instants.every((at) => documentToday(zone, new Date(at)) === serverDay(new Date(at), zone))),
+    "differs from issueDateIn",
+  );
+  results.check(
+    "an unknown or missing zone falls back to Europe/Kyiv",
+    DEFAULT_DOCUMENT_TIME_ZONE === "Europe/Kyiv" &&
+      documentToday(undefined, nearMidnight) === "2026-11-07" &&
+      documentToday("", nearMidnight) === "2026-11-07" &&
+      documentToday("Not/AZone", nearMidnight) === "2026-11-07",
+    "fallback mismatch",
+  );
+  const defaults = details.quoteDefaults("Europe/Kyiv", nearMidnight);
+  results.check(
+    "quoteDefaults suggests today + 14 days in the document zone, across a month end",
+    defaults.today === "2026-11-07" &&
+      defaults.validUntil === "2026-11-21" &&
+      details.quoteDefaults("UTC", new Date("2026-12-25T23:30:00Z")).validUntil === "2027-01-08",
+    JSON.stringify(defaults),
+  );
+
+  // In the browser: 23:30 UTC on 6 Nov is already the 7th in Auckland and still the 6th in Los Angeles.
+  const instant = "2026-11-06T23:30:00Z";
+  for (const { timeZone, today, until } of [
+    { timeZone: "Pacific/Auckland", today: "2026-11-07", until: "2026-11-21" },
+    { timeZone: "America/Los_Angeles", today: "2026-11-06", until: "2026-11-20" },
+    { timeZone: "Not/AZone", today: "2026-11-07", until: "2026-11-21" },
+  ]) {
+    await withDocumentPage(DESKTOP, { order: plainOrder({ status: "draft" }), timeZone, clockAt: instant }, async (page, state) => {
+      const dialog = await openCreateDialog(page, "Quote…");
+      const field = dialog.getByLabel("Valid until");
+      await settle(async () => (await field.inputValue()) === until);
+      results.check(
+        `${timeZone}: the dialog suggests ${until} and the earliest date is ${today}`,
+        (await field.inputValue()) === until && (await field.getAttribute("min")) === today,
+        `${await field.inputValue()} min=${await field.getAttribute("min")}`,
+      );
+      await submitCreate(dialog);
+      await settle(() => (state.created ?? []).length === 1);
+      results.check(
+        `${timeZone}: the untouched suggestion is still not sent`,
+        JSON.stringify(state.created?.[0]?.details) === "{}",
+        JSON.stringify(state.created),
+      );
+    });
+  }
+
+  await withDocumentPage(DESKTOP, { order: plainOrder({ status: "draft" }), timeZone: "Pacific/Auckland", clockAt: instant }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await dialog.getByLabel("Valid until").fill("2026-11-06");
+    await submitCreate(dialog);
+    results.check(
+      "Auckland: 6 Nov is yesterday there, so it is refused on the client",
+      (await dialog.getByText("The date cannot be before today").count()) === 1 && (state.created ?? []).length === 0,
+      await dialog.innerText(),
+    );
+    await dialog.getByLabel("Valid until").fill("2026-11-07");
+    await submitCreate(dialog);
+    await settle(() => (state.created ?? []).length === 1);
+    results.check(
+      "Auckland: 7 Nov is today there and is accepted and sent",
+      JSON.stringify(state.created?.[0]?.details) === '{"validUntil":"2026-11-07"}',
+      JSON.stringify(state.created),
+    );
+  });
+};
+
+const STALE_WARNING = "The issued quote QUOTE-1 will not be updated by this change. Void it and create a new one.";
+
+const checkStaleQuoteWarning = async (results) => {
+  for (const { label, status, expectWarning } of [
+    { label: "an issued quote", status: "generated", expectWarning: true },
+    { label: "a quote still generating", status: "processing", expectWarning: true },
+    { label: "a voided quote", status: "void", expectWarning: false },
+    { label: "a failed quote", status: "failed", expectWarning: false },
+  ]) {
+    await withPage({ viewport: DESKTOP }, async (page) => {
+      const order = plainOrder({
+        status: "draft",
+        receipts: [document("q-1", "quote", status, "2026-02-01T10:05:00.000Z")],
+      });
+      const state = createState([order]);
+      state.handlers = [
+        ...documentHandlers(state),
+        async (route, { path, method }, json) => {
+          const product = PRODUCTS.find((entry) => path === `/products/${entry.id}`);
+          if (!product || method !== "GET") return false;
+          await json(route, product);
+          return true;
+        },
+        async (route, { path, method, body }, json) => {
+          if (path !== "/orders/order-1" || method !== "PATCH") return false;
+          state.orderPatches = [...(state.orderPatches ?? []), JSON.parse(body)];
+          await json(route, order);
+          return true;
+        },
+      ];
+      await installApiMocks(page, state);
+      await gotoOrders(page);
+      await openMenu(page);
+      await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+      const form = page.getByRole("heading", { name: "Edit Order" });
+      await form.waitFor({ state: "visible" });
+      const warning = page.getByTestId("stale-quote-warning");
+      results.check(
+        expectWarning
+          ? `${label}: the edit form warns before saving that the quote will not be updated`
+          : `${label}: no stale-quote warning in the edit form`,
+        expectWarning
+          ? (await warning.count()) === 1 && (await warning.innerText()) === STALE_WARNING
+          : (await warning.count()) === 0,
+        (await warning.count()) > 0 ? await warning.innerText() : "no warning",
+      );
+      if (!expectWarning) return;
+
+      const save = page.getByRole("button", { name: "Save", exact: true });
+      await settle(async () => save.isEnabled());
+      await save.click();
+      await settle(() => (state.orderPatches ?? []).length === 1);
+      const toastText = "Order saved. Quote QUOTE-1 was not updated: void it and create a new one.";
+      await page.getByText(toastText).waitFor({ state: "visible", timeout: 5000 });
+      results.check(
+        `${label}: saving still works (nothing is voided) and a notice repeats the warning`,
+        (state.orderPatches ?? []).length === 1 && (state.voided ?? []).length === 0,
+        JSON.stringify({ patches: state.orderPatches, voided: state.voided }),
+      );
+    });
+  }
+
+  await withPage({ viewport: { width: 375, height: 812 } }, async (page) => {
+    const order = plainOrder({
+      status: "draft",
+      receipts: [document("q-1", "quote", "generated", "2026-02-01T10:05:00.000Z")],
+    });
+    const state = createState([order]);
+    state.handlers = documentHandlers(state);
+    await installApiMocks(page, state);
+    await gotoOrders(page);
+    await openDetails(page);
+    await page.getByRole("button", { name: "Edit Order" }).click();
+    const warning = page.getByTestId("stale-quote-warning");
+    await warning.waitFor({ state: "visible" });
+    const box = await warning.boundingBox();
+    results.check(
+      "375px: the warning is fully visible inside the screen",
+      box !== null && box.x >= 0 && box.x + box.width <= 375 && (await hasNoHorizontalOverflow(page)),
+      JSON.stringify(box),
+    );
+  });
+};
+
+const checkQuoteVoidReissue = async (results) => {
+  const withQuote = plainOrder({
+    status: "draft",
+    receipts: [document("q-1", "quote", "generated", "2026-02-01T10:05:00.000Z")],
+  });
+  await withDocumentPage(DESKTOP, { order: withQuote }, async (page, state) => {
+    await openDetails(page);
+    results.check(
+      "a draft order shows its quote in the documents section",
+      (await page.locator('[data-testid="document-card"][data-document-type="quote"]').count()) === 1,
+      "no quote card",
+    );
+    await page.locator('[data-document-type="quote"]').getByRole("button", { name: "Void" }).click();
+    const confirm = page.getByRole("dialog", { name: "Void: Quote" });
+    await confirm.waitFor({ state: "visible" });
+    await confirm.getByRole("button", { name: "Void", exact: true }).click();
+    await settle(() => (state.voided ?? []).length === 1);
+    const create = page.getByRole("button", { name: "Create: Quote" });
+    await create.waitFor({ state: "visible", timeout: 5000 });
+    await create.click();
+    const dialog = page.getByRole("dialog");
+    results.check(
+      "after voiding a quote it can be created again, and the dialog names the voided number",
+      (await dialog.getByTestId("document-reissue-note").innerText()).includes("QUOTE-1"),
+      await dialog.innerText(),
+    );
+  });
+};
+
 const checkRequisitesBanner = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withDocumentPage(viewport, { refusal: true }, async (page, state) => {
@@ -500,6 +831,7 @@ const checkDocumentsSection = async (results) => {
       await openDetails(page);
       await page.evaluate(() => { window.__noReload = true; });
       for (const [name, type] of [
+        ["Create: Quote", "quote"],
         ["Create: Invoice", "invoice"],
         ["Create: Act of Completed Work", "act"],
         ["Create: Sales receipt", "sales_receipt"],
@@ -517,8 +849,8 @@ const checkDocumentsSection = async (results) => {
         cards.map((card) => card.getAttribute("data-document-type")),
       );
       results.check(
-        `${label}: the documents section shows all four new documents without reloading the page`,
-        types.sort().join(",") === "act,invoice,packing_list,sales_receipt" && (await page.evaluate(() => window.__noReload === true)),
+        `${label}: the documents section shows all five new documents without reloading the page`,
+        types.sort().join(",") === "act,invoice,packing_list,quote,sales_receipt" && (await page.evaluate(() => window.__noReload === true)),
         types.join(","),
       );
       results.check(
@@ -725,6 +1057,10 @@ export const run = async () => {
     await checkInvoiceCreation(results);
     await checkActCreation(results);
     await checkDetaillessCreation(results);
+    await checkQuoteDialog(results);
+    await checkQuoteClock(results);
+    await checkStaleQuoteWarning(results);
+    await checkQuoteVoidReissue(results);
     await checkRequisitesBanner(results);
     await checkDocumentsSection(results);
     await checkRetentionConfirm(results);

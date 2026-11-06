@@ -38,7 +38,7 @@ Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context
 | A backend module, guard, interceptor, job, auth, tenancy, "how do we do X in Nest" | [**backend-patterns.md**](./backend-patterns.md) |
 | A domain flow — orders, receipt/PDF generation, billing, subscriptions, notifications | [**business-logic.md**](./business-logic.md) |
 | Calling / changing an HTTP endpoint (all 104 routes, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
-| Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (invoice/act/sales receipt/packing list), requisites forms | [**frontend.md**](./frontend.md) |
+| Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (quote/invoice/act/sales receipt/packing list), requisites forms | [**frontend.md**](./frontend.md) |
 
 Common combinations: a **full-stack feature** → `backend-patterns` + `frontend` + `api-reference`;
 **understanding a business rule** → `business-logic` (+ `api-reference` for the surface).

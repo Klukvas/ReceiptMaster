@@ -4,7 +4,7 @@ import type { LegalContent } from "./types";
 export const termsEn: LegalContent = {
   title: "Terms of Service",
   seoDescription:
-    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, payment invoices, acts of completed work, sales receipts and packing lists.",
+    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, quotes, payment invoices, acts of completed work, sales receipts and packing lists.",
   body: (
     <>
       <h2>1. Introduction</h2>
@@ -23,8 +23,8 @@ export const termsEn: LegalContent = {
       <p>
         ReceiptMaster is a cloud-based platform that allows businesses to
         create, manage, and share business documents as PDF files: a delivery
-        note, a payment invoice, an act of completed work or services, a sales
-        receipt and a packing list. The Service includes product catalog management, order processing,
+        note, a quote (commercial offer), a payment invoice, an act of completed
+        work or services, a sales receipt and a packing list. The Service includes product catalog management, order processing,
         document generation with customizable templates, and analytics
         dashboards.
       </p>
@@ -63,6 +63,11 @@ export const termsEn: LegalContent = {
           A payment invoice is a request for payment. It is generally not a
           primary accounting document and does not by itself confirm that goods
           were delivered or services were performed.
+        </li>
+        <li>
+          A quote (commercial offer) is an informational offer. It is not an
+          invoice, not a primary accounting document and not a basis for
+          payment or accounting entries.
         </li>
         <li>
           The Service does not generate tax invoices and does not register them

@@ -35,6 +35,7 @@ export type DocumentLabels = {
   issuedBy: string;
   fromContractor: string;
   fromCustomer: string;
+  fromSupplier: string;
   sellerSignature: string;
   shippedBy: string;
   receivedBy: string;
@@ -43,6 +44,13 @@ export type DocumentLabels = {
   actStatement: string;
   /** Printed on the sales receipt: the document has no fiscal standing. */
   nonFiscalNotice: string;
+  /** Printed on the quotation: it is an offer, not a bill. */
+  quoteNotice: string;
+  /** Grand total line of the quotation, which is not "due" yet. */
+  offerTotal: string;
+  validUntil: string;
+  paymentTerms: string;
+  deliveryTerms: string;
   linesCount: string;
   totalQuantity: string;
   vatId: string;
@@ -81,6 +89,7 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Виписав(ла)",
     fromContractor: "Від Виконавця",
     fromCustomer: "Від Замовника",
+    fromSupplier: "Від Постачальника",
     sellerSignature: "Продавець",
     shippedBy: "Відправив",
     receivedBy: "Отримав",
@@ -89,6 +98,12 @@ export const DOCUMENT_LABELS = {
     actStatement:
       "Роботи виконано в повному обсязі, сторони претензій одна до одної не мають.",
     nonFiscalNotice: "Не є фіскальним документом",
+    quoteNotice:
+      "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
+    offerTotal: "Загальна вартість",
+    validUntil: "Пропозиція дійсна до",
+    paymentTerms: "Умови оплати",
+    deliveryTerms: "Умови поставки",
     linesCount: "Найменувань",
     totalQuantity: "Загальна кількість",
     vatId: "ІПН",
@@ -125,6 +140,7 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Выписал(а)",
     fromContractor: "От Исполнителя",
     fromCustomer: "От Заказчика",
+    fromSupplier: "От Поставщика",
     sellerSignature: "Продавец",
     shippedBy: "Отправил",
     receivedBy: "Получил",
@@ -133,6 +149,12 @@ export const DOCUMENT_LABELS = {
     actStatement:
       "Работы выполнены в полном объёме, стороны претензий друг к другу не имеют.",
     nonFiscalNotice: "Не является фискальным документом",
+    quoteNotice:
+      "Предложение не является счётом и не является основанием для оплаты или бухгалтерского учёта",
+    offerTotal: "Общая стоимость",
+    validUntil: "Предложение действительно до",
+    paymentTerms: "Условия оплаты",
+    deliveryTerms: "Условия поставки",
     linesCount: "Наименований",
     totalQuantity: "Общее количество",
     vatId: "ИНН плательщика НДС",
@@ -169,6 +191,7 @@ export const DOCUMENT_LABELS = {
     issuedBy: "Issued by",
     fromContractor: "On behalf of the Contractor",
     fromCustomer: "On behalf of the Customer",
+    fromSupplier: "On behalf of the Supplier",
     sellerSignature: "Seller",
     shippedBy: "Shipped by",
     receivedBy: "Received by",
@@ -177,6 +200,12 @@ export const DOCUMENT_LABELS = {
     actStatement:
       "The work has been completed in full; the parties have no claims against each other.",
     nonFiscalNotice: "Not a fiscal document",
+    quoteNotice:
+      "This quotation is not an invoice and is not a basis for payment or accounting",
+    offerTotal: "Total",
+    validUntil: "Valid until",
+    paymentTerms: "Payment terms",
+    deliveryTerms: "Delivery terms",
     linesCount: "Line items",
     totalQuantity: "Total quantity",
     vatId: "VAT ID",
@@ -297,6 +326,29 @@ export const STYLE_LABEL_OVERRIDES: Record<
       invoiceDate: "Date:",
       generatedAt: "Document generated:",
       thankYou: "Thank you for your business!",
+      footerMessage: "If you have any questions, please contact us.",
+    },
+  },
+  quote: {
+    uk: {
+      invoiceNo: "Номер пропозиції:",
+      invoiceDate: "Дата пропозиції:",
+      generatedAt: "Пропозицію сформовано:",
+      thankYou: "Дякуємо за інтерес до нашої пропозиції!",
+      footerMessage: "Якщо у вас є питання, будь ласка, зв’яжіться з нами.",
+    },
+    ru: {
+      invoiceNo: "Номер предложения:",
+      invoiceDate: "Дата предложения:",
+      generatedAt: "Предложение сформировано:",
+      thankYou: "Благодарим за интерес к нашему предложению!",
+      footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
+    },
+    en: {
+      invoiceNo: "Quotation No:",
+      invoiceDate: "Quotation date:",
+      generatedAt: "Quotation generated:",
+      thankYou: "Thank you for your interest in our offer!",
       footerMessage: "If you have any questions, please contact us.",
     },
   },

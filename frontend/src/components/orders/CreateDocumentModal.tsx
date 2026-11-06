@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type DocumentRequestBody, type Order } from "../../lib/api";
 import { ErrorCode, parseApiError, parseRequisitesError, validationField, type RequisitesError } from "../../lib/api-errors";
@@ -8,21 +8,24 @@ import {
   buildDocumentRequest,
   DEFAULT_PAYMENT_TERM_DAYS,
   formFieldOf,
+  quoteDefaults,
   type ActForm,
   type DetailsErrors,
   type InvoiceForm,
+  type QuoteForm,
 } from "../../lib/document-details";
 import { forecastRequisites } from "../../lib/document-requisites";
 import { DOCUMENT_TYPE_META, documentOf, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
+import { documentConfigQuery } from "../../hooks/useDocumentDraft";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
 import { useTranslation } from "../../hooks/useTranslation";
 import { selectClass } from "../settings/DocumentFormatting";
 import { Button } from "../ui/Button";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { Modal } from "../ui/Modal";
-import { ActDetailsFields, InvoiceDetailsFields } from "./DocumentDetailsFields";
+import { ActDetailsFields, InvoiceDetailsFields, QuoteDetailsFields } from "./DocumentDetailsFields";
 import { RequisitesNotice } from "./RequisitesNotice";
 
 type CreateDocumentModalProps = {
@@ -34,6 +37,7 @@ type CreateDocumentModalProps = {
 type Replacement = { number: string; limit: number; body: DocumentRequestBody };
 
 const EMPTY_ACT: ActForm = { contractRef: "", from: "", to: "" };
+const EMPTY_QUOTE_TERMS = { paymentTerms: "", deliveryTerms: "" };
 
 export function CreateDocumentModal({
   order,
@@ -57,6 +61,33 @@ export function CreateDocumentModal({
     ...invoiceEdits,
   };
   const [actForm, setActForm] = useState<ActForm>(EMPTY_ACT);
+  // "Today" is the day in the account's document time zone, as the server counts it. The
+  // clock is read once so the suggestion does not drift if the dialog stays open past midnight.
+  const documentConfig = useQuery(documentConfigQuery);
+  const timeZone = documentConfig.data?.config.formatting.timeZone;
+  const [openedAt] = useState(() => new Date());
+  const quoteBase = useMemo(
+    () => quoteDefaults(timeZone, openedAt),
+    [timeZone, openedAt],
+  );
+  const [quoteEdits, setQuoteEdits] = useState<Partial<QuoteForm>>({});
+  const quoteForm: QuoteForm = {
+    validUntil: quoteBase.validUntil,
+    ...EMPTY_QUOTE_TERMS,
+    ...quoteEdits,
+  };
+
+  // Only what the user touched is kept, so an untouched date still follows the time zone
+  // once the account's settings arrive.
+  const editQuote = (next: QuoteForm) =>
+    setQuoteEdits((previous) => ({
+      ...previous,
+      ...Object.fromEntries(
+        Object.entries(next).filter(
+          ([field, value]) => value !== quoteForm[field as keyof QuoteForm],
+        ),
+      ),
+    }));
 
   const [fieldErrors, setFieldErrors] = useState<DetailsErrors>({});
   const [submitError, setSubmitError] = useState("");
@@ -124,7 +155,8 @@ export function CreateDocumentModal({
     setRefusal(null);
     const built = buildDocumentRequest(
       type,
-      { invoice: invoiceForm, act: actForm },
+      { invoice: invoiceForm, act: actForm, quote: quoteForm },
+      quoteBase,
       (design.selectedId || undefined) as DocumentConfig["templateId"] | undefined,
     );
     if (!built.ok) {
@@ -173,6 +205,14 @@ export function CreateDocumentModal({
         )}
         {details === "act" && (
           <ActDetailsFields form={actForm} errors={fieldErrors} onChange={setActForm} />
+        )}
+        {details === "quote" && (
+          <QuoteDetailsFields
+            form={quoteForm}
+            errors={fieldErrors}
+            onChange={editQuote}
+            today={quoteBase.today}
+          />
         )}
         {voidedNumber && (
           <p data-testid="document-reissue-note" className="rounded-lg bg-surface-alt p-3 text-sm text-content-secondary">

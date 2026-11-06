@@ -3,6 +3,7 @@ import {
   DOCUMENT_TYPE_SPECS,
   GENERATABLE_TYPES,
   isGeneratableType,
+  isReissuableType,
 } from "./document-types";
 import { DocumentType } from "./entities/receipt.entity";
 import { LOCKING_DOCUMENT_TYPES } from "./order-lock";
@@ -17,19 +18,30 @@ describe("document type specs", () => {
     },
   );
 
-  it("generates exactly waybill, invoice, act, sales receipt and packing list", () => {
+  it("generates exactly waybill, invoice, act, sales receipt, packing list and quote", () => {
     expect([...GENERATABLE_TYPES].sort()).toEqual([
       "act",
       "invoice",
       "packing_list",
+      "quote",
       "sales_receipt",
       "waybill",
     ]);
-    for (const type of [DocumentType.QUOTE, DocumentType.RETURN_NOTE])
-      expect(isGeneratableType(type)).toBe(false);
+    expect(isGeneratableType(DocumentType.RETURN_NOTE)).toBe(false);
   });
 
-  it.each(GENERATABLE_TYPES)(
+  it("keeps the generatable order, so the template capabilities list does not shift", () => {
+    expect(GENERATABLE_TYPES).toEqual([
+      "waybill",
+      "invoice",
+      "act",
+      "sales_receipt",
+      "packing_list",
+      "quote",
+    ]);
+  });
+
+  it.each(GENERATABLE_TYPES.filter((t) => t !== DocumentType.QUOTE))(
     "%s is issued for confirmed orders only",
     (type) => {
       expect(DOCUMENT_TYPE_SPECS[type].allowedOrderStatuses).toEqual([
@@ -37,6 +49,36 @@ describe("document type specs", () => {
       ]);
     },
   );
+
+  it("lets a quotation be issued for a draft or confirmed order without locking it", () => {
+    const spec = DOCUMENT_TYPE_SPECS[DocumentType.QUOTE];
+    expect(spec.allowedOrderStatuses).toEqual([
+      OrderStatus.DRAFT,
+      OrderStatus.CONFIRMED,
+    ]);
+    expect(spec.locking).toBe(false);
+    expect(spec.requiresMoney).toBe(true);
+    expect(spec.requiredSeller).toEqual(["name"]);
+    expect(spec.requiredBuyer).toEqual([]);
+    expect(spec.requiresVatIdForPayer).toBe(true);
+    expect(spec.warnings).toEqual([
+      "seller.taxId",
+      "seller.legalForm",
+      "seller.vatPayer",
+    ]);
+    expect(spec.title).toEqual({
+      uk: "Комерційна пропозиція",
+      ru: "Коммерческое предложение",
+      en: "Quotation",
+    });
+    expect(spec.layout).toMatchObject({
+      payment: false,
+      notice: "quoteNotice",
+      grandTotalLabel: "offerTotal",
+      signatures: { seller: "fromSupplier", stamp: true },
+    });
+    expect(isReissuableType(DocumentType.QUOTE)).toBe(true);
+  });
 
   it("gives every typed document a heading in every language and the waybill none", () => {
     expect(DOCUMENT_TYPE_SPECS[DocumentType.WAYBILL].title).toBeUndefined();

@@ -87,7 +87,9 @@ describeIsolatedPostgres(
         db.getRepository(Product),
         db.getRepository(Recipient),
         db,
-        {} as ReceiptsService,
+        {
+          revokePublicLinksForOrders: async () => 0,
+        } as unknown as ReceiptsService,
         memoryCache,
         subscription,
         {

@@ -17,11 +17,19 @@ import { DocumentType } from "./entities/receipt.entity";
 /** Payment term when neither the request nor the account settings name one. */
 export const FALLBACK_PAYMENT_TERM_DAYS = 5;
 
+/** Days a quotation stays valid when the request names no date. */
+export const QUOTE_DEFAULT_VALIDITY_DAYS = 14;
+/** The furthest a quotation's validity may reach past its issue date. */
+export const QUOTE_MAX_VALIDITY_DAYS = 365;
+
 export type DocumentDetailsInput = {
   dueDate?: string;
   paymentTermDays?: number;
   contractRef?: string;
   period?: { from: string; to: string };
+  validUntil?: string;
+  paymentTerms?: string;
+  deliveryTerms?: string;
 };
 
 export type DueDateSource =
@@ -30,12 +38,21 @@ export type DueDateSource =
   | "settings_default"
   | "fallback";
 
-/** Details as frozen: the invoice term is resolved to a date and says where it came from. */
+export type ValidUntilSource = "request_date" | "default";
+
+/**
+ * Details as frozen: the invoice term and the quotation validity are resolved to dates
+ * and say where they came from.
+ */
 export type FrozenDetails = {
   dueDate?: string;
   dueDateSource?: DueDateSource;
   contractRef?: string;
   period?: { from: string; to: string };
+  validUntil?: string;
+  validUntilSource?: ValidUntilSource;
+  paymentTerms?: string;
+  deliveryTerms?: string;
 };
 
 /** The non-waybill part of a snapshot. Never part of the public projection. */
@@ -116,6 +133,44 @@ function resolveInvoiceTerm(
   };
 }
 
+function resolveInvoiceDetails(
+  input: DocumentDetailsInput,
+  defaultDays: number | null,
+  issueDate: string,
+): FrozenDetails {
+  const term = resolveInvoiceTerm(input, defaultDays, issueDate);
+  if (term.dueDate && term.dueDate < issueDate)
+    throw ApiErrors.VALIDATION_ERROR(
+      "details.dueDate",
+      "must not be earlier than the issue date",
+    );
+  return term;
+}
+
+function resolveQuoteDetails(
+  input: DocumentDetailsInput,
+  issueDate: string,
+): FrozenDetails {
+  const validUntil =
+    input.validUntil ?? addDaysToDate(issueDate, QUOTE_DEFAULT_VALIDITY_DAYS);
+  if (validUntil < issueDate)
+    throw ApiErrors.VALIDATION_ERROR(
+      "details.validUntil",
+      "must not be earlier than the issue date",
+    );
+  if (validUntil > addDaysToDate(issueDate, QUOTE_MAX_VALIDITY_DAYS))
+    throw ApiErrors.VALIDATION_ERROR(
+      "details.validUntil",
+      `must be within ${QUOTE_MAX_VALIDITY_DAYS} days of the issue date`,
+    );
+  return {
+    validUntil,
+    validUntilSource: input.validUntil ? "request_date" : "default",
+    ...(input.paymentTerms ? { paymentTerms: input.paymentTerms } : {}),
+    ...(input.deliveryTerms ? { deliveryTerms: input.deliveryTerms } : {}),
+  };
+}
+
 function resolveDetails(
   type: GeneratableDocumentType,
   context: DocumentContext,
@@ -124,25 +179,23 @@ function resolveDetails(
   const { request } = context;
   if (request.carryOver?.details) return request.carryOver.details;
   const input = request.details;
-  if (type === DocumentType.INVOICE) {
-    const term = resolveInvoiceTerm(
-      input,
-      context.defaultPaymentTermDays,
-      issueDate,
-    );
-    if (term.dueDate && term.dueDate < issueDate)
-      throw ApiErrors.VALIDATION_ERROR(
-        "details.dueDate",
-        "must not be earlier than the issue date",
+  switch (type) {
+    case DocumentType.INVOICE:
+      return resolveInvoiceDetails(
+        input,
+        context.defaultPaymentTermDays,
+        issueDate,
       );
-    return term;
+    case DocumentType.ACT:
+      return {
+        ...(input.contractRef ? { contractRef: input.contractRef } : {}),
+        ...(input.period ? { period: input.period } : {}),
+      };
+    case DocumentType.QUOTE:
+      return resolveQuoteDetails(input, issueDate);
+    default:
+      return {};
   }
-  if (type === DocumentType.ACT)
-    return {
-      ...(input.contractRef ? { contractRef: input.contractRef } : {}),
-      ...(input.period ? { period: input.period } : {}),
-    };
-  return {};
 }
 
 function titleFor(spec: DocumentTypeSpec, language: string): string {

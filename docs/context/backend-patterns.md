@@ -735,8 +735,8 @@ transaction. `RenderSnapshot.document` (every typed document, i.e. all but the w
 `templates/document-blocks.ts` (`DOCUMENT_PARTIALS`): `documentStyles` (`doc-*` CSS, after `printLayout`),
 `documentParties` + `documentPayment` (where the style's recipient/company block was, which is wrapped in
 `{{#unless document}}`), `documentTotals` (replaces the style's totals via `{{#if document}}…{{else}}…{{/if}}`) and
-`documentClosing` (due date / act statement and signatures, before the footer). Templates read only ready flags
-(`document.payment`, `document.act`, `document.totals`, `document.quantities`, `document.notice`, `document.hidesItemPrices`, `document.signatures.buyer`/`caption`), never the document type. The layout flags in `DocumentLayoutSpec` (`money`, `nonFiscalNotice`, `buyerAddress`, `signatures`, `sellerRole`/`buyerRole`) decide which of them `buildDocumentRenderData` sets. `documentTotals` is wrapped in `{{#if document.totals}}` and adds a `{{#if document.quantities}}` summary for no-money documents; CSS that only some types need (`.doc-notice`, `.doc-quantities`) sits behind `{{#if}}` in `documentStyles` so the invoice/act goldens stay byte-identical. The four styles wrap their price/amount `<th>`/`<td>` in `{{#unless document.hidesItemPrices}}` (`@root.document` inside `{{#each items}}`); each block tag sits on
+`documentClosing` (due date / quotation validity and terms / act statement and signatures, before the footer). Every allowed style also wraps everything from the totals to the end of the footer in `<div class="doc-tail">` (own `{{#if document}}` lines; `break-inside: avoid`), because `break-after: avoid` alone does not stop Chromium from printing the footer by itself on a last page; `services/document-pagination.spec.ts` prints real PDFs (needs Chromium and poppler, skipped otherwise) to guard it. Templates read only ready flags
+(`document.payment`, `document.act`, `document.offer`, `document.totals`, `document.quantities`, `document.notice`, `document.hidesItemPrices`, `document.signatures.buyer`/`caption`), never the document type. The layout flags in `DocumentLayoutSpec` (`money`, `notice`: `NoticeLabelKey | null`, `grandTotalLabel`, `buyerAddress`, `signatures`, `sellerRole`/`buyerRole`) decide which of them `buildDocumentRenderData` sets (`notice` picks which label is printed above the parties; `grandTotalLabel` swaps `view.labels.grandTotal` for a copy of the labels, other types share the original object; `document.offer` appears whenever the frozen details carry `validUntil`, i.e. for a quotation). `documentTotals` is wrapped in `{{#if document.totals}}` and adds a `{{#if document.quantities}}` summary for no-money documents; CSS that only some types need (`.doc-notice`, `.doc-quantities`) sits behind `{{#if}}` in `documentStyles` so the invoice/act goldens stay byte-identical. The four styles wrap their price/amount `<th>`/`<td>` in `{{#unless document.hidesItemPrices}}` (`@root.document` inside `{{#each items}}`); each block tag sits on
 its own line so Handlebars drops it and a waybill's HTML stays byte-identical (guarded by
 `services/waybill-html-golden.spec.ts`; change that digest list only when a waybill's output is meant to change).
 The other 11 styles carry no slot. Wording lives in `templates/translations/document-labels.ts`
@@ -768,7 +768,7 @@ export interface ReceiptGenerationJobData {
 
 `ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`) in the validated job tenant. `ReceiptSnapshotService` resolves authoritative configuration, captures transaction/recipient data, normalizes/loads immutable logos and compiles final HTML **before** durable intent. No S3 or Chromium work runs under a database lock. A short transaction rechecks account/preset revisions, locked source fingerprints, entitlement and order eligibility, then stores one pending candidate plus the identifier-only outbox entry. Tenant quota enforcement remains serialized; `DOCUMENTS_RETAINED_PER_TYPE = 10` (counted per `document_type`) retains the existing eligible eviction policy.
 
-`ReceiptArtifactService` renders only stored HTML and complete PDF options, then uploads to an immutable attempt key. Promotion checks tenant, generation, pending identity, expected active revision, confirmed/locked order and non-void lifecycle, switching all active artifact/config/template/public metadata together. It never writes public-token fields. A generated document stays generated and publicly downloadable during replacement, with separate `replacement_status`/`replacement_error`. Failed candidates remain retryable; explicit new config on a failed generation replaces its design, while a plain retry reuses the frozen candidate. The outbox recognizes replacements and reconciles exhausted jobs without destroying active PDFs.
+`ReceiptArtifactService` renders only stored HTML and complete PDF options, then uploads to an immutable attempt key. Promotion checks tenant, generation, pending identity, expected active revision, an order status the receipt's own type allows (`specFor(type).allowedOrderStatuses`, so a quotation promotes on a DRAFT order) and, for locking types, a locked order and non-void lifecycle, switching all active artifact/config/template/public metadata together. It never writes public-token fields. A generated document stays generated and publicly downloadable during replacement, with separate `replacement_status`/`replacement_error`. Failed candidates remain retryable; explicit new config on a failed generation replaces its design, while a plain retry reuses the frozen candidate. The outbox recognizes replacements and reconciles exhausted jobs without destroying active PDFs.
 
 `receipts.document_type` (enum `receipts_document_type_enum`, default `waybill`, migration `AddReceiptDocumentType1792800000000`) replaced the unique `order_id` with the partial unique index `(order_id, document_type) WHERE document_type <> 'return_note'`. Any code that looks a receipt up by `order_id` must also say which type; `voidForCancellation` and file cleanup intentionally act on all types of an order. `orders.service` loads `order.receipts` (all types), so consumers that take `receipts[0]` must filter by `waybill` once other types exist.
 
@@ -1238,13 +1238,13 @@ instead. Run the file locally before pushing a gate change; it needs `python3`, 
 
 ## Rolling back the image after a document reissue
 
-`ReissueVoidedDocuments1793100000000` only loosens a unique index, so it is additive and the deploy
-script keeps it on a failed release. The old image does not know voided rows free a slot: once an
-invoice or act has been reissued, an order holds two rows of that type (the void one and the live
+`ReissueVoidedDocuments1793100000000` and `ReissueVoidedQuotes1793200000000` only loosen a unique index, so they are additive and the deploy
+script keeps them on a failed release. The old image does not know voided rows free a slot: once an
+invoice, act or quote has been reissued, an order holds two rows of that type (the void one and the live
 one) and the previous code, which looks up `(order, document_type)` without a status filter, may pick
 either. Roll the image back before the first reissue is harmless; after it, either keep the new
-image or revert the migration (its `down` refuses while such orders exist, and the voided history is
-never deleted to make it pass).
+image or revert the migrations, **`1793200000000` first, then `1793100000000`** (each `down` refuses while such orders exist for the types it covers, and the voided history is
+never deleted to make it pass). After the first reissue of a quotation an order holds two `quote` rows, the voided one and the live one.
 
 ## Settings writes and logo images
 

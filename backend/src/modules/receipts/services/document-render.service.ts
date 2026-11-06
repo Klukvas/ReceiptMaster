@@ -66,7 +66,7 @@ export type RenderSnapshot = {
   sourceRevision: number;
   sourcePreset?: { id: string; revision: number };
   reconstructed?: boolean;
-  /** Invoices and acts only; a waybill snapshot has no such key. Never public. */
+  /** Every typed document; a waybill snapshot has no such key. Never public. */
   document?: FrozenDocument;
 };
 

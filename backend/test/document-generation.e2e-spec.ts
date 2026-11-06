@@ -165,7 +165,7 @@ describeIsolatedPostgres(
     const asTenant = <T>(operation: () => Promise<T>): Promise<T> =>
       runWithTenant(user.id, operation);
 
-    const confirmedOrder = async (): Promise<Order> => {
+    const draftOrder = async (): Promise<Order> => {
       const product = await db.admin.getRepository(Product).save(
         db.admin.getRepository(Product).create({
           name: randomUUID(),
@@ -176,7 +176,7 @@ describeIsolatedPostgres(
           currency: Currency.UAH,
         }),
       );
-      const draft = (
+      return (
         await asTenant(() =>
           orders.create(
             {
@@ -187,6 +187,10 @@ describeIsolatedPostgres(
           ),
         )
       ).data as Order;
+    };
+
+    const confirmedOrder = async (): Promise<Order> => {
+      const draft = await draftOrder();
       return asTenant(() => orders.confirm(draft.id, user));
     };
 
@@ -624,9 +628,6 @@ describeIsolatedPostgres(
             ),
           );
 
-        expect(await call("quote")).toMatchObject({
-          errorCode: "DOCUMENT_TYPE_NOT_SUPPORTED",
-        });
         expect(await call("return_note")).toMatchObject({
           errorCode: "DOCUMENT_TYPE_NOT_SUPPORTED",
         });
@@ -671,6 +672,219 @@ describeIsolatedPostgres(
         const again = await generate(order, DocumentType.ACT);
         expect(again.id).toBe(first.id);
         expect(await counter(DocumentType.ACT)).toBe(1);
+      });
+    });
+
+    describe("quote", () => {
+      const YEAR = new Date().getUTCFullYear();
+      // Thirty days out in UTC is always inside the 14..365 window whatever the time zone.
+      const inThirtyDays = new Date(Date.now() + 30 * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const stateOf = async (id: string) =>
+        db.admin.getRepository(Receipt).findOneByOrFail({ id });
+
+      it("is issued on a draft order, promoted, and neither locks it nor blocks edits", async () => {
+        const order = await draftOrder();
+
+        const quote = await generate(order, DocumentType.QUOTE, {
+          validUntil: inThirtyDays,
+        });
+        const promoted = await promote(quote);
+
+        expect(quote.document_type).toBe(DocumentType.QUOTE);
+        expect(quote.number).toBe(FIRST_NUMBER);
+        expect(promoted?.status).toBe(ReceiptStatus.GENERATED);
+        expect(await isLocked(order)).toBe(false);
+        expect(await counter(DocumentType.QUOTE)).toBe(1);
+        const row = await stored(quote.id);
+        expect(row.active_snapshot?.document).toMatchObject({
+          type: DocumentType.QUOTE,
+          title: "Комерційна пропозиція",
+        });
+        const updated = await asTenant(() =>
+          orders.update(order.id, { notes: "still editable" } as never, user),
+        );
+        expect(updated.id).toBe(order.id);
+      });
+
+      it("lets the order be confirmed and an invoice issued afterwards", async () => {
+        const order = await draftOrder();
+        await promote(await generate(order, DocumentType.QUOTE));
+
+        await asTenant(() => orders.confirm(order.id, user));
+        const invoice = await generate(order, DocumentType.INVOICE);
+
+        expect(invoice.number).toBe(FIRST_NUMBER);
+        expect((await promote(invoice))?.status).toBe(ReceiptStatus.GENERATED);
+        expect(await isLocked(order)).toBe(true);
+      });
+
+      it("freezes the default validity of 14 days and the terms", async () => {
+        const order = await draftOrder();
+        const quote = await generate(order, DocumentType.QUOTE, {
+          paymentTerms: "50% upfront",
+          deliveryTerms: "Pickup",
+        });
+
+        const document = (await stored(quote.id)).pending_snapshot?.document;
+        expect(document?.details).toMatchObject({
+          validUntilSource: "default",
+          paymentTerms: "50% upfront",
+          deliveryTerms: "Pickup",
+        });
+        const days =
+          (Date.parse(`${document?.details.validUntil}T00:00:00Z`) -
+            Date.parse(`${document?.issueDate}T00:00:00Z`)) /
+          86_400_000;
+        expect(days).toBe(14);
+      });
+
+      it("is voided when a draft order is cancelled, with its link revoked", async () => {
+        const order = await draftOrder();
+        const quote = await generate(order, DocumentType.QUOTE);
+        await promote(quote);
+        await asTenant(() => receipts.generatePublicToken(quote.id, user));
+
+        await asTenant(() => orders.cancel(order.id, user));
+
+        const row = await stateOf(quote.id);
+        expect(row.status).toBe(ReceiptStatus.VOID);
+        expect(row.void_reason).toBe("order_cancelled");
+        expect(row.public_token).toBeNull();
+      });
+
+      it("is refused for a cancelled order without burning a number", async () => {
+        const order = await draftOrder();
+        await asTenant(() => orders.cancel(order.id, user));
+
+        expect(
+          await rejection(generate(order, DocumentType.QUOTE)),
+        ).toMatchObject({ errorCode: "ORDER_CANNOT_BE_MODIFIED" });
+        expect(await counter(DocumentType.QUOTE)).toBe(0);
+      });
+
+      it("refuses a validity before the issue date without burning a number", async () => {
+        const order = await draftOrder();
+
+        const error = (await rejection(
+          generate(order, DocumentType.QUOTE, { validUntil: "2000-01-01" }),
+        )) as ApiErrorResponse;
+
+        expect(error.statusCode).toBe(400);
+        expect(error.toJSON()).toMatchObject({
+          errorCode: "VALIDATION_ERROR",
+        });
+        expect(await counter(DocumentType.QUOTE)).toBe(0);
+      });
+
+      it("refuses a validity beyond 365 days without burning a number", async () => {
+        const order = await draftOrder();
+
+        expect(
+          await rejection(
+            generate(order, DocumentType.QUOTE, { validUntil: "2999-01-01" }),
+          ),
+        ).toMatchObject({ errorCode: "VALIDATION_ERROR" });
+        expect(await counter(DocumentType.QUOTE)).toBe(0);
+      });
+
+      it("a voided quote is reissued under the next number, both rows stay, and the live one blocks a third", async () => {
+        const order = await draftOrder();
+        const first = await generate(order, DocumentType.QUOTE);
+        await promote(first);
+        await asTenant(() => receipts.voidReceipt(first.id, user, "typo"));
+
+        const second = await generate(order, DocumentType.QUOTE);
+        await promote(second);
+
+        expect(second.id).not.toBe(first.id);
+        expect(second.number).toBe(`${YEAR}-000002`);
+        expect((await stateOf(first.id)).status).toBe(ReceiptStatus.VOID);
+        expect(
+          await db.admin.getRepository(Receipt).countBy({
+            order_id: order.id,
+            document_type: DocumentType.QUOTE,
+          }),
+        ).toBe(2);
+        expect(
+          await rejection(generate(order, DocumentType.QUOTE)),
+        ).toMatchObject({
+          errorCode: "DOCUMENT_ALREADY_EXISTS",
+          statusCode: 409,
+        });
+      });
+
+      it("voiding a quote keeps the lock a waybill holds", async () => {
+        const order = await confirmedOrder();
+        const waybill = await generate(order, DocumentType.WAYBILL);
+        await promote(waybill);
+        const quote = await generate(order, DocumentType.QUOTE);
+        await promote(quote);
+        expect(await isLocked(order)).toBe(true);
+
+        await asTenant(() => receipts.voidReceipt(quote.id, user, "t"));
+
+        expect(await isLocked(order)).toBe(true);
+      });
+
+      it("repairs the file of a quote on a draft order", async () => {
+        const order = await draftOrder();
+        const quote = await generate(order, DocumentType.QUOTE);
+        await promote(quote);
+
+        const buffer = await asTenant(() =>
+          artifacts.repair(quote.id, user.id),
+        );
+
+        expect(buffer.equals(FIXTURE_PDF)).toBe(true);
+      });
+
+      it("a replacement keeps the issue date and the validity", async () => {
+        const order = await draftOrder();
+        const quote = await generate(order, DocumentType.QUOTE, {
+          validUntil: inThirtyDays,
+          paymentTerms: "Prepay",
+        });
+        await promote(quote);
+        const before = (await stored(quote.id)).active_snapshot?.document;
+
+        await asTenant(() =>
+          receipts.regenerateReceiptPdf(quote.id, user, {
+            mode: "replace",
+            expectedActiveRevision: 1,
+            confirmReconstruction: false,
+            selection: KEEP,
+          }),
+        );
+
+        const after = (await stored(quote.id)).pending_snapshot?.document;
+        expect(after?.issueDate).toBe(before?.issueDate);
+        expect(after?.details).toEqual(before?.details);
+        expect(after?.details.paymentTerms).toBe("Prepay");
+      });
+
+      it("eleven quotes do not push out invoices", async () => {
+        const invoice = await generate(
+          await confirmedOrder(),
+          DocumentType.INVOICE,
+        );
+        await promote(invoice);
+        for (let i = 0; i < 11; i++) {
+          const quote = await generate(await draftOrder(), DocumentType.QUOTE);
+          await promote(quote);
+        }
+
+        expect((await stateOf(invoice.id)).status).toBe(
+          ReceiptStatus.GENERATED,
+        );
+        expect(
+          await db.admin.getRepository(Receipt).countBy({
+            user_id: user.id,
+            document_type: DocumentType.QUOTE,
+            status: ReceiptStatus.GENERATED,
+          }),
+        ).toBe(10);
       });
     });
 

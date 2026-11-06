@@ -189,6 +189,47 @@ describe("evaluateRequisites: packing list", () => {
   });
 });
 
+describe("evaluateRequisites: quote", () => {
+  const check = (seller: ReturnType<typeof buildSeller>) =>
+    evaluateRequisites(DocumentType.QUOTE, seller, buyer, {});
+
+  it("needs only the seller's name, and warns about tax id, legal form and VAT status", () => {
+    const bare = check(buildSeller(company({ companyTaxId: "" }), {}));
+    expect(bare.missing).toEqual([]);
+    expect(bare.warnings).toEqual([
+      "seller.taxId",
+      "seller.legalForm",
+      "seller.vatPayer",
+    ]);
+    expect(
+      check(
+        buildSeller(company(), {
+          companyLegalForm: "ТОВ",
+          companyVatPayer: false,
+        }),
+      ),
+    ).toEqual({ missing: [], warnings: [] });
+  });
+
+  it("does not need an IBAN", () => {
+    expect(
+      check(buildSeller(company({ companyIban: "" }), {})).missing,
+    ).toEqual([]);
+  });
+
+  it("refuses a seller without a name", () => {
+    expect(
+      check(buildSeller(company({ companyName: "" }), {})).missing,
+    ).toEqual(["seller.name"]);
+  });
+
+  it("requires the VAT number from a VAT payer", () => {
+    expect(
+      check(buildSeller(company(), { companyVatPayer: true })).missing,
+    ).toEqual(["seller.vatId"]);
+  });
+});
+
 describe("buyerFingerprint", () => {
   it("changes with the buyer's IBAN and ignores the display name", () => {
     const base = buildBuyer({ name: "A", iban: VALID_IBAN });

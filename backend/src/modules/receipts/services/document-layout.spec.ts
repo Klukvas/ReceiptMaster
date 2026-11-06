@@ -17,14 +17,17 @@ type TypedDocument =
   | DocumentType.INVOICE
   | DocumentType.ACT
   | DocumentType.SALES_RECEIPT
-  | DocumentType.PACKING_LIST;
-// Invoice and act have golden digests; the later types are checked by content below.
+  | DocumentType.PACKING_LIST
+  | DocumentType.QUOTE;
+// Invoice and act also have readable snapshots; the other types are checked by content below.
 const TYPES: TypedDocument[] = [DocumentType.INVOICE, DocumentType.ACT];
-const ALL_TYPES: TypedDocument[] = [
+// Every type issued before the quotation has golden digests.
+const GOLDEN_TYPES: TypedDocument[] = [
   ...TYPES,
   DocumentType.SALES_RECEIPT,
   DocumentType.PACKING_LIST,
 ];
+const ALL_TYPES: TypedDocument[] = [...GOLDEN_TYPES, DocumentType.QUOTE];
 const UNPRICED_TYPE = DocumentType.PACKING_LIST;
 const STYLES = ["standard", "classic", "minimal", "corporate"];
 const LANGUAGES: DocumentLanguage[] = ["uk", "ru", "en"];
@@ -44,53 +47,101 @@ const XSS = '<script>alert("x")</script>';
 // Digests of the rendered HTML; a change here is a visible change to the document.
 const GOLDEN_SHA256: Record<string, string> = {
   "invoice.standard.uk":
-    "c923ac40f43c9437db558038b39229bd5807ba71344d13a2144a73a2a4b6e0cc",
+    "6bafcf978010092a57b5a0dd1819dd52a3f6ededeb5b5c99f705329aa8345d9c",
   "invoice.standard.ru":
-    "dc9774b5ee38243b5089a7a0d6f21fed813e8ac48813719ed690f6ad481fccf9",
+    "7a0f140ba57a56a7c4717135e8828a7d51300688940ef944bf62034bc0cc0abe",
   "invoice.standard.en":
-    "df8b08b16f5ac51b9117e2cbd90097f53592dfa2f1b13ff1e2be2d28ddcdcf52",
+    "fd13357abaf832e9bc5d358c8665667a85800f2e1a01d84a0c0bb320d469b544",
   "invoice.classic.uk":
-    "28feb1b1edf0bf4dd0d8017aa4221bc1795ce2082f3764f0e92f1a6e57122402",
+    "4226b16bf90aee6494bde04ba4809a5ca265cab6ebcb42ee869788f438732e25",
   "invoice.classic.ru":
-    "809fd4f7b19075a68a2f6072e88fbd4191a4f60bd37c0f4bc5021932df933580",
+    "cec829276b4732e9ef20b7c6a5c6856d07cdfb76ea2db704c2389580de03ec3b",
   "invoice.classic.en":
-    "de41a254bb9acd434af3021cd463c65639d749d97b5f7efc04eff864532ff980",
+    "54c968dd257c8970847c45954103dcba8c53890063e4e38a4c040e537f569be3",
   "invoice.minimal.uk":
-    "b8dd1aa45f140b365ed647aa379f96a62448755eb2a8a2d25e010faf9b5afea1",
+    "0d7004d227b1c3400cb81bbb5dd037b9d4c7190d98e7491fe30843df49da4252",
   "invoice.minimal.ru":
-    "af03e3b1df44c1224b0814858fb461dc7333b951b0b2697a20c76fd3da6cb87d",
+    "000d18b27753d7eba5d69b97e0e0cbd552e96d2292e7eb7ee8109d47b31b1230",
   "invoice.minimal.en":
-    "c4cd600e559815ef1ae40273cf9f6cdad1b1e9841dd27f919d3c4ae599b09a0c",
+    "00e3cb504b025068ad33b8f08c10c51e227f7bcbf5880a45b2cd6a1a0cff3ef1",
   "invoice.corporate.uk":
-    "bb810feec2e292e656c7dc8ac282f60bff5b5c0a2ba34f1e9157bd9bc0351743",
+    "f86dbaae1e79be62fbc6eb97598f3c94861a3609a3689851522c9193ce9683bc",
   "invoice.corporate.ru":
-    "71ed4031919e2e0d07570aa8259f98fc6dd6aeb5afaa1c18cd0e16591478f3bb",
+    "0bb6122588f81f88fa0ffb8d28270879c3d43a20295bc0be6c636f6b4984b891",
   "invoice.corporate.en":
-    "d77d79c3ba3cd69a8c86617cd54cb285f0ad2956d78ccc42bc4c23062985a11c",
+    "b74e131b942d653282d4e78383bf78b684d6db7c7f77e11be5483e1db5559d5f",
   "act.standard.uk":
-    "6c187f6b148416eb117b806f1f94b3eb0fb64fd89cd1584484c30ac24a1b4a82",
+    "1f628564df59d65b87d72c7912a0324e7ed5c6fe15e67c080df98f5daeddda33",
   "act.standard.ru":
-    "a85ec1d90d242d917d5636a982eb3bcf8ca3777cbb083bec7b629087e509728d",
+    "913843b4d51dcc1d429003e8b836c2fdec152faa50711ca1dbf632e634ed8fff",
   "act.standard.en":
-    "eb3333ea6632795c0fe3dcb2ca31ac679e97df72ae2850e631b7bed976193c1f",
+    "b4def70f0757c8dbefe7f248cfc394d721aaa359a7648f6a22955f5f20dc6946",
   "act.classic.uk":
-    "4875b51f0d918256d7c9da0e4782a488053bd9e2b6555e90cc9f13f1f7a96d9b",
+    "2fdad5d53ef8589a3121f122f3604f9d976caf44068682f16ba22eb241541a7f",
   "act.classic.ru":
-    "8c08d8daeff379d2fdc3052ac8c2b64d6a62e721bf9bd7e7ae9827279202cbb2",
+    "9d3e73a5801410760a559be63eea0f780c2000443462b63ba1356cf972aab639",
   "act.classic.en":
-    "091b5991991ca45605cf16c56bbe0b2f9ea07b49cf6a5f6ae15e4ec748ca0a50",
+    "75399f213b65a2998bb150085211efc282e35a6a996a042e4fe5e12b9305e586",
   "act.minimal.uk":
-    "6449f814df81483d8f09caea879df88796febe69b8b6132897098e5b0db1c23e",
+    "64443491ff80201c1dff1e5d87c0fb371b95c66d4673a4d8c0f7f1d5fbe310df",
   "act.minimal.ru":
-    "0658b5f48fb06a91e53fb755e4dc6ce2aefb98f574cfe59e75fcbe81f1e218b6",
+    "5e8f2b8cb844be8ec609737d3c35fdcef3a7baa55a07df6d1f7b8825f3b1da05",
   "act.minimal.en":
-    "525fdaef98c042e544cdffde62e2bb92b43965caafbf0febd41a01bdb99e43e6",
+    "52eaee5151745a27caf2dce902fcd9ff29d2aeca1ef44f68db8ca8f123a2231c",
   "act.corporate.uk":
-    "45a576c0c8f7af07ccc3b0927c09b8b8a2fd7d6713d582ce69694128a116165d",
+    "0995c60e36ee7057e11157e62732c3a4b328b4a997a4e63ab7103211ccab4d4b",
   "act.corporate.ru":
-    "cf9ba943040cf0a246b1c1ad0e1b15a9dfdb413172e04f28918621efb94eb7db",
+    "f248654be84dd6e3bd5c34567be9c86c306c458a517992cc194aa3619d9cc938",
   "act.corporate.en":
-    "2ff7db1f12d21c5472eebf16c4ca50ae7ac8ec40946bcd08491e63ee0bc435ab",
+    "c5eebfea657a877709a4fb1b77e99d8df034cf696b3ccba7b3b52706625348dd",
+  "sales_receipt.standard.uk":
+    "2b57fc82f632f6a17e25867c07707e9c3a09e19fdeb4837dd5c4cbf362027c64",
+  "sales_receipt.standard.ru":
+    "48681ecfc65859e6b777bcdb4f03e3a2d9739bb3e328b0bf77c891fe424b341f",
+  "sales_receipt.standard.en":
+    "ebde1e0d3c5caa6d2a2b31e2d0bb092143e8f4f824cc33fd340046019710d6f4",
+  "sales_receipt.classic.uk":
+    "b760a599a2c50bb10f90b4190efd40f422882f55cc2f4a698f54fc56934a1255",
+  "sales_receipt.classic.ru":
+    "01de20a7242b945a999f16a545352d75a6cea78e075602fa814f3c451a118d2d",
+  "sales_receipt.classic.en":
+    "44dcf7de93276cf18728377e5b474c9a6bb622dc0da2ec1f9f1a2e8a29dfff30",
+  "sales_receipt.minimal.uk":
+    "3a8a91b8e3b6f5bc2655a7afd7af695b4a60e67e24cac356b83fe76f14da8b66",
+  "sales_receipt.minimal.ru":
+    "39f894603bda03c61b572301273d54f16a8afa4104d710acfc654733b528ca29",
+  "sales_receipt.minimal.en":
+    "cb6058e35877712769469effe4dfaa1e96d81f04792ecfdab3f07015c16531e1",
+  "sales_receipt.corporate.uk":
+    "bd47d494b606cad3409b20a61642ad5721ade09141a0acc409c6a54d9c03fd79",
+  "sales_receipt.corporate.ru":
+    "c5a2d632c33c61c8d1dacbb5bc603bbd4b6803bd2fb8f9c47ef24040698ae65d",
+  "sales_receipt.corporate.en":
+    "34b68dda78207f689b4c950fdda16be11d4d4c2d2372d591606f6c07b82e6e36",
+  "packing_list.standard.uk":
+    "1d1ed3dda0e0dac938bab901724552ee0c1baf093dcb8d72e397e153c1adf833",
+  "packing_list.standard.ru":
+    "bf8fde39c308e224c98572b32e115df12314a416be1f6149578ac1e614937208",
+  "packing_list.standard.en":
+    "9559061768bfc8c29e500eec793c3b63163299f78d128f2b85d52c81e5f7df42",
+  "packing_list.classic.uk":
+    "4ad52dcf1470da4588d927ecd5488a75af72aecdfccc9c1308e00f5fbb95cb0f",
+  "packing_list.classic.ru":
+    "ec64f8449c6acc50c75a0a1e00429d8155f1c71c15dd448a0b3837331056e16e",
+  "packing_list.classic.en":
+    "ef521510365ed5413dac76086b6e91b5e8bd3f17adf4a1c240a771608f04859f",
+  "packing_list.minimal.uk":
+    "7fee9ae7841724a3138301afbb9681b54547c2e19532ca9b5d27c3965b1f6039",
+  "packing_list.minimal.ru":
+    "c35c4450539c50206cfc753a6f2114dabfd8c1fc3333de4c9e6413376dbf82fa",
+  "packing_list.minimal.en":
+    "04388c6120dead79826d60e6a6771e0bc7974328957fd9266d01b7335d22d3c4",
+  "packing_list.corporate.uk":
+    "6a518fded11b6beaa38b07d79124b1748a1280317b8aab0cf9f669232227aa1d",
+  "packing_list.corporate.ru":
+    "9a793c3ea4dddabab423708ec81e7f58af0f11765fe3d00f2366863a3b64d962",
+  "packing_list.corporate.en":
+    "10286477140332a535ed50c7e5c92f59ad7fc5a4e51f05f0fde3e5b205d3182d",
 };
 
 const order = (overrides: Partial<FrozenOrder> = {}): FrozenOrder => ({
@@ -137,6 +188,12 @@ const configFor = (
   };
 };
 
+const quoteDetails = {
+  validUntil: "2026-10-29",
+  paymentTerms: "50% передоплата, решта після поставки",
+  deliveryTerms: "Самовивіз зі складу",
+};
+
 const contextFor = (
   type: TypedDocument,
   config: DocumentConfig,
@@ -151,7 +208,9 @@ const contextFor = (
             contractRef,
             period: { from: "2026-10-01", to: "2026-10-31" },
           }
-        : { dueDate: "2026-10-20" },
+        : type === DocumentType.QUOTE
+          ? { ...quoteDetails }
+          : { dueDate: "2026-10-20" },
   },
   seller: buildSeller(config.company, {
     companyLegalForm: "ТОВ",
@@ -227,7 +286,7 @@ describe("invoice and act layout", () => {
   const sha = (html: string) => createHash("sha256").update(html).digest("hex");
 
   describe("golden HTML", () => {
-    const cases = TYPES.flatMap((type) =>
+    const cases = GOLDEN_TYPES.flatMap((type) =>
       STYLES.flatMap((style) =>
         LANGUAGES.map((language) => [type, style, language] as const),
       ),
@@ -484,6 +543,128 @@ describe("invoice and act layout", () => {
         contextFor(UNPRICED_TYPE, config),
       );
       expect(html).not.toMatch(/2,?050\.50|1,?500\.50/);
+    });
+  });
+
+  describe("quotation", () => {
+    const cases = STYLES.flatMap((style) =>
+      LANGUAGES.map((language) => [style, language] as const),
+    );
+    const TITLES = {
+      uk: "Комерційна пропозиція",
+      ru: "Коммерческое предложение",
+      en: "Quotation",
+    };
+    const NOTICE_START = {
+      uk: "Пропозиція не є рахунком",
+      ru: "Предложение не является счётом",
+      en: "This quotation is not an invoice",
+    };
+    const VALID_UNTIL = {
+      uk: "Пропозиція дійсна до",
+      ru: "Предложение действительно до",
+      en: "Valid until",
+    };
+
+    it.each(cases)(
+      "%s / %s carries title, notice, validity, terms and VAT but no payment details",
+      async (style, language) => {
+        const html = await render(DocumentType.QUOTE, style, language);
+        const labels = DOCUMENT_LABELS[language];
+        expect(html).toContain(TITLES[language]);
+        expect(html).toContain('class="doc-notice"');
+        expect(html).toContain(NOTICE_START[language]);
+        expect(html).toContain(VALID_UNTIL[language]);
+        expect(html).toContain(labels.paymentTerms);
+        expect(html).toContain(quoteDetails.paymentTerms);
+        expect(html).toContain(labels.deliveryTerms);
+        expect(html).toContain(quoteDetails.deliveryTerms);
+        expect(html).toContain(`${labels.vatIncluded} (20%)`);
+        expect(html).toContain(labels.offerTotal);
+        expect(html).toContain(labels.fromSupplier);
+        expect(html).not.toContain(labels.paymentDetails);
+        expect(html).not.toContain(SELLER_IBAN);
+        expect(html).not.toContain(labels.dueDate);
+        expect(html).not.toContain("Всього до сплати");
+        expect(html).not.toContain("Всего к оплате");
+        expect(html).not.toContain("Total due");
+        expect(html).not.toContain("{{");
+      },
+    );
+
+    it("calls the delivery condition 'supply' (поставки) in every language", () => {
+      expect(DOCUMENT_LABELS.uk.deliveryTerms).toBe("Умови поставки");
+      expect(DOCUMENT_LABELS.ru.deliveryTerms).toBe("Условия поставки");
+      expect(DOCUMENT_LABELS.en.deliveryTerms).toBe("Delivery terms");
+    });
+
+    it("prints the validity date in the document language", async () => {
+      const html = await render(DocumentType.QUOTE, "standard", "uk");
+      expect(html).toContain("29 жовтня 2026 р.");
+    });
+
+    it("omits the terms that were not given", async () => {
+      const config = configFor("standard", "uk");
+      const context: DocumentContext = {
+        ...contextFor(DocumentType.QUOTE, config),
+        request: {
+          type: DocumentType.QUOTE,
+          details: { validUntil: "2026-10-29" },
+        },
+      };
+      const html = await render(
+        DocumentType.QUOTE,
+        "standard",
+        "uk",
+        order(),
+        context,
+      );
+      expect(html).toContain("Пропозиція дійсна до");
+      expect(html).not.toContain("Умови оплати");
+      expect(html).not.toContain("Умови поставки");
+    });
+
+    it("escapes hostile text in the terms", async () => {
+      for (const style of STYLES) {
+        const config = configFor(style, "uk");
+        const context: DocumentContext = {
+          ...contextFor(DocumentType.QUOTE, config),
+          request: {
+            type: DocumentType.QUOTE,
+            details: {
+              validUntil: "2026-10-29",
+              paymentTerms: XSS,
+              deliveryTerms: XSS,
+            },
+          },
+        };
+        const html = await render(
+          DocumentType.QUOTE,
+          style,
+          "uk",
+          order(),
+          context,
+        );
+        expect(html).not.toContain("<script>alert");
+        expect(html).toContain("&lt;script&gt;");
+      }
+    });
+
+    it("keeps the quotation's wording out of the other types and theirs out of it", async () => {
+      for (const type of GOLDEN_TYPES) {
+        const html = await render(type, "standard", "uk");
+        expect(html).not.toContain(NOTICE_START.uk);
+        expect(html).not.toContain("Пропозиція дійсна до");
+        expect(html).not.toContain("Загальна вартість");
+      }
+      const quote = await render(DocumentType.QUOTE, "standard", "uk");
+      expect(quote).not.toContain("Не є фіскальним документом");
+    });
+
+    it("titles the document and numbers it through the style labels", async () => {
+      const html = await render(DocumentType.QUOTE, "classic", "uk");
+      expect(html).toContain("Номер пропозиції:");
+      expect(html).not.toContain("Номер рахунку:");
     });
   });
 

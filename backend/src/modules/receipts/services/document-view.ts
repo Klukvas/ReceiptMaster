@@ -45,6 +45,7 @@ type QuantitiesView = { lines: string; units: string };
  * document type.
  */
 export type DocumentView = {
+  /** The shared labels, with the grand total line renamed for types that ask for it. */
   labels: DocumentLabels;
   seller: PartyView;
   buyer: PartyView;
@@ -55,7 +56,7 @@ export type DocumentView = {
     bank: string;
     purpose: string;
   };
-  /** Heading-level notice above the parties (sales receipt: not a fiscal document). */
+  /** Heading-level notice above the parties (sales receipt: not fiscal; quotation: not an invoice). */
   notice?: string;
   /** The items table drops its price and amount columns. */
   hidesItemPrices?: true;
@@ -71,6 +72,8 @@ export type DocumentView = {
   quantities?: QuantitiesView;
   /** Invoice only. */
   dueDate?: string;
+  /** Quotation only: how long the offer stands and the terms attached to it. */
+  offer?: { validUntil: string; paymentTerms?: string; deliveryTerms?: string };
   /** Act only. */
   act?: { statement: string; contractRef?: string; period?: string };
   signatures: {
@@ -160,7 +163,9 @@ export function buildDocumentRenderData(
     (purposeVat ? `, ${purposeVat}` : "");
 
   const view: DocumentView = {
-    labels,
+    labels: layout.grandTotalLabel
+      ? { ...labels, grandTotal: labels[layout.grandTotalLabel] }
+      : labels,
     seller: {
       role: labels[layout.sellerRole],
       name: sellerName,
@@ -190,7 +195,7 @@ export function buildDocumentRenderData(
           },
         }
       : {}),
-    ...(layout.nonFiscalNotice ? { notice: labels.nonFiscalNotice } : {}),
+    ...(layout.notice ? { notice: labels[layout.notice] } : {}),
     ...(layout.money
       ? {
           totals: {
@@ -220,6 +225,19 @@ export function buildDocumentRenderData(
           },
         }),
     ...(details.dueDate ? { dueDate: day(details.dueDate) } : {}),
+    ...(details.validUntil
+      ? {
+          offer: {
+            validUntil: day(details.validUntil),
+            ...(details.paymentTerms
+              ? { paymentTerms: details.paymentTerms }
+              : {}),
+            ...(details.deliveryTerms
+              ? { deliveryTerms: details.deliveryTerms }
+              : {}),
+          },
+        }
+      : {}),
     ...(layout.completionStatement
       ? {
           act: {

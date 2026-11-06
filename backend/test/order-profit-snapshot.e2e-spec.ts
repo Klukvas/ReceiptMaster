@@ -79,6 +79,7 @@ describeIsolatedPostgres(
         // Document voiding is covered by order-lifecycle; no receipts exist here.
         {
           voidForCancellation: async () => 0,
+          revokePublicLinksForOrders: async () => 0,
         } as unknown as ReceiptsService,
         memoryCache,
         subscription,

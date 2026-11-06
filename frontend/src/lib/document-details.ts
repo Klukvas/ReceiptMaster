@@ -1,10 +1,14 @@
 import type { DocumentRequestBody } from "./api";
 import type { DocumentConfig } from "./document-config";
+import { documentToday } from "./document-clock";
 import { DOCUMENT_TYPE_META, type CreatableType } from "./document-types";
 
 export const MAX_PAYMENT_TERM_DAYS = 365;
 export const MAX_CONTRACT_REF_LENGTH = 200;
 export const DEFAULT_PAYMENT_TERM_DAYS = 5;
+export const QUOTE_DEFAULT_VALIDITY_DAYS = 14;
+export const QUOTE_MAX_VALIDITY_DAYS = 365;
+export const MAX_QUOTE_TERMS_LENGTH = 300;
 
 export type PaymentTermMode = "days" | "date";
 
@@ -16,8 +20,15 @@ export type InvoiceForm = {
 
 export type ActForm = { contractRef: string; from: string; to: string };
 
+export type QuoteForm = {
+  validUntil: string;
+  paymentTerms: string;
+  deliveryTerms: string;
+};
+
 type InvoiceDetails = Extract<DocumentRequestBody, { type: "invoice" }>["details"];
 type ActDetails = Extract<DocumentRequestBody, { type: "act" }>["details"];
+type QuoteDetails = Extract<DocumentRequestBody, { type: "quote" }>["details"];
 
 /** Field → translation key of the problem. */
 export type DetailsErrors = Partial<Record<string, string>>;
@@ -79,30 +90,116 @@ export function buildActDetails(form: ActForm): Built<ActDetails> {
   };
 }
 
-export type DocumentForms = { invoice: InvoiceForm; act: ActForm };
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `date` (YYYY-MM-DD) moved by `days` calendar days; works on UTC so DST never shifts it. */
+export function addDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/**
+ * `validUntil` is sent only when the user changed the suggested date: otherwise the
+ * server counts the default from the issue date in the account's time zone.
+ */
+export function buildQuoteDetails(
+  form: QuoteForm,
+  defaultValidUntil: string,
+  today: string,
+): Built<QuoteDetails> {
+  const paymentTerms = form.paymentTerms.trim();
+  const deliveryTerms = form.deliveryTerms.trim();
+  const isDateChanged = form.validUntil !== defaultValidUntil;
+  const dateError = (): string | undefined => {
+    if (!isCalendarDate(form.validUntil)) return "documents.errors.validUntilInvalid";
+    if (form.validUntil < today) return "documents.errors.validUntilBeforeIssue";
+    if (form.validUntil > addDays(today, QUOTE_MAX_VALIDITY_DAYS))
+      return "documents.errors.validUntilTooFar";
+    return undefined;
+  };
+  const validUntilError = isDateChanged ? dateError() : undefined;
+  const errors: DetailsErrors = {
+    ...(validUntilError && { validUntil: validUntilError }),
+    ...(paymentTerms.length > MAX_QUOTE_TERMS_LENGTH && {
+      paymentTerms: "documents.errors.termsTooLong",
+    }),
+    ...(deliveryTerms.length > MAX_QUOTE_TERMS_LENGTH && {
+      deliveryTerms: "documents.errors.termsTooLong",
+    }),
+  };
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      ...(isDateChanged && { validUntil: form.validUntil }),
+      ...(paymentTerms !== "" && { paymentTerms }),
+      ...(deliveryTerms !== "" && { deliveryTerms }),
+    },
+  };
+}
+
+export type DocumentForms = {
+  invoice: InvoiceForm;
+  act: ActForm;
+  quote: QuoteForm;
+};
 
 type TemplateId = DocumentConfig["templateId"];
+
+/**
+ * What the quote form starts with, and the date the server would pick for it: both count
+ * from today in the document time zone, not the browser's.
+ */
+export type QuoteDefaults = { today: string; validUntil: string };
+
+export function quoteDefaults(
+  timeZone: string | undefined,
+  now: Date = new Date(),
+): QuoteDefaults {
+  const today = documentToday(timeZone, now);
+  return { today, validUntil: addDays(today, QUOTE_DEFAULT_VALIDITY_DAYS) };
+}
 
 /** The POST /receipts/orders/:id/documents body for the chosen type and its form. */
 export function buildDocumentRequest(
   type: CreatableType,
   forms: DocumentForms,
+  quote: QuoteDefaults,
   templateId?: TemplateId,
 ): Built<DocumentRequestBody> {
   const overrides = templateId ? { overrides: { templateId } } : {};
-  if (DOCUMENT_TYPE_META[type].details === null) {
-    return { ok: true, value: { type, ...overrides } };
+  const withDetails = <Value>(
+    built: Built<Value>,
+    body: (details: Value) => DocumentRequestBody,
+  ): Built<DocumentRequestBody> =>
+    built.ok ? { ok: true, value: body(built.value) } : built;
+  const kind = DOCUMENT_TYPE_META[type].details;
+  switch (kind) {
+    case null:
+      return { ok: true, value: { type, ...overrides } };
+    case "invoice":
+      return withDetails(buildInvoiceDetails(forms.invoice), (details) => ({
+        type: "invoice",
+        details,
+        ...overrides,
+      }));
+    case "act":
+      return withDetails(buildActDetails(forms.act), (details) => ({
+        type: "act",
+        details,
+        ...overrides,
+      }));
+    case "quote":
+      return withDetails(
+        buildQuoteDetails(forms.quote, quote.validUntil, quote.today),
+        (details) => ({ type: "quote", details, ...overrides }),
+      );
+    default: {
+      const unreachable: never = kind;
+      return unreachable;
+    }
   }
-  if (type === "invoice") {
-    const built = buildInvoiceDetails(forms.invoice);
-    return built.ok
-      ? { ok: true, value: { type, details: built.value, ...overrides } }
-      : built;
-  }
-  const built = buildActDetails(forms.act);
-  return built.ok
-    ? { ok: true, value: { type, details: built.value, ...overrides } }
-    : built;
 }
 
 /** Maps a server path like `details.period.from` to the form field that shows it. */

@@ -2170,7 +2170,7 @@
             }
           }
         },
-        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt or packing list) for an order",
+        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list or quotation) for an order",
         "parameters": [
           {
             "name": "orderId",
@@ -2193,7 +2193,7 @@
             }
           },
           "400": {
-            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order not CONFIRMED (ORDER_CANNOT_BE_MODIFIED), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2223,7 +2223,7 @@
             }
           },
           "409": {
-            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice or act can be issued again under a new number. Also returned when the order/defaults changed while preparing",
+            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing",
             "content": {
               "application/json": {
                 "schema": {
@@ -7274,6 +7274,65 @@
                   "remove"
                 ],
                 "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "quote"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "validUntil": {
+                    "type": "string"
+                  },
+                  "paymentTerms": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "deliveryTerms": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
               }
             },
             "required": [

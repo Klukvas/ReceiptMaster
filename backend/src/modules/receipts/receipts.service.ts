@@ -16,6 +16,7 @@ import {
   DataSource,
   EntityManager,
   FindOptionsWhere,
+  In,
   IsNull,
   Not,
 } from "typeorm";
@@ -106,7 +107,7 @@ function documentAlreadyExists(orderId: string, type: DocumentType) {
 const ORDER_TYPE_UNIQUE_INDEX = "IDX_receipts_order_document_type";
 
 /**
- * A voided document stays on its order as history. For an invoice or act it frees the slot
+ * A voided document stays on its order as history. For an invoice, act or quotation it frees the slot
  * for a reissue; any other type stays closed, so a voided one still blocks a new one.
  */
 async function hasClosedVoidedDocument(
@@ -591,6 +592,26 @@ export class ReceiptsService {
         `Order ${orderId} cancelled: voided ${live.length} document(s)`,
       );
     return live.length;
+  }
+
+  /**
+   * Revokes the public link of every document of orders being deleted, in the caller's
+   * transaction: a deleted order must not stay reachable by an old link. Statuses and
+   * files are left alone, as a deleted order's documents are not touched otherwise.
+   * Returns how many links were revoked.
+   */
+  async revokePublicLinksForOrders(
+    manager: EntityManager,
+    orderIds: string[],
+    userId: string,
+  ): Promise<number> {
+    if (orderIds.length === 0) return 0;
+    const result = await manager.update(
+      Receipt,
+      { order_id: In(orderIds), user_id: userId, public_token: Not(IsNull()) },
+      { public_token: null },
+    );
+    return result.affected ?? 0;
   }
 
   async findAll(

@@ -519,6 +519,30 @@ describeIsolatedPostgres(
         expect(await stock(product)).toBe(10);
       });
 
+      it("deleting an order revokes the share links of its documents, one by one or in a batch", async () => {
+        const product = await seedProduct();
+        const single = await confirmed(product);
+        const batched = await confirmed(product);
+        const singleReceipt = await generatedReceipt(single);
+        const batchedReceipt = await generatedReceipt(batched);
+
+        await asTenant(() => orders.remove(single.id, user));
+        await asTenant(() => orders.deleteBatch([batched.id], user));
+
+        for (const receipt of [singleReceipt, batchedReceipt]) {
+          expect(await storedReceipt(receipt.id)).toMatchObject({
+            public_token: null,
+            status: ReceiptStatus.GENERATED,
+          });
+          await expect(
+            receipts.getPublicReceipt(receipt.public_token as string),
+          ).rejects.toMatchObject({ statusCode: 404 });
+          await expect(
+            receipts.getPublicReceiptPdf(receipt.public_token as string),
+          ).rejects.toMatchObject({ statusCode: 404 });
+        }
+      });
+
       it("keeps a document that was voided by hand, with its own reason", async () => {
         const order = await confirmed(await seedProduct());
         const receipt = await generatedReceipt(order);

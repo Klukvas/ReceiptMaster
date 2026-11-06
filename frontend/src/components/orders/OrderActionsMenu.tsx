@@ -156,7 +156,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      const menuHeight = 400;
+      const menuHeight = 480;
       const proposedTop =
         spaceBelow < menuHeight
           ? rect.top - menuHeight + rect.height
@@ -195,6 +195,19 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       className: baseItem,
     });
 
+    const creatableTypes = CREATABLE_TYPES.filter((type) => canCreate(order, type));
+    const createItems: MenuItem[] = creatableTypes.map((type, position) => {
+      const meta = DOCUMENT_TYPE_META[type];
+      return {
+        icon: meta.icon,
+        label: t("documents.menuItem", { type: t(meta.labelKey) }),
+        onClick: (e) => handleAction(() => setCreating(type), e),
+        className: baseItem,
+        group: t("documents.createGroup"),
+        isDividerBefore: position === 0,
+      };
+    });
+
     // Status-dependent actions
     if (order.status === "draft" && !order.is_locked) {
       items.push(
@@ -219,6 +232,9 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         },
       );
     }
+
+    // A draft offers only the documents that do not need a confirmed order.
+    if (order.status === "draft") items.push(...createItems);
 
     if (order.status === "confirmed") {
       // Download/print/customize act on the waybill; other documents have their own entries.
@@ -284,21 +300,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         });
       }
 
-      CREATABLE_TYPES.filter((type) => canCreate(order, type)).forEach(
-        (type, position) => {
-          const meta = DOCUMENT_TYPE_META[type];
-          items.push({
-            icon: meta.icon,
-            label: t("documents.menuItem", { type: t(meta.labelKey) }),
-            onClick: (e) => handleAction(() => setCreating(type), e),
-            className: baseItem,
-            group: t("documents.createGroup"),
-            isDividerBefore: position === 0,
-          });
-        },
-      );
-
-      items.push({
+      items.push(...createItems, {
         icon: XCircle,
         label: t("orders.cancel"),
         onClick: (e) => handleAction(() => onCancel(order.id), e),

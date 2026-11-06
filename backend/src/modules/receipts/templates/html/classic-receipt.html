@@ -406,6 +406,9 @@
         
         <!-- Totals -->
         {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
         {{> documentTotals}}
         {{else}}
         <div class="totals-section">
@@ -460,6 +463,9 @@
             
            
         </div>
+        {{#if document}}
+        </div>
+        {{/if}}
     </div>
 </body>
 </html>

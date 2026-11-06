@@ -327,6 +327,9 @@
         
         <!-- Totals -->
         {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
         {{> documentTotals}}
         {{else}}
         <div class="totals-section">
@@ -383,6 +386,9 @@
             
             <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Receipt generated:{{/if}} {{generatedAt}}</div>
         </div>
+        {{#if document}}
+        </div>
+        {{/if}}
     </div>
 </body>
 </html>

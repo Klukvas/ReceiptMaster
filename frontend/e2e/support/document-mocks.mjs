@@ -26,7 +26,7 @@ export const COMPLETE_COMPANY = {
   defaultPaymentTermDays: 14,
 };
 
-const FULL = ["waybill", "invoice", "act", "sales_receipt", "packing_list"];
+const FULL = ["waybill", "invoice", "act", "sales_receipt", "packing_list", "quote"];
 const capabilities = (documentTypes) => ({
   revision: 2,
   companyFields: ["companyName", "companyAddress", "companyEmail", "companyPhone", "companyTaxId", "companyIban", "companySwift", "companyWebsite", "companyTagline"],
@@ -49,7 +49,7 @@ export const TEMPLATES = [
   template("classic", "Classic", FULL),
 ];
 
-const designConfig = (templateId, company) => ({
+const designConfig = (templateId, company, timeZone = "UTC") => ({
   schemaVersion: 1,
   company: { ...company },
   templateId,
@@ -68,7 +68,7 @@ const designConfig = (templateId, company) => ({
   },
   formatting: {
     numberLocale: "en-US", currencyDisplay: "symbol", dateLocale: "document",
-    dateStyle: "medium", timeStyle: "none", hourCycle: "h23", timeZone: "UTC",
+    dateStyle: "medium", timeStyle: "none", hourCycle: "h23", timeZone,
   },
 });
 
@@ -92,11 +92,12 @@ const requisitesRefusal = {
 };
 
 /**
- * @param state mutable spec state; reads `company`, `retention`, `refusal`, `designId`
- *   and records `created` (parsed payloads) and `voided` (request bodies).
+ * @param state mutable spec state; reads `company`, `retention`, `refusal` (true, or a 422 body),
+ *   `createError` ({ status, body } for any other refusal of the create request), `designId`,
+ *   `timeZone` (document time zone, default UTC) and records `created` (parsed payloads), `voided` (request bodies) and `retentionQueries`.
  */
 export const documentHandlers = (state) => [
-  async (route, { path, method, body }, json) => {
+  async (route, { path, method, body, search }, json) => {
     if (path === "/settings/company-info" && method === "GET")
       return answer(json, route, { data: state.company ?? COMPLETE_COMPANY });
     if (path === "/settings/company-info" && method === "POST") {
@@ -105,15 +106,22 @@ export const documentHandlers = (state) => [
     }
     if (path === "/settings/templates") return answer(json, route, { data: TEMPLATES });
     if (path === "/settings/document-config")
-      return answer(json, route, { data: { revision: 1, config: designConfig(state.designId ?? "thermal", state.company ?? COMPLETE_COMPANY) } });
-    if (path === "/receipts/retention")
+      return answer(json, route, { data: { revision: 1, config: designConfig(state.designId ?? "thermal", state.company ?? COMPLETE_COMPANY, state.timeZone) } });
+    if (path === "/receipts/retention") {
+      state.retentionQueries = [...(state.retentionQueries ?? []), search];
       return answer(json, route, state.retention ?? { limit: 10, count: 2, replaces: null });
+    }
     return false;
   },
   async (route, { path, method, body }, json) => {
     const created = /^\/receipts\/orders\/([^/]+)\/documents$/.exec(path);
     if (created && method === "POST") {
-      if (state.refusal) return answer(json, route, requisitesRefusal, 422);
+      if (state.refusal)
+        return answer(json, route, state.refusal === true ? requisitesRefusal : state.refusal, 422);
+      if (state.createError) {
+        state.createAttempts = [...(state.createAttempts ?? []), payloadOf(body)];
+        return answer(json, route, state.createError.body, state.createError.status);
+      }
       const payload = payloadOf(body);
       state.created = [...(state.created ?? []), payload];
       const document = {

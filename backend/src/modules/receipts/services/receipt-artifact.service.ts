@@ -4,8 +4,9 @@ import { DataSource, IsNull, Not } from "typeorm";
 import { createHash, randomUUID } from "crypto";
 import { Receipt, ReceiptStatus } from "../entities/receipt.entity";
 import { DOCUMENTS_RETAINED_PER_TYPE } from "../document-retention";
+import { specFor } from "../document-types";
 import { isLockingDocumentType } from "../order-lock";
-import { Order, OrderStatus } from "../../orders/entities/order.entity";
+import { Order } from "../../orders/entities/order.entity";
 import { DocumentRenderService } from "./document-render.service";
 import { DocumentArtifactsService } from "./document-artifacts.service";
 import { ReceiptSnapshotService } from "./receipt-snapshot.service";
@@ -81,7 +82,9 @@ export class ReceiptArtifactService {
       });
       if (
         !order ||
-        order.status !== OrderStatus.CONFIRMED ||
+        !specFor(receipt.document_type).allowedOrderStatuses.includes(
+          order.status,
+        ) ||
         (receipt.status === ReceiptStatus.GENERATED &&
           isLockingDocumentType(receipt.document_type) &&
           !order.is_locked)
@@ -310,7 +313,9 @@ export class ReceiptArtifactService {
       });
       if (
         !order ||
-        order.status !== OrderStatus.CONFIRMED ||
+        !specFor(receipt.document_type).allowedOrderStatuses.includes(
+          order.status,
+        ) ||
         (isLockingDocumentType(receipt.document_type) && !order.is_locked)
       )
         return false;

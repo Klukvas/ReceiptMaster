@@ -367,7 +367,7 @@ describe("ReceiptsController: POST orders/:orderId/documents", () => {
     expect(service.generateDocument.mock.calls[1][4]).toBeUndefined();
   });
 
-  it.each(["quote", "return_note"])(
+  it.each(["return_note"])(
     "refuses %s with DOCUMENT_TYPE_NOT_SUPPORTED",
     async (type) => {
       await expect(

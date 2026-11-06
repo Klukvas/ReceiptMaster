@@ -79,6 +79,7 @@ describe("OrdersService", () => {
     receiptsService = {
       generateReceipt: jest.fn(),
       voidForCancellation: jest.fn().mockResolvedValue(0),
+      revokePublicLinksForOrders: jest.fn().mockResolvedValue(0),
     };
     settingsService = {
       getAutoGenerateReceipt: jest.fn().mockResolvedValue(false),
@@ -359,7 +360,7 @@ describe("OrdersService", () => {
   });
 
   describe("cancel", () => {
-    it("cancels a draft without touching documents", async () => {
+    it("cancels a draft and voids its documents, such as a quotation", async () => {
       const manager = lockedOrderTransaction(mockOrder);
       ordersRepo.findOne.mockResolvedValue({
         ...mockOrder,
@@ -369,7 +370,11 @@ describe("OrdersService", () => {
       const result = await service.cancel("order-1", mockUser);
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
-      expect(receiptsService.voidForCancellation).not.toHaveBeenCalled();
+      expect(receiptsService.voidForCancellation).toHaveBeenCalledWith(
+        manager,
+        "order-1",
+        "user-1",
+      );
       expect(manager.update).toHaveBeenCalledWith(
         Order,
         { id: "order-1", user_id: "user-1", status: OrderStatus.DRAFT },
@@ -797,6 +802,27 @@ describe("OrdersService", () => {
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
+    it("revokes the public links of the order's documents in the same transaction", async () => {
+      const manager = {
+        find: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn().mockResolvedValue({ ...mockOrder }),
+        softDelete: jest.fn(),
+        increment: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await service.remove("order-1", mockUser);
+
+      expect(receiptsService.revokePublicLinksForOrders).toHaveBeenCalledWith(
+        manager,
+        ["order-1"],
+        mockUser.id,
+      );
+      expect(
+        receiptsService.revokePublicLinksForOrders.mock.invocationCallOrder[0],
+      ).toBeLessThan(manager.softDelete.mock.invocationCallOrder[0]);
+    });
+
     it("should handle product not found during removal", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
@@ -837,6 +863,11 @@ describe("OrdersService", () => {
 
       expect(result.deleted).toBe(2);
       expect(cacheService.delByPattern).toHaveBeenCalled();
+      expect(receiptsService.revokePublicLinksForOrders).toHaveBeenCalledWith(
+        expect.anything(),
+        ["o1", "o2"],
+        mockUser.id,
+      );
     });
 
     it("should throw if some orders not found", async () => {

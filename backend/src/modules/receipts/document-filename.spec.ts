@@ -24,5 +24,11 @@ describe("documentFilename", () => {
         number: "2026-000003",
       }),
     ).toBe("act-2026-000003.pdf");
+    expect(
+      documentFilename({
+        document_type: DocumentType.QUOTE,
+        number: "2026-000004",
+      }),
+    ).toBe("quote-2026-000004.pdf");
   });
 });

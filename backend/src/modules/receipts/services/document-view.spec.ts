@@ -31,7 +31,8 @@ const frozenFor = (
     | DocumentType.INVOICE
     | DocumentType.ACT
     | DocumentType.SALES_RECEIPT
-    | DocumentType.PACKING_LIST,
+    | DocumentType.PACKING_LIST
+    | DocumentType.QUOTE,
   vatPayer: boolean | null,
   overrides: Partial<FrozenDocument> = {},
 ): FrozenDocument => ({
@@ -45,7 +46,14 @@ const frozenFor = (
             contractRef: "Договір 7",
             period: { from: "2026-10-01", to: "2026-10-31" },
           }
-        : {},
+        : type === DocumentType.QUOTE
+          ? {
+              validUntil: "2026-10-29",
+              validUntilSource: "default",
+              paymentTerms: "50% передоплата",
+              deliveryTerms: "Самовивіз",
+            }
+          : {},
   issueDate: "2026-10-15",
   seller: buildSeller(
     {
@@ -314,6 +322,81 @@ describe("buildDocumentRenderData", () => {
       expect(signatures.caption).toBe("Підпис");
       expect(signatures.caption).not.toContain("М.П.");
       expect([seller.role, buyer.role]).toEqual(["Продавець", "Покупець"]);
+    });
+  });
+
+  describe("quote", () => {
+    const view = (vatPayer: boolean | null, overrides = {}) =>
+      buildDocumentRenderData(
+        frozenFor(DocumentType.QUOTE, vatPayer, overrides),
+        order,
+        "N",
+        config,
+      ).view;
+
+    it("carries the quotation notice and no other type does", () => {
+      expect(view(true).notice).toBe(
+        "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
+      );
+      for (const type of [
+        DocumentType.INVOICE,
+        DocumentType.ACT,
+        DocumentType.SALES_RECEIPT,
+        DocumentType.PACKING_LIST,
+      ] as const)
+        expect(
+          buildDocumentRenderData(frozenFor(type, true), order, "N", config)
+            .view.notice ?? "",
+        ).not.toContain("Пропозиція");
+    });
+
+    it("renames the grand total and leaves the other types' labels alone", () => {
+      expect(view(true).labels.grandTotal).toBe("Загальна вартість");
+      const invoice = buildDocumentRenderData(
+        frozenFor(DocumentType.INVOICE, true),
+        order,
+        "N",
+        config,
+      ).view;
+      expect(invoice.labels.grandTotal).toBe("Всього до сплати");
+    });
+
+    it("has no payment block, splits VAT and signs as supplier with a seal", () => {
+      const payer = view(true);
+      expect(payer.payment).toBeUndefined();
+      expect(payer.totals?.vat?.amount).toBe(money(20000));
+      expect(view(false).totals?.noVat).toBe("Без ПДВ");
+      expect(payer.signatures.seller.heading).toBe("Від Постачальника");
+      expect(payer.signatures.buyer).toBeUndefined();
+      expect(payer.signatures.caption).toBe("Підпис / М.П.");
+      expect([payer.seller.role, payer.buyer.role]).toEqual([
+        "Постачальник",
+        "Покупець",
+      ]);
+    });
+
+    it("exposes the offer terms, and omits them when absent", () => {
+      expect(view(true).offer).toEqual({
+        validUntil: "29 жовтня 2026 р.",
+        paymentTerms: "50% передоплата",
+        deliveryTerms: "Самовивіз",
+      });
+      expect(
+        view(true, { details: { validUntil: "2026-10-29" } }).offer,
+      ).toEqual({ validUntil: "29 жовтня 2026 р." });
+    });
+
+    it("gives the other types no offer", () => {
+      for (const type of [
+        DocumentType.INVOICE,
+        DocumentType.ACT,
+        DocumentType.SALES_RECEIPT,
+        DocumentType.PACKING_LIST,
+      ] as const)
+        expect(
+          buildDocumentRenderData(frozenFor(type, true), order, "N", config)
+            .view.offer,
+        ).toBeUndefined();
     });
   });
 

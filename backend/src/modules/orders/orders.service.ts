@@ -487,9 +487,9 @@ export class OrdersService {
   /**
    * DRAFT or CONFIRMED → CANCELLED in one transaction, taking the tenant receipt
    * lock first and then the order row (the same tenant → order → receipt order as
-   * generation and promotion). Cancelling a confirmed order voids its active
-   * document and pending candidate and revokes the share link; voided documents
-   * stay as history. Stock is not returned here — only deleting the order does
+   * generation and promotion). Cancelling voids the order's active documents
+   * and pending candidates and revokes the share links (a draft carries
+   * documents too: a quotation); voided documents stay as history. Stock is not returned here — only deleting the order does
    * that, exactly once.
    */
   async cancel(id: string, user: User): Promise<Order> {
@@ -502,9 +502,7 @@ export class OrdersService {
       if (order.status === OrderStatus.CANCELLED) {
         throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
       }
-      if (order.status === OrderStatus.CONFIRMED) {
-        await this.receiptsService.voidForCancellation(manager, id, user.id);
-      }
+      await this.receiptsService.voidForCancellation(manager, id, user.id);
       await this.transition(manager, order, OrderStatus.CANCELLED);
     });
     await this.invalidateDashboardCache(user.id);
@@ -712,6 +710,12 @@ export class OrdersService {
         );
       }
 
+      await this.receiptsService.revokePublicLinksForOrders(
+        manager,
+        [id],
+        user.id,
+      );
+
       // Soft delete the order (sets deleted_at timestamp)
       await manager.softDelete(Order, { id, user_id: user.id });
     });
@@ -822,6 +826,11 @@ export class OrdersService {
         );
       }
 
+      await this.receiptsService.revokePublicLinksForOrders(
+        manager,
+        uniqueIds,
+        user.id,
+      );
       await manager.softDelete(Order, { id: In(uniqueIds), user_id: user.id });
 
       return { deleted: orders.length };

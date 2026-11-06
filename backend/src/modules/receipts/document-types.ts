@@ -46,9 +46,13 @@ export type SignatureLabelKey =
   | "issuedBy"
   | "fromContractor"
   | "fromCustomer"
+  | "fromSupplier"
   | "sellerSignature"
   | "shippedBy"
   | "receivedBy";
+
+/** Keys of the notice labels printed above the parties. */
+export type NoticeLabelKey = "nonFiscalNotice" | "quoteNotice";
 
 export type DocumentLayoutSpec = {
   sellerRole: "supplier" | "contractor" | "seller" | "shipper";
@@ -62,8 +66,10 @@ export type DocumentLayoutSpec = {
    * drops its price columns and the document shows line count and total quantity.
    */
   money: boolean;
-  /** Prints the "not a fiscal document" notice above the parties. */
-  nonFiscalNotice: boolean;
+  /** Label of the notice printed above the parties; null for none. */
+  notice: NoticeLabelKey | null;
+  /** Replaces the label of the grand total line when the default does not fit the document. */
+  grandTotalLabel?: "offerTotal";
   /** Which of the buyer's addresses leads: the legal one, or the delivery one. */
   buyerAddress: "legal" | "delivery";
   /** Signature columns; the buyer's is reserved only when `buyer` is set. */
@@ -96,7 +102,8 @@ export type GeneratableDocumentType =
   | DocumentType.INVOICE
   | DocumentType.ACT
   | DocumentType.SALES_RECEIPT
-  | DocumentType.PACKING_LIST;
+  | DocumentType.PACKING_LIST
+  | DocumentType.QUOTE;
 
 export const DOCUMENT_TYPE_SPECS: Record<
   GeneratableDocumentType,
@@ -135,7 +142,7 @@ export const DOCUMENT_TYPE_SPECS: Record<
       payment: true,
       completionStatement: false,
       money: true,
-      nonFiscalNotice: false,
+      notice: null,
       buyerAddress: "legal",
       signatures: { seller: "issuedBy", stamp: true },
       allowedStyles: DOCUMENT_STYLES,
@@ -160,7 +167,7 @@ export const DOCUMENT_TYPE_SPECS: Record<
       payment: false,
       completionStatement: true,
       money: true,
-      nonFiscalNotice: false,
+      notice: null,
       buyerAddress: "legal",
       signatures: {
         seller: "fromContractor",
@@ -189,7 +196,7 @@ export const DOCUMENT_TYPE_SPECS: Record<
       payment: false,
       completionStatement: false,
       money: true,
-      nonFiscalNotice: true,
+      notice: "nonFiscalNotice",
       buyerAddress: "legal",
       signatures: { seller: "sellerSignature", stamp: false },
       allowedStyles: DOCUMENT_STYLES,
@@ -214,13 +221,39 @@ export const DOCUMENT_TYPE_SPECS: Record<
       payment: false,
       completionStatement: false,
       money: false,
-      nonFiscalNotice: false,
+      notice: null,
       buyerAddress: "delivery",
       signatures: {
         seller: "shippedBy",
         buyer: "receivedBy",
         stamp: false,
       },
+      allowedStyles: DOCUMENT_STYLES,
+    },
+  },
+  [DocumentType.QUOTE]: {
+    allowedOrderStatuses: [OrderStatus.DRAFT, OrderStatus.CONFIRMED],
+    locking: false,
+    requiresMoney: true,
+    requiredSeller: ["name"],
+    requiredBuyer: [],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.legalForm", "seller.vatPayer"],
+    title: {
+      uk: "Комерційна пропозиція",
+      ru: "Коммерческое предложение",
+      en: "Quotation",
+    },
+    layout: {
+      sellerRole: "supplier",
+      buyerRole: "buyer",
+      payment: false,
+      completionStatement: false,
+      money: true,
+      notice: "quoteNotice",
+      grandTotalLabel: "offerTotal",
+      buyerAddress: "legal",
+      signatures: { seller: "fromSupplier", stamp: true },
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -244,6 +277,7 @@ export function isGeneratableType(
 export const REISSUABLE_DOCUMENT_TYPES: readonly DocumentType[] = [
   DocumentType.INVOICE,
   DocumentType.ACT,
+  DocumentType.QUOTE,
 ];
 
 export function isReissuableType(type: DocumentType): boolean {

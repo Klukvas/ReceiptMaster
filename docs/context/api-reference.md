@@ -797,7 +797,7 @@ If the account's `autoGenerateReceipt` setting is on (see [Auto-generate receipt
 Marks a DRAFT or CONFIRMED order `cancelled`. It is **not** a deletion: the order stays listed and
 keeps its stock reservation — only `DELETE /orders/:id` returns stock (exactly once).
 
-Cancelling a CONFIRMED order, in the same transaction, voids every non-void receipt of the order
+Cancelling a DRAFT or CONFIRMED order (a draft may carry a quotation), in the same transaction, voids every non-void receipt of the order
 (`status: void`, `void_reason: "order_cancelled"`, `voided_at`), revokes its public share link and
 drops any pending candidate/replacement, so a delayed worker can no longer promote it. The voided PDF
 stays downloadable by the owner as history; a receipt already voided by hand keeps its own reason.
@@ -816,7 +816,7 @@ neither confirmed nor edited.
 
 **DELETE** `/orders/:id`
 
-Deletes an order.
+Deletes an order (soft delete, stock returned). In the same transaction the share links (`public_token`) of every document the order carries are revoked (set to `null`, so `/r/:token` answers 404); statuses and files are not touched.
 
 **Path Params:**
 - `id` (string, UUID)
@@ -860,7 +860,7 @@ be DRAFT under the lock (a concurrent cancel wins). With `autoGenerateReceipt` o
 
 **POST** `/orders/batch-delete`
 
-Soft-deletes multiple orders.
+Soft-deletes multiple orders; like `DELETE /orders/:id` it revokes the share links of their documents in the same transaction.
 
 **Request Body:**
 ```typescript
@@ -1143,31 +1143,34 @@ Generic generation for the supported types. `/receipts/orders/:orderId/receipt*`
 
 ```typescript
 {
-  type: "waybill" | "invoice" | "act",     // required
+  type: "waybill" | "invoice" | "act" | "sales_receipt" | "packing_list" | "quote",     // required
   // design fields, as in POST /receipts/orders/:orderId/receipt
   config?, presetId?, presetRevision?, overrides?, logoAction?: "keep" | "replace" | "remove",
-  details?: InvoiceDetails | ActDetails    // not accepted for a waybill; defaults to {}
+  details?: InvoiceDetails | ActDetails | QuoteDetails    // only for invoice, act and quote; defaults to {}
 }
 InvoiceDetails = { dueDate?: "YYYY-MM-DD", paymentTermDays?: 1..365 }  // at most one of the two
 ActDetails     = { contractRef?: string (1..200, trimmed), period?: { from, to } }  // ISO dates, from <= to
+QuoteDetails   = { validUntil?: "YYYY-MM-DD", paymentTerms?: string, deliveryTerms?: string }  // terms trimmed, 1..300 chars; strict (dueDate / paymentTermDays are a 400)
 ```
 
-`type` is read first: an unknown value is `400 VALIDATION_ERROR`; `quote` and `return_note` are `400 DOCUMENT_TYPE_NOT_SUPPORTED`. `sales_receipt` (товарний чек, **not a fiscal document**; shows the notice, items, totals, VAT, amount in words, seller signature) and `packing_list` (пакувальний лист; items and quantities only, **no prices, sums or VAT** in the PDF, the stored HTML or the public projection) take no `details` (a `details` key is `400 VALIDATION_ERROR`). An invoice, act, sales receipt or packing list needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), on any plan. Each type has its own number series, one document per type and order, and its own 10-document retention.
+`type` is read first: an unknown value is `400 VALIDATION_ERROR`; `return_note` is `400 DOCUMENT_TYPE_NOT_SUPPORTED`. `sales_receipt` (товарний чек, **not a fiscal document**; shows the notice, items, totals, VAT, amount in words, seller signature) and `packing_list` (пакувальний лист; items and quantities only, **no prices, sums or VAT** in the PDF, the stored HTML or the public projection) take no `details` (a `details` key is `400 VALIDATION_ERROR`). An invoice, act, sales receipt or packing list needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), on any plan.
+
+`quote` (комерційна пропозиція; an offer, **not an invoice**: it prints the notice "Пропозиція не є рахунком …", items, totals and VAT like an invoice but no payment details, the last total line is "Загальна вартість", then the validity and the optional payment/delivery terms, one supplier signature with М.П.) takes a **DRAFT or CONFIRMED** order (a CANCELLED one is `400 ORDER_CANNOT_BE_MODIFIED`) and **does not lock** the order. `validUntil` defaults to the issue date + 14 days and must lie within `[issueDate, issueDate + 365 days]`, the issue date being the generation day in the document's time zone; otherwise `400 VALIDATION_ERROR` (`Validation error for details.validUntil: must not be earlier than the issue date` / `…: must be within 365 days of the issue date`), before a number is drawn. A voided quotation can be issued again under a new number; a repeat of a failed one is `{type:"quote",details:{}}`. Cancelling the order voids a live quotation with the other documents. Each type has its own number series, one document per type and order, and its own 10-document retention.
 
 An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 VALIDATION_ERROR`. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate; `{}` retries the frozen candidate.
 
-**Response** (201): `ReceiptProjection` (`document_type` set; PDF is produced asynchronously, as for a waybill). The PDF file name is `invoice-<number>.pdf` / `act-<number>.pdf` / `sales_receipt-<number>.pdf` / `packing_list-<number>.pdf`; a waybill stays `receipt-<number>.pdf`.
+**Response** (201): `ReceiptProjection` (`document_type` set; PDF is produced asynchronously, as for a waybill). The PDF file name is `invoice-<number>.pdf` / `act-<number>.pdf` / `sales_receipt-<number>.pdf` / `packing_list-<number>.pdf` / `quote-<number>.pdf`; a waybill stays `receipt-<number>.pdf`.
 
 **Errors:**
 - 400 `DOCUMENT_TYPE_NOT_SUPPORTED`, `VALIDATION_ERROR`, `ORDER_CANNOT_BE_MODIFIED`
-- 400 `DOCUMENT_TEMPLATE_UNSUPPORTED` — the selected style is not in the type's `layout.allowedStyles` (invoice, act, sales receipt and packing list: `standard`, `classic`, `minimal`, `corporate`; every other style, including `delivery` which prints no amounts and `compact` which cannot show the IBAN, is refused). `GET /settings/templates` lists the types a style can carry in `capabilities.documentTypes`
+- 400 `DOCUMENT_TEMPLATE_UNSUPPORTED` — the selected style is not in the type's `layout.allowedStyles` (invoice, act, sales receipt, packing list and quote: `standard`, `classic`, `minimal`, `corporate`; every other style, including `delivery` which prints no amounts and `compact` which cannot show the IBAN, is refused). `GET /settings/templates` lists the types a style can carry in `capabilities.documentTypes`
 - 402 `TEMPLATE_PLAN_RESTRICTED`
 - 404 `ORDER_NOT_FOUND`
-- 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, or a voided sales receipt/packing list: those types are not reissued; a voided invoice or act is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
+- 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, or a voided waybill/sales receipt/packing list: those types are not reissued; a voided invoice, act or quote is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
 - 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
-- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`; sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`. `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
+- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`; sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
 
-The requisites, issue/due dates, title and the VAT rate (`vatRatePercent`, 20 today, kept by a replacement) are frozen in `snapshot.document`, which is never part of the public projection. The public **JSON** (`GET /public/receipts/:token`) is unchanged: it shows the seller's IBAN and tax code only as the style's visibility settings allow, exactly as for a waybill, and never the buyer's IBAN/tax id, the seller's VAT id (ІПН), the signatory, VAT amounts or the amount in words. For a packing list the public JSON has `money: false`, no `subtotal_cents`/`total_cents`, and items with only `product_name` and `qty`. The **PDF** behind `GET /public/receipts/:token/pdf` is the document itself and carries every requisite the invoice or act prints (both parties' codes and addresses, the payment details, the ІПН, the signatory); anyone holding the link can download it, so revoke the share token to withdraw it.
+The requisites, issue/due/validity dates, title and the VAT rate (`vatRatePercent`, 20 today, kept by a replacement) are frozen in `snapshot.document`, which is never part of the public projection. The public **JSON** (`GET /public/receipts/:token`) is unchanged: it shows the seller's IBAN and tax code only as the style's visibility settings allow, exactly as for a waybill, and never the buyer's IBAN/tax id, the seller's VAT id (ІПН), the signatory, VAT amounts or the amount in words. For a packing list the public JSON has `money: false`, no `subtotal_cents`/`total_cents`, and items with only `product_name` and `qty`. The **PDF** behind `GET /public/receipts/:token/pdf` is the document itself and carries every requisite the invoice or act prints (both parties' codes and addresses, the payment details, the ІПН, the signatory); anyone holding the link can download it, so revoke the share token to withdraw it.
 
 ---
 
@@ -2288,11 +2291,11 @@ All routes require JWT auth. New read routes reject unknown query parameters; UU
 
 Draft writes/preview accept multipart `payload` containing JSON plus optional `logo` file: one file ≤5 MiB, payload ≤64 KiB, bounded fields/parts/headers. `logoAction` is `keep` (default), `replace` (requires file) or `remove` (forbids file). Unknown fields/parts, MIME/byte mismatch, unsafe SVG and out-of-range values are rejected. JSON bodies work when no file is supplied.
 
-Formatting `dateStyle` is `numeric | short | medium | long`. Legacy defaults use `numeric` (four-digit year, original numeric date/time presentation), medium time, language-resolved hour cycle and explicit deployment timezone. Stored explicit styles are not rewritten. Blank custom titles return friendly 400 validation; the old receipt-title endpoint still accepts blank as an automatic-title reset.
+Formatting `dateStyle` is `numeric | short | medium | long`. Legacy defaults use `numeric` (four-digit year, original numeric date/time presentation), medium time, language-resolved hour cycle and the fixed default timezone `Europe/Kyiv` (`DEFAULT_DOCUMENT_TIME_ZONE`) for accounts without saved formatting. Stored explicit styles are not rewritten. Blank custom titles return friendly 400 validation; the old receipt-title endpoint still accepts blank as an automatic-title reset.
 
 Account Save needs a complete config; preset create/update use complete copies. Generation/replacement can use `config` or `presetId`+`presetRevision`, followed by partial `overrides`. Effective template entitlement is enforced. Presets have 1–80 character trimmed names, maximum 20 per tenant and bounded revisions. Foreign-tenant preset/logo IDs are rejected. Saving/selecting presets does not change defaults.
 
-`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, `documentTypes` (the document types the style can carry: always `waybill`, plus `invoice` and `act` for standard/classic/minimal/corporate), logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
+`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, `documentTypes` (the document types the style can carry: always `waybill`, plus `invoice`, `act`, `sales_receipt`, `packing_list` and `quote` for standard/classic/minimal/corporate), logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
 
 Receipt list/create/get/void/share-revoke responses use small allowlisted projections; internal HTML/config/pending assets are private. New public metadata uses frozen visible values and formatting, with Delivery money omitted. Legacy metadata is explicitly unavailable when historical projection cannot be trusted; existing PDF access is preserved.
 

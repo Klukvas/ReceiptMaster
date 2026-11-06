@@ -366,6 +366,9 @@
         
         <!-- Totals -->
         {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
         {{> documentTotals}}
         {{else}}
         <div class="totals-section">
@@ -416,6 +419,9 @@
             </div>
         </div>{{/unless}}
         
+        {{#if document}}
+        </div>
+        {{/if}}
         {{#if pageCount}}
         <div class="page-info">Page {{page}} of {{pageCount}}</div>
         {{/if}}

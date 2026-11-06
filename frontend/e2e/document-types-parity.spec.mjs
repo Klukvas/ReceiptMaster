@@ -13,7 +13,7 @@ const FRONTEND = resolve(ROOT, "frontend/src/lib/document-types.ts");
 
 // The backend file imports two enums at runtime; their values are all it needs.
 const BACKEND_STUBS = {
-  "../orders/entities/order.entity": { OrderStatus: { CONFIRMED: "confirmed" } },
+  "../orders/entities/order.entity": { OrderStatus: { DRAFT: "draft", CONFIRMED: "confirmed" } },
   "./entities/receipt.entity": {
     DocumentType: {
       WAYBILL: "waybill",
@@ -21,6 +21,7 @@ const BACKEND_STUBS = {
       ACT: "act",
       SALES_RECEIPT: "sales_receipt",
       PACKING_LIST: "packing_list",
+      QUOTE: "quote",
     },
   },
 };
@@ -32,6 +33,7 @@ const FRONTEND_STUBS = {
     ClipboardCheck: "i",
     ShoppingBag: "i",
     Package: "i",
+    Handshake: "i",
   },
 };
 

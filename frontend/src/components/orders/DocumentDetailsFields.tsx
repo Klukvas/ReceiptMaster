@@ -4,10 +4,15 @@ import { useTranslation } from "../../hooks/useTranslation";
 import {
   MAX_CONTRACT_REF_LENGTH,
   MAX_PAYMENT_TERM_DAYS,
+  MAX_QUOTE_TERMS_LENGTH,
+  QUOTE_MAX_VALIDITY_DAYS,
+  addDays,
   type ActForm,
   type DetailsErrors,
   type InvoiceForm,
   type PaymentTermMode,
+  type QuoteDefaults,
+  type QuoteForm,
 } from "../../lib/document-details";
 
 type FieldsProps<Form> = {
@@ -125,6 +130,58 @@ export function ActDetailsFields({
           {t("documents.periodHint")}
         </p>
       </fieldset>
+    </div>
+  );
+}
+
+export function QuoteDetailsFields({
+  form,
+  errors,
+  onChange,
+  today,
+}: FieldsProps<QuoteForm> & { today: QuoteDefaults["today"] }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Input
+          id="document-valid-until"
+          label={t("documents.validUntil")}
+          type="date"
+          min={today}
+          max={addDays(today, QUOTE_MAX_VALIDITY_DAYS)}
+          value={form.validUntil}
+          onChange={(event) =>
+            onChange({ ...form, validUntil: event.target.value })
+          }
+          error={translated(t, errors, "validUntil")}
+        />
+        <p className="text-xs text-content-tertiary">
+          {t("documents.validUntilHint")}
+        </p>
+      </div>
+      <Input
+        id="document-payment-terms"
+        label={t("documents.quotePaymentTerms")}
+        placeholder={t("documents.quotePaymentTermsPlaceholder")}
+        maxLength={MAX_QUOTE_TERMS_LENGTH}
+        value={form.paymentTerms}
+        onChange={(event) =>
+          onChange({ ...form, paymentTerms: event.target.value })
+        }
+        error={translated(t, errors, "paymentTerms")}
+      />
+      <Input
+        id="document-delivery-terms"
+        label={t("documents.quoteDeliveryTerms")}
+        placeholder={t("documents.quoteDeliveryTermsPlaceholder")}
+        maxLength={MAX_QUOTE_TERMS_LENGTH}
+        value={form.deliveryTerms}
+        onChange={(event) =>
+          onChange({ ...form, deliveryTerms: event.target.value })
+        }
+        error={translated(t, errors, "deliveryTerms")}
+      />
     </div>
   );
 }

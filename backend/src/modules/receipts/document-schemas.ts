@@ -41,6 +41,19 @@ export const actDetailsSchema = z
   })
   .strict();
 
+export const QUOTE_TERMS_MAX_LENGTH = 300;
+
+const termText = z.string().trim().min(1).max(QUOTE_TERMS_MAX_LENGTH);
+
+/** Quotation terms; without `validUntil` the server applies the default validity. */
+export const quoteDetailsSchema = z
+  .object({
+    validUntil: calendarDate.optional(),
+    paymentTerms: termText.optional(),
+    deliveryTerms: termText.optional(),
+  })
+  .strict();
+
 /** Body of POST /receipts/:id/regenerate (JSON or the multipart `payload` field). */
 export const regenerationSchema = selectionSchema
   .innerType()
@@ -81,5 +94,8 @@ export const documentGenerationSchema = z
     }),
     generationBase(DocumentType.SALES_RECEIPT),
     generationBase(DocumentType.PACKING_LIST),
+    generationBase(DocumentType.QUOTE).extend({
+      details: quoteDetailsSchema.default({}),
+    }),
   ])
   .refine((v) => !v.config || !v.presetId, "Choose a config or a preset");

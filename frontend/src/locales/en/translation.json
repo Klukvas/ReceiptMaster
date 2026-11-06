@@ -90,6 +90,8 @@
     "activeFiltersCount_other": "{{count}} active filters",
     "activeFiltersCount_one": "{{count}} active filter",
     "mixedCurrencies": "All products in an order must use the same currency.",
+    "staleQuoteWarning": "The issued quote {{number}} will not be updated by this change. Void it and create a new one.",
+    "staleQuoteSaved": "Order saved. Quote {{number}} was not updated: void it and create a new one.",
     "title": "Orders",
     "createOrder": "Create Order",
     "orderDetails": "Order Details",
@@ -317,7 +319,7 @@
     "noActivity": "No activity yet",
     "requisites": {
       "title": "Requisites for documents",
-      "hint": "Used on some documents: invoices, acts of completed work and sales receipts.",
+      "hint": "Used on some documents: invoices, acts of completed work, sales receipts and quotations.",
       "legalName": "Legal name",
       "taxId": "EDRPOU or RNOKPP",
       "taxIdKind": "Number kind",
@@ -496,7 +498,7 @@
     "autoReceiptDisabled": "Automatic waybills turned off",
     "requisites": {
       "title": "Requisites for documents",
-      "description": "Printed on invoices, acts of completed work and sales receipts. Saved separately from the document design.",
+      "description": "Printed on invoices, acts of completed work, sales receipts and quotations. Saved separately from the document design.",
       "taxIdKind": "Tax number kind",
       "taxIdKindAuto": "Detect by length",
       "taxIdKinds": {
@@ -600,7 +602,7 @@
       "line1": "Orders, Documents",
       "line2": "Analytics",
       "line3": "in one place",
-      "subtitle": "Manage products, customers and orders, and create PDF documents — waybills, invoices, acts and packing lists — in a few clicks.",
+      "subtitle": "Manage products, customers and orders, and create PDF documents — waybills, quotes, invoices, acts and packing lists — in a few clicks.",
       "startFree": "Start for free",
       "seeDemo": "See features ↓",
       "welcomeBack": "Welcome back",
@@ -643,7 +645,7 @@
       },
       "receipts": {
         "title": "PDF documents",
-        "description": "Waybills, invoices, acts of completed work, non-fiscal sales receipts and packing lists are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
+        "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts and packing lists are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
         "tag1": "15 templates",
         "tag2": "SHA256 hash",
         "tag3": "public link"
@@ -1139,6 +1141,7 @@
     "created": "Document is being created: {{type}}",
     "design": "Document design",
     "notes": {
+      "quote": "A quote is not an invoice and does not lock the order. To send an updated one, void the current quote and create a new one.",
       "sales_receipt": "This is not a fiscal document: it confirms a sale but does not replace a fiscal register receipt.",
       "packing_list": "A packing list shows no prices. Once it is created, the order is locked against editing."
     },
@@ -1157,6 +1160,12 @@
     "periodFrom": "Period start",
     "periodTo": "Period end",
     "periodHint": "Optional. If you set it, fill in both dates.",
+    "validUntil": "Valid until",
+    "validUntilHint": "Defaults to 14 days from the issue date.",
+    "quotePaymentTerms": "Payment terms",
+    "quotePaymentTermsPlaceholder": "E.g. 50% upfront, the rest on receipt",
+    "quoteDeliveryTerms": "Delivery terms",
+    "quoteDeliveryTermsPlaceholder": "E.g. delivery within 3 business days",
     "requisitesMissingTitle": "Some requisites are missing for this document",
     "requisitesWarningsTitle": "Not filled in (the document can still be created)",
     "fillSellerRequisites": "Fill in the seller requisites",
@@ -1169,6 +1178,10 @@
       "periodIncomplete": "Enter both period dates",
       "periodOrder": "The period start cannot be after its end",
       "contractRefTooLong": "At most 200 characters",
+      "validUntilInvalid": "Enter a valid date",
+      "validUntilBeforeIssue": "The date cannot be before today",
+      "validUntilTooFar": "At most 365 days from today",
+      "termsTooLong": "At most 300 characters",
       "invalidField": "Check this field"
     },
     "status": {

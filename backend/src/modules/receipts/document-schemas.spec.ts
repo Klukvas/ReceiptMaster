@@ -103,9 +103,54 @@ describe("documentGenerationSchema", () => {
     expect(
       documentGenerationSchema.safeParse({ type: "invoice", x: 1 }).success,
     ).toBe(false);
-    expect(documentGenerationSchema.safeParse({ type: "quote" }).success).toBe(
-      false,
-    );
+    expect(
+      documentGenerationSchema.safeParse({ type: "return_note" }).success,
+    ).toBe(false);
+  });
+
+  describe("quote", () => {
+    const parse = (details?: unknown) =>
+      documentGenerationSchema.safeParse({ type: "quote", details });
+
+    it("accepts a bare request and defaults the details to empty", () => {
+      const result = documentGenerationSchema.safeParse({ type: "quote" });
+      expect(result.success).toBe(true);
+      expect(
+        result.success && "details" in result.data && result.data.details,
+      ).toEqual({});
+    });
+
+    it("accepts a date and trimmed terms", () => {
+      const result = parse({
+        validUntil: "2026-12-31",
+        paymentTerms: "  50% upfront  ",
+        deliveryTerms: "Pickup",
+      });
+      expect(result.success).toBe(true);
+      expect(
+        result.success && "details" in result.data && result.data.details,
+      ).toEqual({
+        validUntil: "2026-12-31",
+        paymentTerms: "50% upfront",
+        deliveryTerms: "Pickup",
+      });
+    });
+
+    it.each([
+      ["a day that does not exist", { validUntil: "2026-02-30" }],
+      ["a malformed date", { validUntil: "31.12.2026" }],
+      ["empty payment terms", { paymentTerms: "" }],
+      ["blank delivery terms", { deliveryTerms: "   " }],
+      ["too long terms", { paymentTerms: "x".repeat(301) }],
+      ["an invoice key", { paymentTermDays: 5 }],
+      ["a due date", { dueDate: "2026-12-31" }],
+    ])("rejects %s", (_name, details) => {
+      expect(parse(details).success).toBe(false);
+    });
+
+    it("accepts terms of exactly 300 characters", () => {
+      expect(parse({ paymentTerms: "x".repeat(300) }).success).toBe(true);
+    });
   });
 });
 

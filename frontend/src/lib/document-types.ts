@@ -1,6 +1,7 @@
 import {
   ClipboardCheck,
   FileText,
+  Handshake,
   Package,
   Receipt as ReceiptIcon,
   ShoppingBag,
@@ -14,13 +15,14 @@ export type GeneratableType =
   | "invoice"
   | "act"
   | "sales_receipt"
-  | "packing_list";
+  | "packing_list"
+  | "quote";
 
 /** Types created through the create-document dialog (the waybill is one click). */
 export type CreatableType = Exclude<GeneratableType, "waybill">;
 
 /** Which `details` form a type asks for when it is created. */
-export type DocumentDetailsKind = "invoice" | "act";
+export type DocumentDetailsKind = "invoice" | "act" | "quote";
 
 export type DocumentTypeMeta = {
   labelKey: string;
@@ -51,6 +53,16 @@ export const DOCUMENT_TYPE_META = {
     requiredSeller: [],
     requiresVatIdForPayer: false,
     warnings: [],
+  },
+  quote: {
+    labelKey: "documentTypes.quote",
+    icon: Handshake,
+    allowedOrderStatuses: ["draft", "confirmed"],
+    details: "quote",
+    requiredSeller: ["name"],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.legalForm", "seller.vatPayer"],
+    createNoteKey: "documents.notes.quote",
   },
   invoice: {
     labelKey: "documentTypes.invoice",
@@ -110,7 +122,11 @@ export const CREATABLE_TYPES = GENERATABLE_TYPES.filter(
  * Mirror of REISSUABLE_DOCUMENT_TYPES in backend/src/modules/receipts/document-types.ts:
  * types that may be issued again, with a new number, after the previous one was voided.
  */
-export const REISSUABLE_DOCUMENT_TYPES: readonly GeneratableType[] = ["invoice", "act"];
+export const REISSUABLE_DOCUMENT_TYPES: readonly GeneratableType[] = [
+  "invoice",
+  "act",
+  "quote",
+];
 
 export function isReissuable(type: DocumentType): boolean {
   return (REISSUABLE_DOCUMENT_TYPES as readonly DocumentType[]).includes(type);
@@ -190,6 +206,17 @@ export function waybillOf(
 
 export function activeDocument(doc: Receipt | undefined): doc is Receipt {
   return doc?.status === "generated" || doc?.status === "processing";
+}
+
+/**
+ * The quote the order's recipient may already hold: issued (or still generating), neither
+ * void nor failed. A quote is a frozen copy, so editing the order does not update it.
+ */
+export function issuedQuoteOf(
+  order: Pick<OrderWithDocuments, "receipts">,
+): Receipt | undefined {
+  const quote = documentOf(order, "quote");
+  return activeDocument(quote) ? quote : undefined;
 }
 
 /**

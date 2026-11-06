@@ -8,6 +8,10 @@ import {
   issueDateIn,
 } from "./frozen-document";
 import { DocumentType } from "./entities/receipt.entity";
+import {
+  DEFAULT_DOCUMENT_TIME_ZONE,
+  legacyConfig,
+} from "../settings/document-config";
 import type { DocumentConfig } from "../settings/document-config";
 
 const config = {
@@ -102,6 +106,107 @@ describe("buildFrozenDocument: invoice due date", () => {
     );
     expect(frozen.issueDate).toBe("2026-10-01");
     expect(frozen.details.dueDate).toBe("2026-10-05");
+  });
+});
+
+describe("buildFrozenDocument: quote validity", () => {
+  const quote = (
+    details: DocumentRequest["details"] = {},
+    now: Date = NOW,
+    extra: Partial<DocumentRequest> = {},
+  ) =>
+    buildFrozenDocument(
+      context({ type: DocumentType.QUOTE, details, ...extra }),
+      config,
+      now,
+    );
+
+  it("defaults to 14 days from the issue date in the document time zone", () => {
+    // 22:30 UTC on 2 Nov is already 3 Nov in Kyiv, so the default is 17 Nov.
+    expect(quote().details).toEqual({
+      validUntil: "2026-11-17",
+      validUntilSource: "default",
+    });
+  });
+  it("follows the Kyiv calendar day around midnight", () => {
+    const beforeMidnight = new Date("2026-11-02T21:59:00Z"); // 23:59, 2 Nov in Kyiv
+    const afterMidnight = new Date("2026-11-02T22:00:00Z"); // 00:00, 3 Nov in Kyiv
+    expect(quote({}, beforeMidnight).details.validUntil).toBe("2026-11-16");
+    expect(quote({}, afterMidnight).details.validUntil).toBe("2026-11-17");
+  });
+  it("counts today in Kyiv for an account without saved formatting, whatever the server zone", () => {
+    const stored = legacyConfig(null);
+    expect(stored.formatting.timeZone).toBe(DEFAULT_DOCUMENT_TIME_ZONE);
+    expect(DEFAULT_DOCUMENT_TIME_ZONE).toBe("Europe/Kyiv");
+    // 23:30 UTC on 2 Nov is 01:30 on 3 Nov in Kyiv: a UTC "today" would give 2 Nov.
+    const lateEvening = new Date("2026-11-02T23:30:00Z");
+    const frozen = buildFrozenDocument(
+      context({ type: DocumentType.QUOTE, details: {} }),
+      stored,
+      lateEvening,
+    );
+    expect(frozen.issueDate).toBe("2026-11-03");
+    expect(frozen.details.validUntil).toBe("2026-11-17");
+    // The validity floor uses the same day: 3 Nov is allowed, the UTC date 2 Nov is not.
+    const withDate = (validUntil: string) =>
+      buildFrozenDocument(
+        context({ type: DocumentType.QUOTE, details: { validUntil } }),
+        stored,
+        lateEvening,
+      );
+    expect(withDate("2026-11-03").details.validUntil).toBe("2026-11-03");
+    expect(() => withDate("2026-11-02")).toThrow(
+      /must not be earlier than the issue date/,
+    );
+  });
+  it("takes an explicit date and freezes the terms without empty keys", () => {
+    expect(
+      quote({
+        validUntil: "2026-12-01",
+        paymentTerms: "50% upfront",
+      }).details,
+    ).toEqual({
+      validUntil: "2026-12-01",
+      validUntilSource: "request_date",
+      paymentTerms: "50% upfront",
+    });
+  });
+  it("accepts a date equal to the issue date and one a year out", () => {
+    expect(quote({ validUntil: "2026-11-03" }).details.validUntil).toBe(
+      "2026-11-03",
+    );
+    expect(quote({ validUntil: "2027-11-03" }).details.validUntil).toBe(
+      "2027-11-03",
+    );
+  });
+  it("rejects a date before the issue date", () => {
+    expect(() => quote({ validUntil: "2026-11-02" })).toThrow(
+      /details\.validUntil: must not be earlier than the issue date/,
+    );
+  });
+  it("rejects a date more than 365 days after the issue date", () => {
+    expect(() => quote({ validUntil: "2027-11-04" })).toThrow(
+      /details\.validUntil: must be within 365 days of the issue date/,
+    );
+  });
+  it("keeps the validity of the document being replaced", () => {
+    const frozen = quote({ validUntil: "2026-12-31" }, NOW, {
+      carryOver: {
+        buyer: buildBuyer({ name: "Старий" }),
+        issueDate: "2026-10-01",
+        details: {
+          validUntil: "2026-10-10",
+          validUntilSource: "default",
+          deliveryTerms: "Pickup",
+        },
+      },
+    });
+    expect(frozen.issueDate).toBe("2026-10-01");
+    expect(frozen.details).toEqual({
+      validUntil: "2026-10-10",
+      validUntilSource: "default",
+      deliveryTerms: "Pickup",
+    });
   });
 });
 

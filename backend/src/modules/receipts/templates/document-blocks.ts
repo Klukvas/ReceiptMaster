@@ -6,6 +6,10 @@
  * so none of this reaches its HTML. Styles for blocks only some types print sit behind
  * `{{#if}}` so the HTML of the other types stays byte-identical. Block tags sit on their own lines so Handlebars
  * drops them from the output.
+ *
+ * `.doc-tail` wraps everything from the totals to the footer. Chromium does not keep the
+ * footer with the closing block through `break-after: avoid` alone, so without the
+ * wrapper the footer can print by itself on a last page.
  */
 
 const documentStyles = `
@@ -32,6 +36,7 @@ const documentStyles = `
   }
   .doc-totals { break-after: avoid; page-break-after: avoid; }
   .doc-closing { break-before: avoid; page-break-before: avoid; }
+  .doc-tail { break-inside: avoid; page-break-inside: avoid; }
   {{#if document.notice}}
   .doc-notice { margin: 12px 0 0; padding: 6px 10px; border: 1px solid #111827; font-size: 12px; font-weight: 700; text-align: center; break-inside: avoid; page-break-inside: avoid; }
   {{/if}}
@@ -107,6 +112,15 @@ const documentTotals = `{{#if document.totals}}
 const documentClosing = `<div class="doc-closing">
   {{#if document.dueDate}}
   <div><strong>{{document.labels.dueDate}}:</strong> {{document.dueDate}}</div>
+  {{/if}}
+  {{#if document.offer}}
+  <div><strong>{{document.labels.validUntil}}:</strong> {{document.offer.validUntil}}</div>
+  {{#if document.offer.paymentTerms}}
+  <div><span class="doc-label">{{document.labels.paymentTerms}}:</span> {{document.offer.paymentTerms}}</div>
+  {{/if}}
+  {{#if document.offer.deliveryTerms}}
+  <div><span class="doc-label">{{document.labels.deliveryTerms}}:</span> {{document.offer.deliveryTerms}}</div>
+  {{/if}}
   {{/if}}
   {{#if document.act}}
   <div>{{document.act.statement}}</div>
