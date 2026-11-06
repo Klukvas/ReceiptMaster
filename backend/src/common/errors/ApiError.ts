@@ -138,6 +138,19 @@ export const ApiErrors = {
       422,
       { fields, warnings },
     ),
+  RETURN_QUANTITY_EXCEEDED: (
+    shortfalls: Array<{
+      orderItemId: string;
+      requested: number;
+      remaining: number;
+    }>,
+  ) =>
+    new ApiErrorResponse(
+      "Cannot return more than was sold: the quantity left to return is lower than requested",
+      "RETURN_QUANTITY_EXCEEDED",
+      422,
+      { items: shortfalls },
+    ),
   RECEIPT_GENERATION_FAILED: (orderId: string) =>
     new ApiErrorResponse(
       `Failed to generate receipt for order ${orderId}`,

@@ -22,6 +22,7 @@ const BACKEND_STUBS = {
       SALES_RECEIPT: "sales_receipt",
       PACKING_LIST: "packing_list",
       QUOTE: "quote",
+      RETURN_NOTE: "return_note",
     },
   },
 };
@@ -34,6 +35,7 @@ const FRONTEND_STUBS = {
     ShoppingBag: "i",
     Package: "i",
     Handshake: "i",
+    Undo2: "i",
   },
 };
 
@@ -81,6 +83,11 @@ export const run = async () => {
       `${type}: soft warnings`,
       sorted(spec.warnings) === sorted(entry.warnings),
       `${spec.warnings} vs ${entry.warnings}`,
+    );
+    results.check(
+      `${type}: several live documents per order`,
+      (spec.multiplePerOrder ?? false) === (entry.multiplePerOrder ?? false),
+      `${spec.multiplePerOrder} vs ${entry.multiplePerOrder}`,
     );
     results.check(
       `${type}: label key follows documentTypes.<type>`,

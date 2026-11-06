@@ -156,7 +156,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      const menuHeight = 480;
+      const menuHeight = 520;
       const proposedTop =
         spaceBelow < menuHeight
           ? rect.top - menuHeight + rect.height

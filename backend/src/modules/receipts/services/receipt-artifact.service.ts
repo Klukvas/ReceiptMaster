@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, IsNull, Not } from "typeorm";
 import { createHash, randomUUID } from "crypto";
 import { Receipt, ReceiptStatus } from "../entities/receipt.entity";
+import { updateReceiptOnFailure } from "../receipt-failure";
 import { DOCUMENTS_RETAINED_PER_TYPE } from "../document-retention";
 import { specFor } from "../document-types";
 import { isLockingDocumentType } from "../order-lock";
@@ -13,6 +14,7 @@ import { ReceiptSnapshotService } from "./receipt-snapshot.service";
 
 @Injectable()
 export class ReceiptArtifactService {
+  private readonly logger = new Logger(ReceiptArtifactService.name);
   constructor(
     @InjectDataSource() private readonly db: DataSource,
     private readonly snapshots: ReceiptSnapshotService,
@@ -209,9 +211,11 @@ export class ReceiptArtifactService {
       receipt.generation_id === generationId &&
       receipt.status === ReceiptStatus.PROCESSING &&
       !receipt.pending_id
-    ) {
-      const result = await this.db.manager.update(
-        Receipt,
+    )
+      return updateReceiptOnFailure(
+        this.db,
+        this.logger,
+        receipt,
         {
           id,
           user_id: userId,
@@ -224,8 +228,6 @@ export class ReceiptArtifactService {
             "Frozen candidate missing. Explicit reconstruction is required.",
         },
       );
-      return Boolean(result.affected);
-    }
     if (!this.matches(receipt, generationId)) return false;
     const change =
       receipt.status === ReceiptStatus.GENERATED
@@ -239,8 +241,10 @@ export class ReceiptArtifactService {
             error_message:
               "Generation failed. Retry uses the frozen candidate.",
           };
-    const result = await this.db.manager.update(
-      Receipt,
+    return updateReceiptOnFailure(
+      this.db,
+      this.logger,
+      receipt,
       {
         id,
         user_id: userId,
@@ -250,7 +254,6 @@ export class ReceiptArtifactService {
       },
       change,
     );
-    return Boolean(result.affected);
   }
   /** Select oldest eligible candidates first, then lock/refetch all IDs in stable order
    * before touching any lease/logo. Never retire a pre-lock pointer after repair. */

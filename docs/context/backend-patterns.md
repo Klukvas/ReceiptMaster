@@ -727,7 +727,7 @@ preparation and dictionaries as production.
 
 **Typed documents:** `ReceiptsService.generateDocument(orderId, user, type, selection, details?, file?)`
 is the single pipeline (waybill = `generateReceipt`). Per-type rules are data in
-`receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`, kept consistent with `order-lock.ts` by a test).
+`receipts/document-types.ts` (`DOCUMENT_TYPE_SPECS`, kept consistent with `order-lock.ts` by a test). A spec may set `multiplePerOrder: true` (only `return_note` does): the pipeline then skips the one-live-row-per-order-and-type logic (every request inserts a new row, never `DOCUMENT_ALREADY_EXISTS`), and `isMultiplePerOrder(type)` is the helper. The frontend mirrors the flag and `e2e/document-types-parity.spec.mjs` compares it. The goods return ledger (`receipts/return-note.ts`, `return-note-ledger.ts`) adjusts `order_items.returned_qty` inside the generation transaction (reserve with a guarded `UPDATE`, release on void) and refuses with `RETURN_QUANTITY_EXCEEDED` (422).
 Everything that can refuse a request without a number (`ReceiptSnapshotService.preflight`: order status
 from the spec, template support, requisites, dates) runs before `nextDocumentNumber`, which sits outside the
 transaction. `RenderSnapshot.document` (every typed document, i.e. all but the waybill) carries the frozen requisites; the four styles in
@@ -1245,6 +1245,10 @@ one) and the previous code, which looks up `(order, document_type)` without a st
 either. Roll the image back before the first reissue is harmless; after it, either keep the new
 image or revert the migrations, **`1793200000000` first, then `1793100000000`** (each `down` refuses while such orders exist for the types it covers, and the voided history is
 never deleted to make it pass). After the first reissue of a quotation an order holds two `quote` rows, the voided one and the live one.
+
+## Goods return note migration and deploy lists
+
+`AddOrderItemReturnedQty1793300000000` adds `order_items.returned_qty integer NOT NULL DEFAULT 0` with `CHK_order_items_returned_qty_range` (`0 <= returned_qty <= qty`), so existing rows are valid without a backfill and the old image simply ignores the column. Add the name to both `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` in `scripts/deploy-production.sh` (done; `KNOWN_MIGRATIONS` stays sorted). The deploy script's rollback notice warns that once a return note has been issued, `returned_qty` is the only record of the returned quantities, so reverting this migration refuses while any line has returned goods. The unique index of `receipts` already excludes `return_note` (since `AddReceiptDocumentType1792800000000`), so the type needs no index change, and `DocumentType.RETURN_NOTE` was already a value of the enum.
 
 ## Settings writes and logo images
 

@@ -32,6 +32,9 @@ describe("forbidden document wording", () => {
       "Не є фіскальним документом",
       "Не является фискальным документом",
       "Not a fiscal document",
+      "Документ підтверджує повернення товару покупцем. Не є фіскальним документом і не є розрахунком коригування до податкової накладної.",
+      "Документ подтверждает возврат товара покупателем. Не является фискальным документом и не является расчётом корректировки к налоговой накладной.",
+      "This document confirms that the buyer returned the goods. It is not a fiscal document and not an adjustment calculation to a tax invoice.",
     ])
       expect(notice).not.toMatch(FORBIDDEN);
   });

@@ -92,6 +92,7 @@ const orderItem = (id, product, qty) => ({
   product_id: product.id,
   product_name: product.name,
   qty,
+  returned_qty: 0,
   unit_price_cents: product.sale_price_cents,
   line_total_cents: product.sale_price_cents * qty,
 });

@@ -74,6 +74,8 @@ export type DocumentView = {
   dueDate?: string;
   /** Quotation only: how long the offer stands and the terms attached to it. */
   offer?: { validUntil: string; paymentTerms?: string; deliveryTerms?: string };
+  /** Return note only: what the goods are returned against, and why. */
+  returnInfo?: { source: string; reason?: string };
   /** Act only. */
   act?: { statement: string; contractRef?: string; period?: string };
   signatures: {
@@ -115,6 +117,12 @@ function styleLabelOverrides(type: DocumentType, language: DocumentLanguage) {
     language
   ];
 }
+
+const RETURN_SOURCE_LABELS = {
+  waybill: "returnSourceWaybill",
+  invoice: "returnSourceInvoice",
+  order: "returnSourceOrder",
+} as const;
 
 const joined = (...parts: string[]) => parts.filter(Boolean).join(" ");
 
@@ -235,6 +243,19 @@ export function buildDocumentRenderData(
             ...(details.deliveryTerms
               ? { deliveryTerms: details.deliveryTerms }
               : {}),
+          },
+        }
+      : {}),
+    ...(details.returnSource
+      ? {
+          returnInfo: {
+            source: joined(
+              labels[RETURN_SOURCE_LABELS[details.returnSource.kind]],
+              details.returnSource.number,
+              labels.purposeFrom,
+              day(details.returnSource.date),
+            ),
+            ...(details.returnReason ? { reason: details.returnReason } : {}),
           },
         }
       : {}),

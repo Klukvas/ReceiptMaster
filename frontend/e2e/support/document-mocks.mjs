@@ -26,7 +26,7 @@ export const COMPLETE_COMPANY = {
   defaultPaymentTermDays: 14,
 };
 
-const FULL = ["waybill", "invoice", "act", "sales_receipt", "packing_list", "quote"];
+const FULL = ["waybill", "invoice", "act", "sales_receipt", "packing_list", "quote", "return_note"];
 const capabilities = (documentTypes) => ({
   revision: 2,
   companyFields: ["companyName", "companyAddress", "companyEmail", "companyPhone", "companyTaxId", "companyIban", "companySwift", "companyWebsite", "companyTagline"],
@@ -84,6 +84,13 @@ const answer = async (json, route, body, status) => {
   return true;
 };
 
+/** The return ledger of the server: a created return note takes its quantities off the order lines. */
+const withReturned = (items, payload) => {
+  if (payload.type !== "return_note") return items;
+  const returned = new Map(payload.details.lines.map((line) => [line.orderItemId, line.qty]));
+  return items.map((item) => ({ ...item, returned_qty: item.returned_qty + (returned.get(item.id) ?? 0) }));
+};
+
 const requisitesRefusal = {
   error: "Required requisites are missing",
   errorCode: "DOCUMENT_REQUISITES_MISSING",
@@ -93,7 +100,7 @@ const requisitesRefusal = {
 
 /**
  * @param state mutable spec state; reads `company`, `retention`, `refusal` (true, or a 422 body),
- *   `createError` ({ status, body } for any other refusal of the create request), `designId`,
+ *   `createError` ({ status, body } for any other refusal of the create request, e.g. a 422 RETURN_QUANTITY_EXCEEDED), `designId`,
  *   `timeZone` (document time zone, default UTC) and records `created` (parsed payloads), `voided` (request bodies) and `retentionQueries`.
  */
 export const documentHandlers = (state) => [
@@ -124,18 +131,24 @@ export const documentHandlers = (state) => [
       }
       const payload = payloadOf(body);
       state.created = [...(state.created ?? []), payload];
+      // An order may carry several notes of a repeatable type: number and id them in turn.
+      const sameType =
+        payload.type === "return_note"
+          ? state.orders.flatMap((order) => order.receipts).filter((doc) => doc.document_type === payload.type).length
+          : 0;
+      const serial = sameType + 1;
       const document = {
-        id: `doc-${payload.type}`,
+        id: sameType === 0 ? `doc-${payload.type}` : `doc-${payload.type}-${serial}`,
         order_id: created[1],
         document_type: payload.type,
-        number: `${payload.type.toUpperCase()}-0001`,
+        number: `${payload.type.toUpperCase()}-${String(serial).padStart(4, "0")}`,
         status: "generated",
         progress: 100,
-        created_at: new Date().toISOString(),
+        created_at: new Date(Date.now() + serial * 1000).toISOString(),
       };
       state.orders = state.orders.map((order) =>
         order.id === created[1]
-          ? { ...order, receipts: [...order.receipts, document] }
+          ? { ...order, receipts: [...order.receipts, document], items: withReturned(order.items, payload) }
           : order,
       );
       return answer(json, route, document, 201);

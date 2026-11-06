@@ -16,6 +16,9 @@
 //  - a voided invoice or act can be issued again: the voided one moves to a "Voided (n)" history
 //    under the new current document; voiding any other document closes its type; a voided waybill is not
 //    offered for generation, and system void reasons are translated;
+//  - a return note is offered for a confirmed order while any line has units left, however many notes
+//    exist; its dialog lists the lines (ordered / already returned / quantity), validates on the client,
+//    sends only ticked lines, maps RETURN_QUANTITY_EXCEEDED, ignores a double click, and every note is listed;
 //  - replacing an invoice never offers (or starts from) a design that cannot carry it.
 
 import {
@@ -300,7 +303,7 @@ const checkCreateGroup = async (results) => {
       const items = await menuOf(page);
       results.check(
         `${label}: a draft order offers only the quote under "Create document"`,
-        !items.some((item) => /^(Invoice|Act of Completed Work|Sales receipt|Packing list)…/.test(item)) &&
+        !items.some((item) => /^(Invoice|Act of Completed Work|Sales receipt|Packing list|Return note)…/.test(item)) &&
           (await page.getByRole("group", { name: "Create document" }).getByRole("menuitem").allInnerTexts())
             .map((text) => text.trim())
             .join("|") === "Quote…" &&
@@ -313,10 +316,10 @@ const checkCreateGroup = async (results) => {
       const items = await menuOf(page);
       const group = page.getByRole("group", { name: "Create document" });
       results.check(
-        `${label}: a confirmed order lists quote, invoice, act, sales receipt and packing list under "Create document", beside the one-click waybill`,
+        `${label}: a confirmed order lists quote, invoice, act, sales receipt, packing list and return note under "Create document", beside the one-click waybill`,
         items.includes("Generate waybill") &&
           (await group.getByRole("menuitem").allInnerTexts()).map((text) => text.trim()).join("|") ===
-            "Quote…|Invoice…|Act of Completed Work…|Sales receipt…|Packing list…",
+            "Quote…|Invoice…|Act of Completed Work…|Sales receipt…|Packing list…|Return note…",
         `menu items: ${items.join(" | ")}`,
       );
       await page.keyboard.press("ArrowDown");
@@ -854,12 +857,192 @@ const checkDocumentsSection = async (results) => {
         types.join(","),
       );
       results.check(
-        `${label}: nothing left to create once all exist`,
-        (await page.getByRole("button", { name: /^Create: / }).count()) === 0,
-        "create buttons still visible",
+        `${label}: only the return note is still offered once every single-instance type exists`,
+        (await page.getByRole("button", { name: /^Create: / }).allInnerTexts()).map((text) => text.trim()).join("|") ===
+          "Create: Return note",
+        "unexpected create buttons",
       );
     });
   }
+};
+
+const RETURN_ITEMS = [
+  { id: "item-dripper", order_id: "order-1", product_id: PRODUCTS[1].id, product_name: PRODUCTS[1].name, qty: 5, returned_qty: 2, unit_price_cents: 3400, line_total_cents: 17000 },
+  { id: "item-beans", order_id: "order-1", product_id: PRODUCTS[2].id, product_name: PRODUCTS[2].name, qty: 2, returned_qty: 0, unit_price_cents: 2600, line_total_cents: 5200 },
+];
+const DRIPPER = PRODUCTS[1].name;
+const BEANS = PRODUCTS[2].name;
+const returnOrder = (overrides = {}) => plainOrder({ items: RETURN_ITEMS, ...overrides });
+
+const tick = (dialog, name) => dialog.getByLabel(`Return: ${name}`, { exact: true });
+const quantityOf = (dialog, name) => dialog.getByLabel(`Quantity to return: ${name}`, { exact: true });
+
+const checkReturnNoteOffer = async (results) => {
+  const fullyReturned = returnOrder({ items: RETURN_ITEMS.map((item) => ({ ...item, returned_qty: item.qty })) });
+  const cases = [
+    { label: "a confirmed order with units left", order: returnOrder(), isOffered: true },
+    { label: "a draft order", order: returnOrder({ status: "draft" }), isOffered: false },
+    { label: "an order whose units are all returned", order: fullyReturned, isOffered: false },
+    {
+      label: "an order that already has a return note",
+      order: returnOrder({ receipts: [document("rn-1", "return_note", "generated", "2026-02-01T10:05:00.000Z")] }),
+      isOffered: true,
+    },
+  ];
+  for (const { label, order, isOffered } of cases) {
+    await withDocumentPage(DESKTOP, { order }, async (page) => {
+      const items = await menuOf(page);
+      results.check(
+        `return note is ${isOffered ? "offered" : "not offered"} for ${label}`,
+        items.includes("Return note…") === isOffered,
+        `menu items: ${items.join(" | ")}`,
+      );
+    });
+  }
+};
+
+const checkReturnNoteDialog = async (results) => {
+  for (const { label, viewport } of VIEWPORTS) {
+    await withDocumentPage(viewport, { order: returnOrder() }, async (page, state) => {
+      const dialog = await openCreateDialog(page, "Return note…");
+      const rows = await dialog.getByTestId("return-line").evaluateAll((lines) =>
+        lines.map((line) => [...line.querySelectorAll("td")].map((cell) => cell.innerText.trim()).filter(Boolean)),
+      );
+      const quantities = [await quantityOf(dialog, DRIPPER).inputValue(), await quantityOf(dialog, BEANS).inputValue()];
+      results.check(
+        `${label}: each line shows ordered and already returned, and the quantity defaults to what is left`,
+        rows[0].join("|").startsWith(`${DRIPPER}|5|2`) && rows[1].join("|").startsWith(`${BEANS}|2|0`) && quantities.join(",") === "3,2",
+        `${JSON.stringify(rows)} ${quantities}`,
+      );
+      results.check(
+        `${label}: nothing is ticked and the note says it is informational and does not change stock`,
+        !(await tick(dialog, DRIPPER).isChecked()) &&
+          /does not change stock/i.test(await dialog.getByTestId("document-create-note").innerText()) &&
+          /not a fiscal document/i.test(await dialog.getByTestId("document-create-note").innerText()),
+        await dialog.innerText(),
+      );
+      results.check(`${label}: the return note dialog fits the viewport`, await hasNoHorizontalOverflow(page), "horizontal overflow");
+
+      await submitCreate(dialog);
+      results.check(
+        `${label}: submitting without a ticked line is refused on the client`,
+        (await dialog.getByText("Select at least one item").count()) === 1 && (state.created ?? []).length === 0,
+        await dialog.innerText(),
+      );
+
+      await tick(dialog, DRIPPER).check();
+      await quantityOf(dialog, DRIPPER).fill("4");
+      await submitCreate(dialog);
+      results.check(
+        `${label}: more than what is left is refused with the limit`,
+        (await dialog.getByText("No more than 3").count()) === 1 && (state.created ?? []).length === 0,
+        await dialog.innerText(),
+      );
+      await quantityOf(dialog, DRIPPER).fill("0");
+      await submitCreate(dialog);
+      results.check(
+        `${label}: zero is refused`,
+        (await dialog.getByText("Enter a whole number from 1").count()) === 1 && (state.created ?? []).length === 0,
+        await dialog.innerText(),
+      );
+
+      await quantityOf(dialog, DRIPPER).fill("2");
+      await dialog.getByLabel("Reason for the return").fill("  Damaged packaging  ");
+      await submitCreate(dialog);
+      await settle(() => (state.created ?? []).length === 1);
+      const [sent] = state.created ?? [];
+      results.check(
+        `${label}: the request carries only the ticked line, the trimmed reason and the design`,
+        sent?.type === "return_note" &&
+          JSON.stringify(sent.details) ===
+            JSON.stringify({ lines: [{ orderItemId: "item-dripper", qty: 2 }], reason: "Damaged packaging" }) &&
+          sent.overrides?.templateId === "standard",
+        JSON.stringify(sent),
+      );
+    });
+  }
+};
+
+const checkReturnNoteSeveral = async (results) => {
+  await withDocumentPage(DESKTOP, { order: returnOrder() }, async (page, state) => {
+    await openDetails(page);
+    for (const [name, qty] of [[DRIPPER, "1"], [BEANS, "2"]]) {
+      await page.getByRole("button", { name: "Create: Return note" }).click();
+      const dialog = page.getByRole("dialog");
+      await tick(dialog, name).check();
+      await quantityOf(dialog, name).fill(qty);
+      await submitCreate(dialog);
+      await settle(() => (state.created ?? []).length === (name === DRIPPER ? 1 : 2));
+      await dialog.waitFor({ state: "hidden" });
+    }
+    await settle(async () => (await page.locator('[data-document-type="return_note"]').count()) === 2);
+    results.check(
+      "two return notes of one order are both listed",
+      (await page.locator('[data-testid="document-card"][data-document-type="return_note"]').count()) === 2,
+      "cards missing",
+    );
+    results.check(
+      "the second return note was sent without the first one's lines and the first one is still listed",
+      JSON.stringify(state.created.map((sent) => sent.details.lines)) ===
+        JSON.stringify([[{ orderItemId: "item-dripper", qty: 1 }], [{ orderItemId: "item-beans", qty: 2 }]]),
+      JSON.stringify(state.created),
+    );
+    await page.getByRole("button", { name: "Create: Return note" }).click();
+    const dialog = page.getByRole("dialog");
+    const rows = await dialog.getByTestId("return-line").evaluateAll((lines) =>
+      lines.map((line) => line.innerText.replace(/\s+/g, " ").trim()),
+    );
+    results.check(
+      "the ledger moves on: already returned counts the earlier notes and a fully returned line cannot be ticked",
+      rows[0].includes("5 3") && (await tick(dialog, BEANS).isDisabled()) && rows[1].includes("Fully returned"),
+      JSON.stringify(rows),
+    );
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    await page.locator('[data-document-type="return_note"]').first().getByRole("button", { name: "Void" }).click();
+    const confirm = page.getByRole("dialog", { name: "Void: Return note" });
+    await confirm.waitFor({ state: "visible" });
+    results.check(
+      "voiding a return note says its quantities become available again",
+      /available for a new return note/i.test(await confirm.innerText()),
+      await confirm.innerText(),
+    );
+  });
+};
+
+const checkReturnNoteErrors = async (results) => {
+  const exceeded = {
+    status: 422,
+    body: { error: "Cannot return more than was ordered", errorCode: "RETURN_QUANTITY_EXCEEDED" },
+  };
+  await withDocumentPage(DESKTOP, { order: returnOrder(), createError: exceeded }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Return note…");
+    await tick(dialog, BEANS).check();
+    await submitCreate(dialog);
+    await settle(() => (state.createAttempts ?? []).length === 1);
+    const alert = dialog.getByRole("alert");
+    await alert.first().waitFor({ state: "visible" });
+    results.check(
+      "RETURN_QUANTITY_EXCEEDED is explained in the dialog, which stays open and can be submitted again",
+      (await alert.first().innerText()).includes("cannot return more than is left") &&
+        (await page.getByRole("dialog").count()) === 1 &&
+        (await dialog.getByRole("button", { name: "Create", exact: true }).isEnabled()),
+      await dialog.innerText(),
+    );
+  });
+
+  await withDocumentPage(DESKTOP, { order: returnOrder() }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Return note…");
+    await tick(dialog, BEANS).check();
+    await dialog.getByRole("button", { name: "Create", exact: true }).dblclick();
+    await settle(() => (state.created ?? []).length >= 1);
+    await page.waitForTimeout(300);
+    results.check(
+      "a double click on Create issues one return note",
+      (state.created ?? []).length === 1,
+      JSON.stringify(state.created),
+    );
+  });
 };
 
 const checkRetentionConfirm = async (results) => {
@@ -1063,6 +1246,10 @@ export const run = async () => {
     await checkQuoteVoidReissue(results);
     await checkRequisitesBanner(results);
     await checkDocumentsSection(results);
+    await checkReturnNoteOffer(results);
+    await checkReturnNoteDialog(results);
+    await checkReturnNoteSeveral(results);
+    await checkReturnNoteErrors(results);
     await checkRetentionConfirm(results);
     await checkVoid(results);
     await checkReissueAfterVoid(results);

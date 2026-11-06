@@ -5,9 +5,10 @@ import {
   Package,
   Receipt as ReceiptIcon,
   ShoppingBag,
+  Undo2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Order, Receipt } from "./api-types";
+import type { Order, OrderItem, Receipt } from "./api-types";
 
 export type DocumentType = Receipt["document_type"];
 export type GeneratableType =
@@ -16,13 +17,14 @@ export type GeneratableType =
   | "act"
   | "sales_receipt"
   | "packing_list"
-  | "quote";
+  | "quote"
+  | "return_note";
 
 /** Types created through the create-document dialog (the waybill is one click). */
 export type CreatableType = Exclude<GeneratableType, "waybill">;
 
 /** Which `details` form a type asks for when it is created. */
-export type DocumentDetailsKind = "invoice" | "act" | "quote";
+export type DocumentDetailsKind = "invoice" | "act" | "quote" | "return_note";
 
 export type DocumentTypeMeta = {
   labelKey: string;
@@ -37,6 +39,11 @@ export type DocumentTypeMeta = {
   warnings: readonly string[];
   /** Translation key of a short note shown in the create dialog, if the type needs one. */
   createNoteKey?: string;
+  /**
+   * The order may carry several live documents of this type (a return note per shipment
+   * back), so existing ones never block a new one and each is listed on its own.
+   */
+  multiplePerOrder?: boolean;
 };
 
 /**
@@ -107,6 +114,17 @@ export const DOCUMENT_TYPE_META = {
     warnings: [],
     createNoteKey: "documents.notes.packing_list",
   },
+  return_note: {
+    labelKey: "documentTypes.return_note",
+    icon: Undo2,
+    allowedOrderStatuses: ["confirmed"],
+    details: "return_note",
+    requiredSeller: ["name"],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.vatPayer"],
+    createNoteKey: "documents.notes.return_note",
+    multiplePerOrder: true,
+  },
 } as const satisfies Record<GeneratableType, DocumentTypeMeta>;
 
 export const GENERATABLE_TYPES = Object.keys(
@@ -143,9 +161,24 @@ export function documentLabelKey(type: DocumentType): string {
     : `documentTypes.${type}`;
 }
 
+/** The part of an order line the return ledger needs. */
+export type ReturnableItem = Pick<OrderItem, "id" | "qty" | "returned_qty">;
+
 type OrderWithDocuments = Pick<Order, "status"> & {
   receipts?: Receipt[] | null;
+  items?: readonly ReturnableItem[] | null;
 };
+
+export function isMultiplePerOrder(type: DocumentType): boolean {
+  if (!isGeneratableType(type)) return false;
+  const meta: DocumentTypeMeta = DOCUMENT_TYPE_META[type];
+  return meta.multiplePerOrder === true;
+}
+
+/** Units of the line that no earlier (non-void) return note has taken back yet. */
+export function remainingReturnQty(item: Pick<OrderItem, "qty" | "returned_qty">): number {
+  return Math.max(0, item.qty - item.returned_qty);
+}
 
 /** Every document of the order, oldest first (the API does not order them). */
 export function documentsOf(order: Pick<OrderWithDocuments, "receipts">): Receipt[] {
@@ -171,11 +204,15 @@ export function documentOf(
   return ofType.find((doc) => doc.status !== "void") ?? ofType[0];
 }
 
-/** Void documents of a type that were superseded by the current one, newest first. */
+/**
+ * Void documents of a type that were superseded by the current one, newest first. Types
+ * with several live documents have no "current" one, so each note is listed as it is.
+ */
 export function voidedDocumentsOf(
   order: Pick<OrderWithDocuments, "receipts">,
   type: DocumentType,
 ): Receipt[] {
+  if (isMultiplePerOrder(type)) return [];
   const current = documentOf(order, type);
   return documentsOf(order)
     .filter(
@@ -223,14 +260,17 @@ export function issuedQuoteOf(
  * A new document of this type may be requested: the order status allows it and the
  * order has none of that type, the current one failed, or it is void and the type is
  * reissuable (the voided row stays as history and the new one gets a new number).
+ * Types that may repeat are limited by what is left to return, not by earlier documents.
  */
 export function canCreate(order: OrderWithDocuments, type: GeneratableType): boolean {
   const meta: DocumentTypeMeta = DOCUMENT_TYPE_META[type];
+  if (!meta.allowedOrderStatuses.includes(order.status)) return false;
+  if (meta.multiplePerOrder)
+    return (order.items ?? []).some((item) => remainingReturnQty(item) > 0);
   const existing = documentOf(order, type);
   return (
-    meta.allowedOrderStatuses.includes(order.status) &&
-    (!existing ||
-      existing.status === "failed" ||
-      (existing.status === "void" && isReissuable(type)))
+    !existing ||
+    existing.status === "failed" ||
+    (existing.status === "void" && isReissuable(type))
   );
 }

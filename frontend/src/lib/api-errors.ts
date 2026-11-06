@@ -31,6 +31,7 @@ export const ErrorCode = {
   DOCUMENT_TYPE_NOT_SUPPORTED: "DOCUMENT_TYPE_NOT_SUPPORTED",
   DOCUMENT_AMOUNT_INVALID: "DOCUMENT_AMOUNT_INVALID",
   RECONSTRUCTION_REQUIRED: "RECONSTRUCTION_REQUIRED",
+  RETURN_QUANTITY_EXCEEDED: "RETURN_QUANTITY_EXCEEDED",
 
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
@@ -93,6 +94,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.DOCUMENT_TEMPLATE_UNSUPPORTED]:
     "This design cannot be used for this document type",
   [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
+  [ErrorCode.RETURN_QUANTITY_EXCEEDED]:
+    "You can return no more than is left of an item. Check the quantities and try again",
 
   // Product errors
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",

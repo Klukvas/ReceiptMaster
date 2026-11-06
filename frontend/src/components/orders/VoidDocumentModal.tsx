@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type Receipt } from "../../lib/api";
 import { parseApiError } from "../../lib/api-errors";
-import { documentLabelKey, isReissuable } from "../../lib/document-types";
+import { documentLabelKey, isMultiplePerOrder, isReissuable } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { ConfirmModal } from "../ui/ConfirmModal";
 
@@ -14,7 +14,15 @@ type VoidDocumentModalProps = {
   onClose: () => void;
 };
 
-/** Voids one document. Only reissuable types (invoice, act) can be issued again afterwards, with a new number. */
+const voidMessageKey = (document: Receipt): string => {
+  if (isMultiplePerOrder(document.document_type)) return "documents.voidMessageRepeatable";
+  return isReissuable(document.document_type) ? "documents.voidMessageReissuable" : "documents.voidMessageFinal";
+};
+
+/**
+ * Voids one document. Only reissuable types (invoice, act, quote) can be issued again afterwards,
+ * with a new number; a repeatable type (return note) just frees its quantities for a new note.
+ */
 export function VoidDocumentModal({ document, onClose }: VoidDocumentModalProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -42,7 +50,7 @@ export function VoidDocumentModal({ document, onClose }: VoidDocumentModalProps)
       isLoading={voidMutation.isPending}
       variant="danger"
       title={t("documents.voidTitle", { type: label })}
-      message={t(isReissuable(document.document_type) ? "documents.voidMessageReissuable" : "documents.voidMessageFinal", { type: label })}
+      message={t(voidMessageKey(document), { type: label })}
       itemName={document.number}
       confirmLabel={t("documents.void")}
     >

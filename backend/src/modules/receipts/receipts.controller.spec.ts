@@ -367,18 +367,25 @@ describe("ReceiptsController: POST orders/:orderId/documents", () => {
     expect(service.generateDocument.mock.calls[1][4]).toBeUndefined();
   });
 
-  it.each(["return_note"])(
-    "refuses %s with DOCUMENT_TYPE_NOT_SUPPORTED",
-    async (type) => {
-      await expect(
-        controller.createDocument("order-1", req, { type }),
-      ).rejects.toMatchObject({
-        errorCode: "DOCUMENT_TYPE_NOT_SUPPORTED",
-        statusCode: 400,
-      });
-      expect(service.generateDocument).not.toHaveBeenCalled();
-    },
-  );
+  it("refuses a return note without its lines before generating", async () => {
+    await expect(
+      controller.createDocument("order-1", req, { type: "return_note" }),
+    ).rejects.toMatchObject({ errorCode: "VALIDATION_ERROR" });
+    expect(service.generateDocument).not.toHaveBeenCalled();
+  });
+
+  it("passes the lines and reason of a return note to the service", async () => {
+    const details = {
+      lines: [{ orderItemId: "5b0a2d5e-5a0f-4bb7-9a62-6f6c1c2e4d11", qty: 2 }],
+      reason: "Брак",
+    };
+    await controller.createDocument("order-1", req, {
+      type: "return_note",
+      details,
+    });
+    expect(service.generateDocument.mock.calls[0][2]).toBe("return_note");
+    expect(service.generateDocument.mock.calls[0][4]).toEqual(details);
+  });
 
   it.each([{ type: "contract" }, {}, { type: 5 }])(
     "refuses %j as a validation error",

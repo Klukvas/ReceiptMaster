@@ -104,8 +104,99 @@ describe("documentGenerationSchema", () => {
       documentGenerationSchema.safeParse({ type: "invoice", x: 1 }).success,
     ).toBe(false);
     expect(
-      documentGenerationSchema.safeParse({ type: "return_note" }).success,
+      documentGenerationSchema.safeParse({ type: "contract" }).success,
     ).toBe(false);
+  });
+
+  describe("return_note", () => {
+    const itemId = "5b0a2d5e-5a0f-4bb7-9a62-6f6c1c2e4d11";
+    const otherId = "6c1b3e6f-6b1a-4cc8-8b73-7a7d2d3f5e22";
+    const parse = (details?: unknown) =>
+      documentGenerationSchema.safeParse({ type: "return_note", details });
+
+    it("requires details: there is no default", () => {
+      expect(
+        documentGenerationSchema.safeParse({ type: "return_note" }).success,
+      ).toBe(false);
+    });
+
+    it("accepts lines and a trimmed reason", () => {
+      const result = parse({
+        lines: [
+          { orderItemId: itemId, qty: 2 },
+          { orderItemId: otherId, qty: 1 },
+        ],
+        reason: "  Брак  ",
+      });
+      expect(result.success).toBe(true);
+      expect(
+        result.success && "details" in result.data && result.data.details,
+      ).toEqual({
+        lines: [
+          { orderItemId: itemId, qty: 2 },
+          { orderItemId: otherId, qty: 1 },
+        ],
+        reason: "Брак",
+      });
+    });
+
+    it("accepts a reason of exactly 300 characters and 200 lines", () => {
+      expect(
+        parse({
+          lines: [{ orderItemId: itemId, qty: 1 }],
+          reason: "x".repeat(300),
+        }).success,
+      ).toBe(true);
+      const lines = Array.from({ length: 200 }, (_, index) => ({
+        orderItemId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        qty: 1,
+      }));
+      expect(parse({ lines }).success).toBe(true);
+    });
+
+    it.each([
+      ["no lines", { lines: [] }],
+      ["a missing lines key", { reason: "x" }],
+      ["a zero quantity", { lines: [{ orderItemId: itemId, qty: 0 }] }],
+      ["a fractional quantity", { lines: [{ orderItemId: itemId, qty: 1.5 }] }],
+      ["a string quantity", { lines: [{ orderItemId: itemId, qty: "1" }] }],
+      ["a non-uuid id", { lines: [{ orderItemId: "item-1", qty: 1 }] }],
+      [
+        "a repeated line",
+        {
+          lines: [
+            { orderItemId: itemId, qty: 1 },
+            { orderItemId: itemId, qty: 1 },
+          ],
+        },
+      ],
+      [
+        "an empty reason",
+        { lines: [{ orderItemId: itemId, qty: 1 }], reason: "  " },
+      ],
+      [
+        "a reason over 300 characters",
+        { lines: [{ orderItemId: itemId, qty: 1 }], reason: "x".repeat(301) },
+      ],
+      [
+        "an unknown key on a line",
+        { lines: [{ orderItemId: itemId, qty: 1, price: 5 }] },
+      ],
+      [
+        "an unknown key in details",
+        { lines: [{ orderItemId: itemId, qty: 1 }], dueDate: "2026-12-31" },
+      ],
+    ])("rejects %s", (_name, details) => {
+      expect(parse(details).success).toBe(false);
+    });
+
+    it("rejects more than 200 lines", () => {
+      const lines = Array.from({ length: 201 }, (_, index) => ({
+        orderItemId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        qty: 1,
+      }));
+      expect(parse({ lines }).success).toBe(false);
+    });
   });
 
   describe("quote", () => {

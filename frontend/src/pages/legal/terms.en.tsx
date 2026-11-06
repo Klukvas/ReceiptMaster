@@ -4,7 +4,7 @@ import type { LegalContent } from "./types";
 export const termsEn: LegalContent = {
   title: "Terms of Service",
   seoDescription:
-    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, quotes, payment invoices, acts of completed work, sales receipts and packing lists.",
+    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, quotes, payment invoices, acts of completed work, sales receipts, packing lists and return notes.",
   body: (
     <>
       <h2>1. Introduction</h2>
@@ -24,7 +24,7 @@ export const termsEn: LegalContent = {
         ReceiptMaster is a cloud-based platform that allows businesses to
         create, manage, and share business documents as PDF files: a delivery
         note, a quote (commercial offer), a payment invoice, an act of completed
-        work or services, a sales receipt and a packing list. The Service includes product catalog management, order processing,
+        work or services, a sales receipt, a packing list and a return note. The Service includes product catalog management, order processing,
         document generation with customizable templates, and analytics
         dashboards.
       </p>
@@ -68,6 +68,14 @@ export const termsEn: LegalContent = {
           A quote (commercial offer) is an informational offer. It is not an
           invoice, not a primary accounting document and not a basis for
           payment or accounting entries.
+        </li>
+        <li>
+          A return note is an informational document that records which goods
+          and in what quantity are returned under an order. It does not change
+          stock levels, is not a fiscal or settlement document of an RRO/PRRO
+          and is not a tax invoice adjustment calculation. An order can have
+          several return notes, but together they cannot exceed the quantity
+          ordered.
         </li>
         <li>
           The Service does not generate tax invoices and does not register them

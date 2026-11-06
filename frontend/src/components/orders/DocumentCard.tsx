@@ -1,7 +1,7 @@
 import { Ban, Download, Loader2, Printer, RefreshCw, Share2, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatDate, type Receipt } from "../../lib/api";
-import { documentLabelKey } from "../../lib/document-types";
+import { documentLabelKey, isMultiplePerOrder } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { voidReasonText } from "./void-reason";
@@ -103,10 +103,14 @@ export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
           {document.error_message && (
             <p role="alert" className="text-xs text-danger-base">{document.error_message}</p>
           )}
-          <Button size="sm" variant="outline" onClick={() => actions.onRetry(document)}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-            {t("receipts.retryGeneration")}
-          </Button>
+          {isMultiplePerOrder(document.document_type) ? (
+            <p className="text-xs text-content-tertiary">{t("documents.createAgain")}</p>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => actions.onRetry(document)}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {t("receipts.retryGeneration")}
+            </Button>
+          )}
         </div>
       )}
       {footer}

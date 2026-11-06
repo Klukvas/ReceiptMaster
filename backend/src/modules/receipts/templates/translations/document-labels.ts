@@ -48,6 +48,16 @@ export type DocumentLabels = {
   quoteNotice: string;
   /** Grand total line of the quotation, which is not "due" yet. */
   offerTotal: string;
+  /** Return note: signature headings, total line, notice and the "made against" block. */
+  returnedBy: string;
+  returnTotal: string;
+  returnNotice: string;
+  returnSource: string;
+  returnReason: string;
+  /** Source phrases end with the number sign; the number and "from <date>" follow. */
+  returnSourceWaybill: string;
+  returnSourceInvoice: string;
+  returnSourceOrder: string;
   validUntil: string;
   paymentTerms: string;
   deliveryTerms: string;
@@ -101,6 +111,15 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
     offerTotal: "Загальна вартість",
+    returnedBy: "Повернув",
+    returnTotal: "Вартість повернутого товару",
+    returnNotice:
+      "Документ підтверджує повернення товару покупцем. Не є фіскальним документом і не є розрахунком коригування до податкової накладної.",
+    returnSource: "Підстава",
+    returnReason: "Причина повернення",
+    returnSourceWaybill: "Видаткова накладна №",
+    returnSourceInvoice: "Рахунок на оплату №",
+    returnSourceOrder: "Замовлення №",
     validUntil: "Пропозиція дійсна до",
     paymentTerms: "Умови оплати",
     deliveryTerms: "Умови поставки",
@@ -152,6 +171,15 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "Предложение не является счётом и не является основанием для оплаты или бухгалтерского учёта",
     offerTotal: "Общая стоимость",
+    returnedBy: "Вернул",
+    returnTotal: "Стоимость возвращённого товара",
+    returnNotice:
+      "Документ подтверждает возврат товара покупателем. Не является фискальным документом и не является расчётом корректировки к налоговой накладной.",
+    returnSource: "Основание",
+    returnReason: "Причина возврата",
+    returnSourceWaybill: "Расходная накладная №",
+    returnSourceInvoice: "Счёт на оплату №",
+    returnSourceOrder: "Заказ №",
     validUntil: "Предложение действительно до",
     paymentTerms: "Условия оплаты",
     deliveryTerms: "Условия поставки",
@@ -203,6 +231,15 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "This quotation is not an invoice and is not a basis for payment or accounting",
     offerTotal: "Total",
+    returnedBy: "Returned by",
+    returnTotal: "Value of returned goods",
+    returnNotice:
+      "This document confirms that the buyer returned the goods. It is not a fiscal document and not an adjustment calculation to a tax invoice.",
+    returnSource: "Basis",
+    returnReason: "Reason for return",
+    returnSourceWaybill: "Waybill No.",
+    returnSourceInvoice: "Invoice No.",
+    returnSourceOrder: "Order No.",
     validUntil: "Valid until",
     paymentTerms: "Payment terms",
     deliveryTerms: "Delivery terms",
@@ -324,6 +361,29 @@ export const STYLE_LABEL_OVERRIDES: Record<
     en: {
       invoiceNo: "Packing list No:",
       invoiceDate: "Date:",
+      generatedAt: "Document generated:",
+      thankYou: "Thank you for your business!",
+      footerMessage: "If you have any questions, please contact us.",
+    },
+  },
+  return_note: {
+    uk: {
+      invoiceNo: "Номер накладної на повернення:",
+      invoiceDate: "Дата повернення:",
+      generatedAt: "Документ сформовано:",
+      thankYou: "Дякуємо за співпрацю!",
+      footerMessage: "Якщо у вас є питання, будь ласка, зв’яжіться з нами.",
+    },
+    ru: {
+      invoiceNo: "Номер накладной на возврат:",
+      invoiceDate: "Дата возврата:",
+      generatedAt: "Документ сформирован:",
+      thankYou: "Благодарим за сотрудничество!",
+      footerMessage: "Если у вас есть вопросы, пожалуйста, свяжитесь с нами.",
+    },
+    en: {
+      invoiceNo: "Return note No:",
+      invoiceDate: "Return date:",
       generatedAt: "Document generated:",
       thankYou: "Thank you for your business!",
       footerMessage: "If you have any questions, please contact us.",

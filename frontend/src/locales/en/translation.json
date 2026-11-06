@@ -645,7 +645,7 @@
       },
       "receipts": {
         "title": "PDF documents",
-        "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts and packing lists are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
+        "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts, packing lists and return notes are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
         "tag1": "15 templates",
         "tag2": "SHA256 hash",
         "tag3": "public link"
@@ -1020,6 +1020,7 @@
     "documentTemplateUnsupported": "This design cannot be used for this document type",
     "documentTypeNotSupported": "This document type is not supported",
     "documentAmountInvalid": "The order total or currency cannot be printed on a document. Check the order and try again.",
+    "returnQuantityExceeded": "You cannot return more than is left of an item. Check the quantities and try again.",
     "reconstructionRequired": "This document has no saved draft to repeat. Customize it to rebuild it."
   },
   "document": {
@@ -1143,7 +1144,8 @@
     "notes": {
       "quote": "A quote is not an invoice and does not lock the order. To send an updated one, void the current quote and create a new one.",
       "sales_receipt": "This is not a fiscal document: it confirms a sale but does not replace a fiscal register receipt.",
-      "packing_list": "A packing list shows no prices. Once it is created, the order is locked against editing."
+      "packing_list": "A packing list shows no prices. Once it is created, the order is locked against editing.",
+      "return_note": "This is an informational document: it does not change stock, is not a fiscal document and is not a tax invoice adjustment calculation. An order can have several return notes."
     },
     "designFallback": "Your usual design cannot carry this document type, so another one is preselected.",
     "noDesign": "No design is available for this document type.",
@@ -1182,6 +1184,10 @@
       "validUntilBeforeIssue": "The date cannot be before today",
       "validUntilTooFar": "At most 365 days from today",
       "termsTooLong": "At most 300 characters",
+      "returnLinesEmpty": "Select at least one item",
+      "returnQtyInvalid": "Enter a whole number from 1",
+      "returnQtyExceeded": "No more than {{max}}",
+      "reasonTooLong": "No more than 300 characters",
       "invalidField": "Check this field"
     },
     "status": {
@@ -1202,6 +1208,21 @@
     "voidedOn": "voided {{date}}",
     "reissueNote": "Voided {{number}} stays in the history. A new number will be issued.",
     "voidMessageReissuable": "The document will be voided and its public link turned off. It stays in the order's history, and you can issue a new {{type}} with a new number.",
+    "voidMessageRepeatable": "The document will be voided and its public link disabled. The quantities it returned become available for a new return note again.",
+    "createAgain": "Create a new return note.",
+    "returnNote": {
+      "linesTitle": "Items to return",
+      "select": "Select",
+      "selectLine": "Return: {{name}}",
+      "product": "Product",
+      "ordered": "Ordered",
+      "returned": "Already returned",
+      "quantity": "Return",
+      "quantityFor": "Quantity to return: {{name}}",
+      "fullyReturned": "Fully returned",
+      "reason": "Reason for the return",
+      "reasonPlaceholder": "Optional. E.g. damaged packaging"
+    },
     "voidReasons": {
       "order_cancelled": "The order was cancelled"
     }

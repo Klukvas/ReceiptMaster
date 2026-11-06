@@ -42,6 +42,11 @@ import { KeyedMutex } from "../../common/utils/keyed-mutex.util";
 import { nextDocumentNumber, releaseDocumentNumber } from "./receipt-number";
 import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
 import { isLockingDocumentType, syncOrderLock } from "./order-lock";
+import {
+  frozenReturnLines,
+  releaseReturnQuantities,
+  reserveReturnQuantities,
+} from "./return-note-ledger";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
@@ -220,7 +225,9 @@ export class ReceiptsService {
   ): Promise<Receipt> {
     if (!isGeneratableType(type))
       throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
-    if (!hasDocumentBlock(type))
+    // A type that allows several per order has no slot to race for: the order lock and the
+    // quantity ledger serialize it, so the in-process mutex below would add nothing.
+    if (!hasDocumentBlock(type) || specFor(type).multiplePerOrder)
       return this.runGeneration(orderId, user, type, selection, details, file);
     // Two requests for the same order and type must not both allocate a number: the second
     // waits, then finds the first one's PROCESSING row and returns it. In-process on purpose:
@@ -260,21 +267,25 @@ export class ReceiptsService {
     file?: Express.Multer.File,
   ): Promise<Receipt> {
     const spec = specFor(type);
+    const hasSingleSlot = !spec.multiplePerOrder;
     // Voided rows are history, never a row to resume: a reissue starts fresh.
-    const prior = await this.receiptsRepository.findOne({
-      where: {
-        order_id: orderId,
-        user_id: user.id,
-        document_type: type,
-        status: Not(ReceiptStatus.VOID),
-      },
-    });
+    const prior = hasSingleSlot
+      ? await this.receiptsRepository.findOne({
+          where: {
+            order_id: orderId,
+            user_id: user.id,
+            document_type: type,
+            status: Not(ReceiptStatus.VOID),
+          },
+        })
+      : null;
     if (prior?.status === ReceiptStatus.PROCESSING && prior.generation_id)
       return prior;
     if (prior?.status === ReceiptStatus.GENERATED)
       throw documentAlreadyExists(orderId, type);
     if (
       !prior &&
+      hasSingleSlot &&
       (await hasClosedVoidedDocument(
         (where) => this.receiptsRepository.count({ where }),
         user.id,
@@ -365,14 +376,24 @@ export class ReceiptsService {
             });
         if (!order || !spec.allowedOrderStatuses.includes(order.status))
           throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
-        const existing = await manager.findOne(Receipt, {
-          where: {
-            order_id: orderId,
-            user_id: user.id,
-            document_type: type,
-            status: Not(ReceiptStatus.VOID),
-          },
-        });
+        // The order row is locked here, so the quantity check cannot race another note.
+        if (type === DocumentType.RETURN_NOTE)
+          await reserveReturnQuantities(
+            manager,
+            user.id,
+            orderId,
+            prepared?.snapshot.document?.details.returnLines ?? [],
+          );
+        const existing = hasSingleSlot
+          ? await manager.findOne(Receipt, {
+              where: {
+                order_id: orderId,
+                user_id: user.id,
+                document_type: type,
+                status: Not(ReceiptStatus.VOID),
+              },
+            })
+          : null;
         if (
           existing?.status === ReceiptStatus.PROCESSING &&
           existing.generation_id
@@ -382,6 +403,7 @@ export class ReceiptsService {
           throw documentAlreadyExists(orderId, type);
         if (
           !existing &&
+          hasSingleSlot &&
           (await hasClosedVoidedDocument(
             (where) => manager.count(Receipt, { where }),
             user.id,
@@ -512,12 +534,20 @@ export class ReceiptsService {
         throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
       }
 
+      // The snapshot is read before the void clears the candidate that may hold it.
+      // A failed note already gave its quantities back.
+      const returnLines =
+        receipt.status === ReceiptStatus.FAILED
+          ? []
+          : await this.returnLinesToRelease(receipt, user.id, manager);
+
       // Void the receipt and revoke any public share link (immutable update)
       await manager.update(
         Receipt,
         { id: receipt.id, user_id: user.id },
         voidedReceiptFields(reason, new Date()),
       );
+      await this.releaseReturn(manager, receipt, user.id, returnLines);
       const savedReceipt = await manager.findOneOrFail(Receipt, {
         where: { id: receipt.id, user_id: user.id },
         relations: ["order"],
@@ -538,6 +568,43 @@ export class ReceiptsService {
 
       return savedReceipt;
     });
+  }
+
+  private async returnLinesToRelease(
+    receipt: Receipt,
+    userId: string,
+    manager: EntityManager,
+  ) {
+    if (receipt.document_type !== DocumentType.RETURN_NOTE) return [];
+    const lines = frozenReturnLines(
+      await this.snapshots.internal(receipt.id, userId, manager),
+    );
+    // Voiding goes ahead, but quantities that cannot be found cannot be given back.
+    if (lines.length === 0)
+      this.logger.warn(
+        `Return note ${receipt.id} (order ${receipt.order_id}) has no readable lines; its quantities were not released`,
+      );
+    return lines;
+  }
+
+  /** A voided return note gives its quantities back so the goods can be returned again. */
+  private async releaseReturn(
+    manager: EntityManager,
+    receipt: Receipt,
+    userId: string,
+    lines: Parameters<typeof releaseReturnQuantities>[3],
+  ): Promise<void> {
+    if (lines.length === 0) return;
+    const unreleased = await releaseReturnQuantities(
+      manager,
+      userId,
+      receipt.order_id,
+      lines,
+    );
+    if (unreleased.length > 0)
+      this.logger.warn(
+        `Return note ${receipt.number}: ${unreleased.length} line(s) had no returned quantity left to release`,
+      );
   }
 
   /**
@@ -753,6 +820,14 @@ export class ReceiptsService {
       ![ReceiptStatus.GENERATED, ReceiptStatus.FAILED].includes(original.status)
     )
       throw new ConflictException("Document is not ready for replacement");
+    // Its quantities were released when it failed; a retry would use them a second time.
+    if (
+      original.document_type === DocumentType.RETURN_NOTE &&
+      original.status === ReceiptStatus.FAILED
+    )
+      throw new ConflictException(
+        "A failed return note cannot be retried; issue a new one.",
+      );
     const revision = original.active_revision || 0;
     if (
       input.expectedActiveRevision !== undefined &&

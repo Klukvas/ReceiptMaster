@@ -7,15 +7,17 @@ import type { DocumentConfig } from "../../lib/document-config";
 import {
   buildDocumentRequest,
   DEFAULT_PAYMENT_TERM_DAYS,
+  EMPTY_RETURN_NOTE,
   formFieldOf,
   quoteDefaults,
   type ActForm,
   type DetailsErrors,
   type InvoiceForm,
   type QuoteForm,
+  type ReturnNoteForm,
 } from "../../lib/document-details";
 import { forecastRequisites } from "../../lib/document-requisites";
-import { DOCUMENT_TYPE_META, documentOf, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
+import { DOCUMENT_TYPE_META, documentOf, isMultiplePerOrder, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { documentConfigQuery } from "../../hooks/useDocumentDraft";
@@ -27,6 +29,7 @@ import { ConfirmModal } from "../ui/ConfirmModal";
 import { Modal } from "../ui/Modal";
 import { ActDetailsFields, InvoiceDetailsFields, QuoteDetailsFields } from "./DocumentDetailsFields";
 import { RequisitesNotice } from "./RequisitesNotice";
+import { ReturnNoteFields } from "./ReturnNoteFields";
 
 type CreateDocumentModalProps = {
   order: Order;
@@ -89,6 +92,8 @@ export function CreateDocumentModal({
       ),
     }));
 
+  const [returnForm, setReturnForm] = useState<ReturnNoteForm>(EMPTY_RETURN_NOTE);
+
   const [fieldErrors, setFieldErrors] = useState<DetailsErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [refusal, setRefusal] = useState<RequisitesError | null>(null);
@@ -101,7 +106,9 @@ export function CreateDocumentModal({
   const isBusy = createDocument.isPending || isCheckingRetention;
   const recipient = order.recipient;
   const current = documentOf(order, type);
-  const voidedNumber = current?.status === "void" ? current.number : null;
+  // A repeatable type has no single document to reissue.
+  const voidedNumber =
+    !isMultiplePerOrder(type) && current?.status === "void" ? current.number : null;
 
   const forecast =
     company.data &&
@@ -111,6 +118,7 @@ export function CreateDocumentModal({
     : forecast;
 
   const isSendingRef = useRef(false);
+  const isSubmittingRef = useRef(false);
   const send = async (body: DocumentRequestBody) => {
     // A quick double click on a confirm button fires before the modal re-renders.
     if (isSendingRef.current) return;
@@ -138,8 +146,12 @@ export function CreateDocumentModal({
     }
     const { code, message } = parseApiError(error);
     setSubmitError(message);
-    // Someone else (or another tab) already issued it: show the order as it is now.
-    if (code === ErrorCode.DOCUMENT_ALREADY_EXISTS)
+    // Someone else (or another tab) already issued it, or returned the units first: show the
+    // order as it is now.
+    if (
+      code === ErrorCode.DOCUMENT_ALREADY_EXISTS ||
+      code === ErrorCode.RETURN_QUANTITY_EXCEEDED
+    )
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
   };
 
@@ -149,13 +161,30 @@ export function CreateDocumentModal({
   };
 
   const submit = async () => {
-    if (isBusy) return;
+    // Two quick submits both see the same idle render, so the state flag alone is not enough
+    // for a document that may legitimately be issued many times.
+    if (isBusy || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    try {
+      await submitForm();
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  };
+
+  const submitForm = async () => {
     setFieldErrors({});
     setSubmitError("");
     setRefusal(null);
     const built = buildDocumentRequest(
       type,
-      { invoice: invoiceForm, act: actForm, quote: quoteForm },
+      {
+        invoice: invoiceForm,
+        act: actForm,
+        quote: quoteForm,
+        returnNote: returnForm,
+        items: order.items,
+      },
       quoteBase,
       (design.selectedId || undefined) as DocumentConfig["templateId"] | undefined,
     );
@@ -212,6 +241,14 @@ export function CreateDocumentModal({
             errors={fieldErrors}
             onChange={editQuote}
             today={quoteBase.today}
+          />
+        )}
+        {details === "return_note" && (
+          <ReturnNoteFields
+            items={order.items}
+            form={returnForm}
+            errors={fieldErrors}
+            onChange={setReturnForm}
           />
         )}
         {voidedNumber && (

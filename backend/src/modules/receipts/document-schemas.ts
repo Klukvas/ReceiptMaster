@@ -54,6 +54,33 @@ export const quoteDetailsSchema = z
   })
   .strict();
 
+export const RETURN_NOTE_MAX_LINES = 200;
+export const RETURN_REASON_MAX_LENGTH = 300;
+const MAX_LINE_QUANTITY = 2147483647;
+
+const returnLineSchema = z
+  .object({
+    orderItemId: z.string().uuid(),
+    qty: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+  })
+  .strict();
+
+/** Goods return: which order lines come back and in what quantity. Required, never defaulted. */
+export const returnNoteDetailsSchema = z
+  .object({
+    lines: z
+      .array(returnLineSchema)
+      .min(1)
+      .max(RETURN_NOTE_MAX_LINES)
+      .refine(
+        (lines) =>
+          new Set(lines.map((line) => line.orderItemId)).size === lines.length,
+        "Each order line may appear only once",
+      ),
+    reason: z.string().trim().min(1).max(RETURN_REASON_MAX_LENGTH).optional(),
+  })
+  .strict();
+
 /** Body of POST /receipts/:id/regenerate (JSON or the multipart `payload` field). */
 export const regenerationSchema = selectionSchema
   .innerType()
@@ -96,6 +123,9 @@ export const documentGenerationSchema = z
     generationBase(DocumentType.PACKING_LIST),
     generationBase(DocumentType.QUOTE).extend({
       details: quoteDetailsSchema.default({}),
+    }),
+    generationBase(DocumentType.RETURN_NOTE).extend({
+      details: returnNoteDetailsSchema,
     }),
   ])
   .refine((v) => !v.config || !v.presetId, "Choose a config or a preset");

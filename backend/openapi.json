@@ -2170,7 +2170,7 @@
             }
           }
         },
-        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list or quotation) for an order",
+        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list, quotation or goods return note) for an order",
         "parameters": [
           {
             "name": "orderId",
@@ -2193,7 +2193,7 @@
             }
           },
           "400": {
-            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one; a goods return note needs `details.lines`), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2243,7 +2243,7 @@
             }
           },
           "422": {
-            "description": "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them",
+            "description": "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them. A goods return note asking for more than is left to return is refused with RETURN_QUANTITY_EXCEEDED; `items` lists each line with the requested and remaining quantity",
             "content": {
               "application/json": {
                 "schema": {
@@ -5262,6 +5262,10 @@
           "line_total_cents": {
             "type": "number"
           },
+          "returned_qty": {
+            "type": "number",
+            "description": "Quantity already taken back by issued goods return notes (never above qty); a voided return note gives its quantity back"
+          },
           "unit_cost_cents": {
             "type": "number",
             "nullable": true,
@@ -5276,6 +5280,7 @@
           "unit_price_cents",
           "qty",
           "line_total_cents",
+          "returned_qty",
           "unit_cost_cents"
         ]
       },
@@ -7337,6 +7342,84 @@
             },
             "required": [
               "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "return_note"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "qty"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "type",
+              "details"
             ],
             "additionalProperties": false
           }

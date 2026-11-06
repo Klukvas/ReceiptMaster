@@ -278,3 +278,76 @@ describe("buildFrozenDocument", () => {
     expect(carried.vatRatePercent).toBe(7);
   });
 });
+
+describe("buildFrozenDocument for a return note", () => {
+  const source = {
+    kind: "waybill" as const,
+    number: "2026-000003",
+    date: "2026-10-10",
+  };
+  const lines = [{ orderItemId: "item-1", qty: 2 }];
+  const returnContext = (
+    overrides: Partial<DocumentContext> = {},
+    details: DocumentRequest["details"] = { lines, reason: "Брак" },
+  ): DocumentContext => ({
+    ...context({ type: DocumentType.RETURN_NOTE, details }),
+    returnSource: source,
+    ...overrides,
+  });
+
+  it("freezes the lines, reason and source with the heading", () => {
+    const frozen = buildFrozenDocument(returnContext(), config, NOW);
+    expect(frozen.title).toBe("Накладна на повернення товару");
+    expect(frozen.details).toEqual({
+      returnLines: lines,
+      returnReason: "Брак",
+      returnSource: source,
+    });
+    expect(frozen.vatRatePercent).toBe(20);
+  });
+
+  it("omits the reason when none was given", () => {
+    const frozen = buildFrozenDocument(
+      returnContext({}, { lines }),
+      config,
+      NOW,
+    );
+    expect(frozen.details).not.toHaveProperty("returnReason");
+  });
+
+  it("copies the lines so the request cannot change the frozen document later", () => {
+    const input = { lines: [{ orderItemId: "item-1", qty: 2 }] };
+    const frozen = buildFrozenDocument(returnContext({}, input), config, NOW);
+    input.lines[0].qty = 99;
+    expect(frozen.details.returnLines).toEqual(lines);
+  });
+
+  it("refuses a request without lines", () => {
+    expect(() =>
+      buildFrozenDocument(returnContext({}, { lines: [] }), config, NOW),
+    ).toThrow(ApiErrorResponse);
+  });
+
+  it("keeps the frozen details of a replacement, source included", () => {
+    const original = buildFrozenDocument(returnContext(), config, NOW);
+    const replaced = buildFrozenDocument(
+      {
+        ...context({
+          type: DocumentType.RETURN_NOTE,
+          details: {},
+          carryOver: {
+            buyer: original.buyer,
+            issueDate: original.issueDate,
+            details: original.details,
+            vatRatePercent: original.vatRatePercent,
+          },
+        }),
+        returnSource: undefined,
+      },
+      config,
+      new Date("2027-01-01T00:00:00Z"),
+    );
+    expect(replaced.details).toEqual(original.details);
+    expect(replaced.issueDate).toBe(original.issueDate);
+  });
+});

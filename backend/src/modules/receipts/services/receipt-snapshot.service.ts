@@ -33,6 +33,8 @@ import {
   DocumentRequest,
 } from "../frozen-document";
 import { assertTemplateSupportsDocument } from "../document-template-support";
+import { assertReturnable, buildReturnedOrder } from "../return-note";
+import { resolveReturnSource } from "../return-note-ledger";
 import { createHash, randomUUID } from "crypto";
 
 export const PRIVATE_RECEIPT_COLUMNS = [
@@ -96,17 +98,46 @@ export class ReceiptSnapshotService {
     manager: EntityManager = this.db.manager,
   ): Promise<DocumentContext> {
     const columns = await manager.findOne(UserSettings, { where: { userId } });
+    // A replacement keeps the frozen source; a new return note looks it up now.
+    const needsReturnSource =
+      request.type === DocumentType.RETURN_NOTE && !request.carryOver?.details;
     return {
       request,
       seller: buildSeller(config.company, columns ?? {}),
       buyer: request.carryOver?.buyer ?? buildBuyer(order.recipient),
       defaultPaymentTermDays: columns?.defaultPaymentTermDays ?? null,
+      ...(needsReturnSource
+        ? {
+            returnSource: await resolveReturnSource(
+              manager,
+              userId,
+              order,
+              config.formatting.timeZone,
+            ),
+          }
+        : {}),
     };
   }
   /**
    * Every refusal that does not depend on the number (status, template, requisites, dates)
    * without staging anything, so a refused request never burns a document number.
    */
+  /** What the document will print: the whole order, or for a return note the returned part only. */
+  private printedOrder(
+    order: Order,
+    request: DocumentRequest | undefined,
+  ): { total_cents: number; currency: string } {
+    if (request?.type !== DocumentType.RETURN_NOTE) return order;
+    const requested = request.details.lines;
+    if (requested) {
+      assertReturnable(order.items, requested);
+      return buildReturnedOrder(order, requested);
+    }
+    // A replacement keeps the lines it already reserved; only the printed amount is judged.
+    const frozen = request.carryOver?.details?.returnLines;
+    return frozen ? buildReturnedOrder(order, frozen) : order;
+  }
+
   async preflight(
     userId: string,
     orderId: string,
@@ -123,10 +154,20 @@ export class ReceiptSnapshotService {
       config,
       new Date(),
     );
+    // A return note prints only the returned lines, so its quantities and amount are the ones judged.
+    const printed = this.printedOrder(order, request);
     // The amount in words is drawn at render time; a bad currency or total must be refused now.
     try {
-      amountInWords(order.total_cents, order.currency, config.documentLanguage);
-      formatDocumentMoney(order.total_cents, order.currency, config.formatting);
+      amountInWords(
+        printed.total_cents,
+        printed.currency,
+        config.documentLanguage,
+      );
+      formatDocumentMoney(
+        printed.total_cents,
+        printed.currency,
+        config.formatting,
+      );
     } catch {
       throw ApiErrors.DOCUMENT_AMOUNT_INVALID(orderId);
     }
@@ -174,7 +215,7 @@ export class ReceiptSnapshotService {
     const prepared = await this.renders.prepare(
       userId,
       config,
-      frozenOrder || captureOrder(order),
+      frozenOrder || this.orderToFreeze(order, request),
       resolvedNumber,
       logo,
       context,
@@ -195,6 +236,15 @@ export class ReceiptSnapshotService {
           : null,
     };
   }
+  private orderToFreeze(order: Order, request?: DocumentRequest) {
+    // A reconstruction (no frozen order left) still returns only the frozen lines.
+    const lines =
+      request?.type === DocumentType.RETURN_NOTE
+        ? (request.details.lines ?? request.carryOver?.details?.returnLines)
+        : undefined;
+    return lines ? buildReturnedOrder(order, lines) : captureOrder(order);
+  }
+
   async validatePrepared(
     userId: string,
     orderId: string,

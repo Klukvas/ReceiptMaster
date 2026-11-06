@@ -18,7 +18,8 @@ type TypedDocument =
   | DocumentType.ACT
   | DocumentType.SALES_RECEIPT
   | DocumentType.PACKING_LIST
-  | DocumentType.QUOTE;
+  | DocumentType.QUOTE
+  | DocumentType.RETURN_NOTE;
 // Invoice and act also have readable snapshots; the other types are checked by content below.
 const TYPES: TypedDocument[] = [DocumentType.INVOICE, DocumentType.ACT];
 // Every type issued before the quotation has golden digests.
@@ -27,7 +28,11 @@ const GOLDEN_TYPES: TypedDocument[] = [
   DocumentType.SALES_RECEIPT,
   DocumentType.PACKING_LIST,
 ];
-const ALL_TYPES: TypedDocument[] = [...GOLDEN_TYPES, DocumentType.QUOTE];
+const ALL_TYPES: TypedDocument[] = [
+  ...GOLDEN_TYPES,
+  DocumentType.QUOTE,
+  DocumentType.RETURN_NOTE,
+];
 const UNPRICED_TYPE = DocumentType.PACKING_LIST;
 const STYLES = ["standard", "classic", "minimal", "corporate"];
 const LANGUAGES: DocumentLanguage[] = ["uk", "ru", "en"];
@@ -194,6 +199,16 @@ const quoteDetails = {
   deliveryTerms: "Самовивіз зі складу",
 };
 
+const returnDetails = {
+  lines: [{ orderItemId: "item-1", qty: 1 }],
+  reason: "Не підійшов розмір",
+};
+const returnSource = {
+  kind: "waybill" as const,
+  number: "2026-000003",
+  date: "2026-10-10",
+};
+
 const contextFor = (
   type: TypedDocument,
   config: DocumentConfig,
@@ -210,8 +225,11 @@ const contextFor = (
           }
         : type === DocumentType.QUOTE
           ? { ...quoteDetails }
-          : { dueDate: "2026-10-20" },
+          : type === DocumentType.RETURN_NOTE
+            ? { ...returnDetails }
+            : { dueDate: "2026-10-20" },
   },
+  ...(type === DocumentType.RETURN_NOTE ? { returnSource } : {}),
   seller: buildSeller(config.company, {
     companyLegalForm: "ТОВ",
     companyBankName: "АТ Банк",
@@ -665,6 +683,140 @@ describe("invoice and act layout", () => {
       const html = await render(DocumentType.QUOTE, "classic", "uk");
       expect(html).toContain("Номер пропозиції:");
       expect(html).not.toContain("Номер рахунку:");
+    });
+  });
+
+  describe("return note", () => {
+    const cases = STYLES.flatMap((style) =>
+      LANGUAGES.map((language) => [style, language] as const),
+    );
+    const TITLES = {
+      uk: "Накладна на повернення товару",
+      ru: "Накладная на возврат товара",
+      en: "Goods Return Note",
+    };
+    const NOTICES = {
+      uk: "Документ підтверджує повернення товару покупцем. Не є фіскальним документом і не є розрахунком коригування до податкової накладної.",
+      ru: "Документ подтверждает возврат товара покупателем. Не является фискальным документом и не является расчётом корректировки к налоговой накладной.",
+      en: "This document confirms that the buyer returned the goods. It is not a fiscal document and not an adjustment calculation to a tax invoice.",
+    };
+    const returned = order({
+      subtotal_cents: 27500,
+      total_cents: 27500,
+      items: [
+        {
+          product_name: "Консультація",
+          qty: 1,
+          unit_price_cents: 27500,
+          line_total_cents: 27500,
+        },
+      ],
+    });
+    const renderNote = (
+      style: string,
+      language: DocumentLanguage,
+      details: DocumentContext["request"]["details"] = returnDetails,
+    ) => {
+      const config = configFor(style, language);
+      return render(DocumentType.RETURN_NOTE, style, language, returned, {
+        ...contextFor(DocumentType.RETURN_NOTE, config),
+        request: { type: DocumentType.RETURN_NOTE, details },
+      });
+    };
+
+    it.each(cases)(
+      "%s / %s carries title, notice, source, reason, VAT and the return wording",
+      async (style, language) => {
+        const html = await renderNote(style, language);
+        const labels = DOCUMENT_LABELS[language];
+        expect(html).toContain(TITLES[language]);
+        expect(html).toContain(NOTICES[language]);
+        expect(html).toContain(labels.returnTotal);
+        expect(html).toContain(labels.returnSource);
+        expect(html).toContain(`${labels.returnSourceWaybill} 2026-000003`);
+        expect(html).toContain(labels.returnReason);
+        expect(html).toContain("Не підійшов розмір");
+        expect(html).toContain(`${labels.vatIncluded} (20%)`);
+        expect(html).toContain(labels.amountInWords);
+        expect(html).toContain(labels.receivedBy);
+        expect(html).toContain(labels.returnedBy);
+        expect(html).toContain("Консультація");
+        expect(html).not.toContain("Розробка сайту");
+        expect(html).not.toContain(labels.paymentDetails);
+        expect(html).not.toContain(SELLER_IBAN);
+        expect(html).not.toContain(labels.stamp);
+        expect(html).not.toContain(labels.dueDate);
+        expect(html).not.toContain(labels.grandTotal);
+        expect(html).not.toContain("{{");
+      },
+    );
+
+    it("prints the returned value, not the order total", async () => {
+      const html = await renderNote("standard", "uk");
+      expect(html).toMatch(/275[.,]00/);
+      expect(html).not.toMatch(/2[\s\u00a0,.]?050[.,]50/);
+    });
+
+    it("omits the reason when none was given and names an invoice or the order as the source", async () => {
+      const bare = await renderNote("standard", "uk", {
+        lines: returnDetails.lines,
+      });
+      expect(bare).not.toContain(DOCUMENT_LABELS.uk.returnReason);
+      const config = configFor("standard", "uk");
+      for (const [kind, label] of [
+        ["invoice", DOCUMENT_LABELS.uk.returnSourceInvoice],
+        ["order", DOCUMENT_LABELS.uk.returnSourceOrder],
+      ] as const) {
+        const html = await render(
+          DocumentType.RETURN_NOTE,
+          "standard",
+          "uk",
+          returned,
+          {
+            ...contextFor(DocumentType.RETURN_NOTE, config),
+            returnSource: { kind, number: "12", date: "2026-10-02" },
+          },
+        );
+        expect(html).toContain(`${label} 12 від 2 жовтня 2026 р.`);
+      }
+    });
+
+    it("numbers the document through the style labels", async () => {
+      const html = await renderNote("classic", "uk");
+      expect(html).toContain("Номер накладної на повернення:");
+      expect(html).not.toContain("Номер рахунку:");
+    });
+
+    it("escapes hostile text in the reason", async () => {
+      for (const style of STYLES) {
+        const html = await renderNote(style, "uk", {
+          lines: returnDetails.lines,
+          reason: XSS,
+        });
+        expect(html).not.toContain("<script>alert");
+        expect(html).toContain("&lt;script&gt;");
+      }
+    });
+
+    it("keeps its wording out of every other type", async () => {
+      for (const type of [...GOLDEN_TYPES, DocumentType.QUOTE] as const) {
+        const html = await render(type, "standard", "uk");
+        expect(html).not.toContain(NOTICES.uk);
+        expect(html).not.toContain(DOCUMENT_LABELS.uk.returnSource);
+        expect(html).not.toContain(DOCUMENT_LABELS.uk.returnTotal);
+      }
+    });
+
+    it("never calls the note a cash or fiscal receipt", async () => {
+      for (const language of LANGUAGES) {
+        const html = await renderNote("standard", language);
+        expect(
+          html.replace(
+            /Не є фіскальним документом|Не является фискальным документом|not a fiscal document/g,
+            "",
+          ),
+        ).not.toMatch(/касов|кассов|\bcash\b|fiscal receipt|фіскальн\S* чек/i);
+      }
     });
   });
 

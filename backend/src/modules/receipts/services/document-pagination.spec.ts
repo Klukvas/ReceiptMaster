@@ -86,7 +86,8 @@ const contextOf = (
     | DocumentType.QUOTE
     | DocumentType.INVOICE
     | DocumentType.SALES_RECEIPT
-    | DocumentType.PACKING_LIST,
+    | DocumentType.PACKING_LIST
+    | DocumentType.RETURN_NOTE,
   config: DocumentConfig,
   withTerms: boolean,
 ): DocumentContext => ({
@@ -100,8 +101,22 @@ const contextOf = (
               ? { paymentTerms: LONG_TEXT, deliveryTerms: LONG_TEXT }
               : {}),
           }
-        : { dueDate: inDays(7) },
+        : type === DocumentType.RETURN_NOTE
+          ? {
+              lines: [{ orderItemId: "item-1", qty: 1 }],
+              reason: LONG_TEXT,
+            }
+          : { dueDate: inDays(7) },
   },
+  ...(type === DocumentType.RETURN_NOTE
+    ? {
+        returnSource: {
+          kind: "waybill" as const,
+          number: "2026-000003",
+          date: "2026-10-10",
+        },
+      }
+    : {}),
   seller: buildSeller(config.company, {
     companyLegalForm: "ТОВ",
     companyBankName: "АТ Банк",
@@ -246,5 +261,28 @@ describe("typed document pagination (real Chromium)", () => {
         );
       },
     );
+  });
+
+  describe.each(STYLES)("goods return note / %s", (style) => {
+    run("45 lines keep the footer with its content", async () => {
+      expectFooterNotAlone(
+        await print(
+          `return_note.${style}.45`,
+          DocumentType.RETURN_NOTE,
+          style,
+          items(45, "Товар"),
+        ),
+      );
+    });
+    run("3 long lines keep the footer with its content", async () => {
+      expectFooterNotAlone(
+        await print(
+          `return_note.${style}.long3`,
+          DocumentType.RETURN_NOTE,
+          style,
+          longItems(3),
+        ),
+      );
+    });
   });
 });

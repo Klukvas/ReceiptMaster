@@ -122,6 +122,12 @@ const documentClosing = `<div class="doc-closing">
   <div><span class="doc-label">{{document.labels.deliveryTerms}}:</span> {{document.offer.deliveryTerms}}</div>
   {{/if}}
   {{/if}}
+  {{#if document.returnInfo}}
+  <div><strong>{{document.labels.returnSource}}:</strong> {{document.returnInfo.source}}</div>
+  {{#if document.returnInfo.reason}}
+  <div><span class="doc-label">{{document.labels.returnReason}}:</span> {{document.returnInfo.reason}}</div>
+  {{/if}}
+  {{/if}}
   {{#if document.act}}
   <div>{{document.act.statement}}</div>
   {{#if document.act.contractRef}}

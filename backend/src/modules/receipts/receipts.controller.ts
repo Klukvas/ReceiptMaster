@@ -161,17 +161,17 @@ export class ReceiptsController {
   @Post("orders/:orderId/documents")
   @ApiOperation({
     summary:
-      "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list or quotation) for an order",
+      "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list, quotation or goods return note) for an order",
   })
   @ApiDocumentDraftBody("DocumentGenerationRequest")
   @ApiDataResponse(201, "ReceiptProjection", "Document generation started")
   @ApiFailureResponses({
-    400: "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+    400: "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one; a goods return note needs `details.lines`), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
     402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
     404: "Order not found",
     409: "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing",
     413: "Request above 6 MiB or logo above 5 MiB",
-    422: "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them",
+    422: "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them. A goods return note asking for more than is left to return is refused with RETURN_QUANTITY_EXCEEDED; `items` lists each line with the requested and remaining quantity",
   })
   @UseInterceptors(DocumentMultipart())
   async createDocument(

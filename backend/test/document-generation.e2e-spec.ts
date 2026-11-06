@@ -618,7 +618,7 @@ describeIsolatedPostgres(
         expect(await counter(DocumentType.ACT)).toBe(0);
       });
 
-      it("refuses unsupported and unknown types through the controller", async () => {
+      it("refuses a return note without lines and unknown types through the controller", async () => {
         const order = await confirmedOrder();
         const controller = new ReceiptsController(receipts);
         const call = (type: string) =>
@@ -629,7 +629,7 @@ describeIsolatedPostgres(
           );
 
         expect(await call("return_note")).toMatchObject({
-          errorCode: "DOCUMENT_TYPE_NOT_SUPPORTED",
+          errorCode: "VALIDATION_ERROR",
         });
         expect(await call("receipt")).toMatchObject({
           errorCode: "VALIDATION_ERROR",

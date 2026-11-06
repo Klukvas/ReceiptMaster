@@ -31,6 +31,11 @@ export type DocumentTypeSpec = {
   /** Hard requirements: generation is refused (422) until they are filled in. */
   requiredSeller: readonly SellerField[];
   requiredBuyer: readonly BuyerField[];
+  /**
+   * An order may carry several live documents of this type (partial returns). Skips the
+   * one-slot-per-order logic: every request inserts a new row.
+   */
+  multiplePerOrder?: boolean;
   /** A VAT-paying seller must also give its VAT number (ІПН). */
   requiresVatIdForPayer: boolean;
   /** Soft: generation goes ahead and the response/snapshot lists what is absent. */
@@ -49,10 +54,11 @@ export type SignatureLabelKey =
   | "fromSupplier"
   | "sellerSignature"
   | "shippedBy"
-  | "receivedBy";
+  | "receivedBy"
+  | "returnedBy";
 
 /** Keys of the notice labels printed above the parties. */
-export type NoticeLabelKey = "nonFiscalNotice" | "quoteNotice";
+export type NoticeLabelKey = "nonFiscalNotice" | "quoteNotice" | "returnNotice";
 
 export type DocumentLayoutSpec = {
   sellerRole: "supplier" | "contractor" | "seller" | "shipper";
@@ -69,7 +75,7 @@ export type DocumentLayoutSpec = {
   /** Label of the notice printed above the parties; null for none. */
   notice: NoticeLabelKey | null;
   /** Replaces the label of the grand total line when the default does not fit the document. */
-  grandTotalLabel?: "offerTotal";
+  grandTotalLabel?: "offerTotal" | "returnTotal";
   /** Which of the buyer's addresses leads: the legal one, or the delivery one. */
   buyerAddress: "legal" | "delivery";
   /** Signature columns; the buyer's is reserved only when `buyer` is set. */
@@ -103,7 +109,8 @@ export type GeneratableDocumentType =
   | DocumentType.ACT
   | DocumentType.SALES_RECEIPT
   | DocumentType.PACKING_LIST
-  | DocumentType.QUOTE;
+  | DocumentType.QUOTE
+  | DocumentType.RETURN_NOTE;
 
 export const DOCUMENT_TYPE_SPECS: Record<
   GeneratableDocumentType,
@@ -257,6 +264,37 @@ export const DOCUMENT_TYPE_SPECS: Record<
       allowedStyles: DOCUMENT_STYLES,
     },
   },
+  [DocumentType.RETURN_NOTE]: {
+    allowedOrderStatuses: [OrderStatus.CONFIRMED],
+    locking: false,
+    multiplePerOrder: true,
+    requiresMoney: true,
+    requiredSeller: ["name"],
+    requiredBuyer: [],
+    requiresVatIdForPayer: true,
+    warnings: ["seller.taxId", "seller.vatPayer"],
+    title: {
+      uk: "Накладна на повернення товару",
+      ru: "Накладная на возврат товара",
+      en: "Goods Return Note",
+    },
+    layout: {
+      sellerRole: "seller",
+      buyerRole: "buyer",
+      payment: false,
+      completionStatement: false,
+      money: true,
+      notice: "returnNotice",
+      grandTotalLabel: "returnTotal",
+      buyerAddress: "legal",
+      signatures: {
+        seller: "receivedBy",
+        buyer: "returnedBy",
+        stamp: false,
+      },
+      allowedStyles: DOCUMENT_STYLES,
+    },
+  },
 };
 
 export const GENERATABLE_TYPES = Object.keys(
@@ -282,6 +320,13 @@ export const REISSUABLE_DOCUMENT_TYPES: readonly DocumentType[] = [
 
 export function isReissuableType(type: DocumentType): boolean {
   return REISSUABLE_DOCUMENT_TYPES.includes(type);
+}
+
+export function isMultiplePerOrder(type: DocumentType): boolean {
+  return (
+    isGeneratableType(type) &&
+    DOCUMENT_TYPE_SPECS[type].multiplePerOrder === true
+  );
 }
 
 /** Specs for the types generated today; throws for a type that has none. */

@@ -3,10 +3,11 @@ import {
   DOCUMENT_TYPE_SPECS,
   GENERATABLE_TYPES,
   isGeneratableType,
+  isMultiplePerOrder,
   isReissuableType,
 } from "./document-types";
 import { DocumentType } from "./entities/receipt.entity";
-import { LOCKING_DOCUMENT_TYPES } from "./order-lock";
+import { isLockingDocumentType, LOCKING_DOCUMENT_TYPES } from "./order-lock";
 
 describe("document type specs", () => {
   it.each(GENERATABLE_TYPES)(
@@ -18,16 +19,17 @@ describe("document type specs", () => {
     },
   );
 
-  it("generates exactly waybill, invoice, act, sales receipt, packing list and quote", () => {
+  it("generates exactly waybill, invoice, act, sales receipt, packing list, quote and return note", () => {
     expect([...GENERATABLE_TYPES].sort()).toEqual([
       "act",
       "invoice",
       "packing_list",
       "quote",
+      "return_note",
       "sales_receipt",
       "waybill",
     ]);
-    expect(isGeneratableType(DocumentType.RETURN_NOTE)).toBe(false);
+    expect(isGeneratableType(DocumentType.RETURN_NOTE)).toBe(true);
   });
 
   it("keeps the generatable order, so the template capabilities list does not shift", () => {
@@ -38,6 +40,7 @@ describe("document type specs", () => {
       "sales_receipt",
       "packing_list",
       "quote",
+      "return_note",
     ]);
   });
 
@@ -78,6 +81,39 @@ describe("document type specs", () => {
       signatures: { seller: "fromSupplier", stamp: true },
     });
     expect(isReissuableType(DocumentType.QUOTE)).toBe(true);
+  });
+
+  it("describes the goods return note: several per order, no lock, money, never reissued", () => {
+    const spec = DOCUMENT_TYPE_SPECS[DocumentType.RETURN_NOTE];
+    expect(spec.allowedOrderStatuses).toEqual([OrderStatus.CONFIRMED]);
+    expect(spec.locking).toBe(false);
+    expect(spec.multiplePerOrder).toBe(true);
+    expect(spec.requiresMoney).toBe(true);
+    expect(spec.requiredSeller).toEqual(["name"]);
+    expect(spec.requiredBuyer).toEqual([]);
+    expect(spec.requiresVatIdForPayer).toBe(true);
+    expect(spec.warnings).toEqual(["seller.taxId", "seller.vatPayer"]);
+    expect(spec.title).toEqual({
+      uk: "Накладна на повернення товару",
+      ru: "Накладная на возврат товара",
+      en: "Goods Return Note",
+    });
+    expect(spec.layout).toMatchObject({
+      sellerRole: "seller",
+      buyerRole: "buyer",
+      notice: "returnNotice",
+      grandTotalLabel: "returnTotal",
+      signatures: { seller: "receivedBy", buyer: "returnedBy", stamp: false },
+      allowedStyles: ["standard", "classic", "minimal", "corporate"],
+    });
+    expect(isReissuableType(DocumentType.RETURN_NOTE)).toBe(false);
+    expect(isLockingDocumentType(DocumentType.RETURN_NOTE)).toBe(false);
+  });
+
+  it("allows several documents per order for the return note only", () => {
+    expect(
+      GENERATABLE_TYPES.filter((type) => isMultiplePerOrder(type)),
+    ).toEqual([DocumentType.RETURN_NOTE]);
   });
 
   it("gives every typed document a heading in every language and the waybill none", () => {

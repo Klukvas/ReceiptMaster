@@ -1,7 +1,12 @@
 import type { DocumentRequestBody } from "./api";
 import type { DocumentConfig } from "./document-config";
 import { documentToday } from "./document-clock";
-import { DOCUMENT_TYPE_META, type CreatableType } from "./document-types";
+import {
+  DOCUMENT_TYPE_META,
+  remainingReturnQty,
+  type CreatableType,
+  type ReturnableItem,
+} from "./document-types";
 
 export const MAX_PAYMENT_TERM_DAYS = 365;
 export const MAX_CONTRACT_REF_LENGTH = 200;
@@ -9,6 +14,7 @@ export const DEFAULT_PAYMENT_TERM_DAYS = 5;
 export const QUOTE_DEFAULT_VALIDITY_DAYS = 14;
 export const QUOTE_MAX_VALIDITY_DAYS = 365;
 export const MAX_QUOTE_TERMS_LENGTH = 300;
+export const MAX_RETURN_REASON_LENGTH = 300;
 
 export type PaymentTermMode = "days" | "date";
 
@@ -26,9 +32,21 @@ export type QuoteForm = {
   deliveryTerms: string;
 };
 
+/**
+ * Which lines are ticked and the quantity typed for each (a ticked line without an edit
+ * returns everything that is left). Remaining units are read from the order when the form
+ * is validated, so a refreshed order never leaves a stale limit behind.
+ */
+export type ReturnNoteForm = {
+  selectedItemIds: readonly string[];
+  quantities: Readonly<Record<string, string>>;
+  reason: string;
+};
+
 type InvoiceDetails = Extract<DocumentRequestBody, { type: "invoice" }>["details"];
 type ActDetails = Extract<DocumentRequestBody, { type: "act" }>["details"];
 type QuoteDetails = Extract<DocumentRequestBody, { type: "quote" }>["details"];
+type ReturnNoteDetails = Extract<DocumentRequestBody, { type: "return_note" }>["details"];
 
 /** Field → translation key of the problem. */
 export type DetailsErrors = Partial<Record<string, string>>;
@@ -139,10 +157,65 @@ export function buildQuoteDetails(
   };
 }
 
+export const EMPTY_RETURN_NOTE: ReturnNoteForm = {
+  selectedItemIds: [],
+  quantities: {},
+  reason: "",
+};
+
+/** Field key under which the quantity problem of one order line is reported. */
+export const returnQtyField = (orderItemId: string): string => `qty:${orderItemId}`;
+
+/** The quantity the form currently holds for a line: the typed one, else all that is left. */
+export function returnQtyText(form: ReturnNoteForm, item: ReturnableItem): string {
+  return form.quantities[item.id] ?? String(remainingReturnQty(item));
+}
+
+function returnQtyError(text: string, remaining: number): string | undefined {
+  const qty = Number(text);
+  if (text.trim() === "" || !Number.isInteger(qty) || qty < 1)
+    return "documents.errors.returnQtyInvalid";
+  return qty > remaining ? "documents.errors.returnQtyExceeded" : undefined;
+}
+
+/** At least one ticked line, each 1..remaining units, and an optional reason of up to 300 characters. */
+export function buildReturnNoteDetails(
+  form: ReturnNoteForm,
+  items: readonly ReturnableItem[],
+): Built<ReturnNoteDetails> {
+  const ticked = items.filter((item) => form.selectedItemIds.includes(item.id));
+  const reason = form.reason.trim();
+  const qtyErrors = ticked.flatMap((item) => {
+    const key = returnQtyError(returnQtyText(form, item), remainingReturnQty(item));
+    return key ? [[returnQtyField(item.id), key] as const] : [];
+  });
+  const errors: DetailsErrors = {
+    ...(ticked.length === 0 && { lines: "documents.errors.returnLinesEmpty" }),
+    ...Object.fromEntries(qtyErrors),
+    ...(reason.length > MAX_RETURN_REASON_LENGTH && {
+      reason: "documents.errors.reasonTooLong",
+    }),
+  };
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      lines: ticked.map((item) => ({
+        orderItemId: item.id,
+        qty: Number(returnQtyText(form, item)),
+      })),
+      ...(reason !== "" && { reason }),
+    },
+  };
+}
+
 export type DocumentForms = {
   invoice: InvoiceForm;
   act: ActForm;
   quote: QuoteForm;
+  returnNote: ReturnNoteForm;
+  /** The order's lines, for the types that pick among them. */
+  items: readonly ReturnableItem[];
 };
 
 type TemplateId = DocumentConfig["templateId"];
@@ -194,6 +267,11 @@ export function buildDocumentRequest(
       return withDetails(
         buildQuoteDetails(forms.quote, quote.validUntil, quote.today),
         (details) => ({ type: "quote", details, ...overrides }),
+      );
+    case "return_note":
+      return withDetails(
+        buildReturnNoteDetails(forms.returnNote, forms.items),
+        (details) => ({ type: "return_note", details, ...overrides }),
       );
     default: {
       const unreachable: never = kind;

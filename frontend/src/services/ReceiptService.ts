@@ -10,7 +10,8 @@ export interface PrinterInfo {
   isDefault: boolean;
 }
 
-function retryBody(type: GeneratableType): DocumentRequestBody {
+/** The body that repeats a failed document, or null for a type that cannot be repeated blindly. */
+function retryBody(type: GeneratableType): DocumentRequestBody | null {
   switch (type) {
     case "waybill":
       return { type };
@@ -21,6 +22,9 @@ function retryBody(type: GeneratableType): DocumentRequestBody {
     case "sales_receipt":
     case "packing_list":
       return { type };
+    case "return_note":
+      // An order has several return notes: an empty retry would not say which lines to take back.
+      return null;
     default: {
       const unreachable: never = type;
       return unreachable;
@@ -123,8 +127,10 @@ export class ReceiptService {
     if (type === "waybill") return this.generateReceipt(orderId);
     // A type the server cannot generate must never be retried as some other document.
     if (!isGeneratableType(type)) return;
+    const body = retryBody(type);
+    if (!body) return;
     try {
-      await receiptsApi.createDocument(orderId, retryBody(type));
+      await receiptsApi.createDocument(orderId, body);
       notificationService.success(i18n.t("receipts.generateStarted"));
     } catch (error) {
       const apiError = parseApiError(error);

@@ -3,7 +3,11 @@ import {
   RECEIPT_PUBLISH_TIMEOUT_MS,
   generationJobId,
 } from "./receipt-outbox.service";
-import { Receipt, ReceiptStatus } from "./entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "./entities/receipt.entity";
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { tenantStore } from "../../common/tenancy/tenant-context";
 
@@ -25,6 +29,9 @@ describe("durable receipt dispatch", () => {
   let receipts: { findOne: jest.Mock; update: jest.Mock };
   let queue: { getJob: jest.Mock; add: jest.Mock };
   let dispatcher: ReceiptOutboxService;
+  let noteRow: unknown;
+  let transactionMock: jest.Mock;
+  let txQuery: jest.Mock;
   let closePublisher: jest.Mock;
   let createPublisher: jest.Mock;
   beforeEach(() => {
@@ -48,7 +55,31 @@ describe("durable receipt dispatch", () => {
       getJob: jest.fn().mockResolvedValue(null),
       add: jest.fn().mockResolvedValue({}),
     };
+    const txManager = {
+      update: jest.fn(async (_entity, where, change) =>
+        receipts.update(where, change),
+      ),
+      getRepository: () => ({
+        createQueryBuilder: () => {
+          const builder = {
+            addSelect: () => builder,
+            where: () => builder,
+            getOne: async () => noteRow,
+          };
+          return builder;
+        },
+      }),
+      query: jest.fn(async () => [[{ id: "x" }], 1]),
+    };
+    txQuery = txManager.query;
     const source = {
+      manager: {
+        update: (_entity: unknown, where: unknown, change: unknown) =>
+          receipts.update(where, change),
+      },
+      transaction: (transactionMock = jest.fn(async (callback) =>
+        callback(txManager),
+      )),
       getRepository: (entity: unknown) =>
         entity === Receipt
           ? receipts
@@ -106,6 +137,67 @@ describe("durable receipt dispatch", () => {
       }),
       expect.objectContaining({ status: ReceiptStatus.FAILED }),
     );
+  });
+  describe("a return note whose job is exhausted", () => {
+    const lines = [
+      { orderItemId: "item-b", qty: 1 },
+      { orderItemId: "item-a", qty: 2 },
+    ];
+    const asNote = () => {
+      noteRow = {
+        document_type: DocumentType.RETURN_NOTE,
+        active_snapshot: null,
+        pending_snapshot: { document: { details: { returnLines: lines } } },
+      };
+      receipts.findOne.mockResolvedValue({
+        id: entry.receipt_id,
+        generation_id: entry.generation_id,
+        status: ReceiptStatus.PROCESSING,
+        order_id: entry.order_id,
+        document_type: DocumentType.RETURN_NOTE,
+      });
+      queue.getJob.mockResolvedValue({
+        getState: jest.fn().mockResolvedValue("failed"),
+      });
+    };
+
+    it("fails the note and releases its quantities in one transaction", async () => {
+      asNote();
+      await dispatcher.dispatch();
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+      expect(receipts.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: ReceiptStatus.PROCESSING }),
+        expect.objectContaining({ status: ReceiptStatus.FAILED }),
+      );
+      expect(txQuery.mock.calls.map(([, params]) => params[0])).toEqual([
+        "item-a",
+        "item-b",
+      ]);
+    });
+
+    it("releases nothing when the update did not move the row", async () => {
+      asNote();
+      receipts.update.mockResolvedValue({ affected: 0 });
+      await dispatcher.dispatch();
+      expect(txQuery).not.toHaveBeenCalled();
+    });
+
+    it("keeps a failed replacement of an issued note out of the ledger", async () => {
+      asNote();
+      receipts.findOne.mockResolvedValue({
+        id: entry.receipt_id,
+        generation_id: entry.generation_id,
+        status: ReceiptStatus.GENERATED,
+        replacement_status: "processing",
+        active_revision: 0,
+        pending_id: "p",
+        order_id: entry.order_id,
+        document_type: DocumentType.RETURN_NOTE,
+      });
+      await dispatcher.dispatch();
+      expect(transactionMock).not.toHaveBeenCalled();
+      expect(txQuery).not.toHaveBeenCalled();
+    });
   });
   it("cleans terminal or superseded intents without publishing old generations", async () => {
     receipts.findOne.mockResolvedValue({

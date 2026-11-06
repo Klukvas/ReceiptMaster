@@ -13,6 +13,7 @@ import {
   UA_VAT_RATE_PERCENT,
 } from "./document-types";
 import { DocumentType } from "./entities/receipt.entity";
+import type { ReturnLine, ReturnSource } from "./return-note";
 
 /** Payment term when neither the request nor the account settings name one. */
 export const FALLBACK_PAYMENT_TERM_DAYS = 5;
@@ -30,6 +31,8 @@ export type DocumentDetailsInput = {
   validUntil?: string;
   paymentTerms?: string;
   deliveryTerms?: string;
+  lines?: ReturnLine[];
+  reason?: string;
 };
 
 export type DueDateSource =
@@ -53,6 +56,10 @@ export type FrozenDetails = {
   validUntilSource?: ValidUntilSource;
   paymentTerms?: string;
   deliveryTerms?: string;
+  /** Return note: the lines taken back, what they are returned against, and why. */
+  returnLines?: ReturnLine[];
+  returnReason?: string;
+  returnSource?: ReturnSource;
 };
 
 /** The non-waybill part of a snapshot. Never part of the public projection. */
@@ -92,6 +99,8 @@ export type DocumentContext = {
   /** Live buyer unless the request carries a frozen one. */
   buyer: DocumentBuyer;
   defaultPaymentTermDays: number | null;
+  /** Return note only: resolved from the order's documents before the snapshot is built. */
+  returnSource?: ReturnSource;
 };
 
 export function issueDateIn(now: Date, timeZone: string): string {
@@ -171,6 +180,20 @@ function resolveQuoteDetails(
   };
 }
 
+function resolveReturnDetails(
+  input: DocumentDetailsInput,
+  source: ReturnSource | undefined,
+): FrozenDetails {
+  if (!input.lines || input.lines.length === 0)
+    throw ApiErrors.VALIDATION_ERROR("details.lines", "must not be empty");
+  if (!source) throw new Error("A return note needs its source resolved");
+  return {
+    returnLines: input.lines.map((line) => ({ ...line })),
+    ...(input.reason ? { returnReason: input.reason } : {}),
+    returnSource: source,
+  };
+}
+
 function resolveDetails(
   type: GeneratableDocumentType,
   context: DocumentContext,
@@ -193,6 +216,8 @@ function resolveDetails(
       };
     case DocumentType.QUOTE:
       return resolveQuoteDetails(input, issueDate);
+    case DocumentType.RETURN_NOTE:
+      return resolveReturnDetails(input, context.returnSource);
     default:
       return {};
   }
