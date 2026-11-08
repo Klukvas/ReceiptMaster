@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type Receipt } from "../../lib/api";
+import { isAxiosError } from "axios";
 import { parseApiError } from "../../lib/api-errors";
 import { documentLabelKey, isMultiplePerOrder, isReissuable } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -27,10 +28,14 @@ export function VoidDocumentModal({ document, onClose }: VoidDocumentModalProps)
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
   const label = t(documentLabelKey(document.document_type));
 
   const voidMutation = useMutation({
-    mutationFn: () => receiptsApi.void(document.id, reason.trim()),
+    mutationFn: () => {
+      setReasonError("");
+      return receiptsApi.void(document.id, reason.trim());
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["orders"] }),
@@ -39,7 +44,14 @@ export function VoidDocumentModal({ document, onClose }: VoidDocumentModalProps)
       toast.success(t("documents.voided", { type: label }));
       onClose();
     },
-    onError: (error: unknown) => toast.error(parseApiError(error).message),
+    onError: (error: unknown) => {
+      // A refused reason comes back as a 400 whose text is a list of English validation messages.
+      if (isAxiosError(error) && error.response?.status === 400) {
+        setReasonError(t("documents.errors.voidReasonInvalid", { max: MAX_REASON_LENGTH }));
+        return;
+      }
+      toast.error(parseApiError(error).message);
+    },
   });
 
   return (
@@ -61,8 +73,17 @@ export function VoidDocumentModal({ document, onClose }: VoidDocumentModalProps)
           rows={3}
           maxLength={MAX_REASON_LENGTH}
           value={reason}
-          onChange={(event) => setReason(event.target.value)}
+          aria-invalid={reasonError ? true : undefined}
+          onChange={(event) => {
+            setReason(event.target.value);
+            setReasonError("");
+          }}
         />
+        {reasonError && (
+          <span role="alert" className="mt-1 block text-xs font-normal text-danger-base">
+            {reasonError}
+          </span>
+        )}
       </label>
     </ConfirmModal>
   );

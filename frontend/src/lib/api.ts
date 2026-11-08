@@ -11,6 +11,25 @@ import {
 } from "./auth-session";
 import type { components } from "./api-types.generated";
 import { documentEnvelope } from "./document-config";
+import type {
+  DocumentListItem,
+  DocumentListParams,
+  NumberingSetting,
+  NumberingUpdate,
+  SignoffImage,
+  SignoffKind,
+  SignoffState,
+} from "./documents-api-types";
+
+export type {
+  DocumentListItem,
+  DocumentListParams,
+  NumberingSetting,
+  NumberingUpdate,
+  SignoffImage,
+  SignoffKind,
+  SignoffState,
+} from "./documents-api-types";
 
 export type {
   Product,
@@ -442,15 +461,8 @@ export type DocumentRequestBody = RequestWithDefaults<
 >;
 
 export const receiptsApi = {
-  getAll: (params?: {
-    offset?: number;
-    limit?: number;
-    type?: Receipt["document_type"];
-  }) =>
-    api.get<{ data: Receipt[]; total: number; offset: number; limit: number }>(
-      "/receipts",
-      { params },
-    ),
+  getAll: (params?: DocumentListParams) =>
+    api.get<PaginatedResponse<DocumentListItem>>("/receipts", { params }),
 
   /** Waybill. Other document types go through `createDocument`. */
   create: (orderId: string) =>
@@ -642,6 +654,28 @@ export const settingsApi = {
 
   updateCompanyInfo: (companyInfo: CompanyInfoUpdate) =>
     api.post("/settings/company-info", companyInfo),
+
+  getNumbering: () =>
+    api.get<{ types: NumberingSetting[] }>("/settings/document-numbering"),
+
+  updateNumbering: (type: NumberingSetting["documentType"], body: NumberingUpdate) =>
+    api.put<NumberingSetting>(`/settings/document-numbering/${type}`, body),
+
+  getSignoff: () => api.get<SignoffState>("/settings/signoff"),
+
+  getSignoffImage: (kind: SignoffKind) =>
+    api.get<Blob>(`/settings/signoff/${kind}/image`, { responseType: "blob" }),
+
+  uploadSignoff: (kind: SignoffKind, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.put<SignoffImage>(`/settings/signoff/${kind}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  deleteSignoff: (kind: SignoffKind) =>
+    api.delete<void>(`/settings/signoff/${kind}`),
 };
 
 // Formatting utilities
@@ -664,8 +698,9 @@ const DATE_LOCALES: Record<string, string> = {
 const dateLocale = (): string =>
   DATE_LOCALES[i18n.language?.split("-")[0] ?? "en"] ?? "en-GB";
 
-export const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleString(dateLocale());
+/** `timeZone` shows the moment on that zone's clock (the document zone) instead of the viewer's. */
+export const formatDate = (dateString: string, timeZone?: string) =>
+  new Date(dateString).toLocaleString(dateLocale(), timeZone ? { timeZone } : undefined);
 
 export const formatDateOnly = (dateString: string | number | Date) =>
   new Date(dateString).toLocaleDateString(dateLocale());

@@ -175,6 +175,48 @@ describe("ReceiptSnapshotService goods return preflight", () => {
   });
 });
 
+describe("ReceiptSnapshotService.prepare: one instant for number and date", () => {
+  it("hands the same `now` to the number draw and to the render", async () => {
+    const order = baseOrder();
+    const db = { manager: { findOne: jest.fn(async () => order) } };
+    const configs = {
+      resolve: jest.fn(async () => ({
+        config: {
+          ...legacyConfig(null),
+          documentLanguage: "uk" as const,
+          logo: { ...legacyConfig(null).logo, assetId: null },
+        },
+        revision: 0,
+      })),
+    };
+    const renders = {
+      prepare: jest.fn(async () => ({ html: "h", snapshot: {} })),
+    };
+    const service = new ReceiptSnapshotService(
+      db as never,
+      configs as never,
+      { stage: jest.fn(async () => null) } as never,
+      renders as never,
+    );
+    const drawn: Array<{ zone: string; now: Date }> = [];
+
+    await service.prepare(
+      USER,
+      "order-1",
+      async (zone: string, now: Date) => {
+        drawn.push({ zone, now });
+        return "2027-000001";
+      },
+      { logoAction: "keep" },
+    );
+
+    expect(drawn).toHaveLength(1);
+    expect(drawn[0].zone).toBe("Europe/Kyiv");
+    const renderArgs = renders.prepare.mock.calls[0] as unknown[];
+    expect(renderArgs.at(-1)).toBe(drawn[0].now);
+  });
+});
+
 describe("resolveReturnSource", () => {
   const order = {
     id: "order-1",
@@ -241,5 +283,77 @@ describe("resolveReturnSource", () => {
         "Europe/Kyiv",
       ),
     ).resolves.toEqual({ kind: "order", number: "17", date: "2026-10-02" });
+  });
+
+  describe("the basis matches what the source document prints", () => {
+    const row = (type: DocumentType, snapshot: object | null) => ({
+      manager: {
+        findOne: jest.fn(async (_entity, options) =>
+          options.where.document_type === type
+            ? {
+                number: "2026-000004",
+                created_at: new Date("2026-10-06T22:30:00Z"),
+                active_snapshot: snapshot,
+              }
+            : null,
+        ),
+      },
+    });
+
+    it("takes a waybill's own title and the order date it prints, in its own time zone", async () => {
+      const { manager } = row(DocumentType.WAYBILL, {
+        publicProjection: { companyInfo: { receiptTitle: "Інвойс" } },
+        order: { created_at: "2026-10-01T21:30:00.000Z" },
+        config: { formatting: { timeZone: "Europe/Kyiv" } },
+      });
+
+      await expect(
+        resolveReturnSource(manager as never, USER, order, "UTC"),
+      ).resolves.toEqual({
+        kind: "waybill",
+        number: "2026-000004",
+        // The waybill prints the order date, not the day the row was created.
+        date: "2026-10-02",
+        title: "Інвойс",
+      });
+    });
+
+    it("takes an invoice's frozen heading and issue date, not a recomputed one", async () => {
+      const { manager } = row(DocumentType.INVOICE, {
+        document: { title: "Рахунок на оплату", issueDate: "2026-10-06" },
+      });
+
+      // The row's creation time is already 7 October in Kyiv; the invoice says 6 October.
+      await expect(
+        resolveReturnSource(manager as never, USER, order, "Europe/Kyiv"),
+      ).resolves.toEqual({
+        kind: "invoice",
+        number: "2026-000004",
+        date: "2026-10-06",
+        title: "Рахунок на оплату",
+      });
+    });
+
+    it("falls back to the row and the generic label when the snapshot is unusable", async () => {
+      const { manager } = row(DocumentType.INVOICE, null);
+      await expect(
+        resolveReturnSource(manager as never, USER, order, "Europe/Kyiv"),
+      ).resolves.toEqual({
+        kind: "invoice",
+        number: "2026-000004",
+        date: "2026-10-07",
+      });
+    });
+
+    it("loads the select:false snapshot explicitly", async () => {
+      const { manager } = row(DocumentType.WAYBILL, null);
+      await resolveReturnSource(manager as never, USER, order, "UTC");
+      expect(manager.findOne).toHaveBeenCalledWith(
+        Receipt,
+        expect.objectContaining({
+          select: expect.objectContaining({ active_snapshot: true }),
+        }),
+      );
+    });
   });
 });

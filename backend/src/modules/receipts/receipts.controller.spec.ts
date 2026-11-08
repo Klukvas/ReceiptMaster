@@ -1,3 +1,4 @@
+import { ListDocumentsQueryDto } from "./dto/list-documents-query.dto";
 import { ReceiptsController } from "./receipts.controller";
 import { User } from "../users/entities/user.entity";
 import { DocumentType } from "./entities/receipt.entity";
@@ -80,11 +81,9 @@ describe("ReceiptsController", () => {
 
   describe("findAll", () => {
     it("should return all receipts", async () => {
-      const _result = await controller.findAll(mockReq, undefined, undefined);
-      expect(receiptsService.findAll).toHaveBeenCalledWith(mockUser, {
-        offset: undefined,
-        limit: undefined,
-      });
+      const query = new ListDocumentsQueryDto();
+      await controller.findAll(mockReq, query);
+      expect(receiptsService.findAll).toHaveBeenCalledWith(mockUser, query);
     });
   });
 
@@ -405,14 +404,35 @@ describe("ReceiptsController: POST orders/:orderId/documents", () => {
     ).rejects.toMatchObject({ errorCode: "VALIDATION_ERROR" });
   });
 
-  it("filters the list by a known type and rejects an unknown one", async () => {
-    await controller.findAll(req, undefined, undefined, "invoice");
-    expect(service.findAll).toHaveBeenCalledWith(
-      user,
-      expect.objectContaining({ type: DocumentType.INVOICE }),
-    );
-    await expect(
-      controller.findAll(req, undefined, undefined, "nope"),
-    ).rejects.toBeInstanceOf(ApiErrorResponse);
+  it("adds the order to every listed document", async () => {
+    service.findAll.mockResolvedValueOnce({
+      data: [
+        {
+          id: "r1",
+          order_id: "o1",
+          document_type: DocumentType.INVOICE,
+          number: "2026-000001",
+          order: {
+            id: "o1",
+            order_number: 7,
+            status: "confirmed",
+            recipient: { name: "Acme", email: "private@acme.test" },
+          },
+        },
+      ],
+      total: 1,
+      offset: 0,
+      limit: 20,
+    });
+
+    const page = await controller.findAll(req, new ListDocumentsQueryDto());
+
+    expect(page.data[0].order).toEqual({
+      id: "o1",
+      order_number: 7,
+      status: "confirmed",
+      recipient_name: "Acme",
+    });
+    expect(page).toMatchObject({ total: 1, offset: 0, limit: 20 });
   });
 });

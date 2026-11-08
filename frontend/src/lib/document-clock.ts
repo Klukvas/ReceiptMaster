@@ -29,3 +29,14 @@ export function documentToday(
     return calendarDateIn(DEFAULT_DOCUMENT_TIME_ZONE, now);
   }
 }
+
+/** The zone to display document dates in: the account's, or the default when unknown or unusable. */
+export function resolveDocumentTimeZone(timeZone: string | undefined): string {
+  if (!timeZone) return DEFAULT_DOCUMENT_TIME_ZONE;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return timeZone;
+  } catch {
+    return DEFAULT_DOCUMENT_TIME_ZONE;
+  }
+}

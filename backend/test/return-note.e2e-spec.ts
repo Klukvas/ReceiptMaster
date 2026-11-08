@@ -464,7 +464,7 @@ describeIsolatedPostgres(
       expect(await returnedQty(items[0])).toBe(2);
     });
 
-    it("keeps the ledger when retention evicts old notes", async () => {
+    it("never evicts a return note: the cap is not enforced for it and the ledger stays", async () => {
       const { order, items } = await confirmedOrder([12]);
       const issued: Receipt[] = [];
       for (let index = 0; index < 11; index++) {
@@ -475,10 +475,10 @@ describeIsolatedPostgres(
         issued.push(note);
       }
 
-      expect(await noteCount(order)).toBe(10);
+      expect(await noteCount(order)).toBe(11);
       expect(
         await db.admin.getRepository(Receipt).findOneBy({ id: issued[0].id }),
-      ).toBeNull();
+      ).not.toBeNull();
       expect(await returnedQty(items[0])).toBe(11);
       const error = (await rejection(
         giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]),

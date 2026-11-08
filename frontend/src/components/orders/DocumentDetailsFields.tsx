@@ -32,7 +32,8 @@ export function InvoiceDetailsFields({
   form,
   errors,
   onChange,
-}: FieldsProps<InvoiceForm>) {
+  today,
+}: FieldsProps<InvoiceForm> & { today: QuoteDefaults["today"] }) {
   const { t } = useTranslation();
   return (
     <fieldset className="space-y-3">
@@ -69,6 +70,7 @@ export function InvoiceDetailsFields({
           id="document-due-date"
           label={t("documents.dueDate")}
           type="date"
+          min={today}
           value={form.dueDate}
           onChange={(event) =>
             onChange({ ...form, dueDate: event.target.value })

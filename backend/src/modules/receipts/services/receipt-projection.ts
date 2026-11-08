@@ -22,3 +22,23 @@ export function receiptProjection(receipt: Receipt) {
     replacement_error: receipt.replacement_error,
   };
 }
+
+/**
+ * A projection plus the order it belongs to, for the documents page. Pure addition:
+ * every `receiptProjection` key keeps its name and meaning. The recipient name is the
+ * live one, not the name frozen into the document.
+ */
+export function documentListItem(receipt: Receipt) {
+  const { order } = receipt;
+  return {
+    ...receiptProjection(receipt),
+    order: order
+      ? {
+          id: order.id,
+          order_number: order.order_number,
+          status: order.status,
+          recipient_name: order.recipient?.name ?? null,
+        }
+      : null,
+  };
+}

@@ -2266,23 +2266,82 @@
     "/receipts": {
       "get": {
         "operationId": "ReceiptsController_findAll",
-        "summary": "Получить список всех чеков",
+        "summary": "List documents with filters, search and sorting, each with its order and recipient name",
         "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
           {
             "name": "offset",
             "required": false,
             "in": "query",
-            "description": "Offset",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Matches the document number, the recipient's name or legal name, and, for digits (optionally with #), the order number",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "created_at (default), number, document_type or status; anything else is ignored",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "limit",
+            "name": "sortOrder",
             "required": false,
             "in": "query",
-            "description": "Limit (max 100)",
+            "description": "Направление сортировки: ASC или DESC",
             "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "A calendar day in the account's document time zone (Europe/Kyiv unless configured); the whole day is included",
+            "schema": {
+              "example": "2026-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "Same as startDate; the whole day is included",
+            "schema": {
+              "example": "2026-12-31",
               "type": "string"
             }
           },
@@ -2290,7 +2349,6 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "Only documents of this type (default: all types)",
             "schema": {
               "enum": [
                 "waybill",
@@ -2303,15 +2361,39 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "processing",
+                "generated",
+                "void",
+                "failed"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Список чеков получен",
+            "description": "Page of documents",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReceiptListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -2485,11 +2567,11 @@
       "post": {
         "operationId": "ReceiptsController_voidReceipt",
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReceiptVoidRequest"
+                "$ref": "#/components/schemas/VoidReceiptDto"
               }
             }
           }
@@ -2517,7 +2599,7 @@
             }
           },
           "400": {
-            "description": "Receipt is already voided"
+            "description": "Receipt is already voided, or `reason` is not a string of at most 500 characters"
           },
           "404": {
             "description": "Receipt not found"
@@ -3003,6 +3085,99 @@
             "description": ""
           }
         }
+      }
+    },
+    "/settings/document-numbering": {
+      "get": {
+        "operationId": "DocumentNumberingController_list",
+        "summary": "Number format and next number for every document type",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All seven types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingSettingsResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/document-numbering/{type}": {
+      "put": {
+        "operationId": "DocumentNumberingController_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NumberingUpdateRequest"
+              }
+            }
+          }
+        },
+        "summary": "Set the number format of one document type, optionally raising the counter",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved setting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingSetting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid prefix, padding or startNumber (VALIDATION_ERROR names the field)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/settings/logo/upload": {
@@ -4194,6 +4369,199 @@
                 }
               }
             }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/signoff": {
+      "get": {
+        "operationId": "DocumentSignoffController_get",
+        "summary": "The account's current signature and stamp images",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Image metadata, null where unset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignoffState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/signoff/{kind}/image": {
+      "get": {
+        "operationId": "DocumentSignoffController_image",
+        "summary": "The stored signature or stamp as a PNG",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG image",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No image of this kind is set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/signoff/{kind}": {
+      "put": {
+        "operationId": "DocumentSignoffController_replace",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PNG or JPEG, 32 to 4096 px a side, at most 2 MiB"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "file": {
+                  "contentType": "image/png, image/jpeg"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace the signature or stamp image",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignoffImage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File above 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More than 10 uploads a minute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DocumentSignoffController_remove",
+        "summary": "Remove the signature or stamp image (idempotent)",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed or already absent"
           }
         },
         "tags": [
@@ -5815,6 +6183,15 @@
           "currency"
         ]
       },
+      "VoidReceiptDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
       "ReceiptDesignResponseDto": {
         "type": "object",
         "properties": {
@@ -6239,6 +6616,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "minStart": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "issueDate": {
+            "type": "string"
           }
         },
         "required": [
@@ -7733,13 +8122,301 @@
           "replacement_error"
         ]
       },
+      "DocumentListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "void_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "active_revision": {
+            "type": "integer"
+          },
+          "replacement_status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "replacement_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "order": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "order_number": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "confirmed",
+                  "cancelled"
+                ]
+              },
+              "recipient_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "order_number",
+              "status",
+              "recipient_name"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "document_type",
+          "number",
+          "pdf_url",
+          "hash",
+          "status",
+          "template_id",
+          "template_version",
+          "progress",
+          "error_message",
+          "created_at",
+          "voided_at",
+          "void_reason",
+          "public_token",
+          "active_revision",
+          "replacement_status",
+          "replacement_error",
+          "order"
+        ]
+      },
+      "NumberingSetting": {
+        "type": "object",
+        "properties": {
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "prefix": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "padding": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "includeYear": {
+            "type": "boolean"
+          },
+          "nextValue": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minStart": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "nextNumber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentType",
+          "prefix",
+          "padding",
+          "includeYear",
+          "nextValue",
+          "minStart",
+          "nextNumber"
+        ]
+      },
+      "NumberingSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingSetting"
+            }
+          }
+        },
+        "required": [
+          "types"
+        ]
+      },
+      "NumberingUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "padding": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "includeYear": {
+            "type": "boolean"
+          },
+          "startNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          }
+        },
+        "required": [
+          "prefix",
+          "padding",
+          "includeYear"
+        ]
+      },
+      "SignoffImage": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "assetId",
+          "width",
+          "height",
+          "bytes",
+          "updatedAt"
+        ]
+      },
+      "SignoffState": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignoffImage"
+              }
+            ],
+            "nullable": true
+          },
+          "stamp": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignoffImage"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "signature",
+          "stamp"
+        ]
+      },
       "ReceiptListResponse": {
         "type": "object",
         "properties": {
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ReceiptProjection"
+              "$ref": "#/components/schemas/DocumentListItem"
             }
           },
           "total": {

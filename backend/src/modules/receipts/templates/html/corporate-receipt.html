@@ -339,6 +339,9 @@
         {{#if document}}
         {{> documentStyles}}
         {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoffStyles}}
+        {{/if}}
         {{#if document.hidesItemPrices}}
         .items-table th:nth-child(1) { width: 8%; }
         .items-table th:nth-child(2) { width: 72%; }
@@ -483,6 +486,9 @@
         
         {{#if document}}
         {{> documentClosing}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoff}}
         {{/if}}
         <!-- Footer Section -->
         {{#unless document}}

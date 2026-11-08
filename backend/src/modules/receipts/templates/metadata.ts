@@ -338,6 +338,8 @@ export type TemplateCapabilities = {
   terms: boolean;
   generatedAt: boolean;
   paper: "A4" | "thermal";
+  /** Whether the style prints the account's signature and stamp image. */
+  signoff: boolean;
   /** Document types this style can carry, derived from the document type specs. */
   documentTypes: string[];
   logo: {
@@ -357,6 +359,13 @@ const fullCompany = [
   "companySwift",
   "companyWebsite",
   "companyTagline",
+];
+/** Styles with a signature block (waybill) or a seller signature (typed documents). */
+export const SIGNOFF_TEMPLATE_IDS: readonly string[] = [
+  "standard",
+  "classic",
+  "minimal",
+  "corporate",
 ];
 /** A spec without a layout (the waybill) is carried by every style. */
 function documentTypesFor(id: string): string[] {
@@ -415,6 +424,7 @@ export function getTemplateCapabilities(id: string): TemplateCapabilities {
       "proforma",
     ].includes(id),
     paper: id === "thermal" ? "thermal" : "A4",
+    signoff: SIGNOFF_TEMPLATE_IDS.includes(id),
     documentTypes: documentTypesFor(id),
     logo: {
       minWidth: 24,

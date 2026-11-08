@@ -239,7 +239,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
       ),
     );
   }
-  it.each(["precreate", "promotion", "orderdelete"])(
+  it.each(["promotion", "orderdelete"])(
     "%s eviction racing repair has no receipt/lease cycle",
     async (mode) => {
       const { candidate } = await setup();
@@ -265,26 +265,14 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
           await attempted.promise;
         }
       };
-      const m = installTransactions(locks, () =>
-        mode !== "precreate" && !triggered ? "E" : "R",
-      );
+      const m = installTransactions(locks, () => (!triggered ? "E" : "R"));
       const repair = (async () => {
         await start.promise;
         return f.artifacts.repair("B", TENANT);
       })();
       const eviction = (async () => {
         try {
-          if (mode === "precreate") {
-            await (
-              f.receipts as unknown as {
-                cleanupOldReceipts(
-                  m: EntityManager,
-                  u: string,
-                  t: DocumentType,
-                ): Promise<void>;
-              }
-            ).cleanupOldReceipts(m("E"), TENANT, DocumentType.WAYBILL);
-          } else if (mode === "orderdelete") {
+          if (mode === "orderdelete") {
             await f.receipts.deleteReceiptFilesForOrder("orderB", TENANT);
           } else {
             await f.db.manager.save(Receipt, candidate);
@@ -332,23 +320,16 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
     const m = installTransactions(locks, () => "R");
     const repair = f.artifacts.repair("B", TENANT);
     await held.promise;
-    const eviction = (
-      f.receipts as unknown as {
-        cleanupOldReceipts(
-          m: EntityManager,
-          u: string,
-          t: DocumentType,
-        ): Promise<void>;
-      }
-    )
-      .cleanupOldReceipts(
+    const eviction = f.artifacts
+      .evictOverCap(
         {
           ...m("E"),
-          count: async () => 10,
+          count: async () => 11,
           find: async () => [b],
         } as unknown as EntityManager,
         TENANT,
         DocumentType.WAYBILL,
+        "promoted",
       )
       .finally(() => locks.release("E"));
     const results = await Promise.allSettled([repair, eviction]);
@@ -385,15 +366,12 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
       find: async () => selected,
     } as unknown as EntityManager;
     const results = await Promise.allSettled([
-      (
-        f.receipts as unknown as {
-          cleanupOldReceipts(
-            m: EntityManager,
-            u: string,
-            t: DocumentType,
-          ): Promise<void>;
-        }
-      ).cleanupOldReceipts(overridden, TENANT, DocumentType.WAYBILL),
+      f.artifacts.evictOverCap(
+        overridden,
+        TENANT,
+        DocumentType.WAYBILL,
+        "promoted",
+      ),
     ]);
     saveTrace("refetch", locks, results);
     expect(results[0].status).toBe("fulfilled");

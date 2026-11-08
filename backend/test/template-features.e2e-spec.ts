@@ -520,7 +520,10 @@ describe("template features: real Nest HTTP, synthetic persistence/storage (no r
       is_locked: false,
     };
     await f.db.manager.save(Order, order);
-    await f.receipts.generateReceipt(order.id, f.user);
+    const eleventh = await f.receipts.generateReceipt(order.id, f.user);
+    // Creating the row evicts nothing; the cap is enforced when it is promoted.
+    expect(f.memory.rows(Receipt)).toHaveLength(11);
+    await f.artifacts.execute(eleventh.id, TENANT, eleventh.generation_id);
     expect(f.memory.rows(Receipt)).toHaveLength(10);
     expect(
       await f.artifacts.execute(oldest.id, TENANT, oldest.generation_id),

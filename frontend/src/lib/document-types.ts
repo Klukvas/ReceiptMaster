@@ -91,7 +91,7 @@ export const DOCUMENT_TYPE_META = {
     allowedOrderStatuses: ["confirmed"],
     details: "act",
     requiredSeller: ["name", "taxId", "signatoryName", "signatoryPosition"],
-    requiresVatIdForPayer: false,
+    requiresVatIdForPayer: true,
     warnings: ["buyer.legalName", "buyer.taxId", "details.contractRef"],
   },
   sales_receipt: {

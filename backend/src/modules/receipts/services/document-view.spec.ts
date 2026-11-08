@@ -83,6 +83,46 @@ const frozenFor = (
   ...overrides,
 });
 
+describe("tax codes in the parties block", () => {
+  const sellerOf = (taxId: string) =>
+    buildSeller(
+      {
+        ...config.company,
+        companyName: "Продавець",
+        companyTaxId: taxId,
+        companyIban: "UA213223130000026007233566001",
+      },
+      {},
+    );
+  const view = (overrides: Partial<FrozenDocument>) =>
+    buildDocumentRenderData(
+      frozenFor(DocumentType.INVOICE, false, overrides),
+      order,
+      "N-1",
+      config,
+    ).view;
+
+  it("prints a code whose kind is known, under its label", () => {
+    const { seller, buyer } = view({});
+    expect(seller).toMatchObject({ codeLabel: "ЄДРПОУ", code: "12345678" });
+    expect(buyer).toMatchObject({ codeLabel: "ЄДРПОУ", code: "87654321" });
+  });
+
+  it("hides a seller code of unknown kind instead of printing it unlabelled", () => {
+    const { seller } = view({ seller: sellerOf("12345") });
+    expect(seller.codeLabel).toBe("");
+    expect(seller.code).toBe("");
+  });
+
+  it("hides a buyer code of unknown kind", () => {
+    const { buyer } = view({
+      buyer: buildBuyer({ name: "Іван", tax_id: "ABC" }),
+    });
+    expect(buyer.codeLabel).toBe("");
+    expect(buyer.code).toBe("");
+  });
+});
+
 describe("buildDocumentRenderData", () => {
   it("splits the VAT of a payer's total and puts it in the payment purpose", () => {
     const { view } = buildDocumentRenderData(

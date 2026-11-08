@@ -80,7 +80,8 @@
     "profile": "Profile",
     "groupMain": "Main",
     "groupInsights": "Insights",
-    "groupSystem": "System"
+    "groupSystem": "System",
+    "documents": "Documents"
   },
   "orders": {
     "replaceReceiptTitle": "Replace the oldest document?",
@@ -528,7 +529,8 @@
         "paymentTermDays": "Enter a whole number from 1 to 365",
         "serverInvalid": "The server rejected this value"
       }
-    }
+    },
+    "tabDocuments": "Documents"
   },
   "receipts": {
     "generatingReceipt": "Generating document...",
@@ -1021,7 +1023,9 @@
     "documentTypeNotSupported": "This document type is not supported",
     "documentAmountInvalid": "The order total or currency cannot be printed on a document. Check the order and try again.",
     "returnQuantityExceeded": "You cannot return more than is left of an item. Check the quantities and try again.",
-    "reconstructionRequired": "This document has no saved draft to repeat. Customize it to rebuild it."
+    "reconstructionRequired": "This document has no saved draft to repeat. Customize it to rebuild it.",
+    "numberingStartTooLow": "The starting number cannot be lower than the next number to be issued",
+    "invoiceDueDateBeforeIssueDate": "The due date cannot be before the issue date"
   },
   "document": {
     "interfaceLanguage": "Interface language",
@@ -1185,10 +1189,13 @@
       "validUntilTooFar": "At most 365 days from today",
       "termsTooLong": "At most 300 characters",
       "returnLinesEmpty": "Select at least one item",
-      "returnQtyInvalid": "Enter a whole number from 1",
-      "returnQtyExceeded": "No more than {{max}}",
+      "returnQtyInvalid": "Enter a whole number from 1 to {{max}}",
+      "returnQtyExceeded": "You can return no more than {{max}} pcs.",
       "reasonTooLong": "No more than 300 characters",
-      "invalidField": "Check this field"
+      "invalidField": "Check this field",
+      "dueDateBeforeToday": "The due date cannot be before today",
+      "dueDateServer": "This due date is not accepted. Choose today or a later date.",
+      "voidReasonInvalid": "The reason is not accepted. Use up to {{max}} characters."
     },
     "status": {
       "generated": "Ready",
@@ -1221,10 +1228,17 @@
       "quantityFor": "Quantity to return: {{name}}",
       "fullyReturned": "Fully returned",
       "reason": "Reason for the return",
-      "reasonPlaceholder": "Optional. E.g. damaged packaging"
+      "reasonPlaceholder": "Optional. E.g. damaged packaging",
+      "hint": "This document does not refund money and does not change stock."
     },
     "voidReasons": {
       "order_cancelled": "The order was cancelled"
+    },
+    "failureReasons": {
+      "stopped": "Generation was interrupted. Create the document again.",
+      "reconstruction": "The saved draft of this document is missing. Create the document again from the order.",
+      "generationFailed": "The document could not be generated. Try again.",
+      "unknown": "The document could not be generated. Try again or contact support."
     }
   },
   "documentFields": {
@@ -1248,6 +1262,78 @@
       "dueDate": "Pay by",
       "paymentTermDays": "Days to pay",
       "period": "Work period"
+    }
+  },
+  "documentsPage": {
+    "title": "Documents",
+    "subtitle": "Every document issued from your orders",
+    "retentionHint": "The 10 most recent generated waybills, quotes, sales receipts and packing lists are kept; invoices, acts, return notes, voided and failed documents stay.",
+    "filters": "Document filters",
+    "type": "Type",
+    "allTypes": "All types",
+    "status": "Status",
+    "allStatuses": "All statuses",
+    "from": "From date",
+    "to": "To date",
+    "clearFilters": "Clear filters",
+    "number": "Number",
+    "order": "Order",
+    "recipient": "Recipient",
+    "date": "Date",
+    "searchPlaceholder": "Search by number or recipient",
+    "empty": "No documents yet. They appear here when you create them from an order.",
+    "noMatches": "No documents match these filters",
+    "goToOrders": "Go to orders",
+    "replacing": "Replacing",
+    "replacementFailed": "Replacement failed",
+    "createAgain": "Create again",
+    "timeZoneHint": "Dates are counted by calendar day in the {{zone}} time zone."
+  },
+  "numbering": {
+    "title": "Document numbering",
+    "description": "Set how numbers look for each type of document.",
+    "warning": "A change affects new documents only. Numbers that were already issued stay as they are.",
+    "prefix": "Prefix",
+    "padding": "Digits in the number",
+    "startNumber": "Start from",
+    "startHint": "Next number: {{min}}. It can only be raised.",
+    "includeYear": "Include the year",
+    "preview": "Preview",
+    "nextNumber": "Next number",
+    "saved": "Numbering saved: {{type}}",
+    "errors": {
+      "prefixInvalid": "Up to {{max}} letters, digits, spaces and . _ - only",
+      "prefixEndsWithDigit": "The prefix cannot end with a digit",
+      "startInvalid": "Enter a whole number from 1 to 2,000,000,000",
+      "startTooLow": "The start number must be at least {{min}}: lower numbers are already used"
+    }
+  },
+  "signoff": {
+    "title": "Signature and stamp",
+    "description": "Upload a signature and a stamp to print them on your documents.",
+    "note": "Documents that were already issued do not change. The signature and stamp are printed in the Standard, Classic, Minimal and Corporate styles. A scanned signature or stamp image is not a qualified electronic signature.",
+    "styleUnsupported": "Your current style ({{style}}) does not print the signature and stamp. Switch to Standard, Classic, Minimal or Corporate to use them.",
+    "signature": "Signature",
+    "stamp": "Stamp",
+    "signatureHint": "PNG with a transparent background, about 800×300 px.",
+    "stampHint": "PNG with a transparent background, about 600×600 px.",
+    "none": "Nothing uploaded",
+    "previewAlt": "{{kind}} preview",
+    "previewFailed": "The image could not be loaded",
+    "meta": "{{width}}×{{height}} px, {{size}} KB",
+    "chooseFile": "Choose a file: {{kind}}",
+    "upload": "Upload",
+    "replace": "Replace",
+    "limits": "PNG or JPEG, up to {{max}} MB.",
+    "uploaded": "Uploaded: {{kind}}",
+    "deleted": "Deleted: {{kind}}",
+    "deleteTitle": "Delete: {{kind}}?",
+    "deleteMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
+    "willBeAdded": "Your signature and stamp will be added to this document.",
+    "errors": {
+      "type": "Only PNG and JPEG images are accepted",
+      "tooLarge": "The image is larger than 2 MB",
+      "rateLimited": "Too many uploads. Try again in a minute"
     }
   }
 }

@@ -1,3 +1,4 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -65,8 +66,11 @@ export class SuppliersService {
       );
     }
 
-    const sortColumn =
-      SUPPLIER_SORTABLE_COLUMNS[sortBy] || "supplier.created_at";
+    const sortColumn = pickSortColumn(
+      SUPPLIER_SORTABLE_COLUMNS,
+      sortBy,
+      "supplier.created_at",
+    );
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 

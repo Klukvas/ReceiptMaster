@@ -199,6 +199,24 @@ describe("OrdersService", () => {
         expect.any(String),
       );
     });
+
+    it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])(
+      "ignores the inherited sort key %s and sorts by the default",
+      async (sortBy) => {
+        const qb = ordersRepo.createQueryBuilder();
+        const before = Object.getOwnPropertyNames(Object.prototype).sort();
+
+        await service.findAll({ limit: 10, offset: 0, sortBy }, mockUser);
+
+        expect(qb.orderBy).toHaveBeenCalledWith(
+          "order.created_at",
+          expect.any(String),
+        );
+        expect(Object.getOwnPropertyNames(Object.prototype).sort()).toEqual(
+          before,
+        );
+      },
+    );
   });
 
   describe("findOne", () => {

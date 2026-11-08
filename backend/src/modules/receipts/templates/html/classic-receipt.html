@@ -286,6 +286,9 @@
         {{#if document}}
         {{> documentStyles}}
         {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoffStyles}}
+        {{/if}}
     </style>
 </head>
 <body>
@@ -446,6 +449,9 @@
         
         {{#if document}}
         {{> documentClosing}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoff}}
         {{/if}}
         <!-- Footer -->
         <div class="footer">

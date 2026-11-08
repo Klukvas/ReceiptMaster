@@ -75,6 +75,12 @@ export const privacyEn: LegalContent = {
           return that you type into a return note is stored with the document
           and printed in its PDF
         </li>
+        <li>
+          Images of your signature and stamp, if you upload them (PNG or JPEG,
+          up to 2 MB). We use them only to print them on the documents you
+          generate, and we keep them in private object storage that is not
+          publicly accessible. Image metadata (EXIF) is removed on upload
+        </li>
       </ul>
       <p>
         <strong>Data of your customers and counterparties.</strong> You enter
@@ -92,6 +98,17 @@ export const privacyEn: LegalContent = {
         parties, such as tax numbers, the seller's bank account number (IBAN)
         and addresses. We ask search engines not to index these pages, but
         anyone who has the link can still open it.
+      </p>
+
+      <p>
+        <strong>Signature and stamp images.</strong> An image you upload is
+        used only to place your signature or stamp on your documents. A copy is
+        embedded in each document generated afterwards, so it also appears in
+        the PDF opened through that document's public link. If you delete the
+        image in the Service, the stored file is erased within about 24 hours
+        and the image is no longer added to new documents; the copy already
+        embedded in issued documents does not change. Make sure you have the
+        right to use the image you upload.
       </p>
 
       <h3>3.3 Usage Data</h3>
@@ -193,7 +210,7 @@ export const privacyEn: LegalContent = {
               <td>Hetzner (hosting and object storage, Germany)</td>
               <td>Infrastructure, database, and storage of files</td>
               <td>
-                All service data, including logos and generated documents
+                All service data, including logos, signature and stamp images and generated documents
               </td>
             </tr>
             <tr>
@@ -229,15 +246,25 @@ export const privacyEn: LegalContent = {
           are only hidden from you until then.
         </li>
         <li>
-          <strong>Documents:</strong> We keep the 10 most recent active (not
-          voided) generated documents of each type (delivery note, quote, payment
-          invoice, act of completed work, sales receipt, packing list, return note) of your account. Generating a new one
-          permanently removes the oldest active document of the same type: its share link stops
-          working at once and its PDF file is deleted from storage shortly
-          afterwards. Voided and failed documents do not count towards this
-          limit; we keep them, with their numbers, for as long as your account
-          exists. We are not an archive, so save copies of the documents
-          you are required to keep.
+          <strong>Documents:</strong> We keep the 10 most recent generated
+          documents of each of these types: delivery note, quote, sales receipt
+          and packing list. Generating a new one permanently removes the oldest
+          document of the same type: its share link stops working at once and
+          its PDF file is deleted from storage shortly afterwards. Payment
+          invoices, acts of completed work, return notes, and voided and failed
+          documents of any type are not removed under this limit; we keep them,
+          with their numbers, for as long as your account exists. We are not an
+          archive, so save copies of the documents you are required to keep.
+        </li>
+        <li>
+          <strong>Signature and stamp images:</strong> Kept until you delete
+          them or delete your account. After you delete one, the file is erased
+          from storage within about 24 hours. The copy embedded in documents
+          already generated remains in those documents and in their public
+          links until the document is deleted or removed under the limit of 10
+          documents per type. A failed document whose content was already
+          prepared may keep the earlier signature or stamp if you retry it.
+          Backup copies are removed when the backups expire.
         </li>
         <li>
           <strong>Security logs:</strong> Kept while your account exists and

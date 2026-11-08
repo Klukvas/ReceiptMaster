@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-06
 
-**Total Endpoints:** 105 routes across 15 controllers; 104 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
+**Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -1158,9 +1158,9 @@ ReturnNoteDetails = { lines: { orderItemId: uuid, qty: int >= 1 }[] (1..200, eac
 
 `quote` (комерційна пропозиція; an offer, **not an invoice**: it prints the notice "Пропозиція не є рахунком …", items, totals and VAT like an invoice but no payment details, the last total line is "Загальна вартість", then the validity and the optional payment/delivery terms, one supplier signature with М.П.) takes a **DRAFT or CONFIRMED** order (a CANCELLED one is `400 ORDER_CANNOT_BE_MODIFIED`) and **does not lock** the order. `validUntil` defaults to the issue date + 14 days and must lie within `[issueDate, issueDate + 365 days]`, the issue date being the generation day in the document's time zone; otherwise `400 VALIDATION_ERROR` (`Validation error for details.validUntil: must not be earlier than the issue date` / `…: must be within 365 days of the issue date`), before a number is drawn. A voided quotation can be issued again under a new number; a repeat of a failed one is `{type:"quote",details:{}}`. Cancelling the order voids a live quotation with the other documents. Each type has its own number series, one document per type and order, and its own 10-document retention.
 
-`return_note` (накладна на повернення товару; ru «накладная на возврат товара», en "Goods Return Note") records goods that come back under an order. It needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), is **informational**: it does **not** change stock, is **not a fiscal document** and **not a settlement/tax-invoice adjustment («розрахунок коригування»)**, and **does not lock** the order. `details.lines` is required (a missing `details` or an empty `lines` is `400 VALIDATION_ERROR`); every `orderItemId` must belong to the order. Unlike every other type, an order may carry **several live return notes** (partial returns): they are not limited by the one-document-per-type rule and do not conflict with each other (no `DOCUMENT_ALREADY_EXISTS`). The limit is the ledger: each `OrderItem` exposes `returned_qty` (units already taken back by earlier non-void return notes, `0 <= returned_qty <= qty`), so a request may return at most `qty - returned_qty` of a line. Asking for more is `422 RETURN_QUANTITY_EXCEEDED` with `items: [{ orderItemId, requested, remaining }]`, and no number is drawn. The ledger is read when the request arrives and checked again atomically at issue time, so two parallel notes cannot both take the last unit. A **voided** return note gives its quantities back (the ledger decreases); eviction by the retention cap does not. `details.lines` is mandatory (never defaulted), so there is no blind `{details:{}}` retry of a failed note; the UI offers no retry button for it and asks for a new note instead.
+`return_note` (накладна на повернення товару; ru «накладная на возврат товара», en "Goods Return Note") records goods that come back under an order. It needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), is **informational**: it does **not** change stock, is **not a fiscal document** and **not a settlement/tax-invoice adjustment («розрахунок коригування»)**, and **does not lock** the order. `details.lines` is required (a missing `details` or an empty `lines` is `400 VALIDATION_ERROR`); every `orderItemId` must belong to the order. Unlike every other type, an order may carry **several live return notes** (partial returns): they are not limited by the one-document-per-type rule and do not conflict with each other (no `DOCUMENT_ALREADY_EXISTS`). The limit is the ledger: each `OrderItem` exposes `returned_qty` (units already taken back by earlier non-void return notes, `0 <= returned_qty <= qty`), so a request may return at most `qty - returned_qty` of a line. Asking for more is `422 RETURN_QUANTITY_EXCEEDED` with `items: [{ orderItemId, requested, remaining }]`, and no number is drawn. The ledger is read when the request arrives and checked again atomically at issue time, so two parallel notes cannot both take the last unit. A **voided** return note gives its quantities back (the ledger decreases). Return notes are never evicted by the retention cap. `details.lines` is mandatory (never defaulted), so there is no blind `{details:{}}` retry of a failed note; the UI offers no retry button for it and asks for a new note instead.
 
-An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 VALIDATION_ERROR`. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate; `{}` retries the frozen candidate.
+An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 INVOICE_DUE_DATE_BEFORE_ISSUE_DATE` with the stable body `{ error, errorCode, field: "details.dueDate", dueDate, issueDate }` (both dates `YYYY-MM-DD`; the client localizes from `errorCode` and shows `field`); it is raised in preflight, so no number is burned. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate; `{}` retries the frozen candidate.
 
 **Response** (201): `ReceiptProjection` (`document_type` set; PDF is produced asynchronously, as for a waybill). The PDF file name is `invoice-<number>.pdf` / `act-<number>.pdf` / `sales_receipt-<number>.pdf` / `packing_list-<number>.pdf` / `quote-<number>.pdf` / `return_note-<number>.pdf`; a waybill stays `receipt-<number>.pdf`.
 
@@ -1172,7 +1172,7 @@ An invoice's due date is `issueDate` (the generation day in the document's time 
 - 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, never for `return_note`; or a voided waybill/sales receipt/packing list: those types are not reissued; a voided invoice, act or quote is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
 - 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
 - 422 `RETURN_QUANTITY_EXCEEDED` — a `return_note` asks for more of a line than is left to return (`qty - returned_qty`); `items` lists each short line with `requested` and `remaining`.
-- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`; sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
+- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`, and `seller.vatId` when `companyVatPayer` is true (as an invoice does); sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
 
 The requisites, issue/due/validity dates, title and the VAT rate (`vatRatePercent`, 20 today, kept by a replacement) are frozen in `snapshot.document`, which is never part of the public projection. The public **JSON** (`GET /public/receipts/:token`) is unchanged: it shows the seller's IBAN and tax code only as the style's visibility settings allow, exactly as for a waybill, and never the buyer's IBAN/tax id, the seller's VAT id (ІПН), the signatory, VAT amounts or the amount in words. For a packing list the public JSON has `money: false`, no `subtotal_cents`/`total_cents`, and items with only `product_name` and `qty`. The **PDF** behind `GET /public/receipts/:token/pdf` is the document itself and carries every requisite the invoice or act prints (both parties' codes and addresses, the payment details, the ІПН, the signatory); anyone holding the link can download it, so revoke the share token to withdraw it.
 
@@ -1182,32 +1182,48 @@ The requisites, issue/due/validity dates, title and the VAT rate (`vatRatePercen
 
 **GET** `/receipts`
 
-Paginated list of all user's generated receipts.
+Paginated list of the account's documents for the Documents page: filters, search, sorting, and the order each document belongs to. Documents of soft-deleted orders are not listed. Another account's documents are never visible (row-level security plus the `user_id` filter).
 
-**Query Params:**
+**Query Params** (`ListDocumentsQueryDto`; every key the client's `useServerPagination` sends is declared):
 
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
-| offset | number | 0 | |
-| limit | number | 20 | At most 100 |
-| type | `DocumentType` | all | Only documents of this type; an unknown value is `400 VALIDATION_ERROR` |
+| offset | integer | 0 | 0 to 1,000,000 (anything else, including `1.5` or `1e30`, is `400`) |
+| limit | integer | 20 | 1 to 100 |
+| type | `DocumentType` | all | A cleared (empty) value means no filter; an unknown value is `400` |
+| status | `processing` \| `generated` \| `failed` \| `void` | all | Same rules as `type` |
+| startDate, endDate | `YYYY-MM-DD` | none | Calendar days **in the account's document time zone** (`document_config.formatting.timeZone`, `Europe/Kyiv` by default; the same zone that dates the documents), both ends included: from the start of `startDate` to the end of `endDate` in that zone, independent of the server's own time zone and daylight saving. Must be real dates. 00:00 to 03:00 Kyiv time belongs to its own day, not to the previous UTC day |
+| search | string, at most 100 after trimming | none | Matches the document number (`ILIKE`), the recipient's name and legal name (`ILIKE`; `%`, `_` and `\` are literal). A value of digits, with an optional leading `#` (up to 9 digits), also matches the order number exactly |
+| sortBy | `created_at` \| `number` \| `document_type` \| `status` | `created_at` | Allowlist by own keys only (`__proto__`, `constructor` and the like are ignored, see `common/utils/sort-column.util.ts`; the same helper guards the orders, products, suppliers and recipients lists); any other value is ignored. `number` and `status` sort as stored (text / enum order) |
+| sortOrder | `ASC` \| `DESC` | `DESC` | Ties break by document id in the same direction |
 
 **Response** (200): `ReceiptListResponse`
 ```typescript
 {
-  data: ReceiptProjection[],
-  total: number,
+  data: DocumentListItem[],
+  total: number,    // matches of the filters, not of the page
   offset: number,
   limit: number
 }
+
+// ReceiptProjection plus the order; nothing of ReceiptProjection changed.
+type DocumentListItem = ReceiptProjection & {
+  order: {
+    id: string,
+    order_number: number,
+    status: "draft" | "confirmed" | "cancelled",
+    recipient_name: string | null   // the recipient's current name, not the one frozen in the document
+  } | null
+}
 ```
 
+---
 
 ### Receipt Retention
 
 **GET** `/receipts/retention` (requires auth)
 
-How close the account is to the retention cap (10 generated documents of a document type) and which document creating the next one of that type would delete, so the UI can ask first. Declared before `GET /receipts/:id`.
+How close the account is to the retention cap (10 generated documents of a document type) and which document promoting the next one of that type would delete, so the UI can ask first. `replaces` is always `null` for `invoice`, `act` and `return_note`: they are never evicted and the cap is not enforced for them. Declared before `GET /receipts/:id`.
 
 **Query Params:**
 - `type` (optional): one of `waybill`, `invoice`, `quote`, `act`, `sales_receipt`, `packing_list`, `return_note`. Defaults to `waybill`; any other value returns 400 `VALIDATION_ERROR`.
@@ -1250,11 +1266,13 @@ Downloads receipt as PDF file.
 
 **Response** (200): Binary PDF file
 - Content-Type: application/pdf
-- Content-Disposition: inline
+- Content-Disposition: `inline; filename="<ASCII fallback>"; filename*=UTF-8''<percent-encoded name>` (see *Download file names* below)
 
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
 - 400 — PDF file is not a valid PDF
+
+**Download file names.** The name is `receipt-<number>.pdf` for a waybill and `<type>-<number>.pdf` for the others. Since a number may carry a prefix with non-Latin letters (`РФ-2026-000043`), `receipts/content-disposition.ts::pdfDisposition` writes an ASCII `filename` (every non-ASCII character, `"`, `\` and `%` becomes `_`) plus an RFC 5987 `filename*` with the exact name. Both PDF endpoints (`/receipts/:id/pdf` and `/public/receipts/:token/pdf`) use it; writing the raw name used to make Node throw on a non-Latin-1 header and answer 500.
 
 ---
 
@@ -1310,7 +1328,7 @@ Voids a receipt and unlocks its order for editing.
 
 **Request Body** (optional, `ReceiptVoidRequest`):
 ```typescript
-{ reason?: string }  // Not validated; omitted leaves void_reason empty; at most 500 characters
+{ reason?: string }  // trimmed; at most 500 characters; omitted (or empty) leaves void_reason empty
 ```
 
 **Response** (201): `ReceiptProjection` (status updated)
@@ -1318,6 +1336,7 @@ Voids a receipt and unlocks its order for editing.
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
 - 400 `RECEIPT_IS_ALREADY_VOIDED`
+- 400 (global validation pipe: `errorCode: "HTTP_EXCEPTION"`, `error` is a list of messages) — `reason` is not a string or is longer than 500 characters (`VoidReceiptDto`); it used to reach the database and answer 500
 
 ---
 
@@ -1978,6 +1997,89 @@ Account flag (`user_settings.autoGenerateReceipt`, default `false`). When on, `P
 { data: { enabled: boolean } }
 ```
 
+### Document numbering
+
+Per document type (`waybill`, `invoice`, `quote`, `act`, `sales_receipt`, `packing_list`, `return_note`) an account can choose how the next numbers look and where the counter starts. Business rules: [business-logic.md → Document numbers](./business-logic.md). The routes live in the receipts module (`receipts/document-numbering.controller.ts`).
+
+#### Get Numbering Settings
+
+**GET** `/settings/document-numbering`
+
+**Response** (200) — all seven types, always, with the historical default for a type that was never configured:
+```typescript
+{ types: NumberingSetting[] }
+
+type NumberingSetting = {
+  documentType: DocumentType,
+  prefix: string,        // 0 to 16 characters, default ""
+  padding: number,       // 1 to 9, default 6
+  includeYear: boolean,  // default true
+  nextValue: number,     // the counter value the next document gets (for a waybill: higher of document_counters and users.receipt_counter, plus 1)
+  minStart: number,      // lowest startNumber that is still accepted; equals nextValue
+  nextNumber: string     // preview, e.g. "РФ-2026-000043"
+}
+```
+
+---
+
+#### Set Numbering Format
+
+**PUT** `/settings/document-numbering/:type`
+
+**Request Body:**
+```typescript
+{
+  prefix: string,        // trimmed; letters, digits, . _ - and space only; at most 16; MUST NOT end with a digit; no / \ " or control characters
+  padding: number,       // integer 1..9
+  includeYear: boolean,
+  startNumber?: number   // integer 1..2_000_000_000; only raises the counter so that the next number is this one
+}
+```
+Format printed: `prefix + (includeYear ? "<UTC year>-" : "") + String(value).padStart(padding, "0")`. With the defaults (`""`, 6, `true`) that is exactly the old `2026-000042`.
+
+**Response** (200): `NumberingSetting` (the saved one).
+
+**Errors:**
+- 400 `VALIDATION_ERROR` — the message names the field (`prefix`, `padding`, `includeYear` or `startNumber`) or `type` (unknown document type)
+- 409 `NUMBERING_START_TOO_LOW` — `startNumber` would reuse a number already issued. Body: `{ error, errorCode, minStart }`; `minStart` is the lowest start that is accepted. Nothing is saved (not even the format)
+
+The change applies to documents drawn after it; issued documents keep their number. A retry of a failed document keeps its number. A voided invoice, act or quotation issued again gets a number in the format that applies at that moment.
+
+---
+
+### Signature and stamp
+
+Account-level images printed on documents whose style has a signature block (`capabilities.signoff` in `GET /settings/templates`: `standard`, `classic`, `minimal`, `corporate`). Business rules: [business-logic.md → Signature and stamp](./business-logic.md).
+
+**SignoffImage** = `{ assetId: string, width: number, height: number, bytes: number, updatedAt: string }` (the stored, normalized PNG; a new upload is a new asset).
+
+#### Get State
+
+**GET** `/settings/signoff` → `{ signature: SignoffImage | null, stamp: SignoffImage | null }`
+
+#### Get Image
+
+**GET** `/settings/signoff/:kind/image` — `kind` is `signature` or `stamp` (anything else is `400`).
+
+**Response** (200): the stored PNG with `Content-Type: image/png`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`. 404 when not set. Needs the bearer token, so a client fetches it as a blob rather than through an `<img src>`.
+
+#### Replace
+
+**PUT** `/settings/signoff/:kind` — `multipart/form-data` with exactly one part, the file field `file`. No other fields.
+
+**Response** (200): `SignoffImage`.
+
+**Errors:**
+- 400 `VALIDATION_ERROR` (message names `signature` or `stamp`) — not a PNG or JPEG, the file's first bytes do not match its declared type, a side outside 32..4096 px, animated PNG, undecodable, or no `file` part (`REQUIRED_FIELD_MISSING`)
+- 413 — file above 2 MiB (refused while streaming, before decoding)
+- 429 — more than 10 uploads a minute
+
+The error text is `Validation error for <kind>: Use a PNG or JPEG image, 32 to 4096 px on each side, up to 2 MB`. The server decodes in memory, applies the EXIF orientation, drops all metadata (EXIF, GPS, ICC), fits the image inside 800 x 300 (signature) or 600 x 600 (stamp) without enlarging, and stores a PNG of at most 256 KiB.
+
+#### Remove
+
+**DELETE** `/settings/signoff/:kind` → 204, idempotent (also when nothing was set). Documents already issued keep their images; the stored object is deleted by scheduled cleanup after a 24-hour grace.
+
 ---
 
 ## Public Receipts
@@ -2017,10 +2119,11 @@ Downloads receipt PDF using public share token (no auth).
 
 **Response** (200): Binary PDF file
 - Content-Type: application/pdf
-- Content-Disposition: inline
+- Content-Disposition: `inline; filename="<ASCII fallback>"; filename*=UTF-8''<name>` (same helper as the authenticated download)
+- The PDF contains the signature and stamp images the document was issued with, when its style prints them (they are embedded in the frozen HTML; the JSON data of `GET /public/receipts/:token` never carries images)
 
 **Errors:**
-- 404 — Receipt not found or share link revoked
+- 404 — Receipt not found or share link revoked, or its stored file is missing: the body of a missing-file 404 is always the fixed `File not found: receipt PDF` (`FILE_NOT_FOUND`); the storage path (bucket, key, account id) is only written to the server log
 - Rate limited to 20 requests/min per IP
 
 ---
@@ -2299,7 +2402,7 @@ Formatting `dateStyle` is `numeric | short | medium | long`. Legacy defaults use
 
 Account Save needs a complete config; preset create/update use complete copies. Generation/replacement can use `config` or `presetId`+`presetRevision`, followed by partial `overrides`. Effective template entitlement is enforced. Presets have 1–80 character trimmed names, maximum 20 per tenant and bounded revisions. Foreign-tenant preset/logo IDs are rejected. Saving/selecting presets does not change defaults.
 
-`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, `documentTypes` (the document types the style can carry: always `waybill`, plus `invoice`, `act`, `sales_receipt`, `packing_list`, `quote` and `return_note` for standard/classic/minimal/corporate), logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
+`GET /settings/templates` includes typed `capabilities`: actual company/recipient bindings, money, accent (Branded only), terms (Proforma only), generated timestamp, A4/Thermal paper, `signoff` (boolean: the style prints the account's signature and stamp image; true only for standard/classic/minimal/corporate), `documentTypes` (the document types the style can carry: always `waybill`, plus `invoice`, `act`, `sales_receipt`, `packing_list`, `quote` and `return_note` for standard/classic/minimal/corporate), logo bounds/alignment and template revision. Requests with declared Content-Length above 6 MiB are rejected early. Multipart raw streams are capped at 6 MiB before Multer, including preamble, boundaries, headers and epilogue, even without Content-Length (chunked transport). The bounded envelope is replayed only after complete capture; aborts/oversize never reach the controller. Multer file/field/part/header limits still apply. Automatic sizing preserves the actual original CSS geometry for all 15 styles: Compact synthetic 100×400 tall logos display at 30×120 px and 800×180 wide logos at 200×45 px; Thermal retains its legacy automatic cap inside the 80 mm paper. Manual sizing clamps Thermal to 120×72 px and other styles to 200×120 px. Retained unsupported config is not rendered.
 
 Receipt list/create/get/void/share-revoke responses use small allowlisted projections; internal HTML/config/pending assets are private. New public metadata uses frozen visible values and formatting, with Delivery money omitted. Legacy metadata is explicitly unavailable when historical projection cannot be trusted; existing PDF access is preserved.
 

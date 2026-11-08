@@ -133,9 +133,42 @@ export function frozenReturnLines(receipt: {
   );
 }
 
+type SourceSnapshot = {
+  capturedAt?: string;
+  order?: { created_at?: string };
+  config?: { formatting?: { timeZone?: string } };
+  publicProjection?: { companyInfo?: { receiptTitle?: string } };
+  document?: { title?: string; issueDate?: string };
+} | null;
+
+/**
+ * What the source document itself prints, read from its frozen snapshot so the basis of a
+ * return note says what the PDF of that document says. A waybill prints its title and the
+ * order date (in its own time zone); an invoice prints the issue date frozen at issue.
+ */
+function printedBasis(
+  kind: "waybill" | "invoice",
+  snapshot: SourceSnapshot | undefined,
+): { title?: string; date?: string } {
+  if (!snapshot) return {};
+  if (kind === "invoice") {
+    const { title, issueDate } = snapshot.document ?? {};
+    return { title: title || undefined, date: issueDate || undefined };
+  }
+  const createdAt = snapshot.order?.created_at;
+  const zone = snapshot.config?.formatting?.timeZone;
+  return {
+    title: snapshot.publicProjection?.companyInfo?.receiptTitle || undefined,
+    date:
+      createdAt && zone ? issueDateIn(new Date(createdAt), zone) : undefined,
+  };
+}
+
 /**
  * Picks what the return is made against: the newest issued waybill, else the newest
- * issued invoice, else the order itself (its number and creation date).
+ * issued invoice, else the order itself (its number and creation date). The title and date
+ * are the ones printed in that document, not the row's creation time; a source without a
+ * usable snapshot falls back to its row's creation date and the generic label.
  */
 export async function resolveReturnSource(
   manager: EntityManager,
@@ -154,14 +187,19 @@ export async function resolveReturnSource(
         document_type: type,
         status: ReceiptStatus.GENERATED,
       },
+      // `active_snapshot` is select:false; naming it here loads it.
+      select: { number: true, created_at: true, active_snapshot: true },
       order: { created_at: "DESC", id: "DESC" },
     });
-    if (document)
-      return {
-        kind,
-        number: document.number,
-        date: issueDateIn(new Date(document.created_at), timeZone),
-      };
+    if (!document) continue;
+    const printed = printedBasis(kind, document.active_snapshot);
+    return {
+      kind,
+      number: document.number,
+      date:
+        printed.date ?? issueDateIn(new Date(document.created_at), timeZone),
+      ...(printed.title ? { title: printed.title } : {}),
+    };
   }
   return {
     kind: "order",

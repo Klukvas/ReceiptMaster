@@ -435,22 +435,6 @@ describeIsolatedPostgres(
           })
         ).map((r) => r.id);
 
-      /** Generation path: what receipts.generateReceipt runs before inserting. */
-      const evictFor = (type: DocumentType) =>
-        asTenant(() =>
-          db.app.transaction((manager) =>
-            (
-              receipts as unknown as {
-                cleanupOldReceipts: (
-                  m: typeof manager,
-                  userId: string,
-                  t: DocumentType,
-                ) => Promise<void>;
-              }
-            ).cleanupOldReceipts(manager, user.id, type),
-          ),
-        );
-
       const promote = async (type: DocumentType, order?: Order) => {
         const { receipt, generationId } = await processingDocument(
           order ?? (await confirmedOrder()),
@@ -460,19 +444,6 @@ describeIsolatedPostgres(
           artifacts.execute(receipt.id, user.id, generationId),
         );
       };
-
-      it("generating an 11th waybill evicts the oldest waybill", async () => {
-        const waybills = await generatedOfType(DocumentType.WAYBILL, LIMIT);
-
-        await evictFor(DocumentType.WAYBILL);
-
-        const left = await idsOfType(
-          DocumentType.WAYBILL,
-          ReceiptStatus.GENERATED,
-        );
-        expect(left).toHaveLength(LIMIT - 1);
-        expect(left).not.toContain(waybills[0].id);
-      });
 
       it("promoting an 11th waybill evicts only the oldest waybill", async () => {
         const waybills = await generatedOfType(DocumentType.WAYBILL, LIMIT);
@@ -491,27 +462,17 @@ describeIsolatedPostgres(
 
       it("ten generated invoices do not count toward the waybill limit", async () => {
         const invoices = await generatedOfType(DocumentType.INVOICE, LIMIT);
-        const waybills = await generatedOfType(DocumentType.WAYBILL, 9);
+        await generatedOfType(DocumentType.WAYBILL, 9);
 
-        await evictFor(DocumentType.WAYBILL);
+        await promote(DocumentType.WAYBILL);
 
+        // The tenth waybill is within the cap, so nothing is evicted.
         expect(
           await idsOfType(DocumentType.WAYBILL, ReceiptStatus.GENERATED),
-        ).toHaveLength(9);
+        ).toHaveLength(10);
         expect(
           await idsOfType(DocumentType.INVOICE, ReceiptStatus.GENERATED),
         ).toEqual(expect.arrayContaining(invoices.map((r) => r.id)));
-        expect(waybills).toHaveLength(9);
-      });
-
-      it("generating a waybill next to ten invoices evicts nothing", async () => {
-        await generatedOfType(DocumentType.INVOICE, LIMIT);
-
-        await evictFor(DocumentType.WAYBILL);
-
-        expect(
-          await idsOfType(DocumentType.INVOICE, ReceiptStatus.GENERATED),
-        ).toHaveLength(LIMIT);
       });
 
       it("promoting a waybill next to ten invoices evicts nothing", async () => {
@@ -525,7 +486,7 @@ describeIsolatedPostgres(
         ).toHaveLength(LIMIT);
       });
 
-      it("promoting an invoice evicts the oldest invoice and keeps ten waybills", async () => {
+      it("never evicts an invoice, however many there are, and leaves the waybills alone", async () => {
         const sharedOrders: Order[] = [];
         for (let i = 0; i < LIMIT; i++)
           sharedOrders.push(await confirmedOrder());
@@ -546,8 +507,11 @@ describeIsolatedPostgres(
           DocumentType.INVOICE,
           ReceiptStatus.GENERATED,
         );
-        expect(leftInvoices).toHaveLength(LIMIT);
-        expect(leftInvoices).not.toContain(invoices[0].id);
+        // Evicting an invoice would free its slot: the order could be invoiced twice.
+        expect(leftInvoices).toHaveLength(LIMIT + 1);
+        expect(leftInvoices).toEqual(
+          expect.arrayContaining(invoices.map((r) => r.id)),
+        );
         expect(
           await idsOfType(DocumentType.WAYBILL, ReceiptStatus.GENERATED),
         ).toEqual(expect.arrayContaining(waybills.map((r) => r.id)));
@@ -585,7 +549,8 @@ describeIsolatedPostgres(
           status: ReceiptStatus.GENERATED,
         });
 
-        await evictFor(DocumentType.WAYBILL);
+        // The tenth generated waybill: within the cap, so nothing is evicted.
+        await promote(DocumentType.WAYBILL);
 
         const stored = async (id: string) =>
           db.admin.getRepository(Receipt).findOneBy({ id });
@@ -610,16 +575,26 @@ describeIsolatedPostgres(
           expect(result).toEqual({ limit: LIMIT, count: 3, replaces: null });
         });
 
-        it("counts only invoices for type=invoice and replaces the oldest invoice", async () => {
+        it("counts only invoices for type=invoice but never offers one for replacement", async () => {
           await generatedOfType(DocumentType.WAYBILL, 2);
-          const invoices = await generatedOfType(DocumentType.INVOICE, LIMIT);
+          await generatedOfType(DocumentType.INVOICE, LIMIT);
 
           const result = await asTenant(() =>
             receipts.getRetention(user, DocumentType.INVOICE),
           );
 
           expect(result.count).toBe(LIMIT);
-          expect(result.replaces?.id).toBe(invoices[0].id);
+          expect(result.replaces).toBeNull();
+        });
+
+        it("replaces the oldest waybill when the waybills are full", async () => {
+          await generatedOfType(DocumentType.INVOICE, 2);
+          const waybills = await generatedOfType(DocumentType.WAYBILL, LIMIT);
+
+          const result = await asTenant(() => receipts.getRetention(user));
+
+          expect(result.count).toBe(LIMIT);
+          expect(result.replaces?.id).toBe(waybills[0].id);
         });
 
         it("does not name a replacement for a waybill while only invoices are full", async () => {

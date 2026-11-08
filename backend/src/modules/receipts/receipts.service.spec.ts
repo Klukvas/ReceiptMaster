@@ -98,12 +98,31 @@ describe("ReceiptsService", () => {
     recipient: { name: "John", email: "john@test.com" } as any,
   };
 
+  // Fluent fake of the documents-list query builder; every call is recorded.
+  let listQuery: Record<string, jest.Mock>;
+
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    listQuery = {};
+    for (const name of [
+      "withDeleted",
+      "leftJoin",
+      "addSelect",
+      "where",
+      "andWhere",
+      "orderBy",
+      "addOrderBy",
+      "offset",
+      "limit",
+    ])
+      listQuery[name] = jest.fn().mockReturnValue(listQuery);
+    listQuery.getManyAndCount = jest.fn().mockResolvedValue([[mockReceipt], 1]);
 
     receiptsRepo = {
       find: jest.fn().mockResolvedValue([mockReceipt]),
       findAndCount: jest.fn().mockResolvedValue([[mockReceipt], 1]),
+      createQueryBuilder: jest.fn(() => listQuery),
       findOne: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
       findOneOrFail: jest.fn().mockResolvedValue(mockReceipt),
@@ -279,23 +298,40 @@ describe("ReceiptsService", () => {
         order_id: "o1",
       });
 
-      const result = await service.getRetention(mockUser, DocumentType.INVOICE);
+      const result = await service.getRetention(mockUser, DocumentType.QUOTE);
 
       expect(result.replaces?.id).toBe("inv-oldest");
       expect(receiptsRepo.findOne).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            document_type: DocumentType.INVOICE,
+            document_type: DocumentType.QUOTE,
             status: ReceiptStatus.GENERATED,
             user_id: mockUser.id,
           }),
         }),
       );
     });
+
+    it.each([DocumentType.INVOICE, DocumentType.ACT, DocumentType.RETURN_NOTE])(
+      "never offers a %s to be replaced: the cap is not enforced for it",
+      async (type) => {
+        receiptsRepo.count = jest.fn().mockResolvedValue(25);
+
+        const result = await service.getRetention(mockUser, type);
+
+        expect(result.replaces).toBeNull();
+        expect(receiptsRepo.findOne).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("findAll", () => {
-    it("should return all receipts for user", async () => {
+    const conditions = () =>
+      listQuery.andWhere.mock.calls.map(([condition]) =>
+        typeof condition === "string" ? condition : "<brackets>",
+      );
+
+    it("returns the page scoped to the account, hiding deleted orders", async () => {
       const result = await service.findAll(mockUser);
 
       expect(result).toEqual({
@@ -304,7 +340,115 @@ describe("ReceiptsService", () => {
         offset: 0,
         limit: 20,
       });
-      expect(receiptsRepo.findAndCount).toHaveBeenCalled();
+      expect(listQuery.where).toHaveBeenCalledWith("r.user_id = :userId", {
+        userId: "user-1",
+      });
+      expect(conditions()).toEqual(["o.deleted_at IS NULL"]);
+      expect(listQuery.withDeleted).toHaveBeenCalled();
+    });
+
+    it("sorts newest first with the id as tie-break by default", async () => {
+      await service.findAll(mockUser);
+      expect(listQuery.orderBy).toHaveBeenCalledWith("r.created_at", "DESC");
+      expect(listQuery.addOrderBy).toHaveBeenCalledWith("r.id", "DESC");
+    });
+
+    it.each([
+      ["number", "r.number"],
+      ["document_type", "r.document_type"],
+      ["status", "r.status"],
+    ])("sorts by %s from the allowlist", async (sortBy, column) => {
+      await service.findAll(mockUser, { sortBy, sortOrder: "ASC" as never });
+      expect(listQuery.orderBy).toHaveBeenCalledWith(column, "ASC");
+    });
+
+    it.each(["__proto__", "constructor", "toString"])(
+      "ignores the inherited key %s",
+      async (sortBy) => {
+        await service.findAll(mockUser, { sortBy });
+        expect(listQuery.orderBy).toHaveBeenCalledWith("r.created_at", "DESC");
+      },
+    );
+
+    it("ignores a sort key outside the allowlist", async () => {
+      await service.findAll(mockUser, { sortBy: "pdf_path; DROP TABLE x" });
+      expect(listQuery.orderBy).toHaveBeenCalledWith("r.created_at", "DESC");
+    });
+
+    it("filters by type, status and the account's local days, as dates plus a zone name", async () => {
+      dataSource.manager.query.mockResolvedValueOnce([
+        { zone: "America/New_York" },
+      ]);
+
+      await service.findAll(mockUser, {
+        type: DocumentType.INVOICE,
+        status: ReceiptStatus.VOID,
+        startDate: "2026-03-01",
+        endDate: "2026-03-31",
+      });
+
+      const bounds = conditions().filter((c) => c.includes("created_at"));
+      expect(bounds).toHaveLength(2);
+      expect(bounds[0]).toContain("CAST(:startDate AS date)");
+      expect(bounds[1]).toContain("CAST(:endDate AS date) + 1");
+      for (const bound of bounds)
+        expect(bound).toContain("AT TIME ZONE :zone) AT TIME ZONE 'UTC'");
+      const params = Object.assign(
+        {},
+        ...listQuery.andWhere.mock.calls.map(([, values]) => values),
+      );
+      expect(params).toMatchObject({
+        startDate: "2026-03-01",
+        endDate: "2026-03-31",
+        zone: "America/New_York",
+      });
+      expect(dataSource.manager.query).toHaveBeenCalledWith(
+        expect.stringContaining("formatting"),
+        [mockUser.id],
+      );
+    });
+
+    it("uses Europe/Kyiv for an account without a saved configuration", async () => {
+      dataSource.manager.query.mockResolvedValueOnce([]);
+      await service.findAll(mockUser, { startDate: "2026-03-01" });
+      const [, params] = listQuery.andWhere.mock.calls.at(-1)!;
+      expect(params.zone).toBe("Europe/Kyiv");
+    });
+
+    it("falls back to Europe/Kyiv when the stored zone is not a real one", async () => {
+      dataSource.manager.query.mockResolvedValueOnce([
+        { zone: "Mars/Olympus" },
+      ]);
+      await service.findAll(mockUser, { endDate: "2026-03-01" });
+      const [, params] = listQuery.andWhere.mock.calls.at(-1)!;
+      expect(params.zone).toBe("Europe/Kyiv");
+    });
+
+    it("does not look the zone up when no date is asked for", async () => {
+      await service.findAll(mockUser, {});
+      expect(dataSource.manager.query).not.toHaveBeenCalled();
+    });
+
+    it("escapes LIKE wildcards in the search and adds the order number for digits", async () => {
+      await service.findAll(mockUser, { search: "50%_off" });
+      const [, plain] = listQuery.andWhere.mock.calls.at(-1)!;
+      expect(plain).toEqual({ pattern: "%50\\%\\_off%" });
+
+      await service.findAll(mockUser, { search: "#17" });
+      const [, numeric] = listQuery.andWhere.mock.calls.at(-1)!;
+      expect(numeric).toEqual({ pattern: "%#17%", orderNumber: 17 });
+    });
+
+    it("does not treat a number too large for an order as an order number", async () => {
+      await service.findAll(mockUser, { search: "12345678901234" });
+      const [, values] = listQuery.andWhere.mock.calls.at(-1)!;
+      expect(values).not.toHaveProperty("orderNumber");
+    });
+
+    it("pages with offset and limit, capping the limit at 100", async () => {
+      await service.findAll(mockUser, { offset: 10, limit: 500 });
+      expect(listQuery.offset).toHaveBeenCalledWith(10);
+      expect(listQuery.limit).toHaveBeenCalledWith(100);
     });
   });
 
@@ -1039,120 +1183,6 @@ describe("ReceiptsService", () => {
     });
   });
 
-  describe("cleanupOldReceipts", () => {
-    it("should delete old receipts when limit exceeded", async () => {
-      const manager = {
-        count: jest.fn().mockResolvedValue(12),
-        find: jest.fn().mockResolvedValue([
-          { id: "r1", pdf_path: "object-storage://bucket/r1.pdf" },
-          { id: "r2", pdf_path: null },
-        ]),
-        delete: jest.fn(),
-      };
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue({
-        bucket: "bucket",
-        key: "r1.pdf",
-      });
-      pdfStorageService.deleteFile.mockResolvedValue(undefined);
-
-      const paths = await (service as any).cleanupOldReceipts(
-        manager,
-        "user-1",
-        DocumentType.WAYBILL,
-      );
-
-      expect(manager.delete).toHaveBeenCalled();
-      expect(paths).toBeUndefined();
-      expect(artifacts.retire).toHaveBeenCalledTimes(2);
-      expect(pdfStorageService.deleteFile).not.toHaveBeenCalled();
-    });
-
-    it("counts and selects victims only within the given document type", async () => {
-      const manager = {
-        count: jest.fn().mockResolvedValue(11),
-        find: jest.fn().mockResolvedValue([{ id: "r1" }, { id: "r2" }]),
-        delete: jest.fn(),
-      };
-
-      await (service as any).cleanupOldReceipts(
-        manager,
-        "user-1",
-        DocumentType.INVOICE,
-      );
-
-      const scope = {
-        user_id: "user-1",
-        status: ReceiptStatus.GENERATED,
-        document_type: DocumentType.INVOICE,
-      };
-      expect(manager.count).toHaveBeenCalledWith(Receipt, { where: scope });
-      expect(manager.find).toHaveBeenCalledWith(
-        Receipt,
-        expect.objectContaining({
-          where: scope,
-          // 11 generated, keep 9 so the new one makes 10
-          take: 2,
-          order: { created_at: "ASC", id: "ASC" },
-        }),
-      );
-    });
-
-    it("should not delete when under limit", async () => {
-      const manager = {
-        count: jest.fn().mockResolvedValue(5),
-        find: jest.fn(),
-        delete: jest.fn(),
-      };
-
-      await (service as any).cleanupOldReceipts(
-        manager,
-        "user-1",
-        DocumentType.WAYBILL,
-      );
-      expect(manager.find).not.toHaveBeenCalled();
-    });
-
-    it("should handle cleanup error gracefully", async () => {
-      const manager = {
-        count: jest.fn().mockRejectedValue(new Error("DB error")),
-      };
-
-      await expect(
-        (service as any).cleanupOldReceipts(
-          manager,
-          "user-1",
-          DocumentType.WAYBILL,
-        ),
-      ).rejects.toThrow("DB error");
-    });
-
-    it("should handle file deletion error in cleanup", async () => {
-      const manager = {
-        count: jest.fn().mockResolvedValue(12),
-        find: jest
-          .fn()
-          .mockResolvedValue([
-            { id: "r1", pdf_path: "object-storage://bucket/r1.pdf" },
-          ]),
-        delete: jest.fn(),
-      };
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue({
-        bucket: "bucket",
-        key: "r1.pdf",
-      });
-      pdfStorageService.deleteFile.mockRejectedValue(new Error("S3 error"));
-
-      await (service as any).cleanupOldReceipts(
-        manager,
-        "user-1",
-        DocumentType.WAYBILL,
-      );
-      expect(manager.delete).toHaveBeenCalled();
-    });
-  });
-
   describe("getAvailablePrinters", () => {
     it("should return list of printers", async () => {
       const result = await service.getAvailablePrinters();
@@ -1366,28 +1396,6 @@ describe("ReceiptsService", () => {
     });
   });
 
-  describe("findAll - pagination options", () => {
-    it("should respect custom offset and limit", async () => {
-      receiptsRepo.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findAll(mockUser, { offset: 10, limit: 50 });
-
-      expect(receiptsRepo.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({ skip: 10, take: 50 }),
-      );
-    });
-
-    it("should cap limit at 100", async () => {
-      receiptsRepo.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findAll(mockUser, { limit: 200 });
-
-      expect(receiptsRepo.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 100 }),
-      );
-    });
-  });
-
   describe("printReceipt", () => {
     beforeEach(() => {
       receiptsRepo.findOne.mockResolvedValue({
@@ -1542,6 +1550,41 @@ describe("ReceiptsService", () => {
 
       // temp file cleanup should be called in finally block
       expect(fs.unlink).toHaveBeenCalled();
+    });
+  });
+
+  describe("getPublicReceiptPdf - the 404 never names the storage path", () => {
+    it.each([
+      [
+        "the object is gone",
+        { bucket: "secret-bucket", key: "u-1/x.pdf" },
+        false,
+      ],
+      ["the stored path cannot be parsed", null, true],
+    ])("when %s", async (_name, parsed, exists) => {
+      receiptsRepo.findOne.mockResolvedValue({
+        ...mockReceipt,
+        public_token: "a".repeat(64),
+        pdf_path: "object-storage://secret-bucket/u-1/x.pdf",
+      });
+      pdfStorageService.parseObjectStoragePath.mockReturnValue(parsed);
+      pdfStorageService.fileExists.mockResolvedValue(exists);
+      const warn = jest.spyOn((service as any).logger, "warn");
+
+      const error = (await service
+        .getPublicReceiptPdf("a".repeat(64))
+        .catch((caught: unknown) => caught)) as ApiErrorResponse;
+
+      expect(error).toMatchObject({
+        statusCode: 404,
+        errorCode: "FILE_NOT_FOUND",
+        message: "File not found: receipt PDF",
+      });
+      expect(JSON.stringify(error.toJSON())).not.toMatch(/secret-bucket|u-1/);
+      // The path is kept for operators.
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("object-storage://secret-bucket/u-1/x.pdf"),
+      );
     });
   });
 

@@ -40,6 +40,12 @@ const documentStyles = `
   {{#if document.notice}}
   .doc-notice { margin: 12px 0 0; padding: 6px 10px; border: 1px solid #111827; font-size: 12px; font-weight: 700; text-align: center; break-inside: avoid; page-break-inside: avoid; }
   {{/if}}
+  {{#if document.signatures.hasImages}}
+  .doc-signature { position: relative; }
+  .doc-sign-line-image { display: flex; align-items: flex-end; height: 58px; }
+  .doc-sign-image { max-height: 56px; max-width: 200px; object-fit: contain; }
+  .doc-stamp { position: absolute; width: 110px; height: 110px; object-fit: contain; right: 0; top: -10px; }
+  {{/if}}
   {{#if document.quantities}}
   .doc-quantities { width: 55%; margin: 12px 0 8px auto; font-size: 12px; line-height: 1.6; break-inside: avoid; page-break-inside: avoid; }
   {{/if}}
@@ -139,11 +145,18 @@ const documentClosing = `<div class="doc-closing">
   {{/if}}
   <div class="doc-signatures">
     <div class="doc-signature">
+      {{#if document.signatures.stampImage}}
+      <img class="doc-stamp" src="{{document.signatures.stampImage}}" alt="">
+      {{/if}}
       <div class="doc-sign-heading">{{document.signatures.seller.heading}}</div>
       {{#if document.signatures.seller.position}}
       <div>{{document.signatures.seller.position}}</div>
       {{/if}}
+      {{#if document.signatures.seller.image}}
+      <div class="doc-sign-line doc-sign-line-image"><img class="doc-sign-image" src="{{document.signatures.seller.image}}" alt=""></div>
+      {{else}}
       <div class="doc-sign-line"></div>
+      {{/if}}
       <div class="doc-sign-caption">{{document.signatures.caption}}</div>
       {{#if document.signatures.seller.name}}
       <div class="doc-sign-name">{{document.signatures.seller.name}}</div>
@@ -171,4 +184,39 @@ export const DOCUMENT_PARTIALS: Readonly<Record<string, string>> = {
   documentPayment,
   documentTotals,
   documentClosing,
+};
+
+/**
+ * Waybill-only signature and stamp block, kept apart from `DOCUMENT_PARTIALS` (whose five
+ * slots every typed-document style must contain exactly once). A style opts in with
+ * `{{#if signoff}}{{> waybillSignoff}}{{/if}}` before its footer and the matching styles
+ * line, each tag on its own line so an account without images gets the same bytes as ever.
+ */
+const waybillSignoffStyles = `
+  .signoff { display: flex; justify-content: flex-end; align-items: flex-end; gap: 32px; margin: 24px 0 12px; break-inside: avoid; page-break-inside: avoid; break-after: avoid; page-break-after: avoid; }
+  .signoff-item { text-align: center; }
+  .signoff-image { display: block; max-height: 64px; max-width: 200px; margin: 0 auto; object-fit: contain; }
+  .signoff-stamp .signoff-image { max-height: 110px; max-width: 110px; }
+  .signoff-caption { border-top: 1px solid #111827; min-width: 160px; margin-top: 4px; padding-top: 2px; font-size: 10px; color: #6b7280; }
+`;
+
+const waybillSignoff = `<div class="signoff">
+  {{#if signoff.signatureImage}}
+  <div class="signoff-item signoff-signature">
+    <img class="signoff-image" src="{{signoff.signatureImage}}" alt="">
+    <div class="signoff-caption">{{signoff.labels.signature}}</div>
+  </div>
+  {{/if}}
+  {{#if signoff.stampImage}}
+  <div class="signoff-item signoff-stamp">
+    <img class="signoff-image" src="{{signoff.stampImage}}" alt="">
+    <div class="signoff-caption">{{signoff.labels.stamp}}</div>
+  </div>
+  {{/if}}
+</div>
+`;
+
+export const SIGNOFF_PARTIALS: Readonly<Record<string, string>> = {
+  waybillSignoffStyles,
+  waybillSignoff,
 };

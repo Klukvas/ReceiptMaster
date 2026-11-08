@@ -1,10 +1,17 @@
 import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource, IsNull, Not } from "typeorm";
+import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 import { createHash, randomUUID } from "crypto";
-import { Receipt, ReceiptStatus } from "../entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "../entities/receipt.entity";
 import { updateReceiptOnFailure } from "../receipt-failure";
-import { DOCUMENTS_RETAINED_PER_TYPE } from "../document-retention";
+import {
+  DOCUMENTS_RETAINED_PER_TYPE,
+  isRetentionExempt,
+} from "../document-retention";
 import { specFor } from "../document-types";
 import { isLockingDocumentType } from "../order-lock";
 import { Order } from "../../orders/entities/order.entity";
@@ -139,41 +146,13 @@ export class ReceiptArtifactService {
         },
       );
       if (!updated.affected) return null;
-      if (current.status === ReceiptStatus.PROCESSING) {
-        const total = await manager.count(Receipt, {
-          where: {
-            user_id: userId,
-            status: ReceiptStatus.GENERATED,
-            document_type: current.document_type,
-          },
-        });
-        if (total > DOCUMENTS_RETAINED_PER_TYPE) {
-          const oldest = await manager.find(Receipt, {
-            where: {
-              user_id: userId,
-              status: ReceiptStatus.GENERATED,
-              document_type: current.document_type,
-              id: Not(id),
-            },
-            select: [
-              "id",
-              "user_id",
-              "pdf_path",
-              "active_logo_asset_id",
-              "pending_logo_asset_id",
-            ],
-            order: { created_at: "ASC", id: "ASC" },
-            take: total - DOCUMENTS_RETAINED_PER_TYPE,
-          });
-          const locked = await this.lockRetirements(oldest, userId, manager);
-          for (const old of locked) await this.retire(old, manager);
-          for (const old of locked)
-            await manager.delete(Receipt, {
-              id: old.id,
-              user_id: userId,
-              status: ReceiptStatus.GENERATED,
-            });
-        }
+      // Eviction happens here, at a successful first promotion, never when a row is created:
+      // a generation that fails must not cost an older document its place.
+      if (
+        current.status === ReceiptStatus.PROCESSING &&
+        !isRetentionExempt(current.document_type)
+      ) {
+        await this.evictOverCap(manager, userId, current.document_type, id);
       }
       await this.leases.retire(userId, current.pdf_path, manager);
       if (receipt.active_logo_asset_id !== receipt.pending_logo_asset_id)
@@ -191,6 +170,52 @@ export class ReceiptArtifactService {
       return manager.findOneOrFail(Receipt, { where: { id, user_id: userId } });
     });
   }
+  /**
+   * Brings the type back to the cap after a promotion: the oldest generated documents of the
+   * type (never the one just promoted) are retired and deleted, rows locked in a stable order
+   * before any PDF or logo lease. The caller has excluded the types that are never evicted.
+   */
+  async evictOverCap(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+  ): Promise<void> {
+    const total = await manager.count(Receipt, {
+      where: {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+      },
+    });
+    if (total <= DOCUMENTS_RETAINED_PER_TYPE) return;
+    const oldest = await manager.find(Receipt, {
+      where: {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+        id: Not(promotedId),
+      },
+      select: [
+        "id",
+        "user_id",
+        "pdf_path",
+        "active_logo_asset_id",
+        "pending_logo_asset_id",
+      ],
+      order: { created_at: "ASC", id: "ASC" },
+      take: total - DOCUMENTS_RETAINED_PER_TYPE,
+    });
+    const locked = await this.lockRetirements(oldest, userId, manager);
+    for (const old of locked) await this.retire(old, manager);
+    for (const old of locked)
+      await manager.delete(Receipt, {
+        id: old.id,
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+      });
+  }
+
   private matches(receipt: Receipt, generationId: string): boolean {
     return (
       receipt.generation_id === generationId &&

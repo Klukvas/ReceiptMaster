@@ -47,6 +47,16 @@ export const termsEn: LegalContent = {
           or sign the file yourself using other tools.
         </li>
         <li>
+          You are responsible for having the right to use any signature or
+          stamp image you upload, and for its accuracy. Upload only your own
+          images or images you are properly authorised to use.
+        </li>
+        <li>
+          An image of a signature or stamp (a facsimile) printed on a document
+          is not a qualified electronic signature (QES). A document that
+          carries such an image does not become electronically signed.
+        </li>
+        <li>
           The documents are not fiscal receipts or settlement documents issued
           through a registrar of settlement operations (RRO/PRRO) and do not
           replace them where the law requires one.
@@ -99,10 +109,14 @@ export const termsEn: LegalContent = {
       <ul>
         <li>
           The Service is not an archive of your accounting records. It keeps
-          the 10 most recent active (not voided) documents of each type.
-          Generating a new one permanently removes the oldest active document
-          of the same type, together with its PDF file and public link. You are responsible for saving
-          copies of the documents you are required to keep.
+          the 10 most recent generated documents of each of these types:
+          delivery note, quote, sales receipt and packing list. Generating a
+          new one permanently removes the oldest document of the same type,
+          together with its PDF file and public link. Payment invoices, acts of
+          completed work, return notes, and voided and failed documents of any
+          type are not removed under this limit and are kept for as long as
+          your account exists. You are responsible for saving copies of the
+          documents you are required to keep.
         </li>
         <li>
           You can share a document through a public link. Anyone who has the

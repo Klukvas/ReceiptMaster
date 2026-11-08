@@ -5,8 +5,17 @@ import { join } from "path";
 import { Client } from "pg";
 import { DataSource } from "typeorm";
 import { applyRuntimeGrants } from "./helpers/db-roles";
+import { DocumentNumberingFormat1793400000000 } from "../src/config/migrations/1793400000000-DocumentNumberingFormat";
 import { DocumentType } from "../src/modules/receipts/entities/receipt.entity";
 import { nextDocumentNumber } from "../src/modules/receipts/receipt-number";
+
+/** The text of the next number, which is all these tests compare. */
+const drawNumber = async (
+  manager: Parameters<typeof nextDocumentNumber>[0],
+  userId: string,
+  type: DocumentType,
+) =>
+  (await nextDocumentNumber(manager, userId, type, { timeZone: "UTC" })).number;
 import {
   AUDIT_CLUSTER,
   connectIsolatedAdmin,
@@ -56,7 +65,27 @@ describeIsolatedPostgres(
         synchronize: false,
       }).initialize();
 
-    const migrateToLatest = () => current.runMigrations({ transaction: "all" });
+    // The draw statement also reads the number-format columns that a later migration adds,
+    // so it is applied after this suite's own migration (it is not part of its subject).
+    const addFormatColumns = async () => {
+      const [present] = await current.query(
+        `SELECT 1 AS present FROM information_schema.columns
+         WHERE table_name = 'document_counters' AND column_name = 'prefix'`,
+      );
+      if (present) return;
+      const runner = current.createQueryRunner();
+      try {
+        await new DocumentNumberingFormat1793400000000().up(runner);
+      } finally {
+        await runner.release();
+      }
+    };
+
+    const migrateToLatest = async () => {
+      const applied = await current.runMigrations({ transaction: "all" });
+      await addFormatColumns();
+      return applied;
+    };
 
     const seedAccount = async (userId: string, receiptCounter: number) => {
       await previous.query(
@@ -164,7 +193,7 @@ describeIsolatedPostgres(
       const rolledBack = randomUUID();
       await seedAccount(rolledBack, 4);
       await asTenant(rolledBack, (m) =>
-        nextDocumentNumber(m, rolledBack, DocumentType.WAYBILL),
+        drawNumber(m, rolledBack, DocumentType.WAYBILL),
       );
       // The older image only ever writes users.receipt_counter.
       await current.query(
@@ -173,7 +202,7 @@ describeIsolatedPostgres(
       );
 
       const next = await asTenant(rolledBack, (m) =>
-        nextDocumentNumber(m, rolledBack, DocumentType.WAYBILL),
+        drawNumber(m, rolledBack, DocumentType.WAYBILL),
       );
 
       expect(next).toBe(`${new Date().getUTCFullYear()}-000021`);
@@ -193,13 +222,13 @@ describeIsolatedPostgres(
       await migrateToLatest();
 
       const waybill = await asTenant(veteran, (m) =>
-        nextDocumentNumber(m, veteran, DocumentType.WAYBILL),
+        drawNumber(m, veteran, DocumentType.WAYBILL),
       );
       const act = await asTenant(veteran, (m) =>
-        nextDocumentNumber(m, veteran, DocumentType.ACT),
+        drawNumber(m, veteran, DocumentType.ACT),
       );
       const first = await asTenant(newcomer, (m) =>
-        nextDocumentNumber(m, newcomer, DocumentType.WAYBILL),
+        drawNumber(m, newcomer, DocumentType.WAYBILL),
       );
 
       const year = new Date().getUTCFullYear();
@@ -220,7 +249,7 @@ describeIsolatedPostgres(
       const numbers = await Promise.all(
         Array.from({ length: 20 }, () =>
           asTenant(evicted, (m) =>
-            nextDocumentNumber(m, evicted, DocumentType.INVOICE),
+            drawNumber(m, evicted, DocumentType.INVOICE),
           ),
         ),
       );
@@ -270,7 +299,7 @@ describeIsolatedPostgres(
                   `SELECT set_config('app.current_user_id', $1, true)`,
                   [tenant],
                 );
-              return await nextDocumentNumber(
+              return await drawNumber(
                 {
                   query: async (sql: string, params: unknown[]) =>
                     (await app.query(sql, params)).rows,

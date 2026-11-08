@@ -1,6 +1,11 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable, Optional } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, EntityManager } from "typeorm";
+import {
+  DocumentSignoffService,
+  SignoffPointers,
+} from "../../settings/services/document-signoff.service";
+import { getTemplateCapabilities } from "../templates/metadata";
 import { DocumentType, Receipt } from "../entities/receipt.entity";
 import { Order } from "../../orders/entities/order.entity";
 import { UserSettings } from "../../settings/entities/user-settings.entity";
@@ -54,6 +59,7 @@ export class ReceiptSnapshotService {
     private readonly configs: DocumentConfigService,
     private readonly assets: DocumentAssetsService,
     private readonly renders: DocumentRenderService,
+    @Optional() private readonly signoffs?: DocumentSignoffService,
   ) {}
   async lookup(
     id: string,
@@ -175,7 +181,7 @@ export class ReceiptSnapshotService {
   async prepare(
     userId: string,
     orderId: string,
-    number: string | (() => Promise<string>),
+    number: string | ((timeZone: string, now: Date) => Promise<string>),
     selection: ConfigSelection,
     file?: Express.Multer.File,
     frozenOrder?: RenderSnapshot["order"],
@@ -210,8 +216,18 @@ export class ReceiptSnapshotService {
     const context = request
       ? await this.documentContext(userId, order, request, config)
       : undefined;
+    // Read last, closest to the render; validatePrepared re-checks the pointers under the lock.
+    const signoffLoad = getTemplateCapabilities(config.templateId).signoff
+      ? await this.signoffs?.load(userId)
+      : undefined;
+    // One instant for the number's year and the document's issue date, so they cannot
+    // disagree across midnight in the document's zone.
+    const now = new Date();
     // A lazy number is drawn only now, after everything that can fail for lack of a file.
-    const resolvedNumber = typeof number === "string" ? number : await number();
+    const resolvedNumber =
+      typeof number === "string"
+        ? number
+        : await number(config.formatting.timeZone, now);
     const prepared = await this.renders.prepare(
       userId,
       config,
@@ -219,6 +235,8 @@ export class ReceiptSnapshotService {
       resolvedNumber,
       logo,
       context,
+      signoffLoad?.source,
+      now,
     );
     return {
       ...prepared,
@@ -228,6 +246,8 @@ export class ReceiptSnapshotService {
         sourceRevision: resolved.revision,
         sourcePreset: resolved.preset,
       },
+      // Pointers as read, usable or not: validatePrepared compares them, not the embedded ids.
+      signoffPointers: signoffLoad?.pointers,
       fingerprint: orderFingerprint(order),
       // Set only when the buyer is read live; a frozen buyer is not compared to the recipient.
       liveBuyerFingerprint:
@@ -304,12 +324,34 @@ export class ReceiptSnapshotService {
       prepared.snapshot.config.templateId,
       manager,
     );
+    await this.assertSignoffUnchanged(
+      userId,
+      prepared.signoffPointers,
+      manager,
+    );
     await this.assets.attach(
       userId,
       prepared.snapshot.config.logo.assetId,
       manager,
     );
     return full;
+  }
+  /**
+   * A signature or stamp removed or replaced while the document was being prepared must
+   * not slip into it: the settings lock is held, so the pointers are final here.
+   */
+  private async assertSignoffUnchanged(
+    userId: string,
+    read: SignoffPointers | undefined,
+    manager: EntityManager,
+  ): Promise<void> {
+    // Undefined: the style prints no images, so there is nothing to go stale.
+    if (!this.signoffs || !read) return;
+    const current = await this.signoffs.pointers(userId, manager);
+    if (current.signature !== read.signature || current.stamp !== read.stamp)
+      throw new ConflictException(
+        "Defaults changed. Refresh and generate again.",
+      );
   }
   /**
    * Second requisites check, inside the transaction and under the settings lock: the

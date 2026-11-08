@@ -1,3 +1,4 @@
+import { pdfDisposition } from "./content-disposition";
 import {
   Controller,
   Get,
@@ -50,7 +51,7 @@ export class PublicReceiptsController {
 
       res.set({
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${filename}"`,
+        "Content-Disposition": pdfDisposition(filename),
         "Content-Length": buffer.length.toString(),
         "Cache-Control": "no-cache",
         Pragma: "no-cache",

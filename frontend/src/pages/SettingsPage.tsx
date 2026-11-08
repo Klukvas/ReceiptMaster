@@ -11,9 +11,12 @@ import {
   ExternalLink,
   Loader2,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
+import { DocumentNumberingSettings } from "../components/settings/DocumentNumberingSettings";
+import { SignoffSettings } from "../components/settings/SignoffSettings";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { formatDateOnly } from "../lib/api";
 import { UsageBar } from "../components/subscription/UsageBar";
@@ -25,6 +28,7 @@ type SettingsTab =
   | "company"
   | "receipt"
   | "language"
+  | "documents"
   | "subscription"
   | "advanced";
 
@@ -32,6 +36,7 @@ const VALID_TABS: readonly SettingsTab[] = [
   "company",
   "receipt",
   "language",
+  "documents",
   "subscription",
   "advanced",
 ] as const;
@@ -352,6 +357,11 @@ export const SettingsPage = () => {
       icon: Globe,
     },
     {
+      key: "documents",
+      label: t("settings.tabDocuments", "Documents"),
+      icon: FileText,
+    },
+    {
       key: "subscription",
       label: t("subscription.subscriptionTab", "Subscription"),
       icon: CreditCard,
@@ -466,6 +476,13 @@ export const SettingsPage = () => {
             }
           />
         </div>
+
+        {activeTab === "documents" && (
+          <>
+            <DocumentNumberingSettings />
+            <SignoffSettings />
+          </>
+        )}
 
         {activeTab === "subscription" && <SubscriptionTab />}
 

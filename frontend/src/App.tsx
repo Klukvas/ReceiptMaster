@@ -31,6 +31,9 @@ const SuppliersPage = React.lazy(() =>
 const OrdersPage = React.lazy(() =>
   import("./pages/OrdersPage").then((m) => ({ default: m.OrdersPage })),
 );
+const DocumentsPage = React.lazy(() =>
+  import("./pages/DocumentsPage").then((m) => ({ default: m.DocumentsPage })),
+);
 const DashboardPage = React.lazy(() =>
   import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
@@ -135,6 +138,16 @@ const AppRoutes: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <OrdersPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/documents"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DocumentsPage />
               </Layout>
             </ProtectedRoute>
           }

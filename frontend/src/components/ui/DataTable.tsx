@@ -60,6 +60,9 @@ interface DataTableProps<T> {
 
  onRowClick?: (item: T) => void;
 
+ /** Tighter cell padding, and the actions column stays in view while the table scrolls sideways. */
+ compact?: boolean;
+
  selectable?: boolean;
  selectedKeys?: Set<string>;
  onSelectionChange?: (keys: Set<string>) => void;
@@ -100,6 +103,7 @@ export function DataTable<T>({
  renderCard,
  toolbarExtra,
  onRowClick,
+ compact = false,
  selectable = false,
  selectedKeys,
  onSelectionChange,
@@ -281,7 +285,7 @@ export function DataTable<T>({
  {visibleColumns.map((col) => (
  <th
  key={col.key}
- className="px-6 py-3.5 text-left text-xs font-medium text-content-tertiary uppercase tracking-wider"
+ className={`${compact ?"px-3" :"px-6"} py-3.5 text-left text-xs font-medium text-content-tertiary uppercase tracking-wider`}
  >
  {col.sortable ? (
  <button
@@ -297,7 +301,7 @@ export function DataTable<T>({
  </th>
  ))}
  {renderActions && (
- <th className="px-4 py-3.5 w-12">
+ <th className={`px-4 py-3.5 w-12 ${compact ?"sticky right-0 bg-elevated" :""}`}>
  <span className="sr-only">
  {actionsHeader || t("common.actions")}
  </span>
@@ -363,13 +367,13 @@ export function DataTable<T>({
  {visibleColumns.map((col) => (
  <td
  key={col.key}
- className="px-6 py-4 whitespace-nowrap"
+ className={`${compact ?"px-3" :"px-6"} py-4 whitespace-nowrap`}
  >
  {col.render(item)}
  </td>
  ))}
  {renderActions && (
- <td className="px-4 py-4 whitespace-nowrap text-right">
+ <td className={`px-4 py-4 whitespace-nowrap text-right ${compact ?"sticky right-0 bg-elevated" :""}`}>
  {renderActions(item)}
  </td>
  )}

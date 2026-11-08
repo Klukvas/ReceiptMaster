@@ -32,6 +32,8 @@ export const ErrorCode = {
   DOCUMENT_AMOUNT_INVALID: "DOCUMENT_AMOUNT_INVALID",
   RECONSTRUCTION_REQUIRED: "RECONSTRUCTION_REQUIRED",
   RETURN_QUANTITY_EXCEEDED: "RETURN_QUANTITY_EXCEEDED",
+  NUMBERING_START_TOO_LOW: "NUMBERING_START_TOO_LOW",
+  INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
 
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
@@ -96,6 +98,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
   [ErrorCode.RETURN_QUANTITY_EXCEEDED]:
     "You can return no more than is left of an item. Check the quantities and try again",
+  [ErrorCode.INVOICE_DUE_DATE_BEFORE_ISSUE_DATE]:
+    "The due date cannot be before the issue date",
+  [ErrorCode.NUMBERING_START_TOO_LOW]:
+    "The starting number cannot be lower than the next number to be issued",
 
   // Product errors
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
@@ -294,6 +300,9 @@ export function validationField(error: unknown): string | null {
   if (!isAxiosError(error)) return null;
   const body: unknown = error.response?.data;
   if (typeof body !== "object" || body === null) return null;
+  // Typed refusals name their field directly ({ errorCode, field: "details.dueDate" }).
+  const field = (body as { field?: unknown }).field;
+  if (typeof field === "string" && /^[\w.[\]]+$/.test(field)) return field;
   const message = (body as { error?: unknown }).error;
   const parts = Array.isArray(message) ? message : [message];
   for (const part of parts) {

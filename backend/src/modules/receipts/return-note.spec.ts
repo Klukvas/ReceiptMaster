@@ -170,4 +170,84 @@ describe("buildReturnedOrder", () => {
       "Замовлення № 5 від 1 жовтня 2026 р.",
     );
   });
+
+  it.each([
+    ["uk", "Інвойс", "Інвойс № 2026-000004 від 2 жовтня 2026 р."],
+    ["en", "Invoice", "Invoice No. 2026-000004 dated October 2, 2026"],
+  ] as const)(
+    "prints the source document's own heading in the basis (%s)",
+    (language, title, expected) => {
+      const config = { ...legacyConfig(null), documentLanguage: language };
+      const frozen = {
+        type: DocumentType.RETURN_NOTE,
+        title: "x",
+        details: {
+          returnLines: [],
+          returnSource: {
+            kind: "waybill",
+            number: "2026-000004",
+            date: "2026-10-02",
+            title,
+          },
+        },
+        issueDate: "2026-10-15",
+        seller: buildSeller(
+          { ...config.company, companyName: "ТОВ" },
+          { companyVatPayer: false },
+        ),
+        buyer: buildBuyer({ name: "Покупець" }),
+        vatRatePercent: 20,
+        warnings: [],
+        buyerFingerprint: "x",
+      } as FrozenDocument;
+      const data = buildDocumentRenderData(
+        frozen,
+        buildReturnedOrder(order(), [{ orderItemId: "a", qty: 2 }]),
+        "N-1",
+        config,
+      );
+      expect(data.view.returnInfo?.source).toBe(expected);
+    },
+  );
+
+  it.each([
+    ["uk", "Накладна №", "Накладна № 2026-000004 від 2 жовтня 2026 р."],
+    ["en", "Invoice No.", "Invoice No. 2026-000004 dated October 2, 2026"],
+    ["en", "Invoice no", "Invoice no 2026-000004 dated October 2, 2026"],
+    ["en", "Casino", "Casino No. 2026-000004 dated October 2, 2026"],
+  ] as const)(
+    "does not repeat the number sign when the title already ends with one (%s: %s)",
+    (language, title, expected) => {
+      const config = { ...legacyConfig(null), documentLanguage: language };
+      const frozen = {
+        type: DocumentType.RETURN_NOTE,
+        title: "x",
+        details: {
+          returnLines: [],
+          returnSource: {
+            kind: "waybill",
+            number: "2026-000004",
+            date: "2026-10-02",
+            title,
+          },
+        },
+        issueDate: "2026-10-15",
+        seller: buildSeller(
+          { ...config.company, companyName: "ТОВ" },
+          { companyVatPayer: false },
+        ),
+        buyer: buildBuyer({ name: "Покупець" }),
+        vatRatePercent: 20,
+        warnings: [],
+        buyerFingerprint: "x",
+      } as FrozenDocument;
+      const data = buildDocumentRenderData(
+        frozen,
+        buildReturnedOrder(order(), [{ orderItemId: "a", qty: 2 }]),
+        "N-1",
+        config,
+      );
+      expect(data.view.returnInfo?.source).toBe(expected);
+    },
+  );
 });

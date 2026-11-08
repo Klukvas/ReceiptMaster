@@ -241,6 +241,21 @@ export const ApiErrors = {
       "VALIDATION_ERROR",
       400,
     ),
+  /** Stable code for the client to localize; `field` names the request key at fault. */
+  INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: (dueDate: string, issueDate: string) =>
+    new ApiErrorResponse(
+      "Validation error for details.dueDate: must not be earlier than the issue date",
+      "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
+      400,
+      { field: "details.dueDate", dueDate, issueDate },
+    ),
+  NUMBERING_START_TOO_LOW: (minStart: number) =>
+    new ApiErrorResponse(
+      `The start number must be at least ${minStart}: lower numbers are already used`,
+      "NUMBERING_START_TOO_LOW",
+      409,
+      { minStart },
+    ),
   REQUIRED_FIELD_MISSING: (field: string) =>
     new ApiErrorResponse(
       `Required field ${field} is missing`,

@@ -4,6 +4,7 @@ import { formatDate, type Receipt } from "../../lib/api";
 import { documentLabelKey, isMultiplePerOrder } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import { DocumentFailureReason } from "../documents/DocumentFailureReason";
 import { voidReasonText } from "./void-reason";
 
 export type DocumentCardActions = {
@@ -100,9 +101,7 @@ export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
       )}
       {document.status === "failed" && (
         <div className="space-y-2">
-          {document.error_message && (
-            <p role="alert" className="text-xs text-danger-base">{document.error_message}</p>
-          )}
+          {document.error_message && <DocumentFailureReason message={document.error_message} />}
           {isMultiplePerOrder(document.document_type) ? (
             <p className="text-xs text-content-tertiary">{t("documents.createAgain")}</p>
           ) : (

@@ -5,10 +5,14 @@ import {
   DocumentType,
   ReceiptStatus,
 } from "../modules/receipts/entities/receipt.entity";
-import { receiptProjection } from "../modules/receipts/services/receipt-projection";
+import {
+  documentListItem,
+  receiptProjection,
+} from "../modules/receipts/services/receipt-projection";
 import {
   PRIMARY_COLOR_PATTERN,
   SHARED_SCHEMAS,
+  documentListItemSchema,
   receiptProjectionSchema,
   sharedComponents,
 } from "./api-components";
@@ -56,6 +60,63 @@ describe("shared OpenAPI components", () => {
       Object.keys(receiptProjectionSchema.shape).sort(),
     );
     expect(receiptProjectionSchema.safeParse(wire).success).toBe(true);
+  });
+
+  it("documents exactly what documentListItem() puts on the wire, and only adds `order`", () => {
+    const receipt = {
+      id: "0b8c6f35-6cc4-4c2a-9b2c-6f7e0c1d2e3f",
+      order_id: "1c9d7a46-7dd5-4d3b-8c3d-7a8f1d2e3f40",
+      document_type: DocumentType.INVOICE,
+      number: "РФ-2026-000001",
+      pdf_url: null,
+      hash: null,
+      status: ReceiptStatus.GENERATED,
+      template_id: "standard",
+      template_version: 1,
+      progress: 100,
+      error_message: null,
+      created_at: new Date("2026-10-29T10:00:00Z"),
+      voided_at: null,
+      void_reason: null,
+      public_token: null,
+      active_revision: 1,
+      replacement_status: null,
+      replacement_error: null,
+      html_snapshot: "<private>",
+      order: {
+        id: "1c9d7a46-7dd5-4d3b-8c3d-7a8f1d2e3f40",
+        order_number: 12,
+        status: "confirmed",
+        total_cents: 99999,
+        recipient: { name: "Acme", email: "private@acme.test" },
+      },
+    } as unknown as Receipt;
+
+    const wire = JSON.parse(JSON.stringify(documentListItem(receipt)));
+    const { order, ...projection } = wire;
+
+    expect(Object.keys(wire).sort()).toEqual(
+      Object.keys(documentListItemSchema.shape).sort(),
+    );
+    expect(documentListItemSchema.safeParse(wire).success).toBe(true);
+    expect(projection).toEqual(
+      JSON.parse(JSON.stringify(receiptProjection(receipt))),
+    );
+    // Nothing of the order beyond the four documented fields, no recipient contacts.
+    expect(order).toEqual({
+      id: "1c9d7a46-7dd5-4d3b-8c3d-7a8f1d2e3f40",
+      order_number: 12,
+      status: "confirmed",
+      recipient_name: "Acme",
+    });
+    expect(
+      documentListItemSchema.safeParse({ ...wire, order: null }).success,
+    ).toBe(true);
+    expect(
+      JSON.stringify(
+        documentListItem({ ...receipt, order: undefined } as never),
+      ),
+    ).toContain('"order":null');
   });
 
   it("documents primaryColor with the same case-insensitive rule Zod applies", () => {

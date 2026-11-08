@@ -37,8 +37,8 @@ Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context
 |---|---|
 | A backend module, guard, interceptor, job, auth, tenancy, "how do we do X in Nest" | [**backend-patterns.md**](./backend-patterns.md) |
 | A domain flow — orders, receipt/PDF generation, billing, subscriptions, notifications | [**business-logic.md**](./business-logic.md) |
-| Calling / changing an HTTP endpoint (all 104 routes, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
-| Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (quote/invoice/act/sales receipt/packing list/return note), requisites forms | [**frontend.md**](./frontend.md) |
+| Calling / changing an HTTP endpoint (all 113 routes, 112 in the OpenAPI contract, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
+| Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (quote/invoice/act/sales receipt/packing list/return note), requisites forms, the `/documents` list, document numbering and signature/stamp settings | [**frontend.md**](./frontend.md) |
 
 Common combinations: a **full-stack feature** → `backend-patterns` + `frontend` + `api-reference`;
 **understanding a business rule** → `business-logic` (+ `api-reference` for the surface).
@@ -63,7 +63,8 @@ market/
 ├── frontend/                # React app
 │   ├── src/
 │   │   ├── main.tsx, App.tsx (routing + providers)
-│   │   ├── pages/           # 18 route pages (public + dashboard)
+│   │   ├── pages/           # 19 route pages (public + dashboard; DocumentsPage = /documents list)
+│   │   ├── components/      # per-feature UI; documents/ = /documents page, settings/ = numbering + signoff
 │   │   ├── services/        # OrderService, ReceiptService, NotificationService
 │   │   ├── lib/             # api.ts (Axios client + interceptors), auth-session.ts
 │   │   │                    #   (cross-tab refresh outcome), api-errors.ts, profit.ts

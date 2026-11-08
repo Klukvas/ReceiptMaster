@@ -2,6 +2,8 @@ import { DocumentAsset } from "./entities/document-asset.entity";
 import { DocumentPreset } from "./entities/document-preset.entity";
 import { DocumentAssetsService } from "./services/document-assets.service";
 import { DocumentConfigService } from "./services/document-config.service";
+import { DocumentSignoffController } from "./document-signoff.controller";
+import { DocumentSignoffService } from "./services/document-signoff.service";
 import { DocumentConfigController } from "./document-config.controller";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
@@ -20,18 +22,24 @@ import { CacheModule } from "../../common/modules/cache.module";
     SubscriptionModule,
     CacheModule,
   ],
-  controllers: [SettingsController, DocumentConfigController],
+  controllers: [
+    SettingsController,
+    DocumentConfigController,
+    DocumentSignoffController,
+  ],
   providers: [
     SettingsService,
     LogoStorageService,
     DocumentAssetsService,
     DocumentConfigService,
+    DocumentSignoffService,
   ],
   exports: [
     SettingsService,
     LogoStorageService,
     DocumentAssetsService,
     DocumentConfigService,
+    DocumentSignoffService,
   ],
 })
 export class SettingsModule {}

@@ -1,3 +1,4 @@
+import { pdfDisposition } from "./content-disposition";
 import { HttpException } from "@nestjs/common";
 import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
 import { DocumentType } from "./entities/receipt.entity";
@@ -7,7 +8,12 @@ import {
   DocumentMultipart,
   documentPayload,
 } from "../settings/document-multipart";
-import { receiptProjection } from "./services/receipt-projection";
+import { VoidReceiptDto } from "./dto/void-receipt.dto";
+import { ListDocumentsQueryDto } from "./dto/list-documents-query.dto";
+import {
+  documentListItem,
+  receiptProjection,
+} from "./services/receipt-projection";
 import {
   documentGenerationSchema,
   documentTypeProbe,
@@ -47,15 +53,6 @@ import { User } from "../users/entities/user.entity";
 
 function isDocumentType(value: string): value is DocumentType {
   return (Object.values(DocumentType) as string[]).includes(value);
-}
-
-function parseDocumentType(value: string): DocumentType {
-  if (!isDocumentType(value))
-    throw ApiErrors.VALIDATION_ERROR(
-      "type",
-      `type must be one of: ${Object.values(DocumentType).join(", ")}`,
-    );
-  return value;
 }
 
 @ApiTags("receipts")
@@ -206,38 +203,18 @@ export class ReceiptsController {
   }
 
   @Get()
-  @ApiOperation({ summary: "Получить список всех чеков" })
-  @ApiDataResponse(200, "ReceiptListResponse", "Список чеков получен")
-  @ApiQuery({ name: "offset", required: false, description: "Offset" })
-  @ApiQuery({ name: "limit", required: false, description: "Limit (max 100)" })
-  @ApiQuery({
-    name: "type",
-    required: false,
-    enum: DocumentType,
-    description: "Only documents of this type (default: all types)",
+  @ApiOperation({
+    summary:
+      "List documents with filters, search and sorting, each with its order and recipient name",
   })
+  @ApiDataResponse(200, "ReceiptListResponse", "Page of documents")
+  @ApiFailureResponses({ 400: "Invalid query parameter" })
   async findAll(
     @Request() req: { user: User },
-    @Query("offset") offset?: string,
-    @Query("limit") limit?: string,
-    @Query("type") type?: string,
+    @Query() query: ListDocumentsQueryDto,
   ) {
-    const documentType =
-      type === undefined ? undefined : parseDocumentType(type);
-    const parsedOffset = offset ? parseInt(offset, 10) : undefined;
-    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
-    const result = await this.receiptsService.findAll(req.user, {
-      offset:
-        Number.isFinite(parsedOffset) && parsedOffset! >= 0
-          ? parsedOffset
-          : undefined,
-      limit:
-        Number.isFinite(parsedLimit) && parsedLimit! > 0
-          ? parsedLimit
-          : undefined,
-      type: documentType,
-    });
-    return { ...result, data: result.data.map(receiptProjection) };
+    const result = await this.receiptsService.findAll(req.user, query);
+    return { ...result, data: result.data.map(documentListItem) };
   }
 
   // Declared before ":id" so "retention" is not read as a receipt id.
@@ -299,7 +276,7 @@ export class ReceiptsController {
 
       res.set({
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${filename}"`,
+        "Content-Disposition": pdfDisposition(filename),
         "Content-Length": buffer.length.toString(),
         "Cache-Control": "no-cache",
         Pragma: "no-cache",
@@ -336,15 +313,23 @@ export class ReceiptsController {
   @ApiOperation({ summary: "Void a receipt and unlock the order" })
   @ApiJsonBody("ReceiptVoidRequest", { required: false })
   @ApiDataResponse(201, "ReceiptProjection", "Receipt voided successfully")
-  @ApiResponse({ status: 400, description: "Receipt is already voided" })
+  @ApiResponse({
+    status: 400,
+    description:
+      "Receipt is already voided, or `reason` is not a string of at most 500 characters",
+  })
   @ApiResponse({ status: 404, description: "Receipt not found" })
   async voidReceipt(
     @Param("id", ParseUUIDPipe) id: string,
-    @Body() body: { reason: string },
+    @Body() body: VoidReceiptDto,
     @Request() req: { user: User },
   ) {
     return receiptProjection(
-      await this.receiptsService.voidReceipt(id, req.user, body.reason),
+      await this.receiptsService.voidReceipt(
+        id,
+        req.user,
+        body?.reason || undefined,
+      ),
     );
   }
 

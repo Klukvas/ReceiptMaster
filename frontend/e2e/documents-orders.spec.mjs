@@ -397,12 +397,13 @@ const checkInvoiceCreation = async (results) => {
   await withDocumentPage(DESKTOP, {}, async (page, state) => {
     const dialog = await openCreateDialog(page, "Invoice…");
     await dialog.getByLabel("Due date").check();
-    await dialog.getByLabel("Pay by").fill("2026-03-15");
+    const dueDate = daysFromToday(30);
+    await dialog.getByLabel("Pay by").fill(dueDate);
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     await settle(() => (state.created ?? []).length === 1);
     results.check(
       "choosing a due date sends dueDate and no paymentTermDays",
-      JSON.stringify(state.created?.[0]?.details) === '{"dueDate":"2026-03-15"}',
+      JSON.stringify(state.created?.[0]?.details) === JSON.stringify({ dueDate }),
       JSON.stringify(state.created),
     );
   });
@@ -906,12 +907,13 @@ const checkReturnNoteDialog = async (results) => {
     await withDocumentPage(viewport, { order: returnOrder() }, async (page, state) => {
       const dialog = await openCreateDialog(page, "Return note…");
       const rows = await dialog.getByTestId("return-line").evaluateAll((lines) =>
-        lines.map((line) => [...line.querySelectorAll("td")].map((cell) => cell.innerText.trim()).filter(Boolean)),
+        lines.map((line) => line.innerText.replace(/\s+/g, " ").trim()),
       );
       const quantities = [await quantityOf(dialog, DRIPPER).inputValue(), await quantityOf(dialog, BEANS).inputValue()];
       results.check(
         `${label}: each line shows ordered and already returned, and the quantity defaults to what is left`,
-        rows[0].join("|").startsWith(`${DRIPPER}|5|2`) && rows[1].join("|").startsWith(`${BEANS}|2|0`) && quantities.join(",") === "3,2",
+        rows[0].startsWith(DRIPPER) && /Ordered 5 Already returned 2/.test(rows[0]) &&
+          rows[1].startsWith(BEANS) && /Ordered 2 Already returned 0/.test(rows[1]) && quantities.join(",") === "3,2",
         `${JSON.stringify(rows)} ${quantities}`,
       );
       results.check(
@@ -935,14 +937,14 @@ const checkReturnNoteDialog = async (results) => {
       await submitCreate(dialog);
       results.check(
         `${label}: more than what is left is refused with the limit`,
-        (await dialog.getByText("No more than 3").count()) === 1 && (state.created ?? []).length === 0,
+        (await dialog.getByText("You can return no more than 3 pcs.").count()) === 1 && (state.created ?? []).length === 0,
         await dialog.innerText(),
       );
       await quantityOf(dialog, DRIPPER).fill("0");
       await submitCreate(dialog);
       results.check(
         `${label}: zero is refused`,
-        (await dialog.getByText("Enter a whole number from 1").count()) === 1 && (state.created ?? []).length === 0,
+        (await dialog.getByText("Enter a whole number from 1 to 3").count()) === 1 && (state.created ?? []).length === 0,
         await dialog.innerText(),
       );
 
@@ -994,7 +996,7 @@ const checkReturnNoteSeveral = async (results) => {
     );
     results.check(
       "the ledger moves on: already returned counts the earlier notes and a fully returned line cannot be ticked",
-      rows[0].includes("5 3") && (await tick(dialog, BEANS).isDisabled()) && rows[1].includes("Fully returned"),
+      /Ordered 5 Already returned 3/.test(rows[0]) && (await tick(dialog, BEANS).isDisabled()) && rows[1].includes("Fully returned"),
       JSON.stringify(rows),
     );
     await dialog.getByRole("button", { name: "Cancel" }).click();

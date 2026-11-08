@@ -68,6 +68,62 @@ export const receiptProjectionSchema = z.object({
   replacement_error: z.string().nullable(),
 });
 
+/** Mirrors `documentListItem()`: the projection plus the order the document belongs to. */
+export const documentListItemSchema = receiptProjectionSchema.extend({
+  order: z
+    .object({
+      id: z.string().uuid(),
+      order_number: z.number().int(),
+      status: z.enum(["draft", "confirmed", "cancelled"]),
+      recipient_name: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+export const numberingSettingSchema = z.object({
+  documentType: z.nativeEnum(DocumentType),
+  prefix: z.string().max(16),
+  padding: z.number().int().min(1).max(9),
+  includeYear: z.boolean(),
+  nextValue: z.number().int().min(1),
+  minStart: z.number().int().min(1),
+  nextNumber: z.string(),
+});
+
+/** Documentation twin of `UpdateNumberingDto`; a unit test keeps the limits in step. */
+export const numberingUpdateRequestSchema = z.object({
+  prefix: z
+    .string()
+    .max(16)
+    .describe(
+      'Letters, digits and . _ - space; may not end with a digit or contain / \\ "',
+    ),
+  padding: z.number().int().min(1).max(9),
+  includeYear: z.boolean(),
+  startNumber: z
+    .number()
+    .int()
+    .min(1)
+    .max(2_000_000_000)
+    .optional()
+    .describe(
+      "Raises the counter so the next number is this one; never lowers it",
+    ),
+});
+
+export const signoffImageSchema = z.object({
+  assetId: z.string().uuid(),
+  width: z.number().int(),
+  height: z.number().int(),
+  bytes: z.number().int(),
+  updatedAt: z.string().datetime(),
+});
+
+export const signoffStateSchema = z.object({
+  signature: signoffImageSchema.nullable(),
+  stamp: signoffImageSchema.nullable(),
+});
+
 export const SHARED_SCHEMAS = {
   ApiErrorResponse: z.object({
     error: z.union([z.string(), z.array(z.string())]),
@@ -75,6 +131,12 @@ export const SHARED_SCHEMAS = {
     // DOCUMENT_REQUISITES_MISSING: what blocks generation, and what is only advisory.
     fields: z.array(z.string()).optional(),
     warnings: z.array(z.string()).optional(),
+    // NUMBERING_START_TOO_LOW: the lowest start number that is still allowed.
+    minStart: z.number().int().optional(),
+    // INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: the request key at fault and both dates (YYYY-MM-DD).
+    field: z.string().optional(),
+    dueDate: z.string().optional(),
+    issueDate: z.string().optional(),
   }),
   MessageResponse: z.object({ message: z.string() }),
   DocumentConfig: documentConfigSchema,
@@ -96,8 +158,16 @@ export const SHARED_SCHEMAS = {
   DocumentPresetResponse: data(preset),
   DocumentPresetDeletedResponse: data(z.object({ deleted: z.literal(true) })),
   ReceiptProjection: receiptProjectionSchema,
+  DocumentListItem: documentListItemSchema,
+  NumberingSetting: numberingSettingSchema,
+  NumberingSettingsResponse: z.object({
+    types: z.array(numberingSettingSchema),
+  }),
+  NumberingUpdateRequest: numberingUpdateRequestSchema,
+  SignoffImage: signoffImageSchema,
+  SignoffState: signoffStateSchema,
   ReceiptListResponse: z.object({
-    data: z.array(receiptProjectionSchema),
+    data: z.array(documentListItemSchema),
     total: z.number().int(),
     offset: z.number().int(),
     limit: z.number().int(),

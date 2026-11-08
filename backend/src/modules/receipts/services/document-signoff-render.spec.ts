@@ -1,0 +1,412 @@
+import { createHash } from "crypto";
+import { SignoffSource } from "../../../common/services/signoff-image";
+import { legacyConfig } from "../../settings/document-config";
+import type { DocumentConfig } from "../../settings/document-config";
+import { buildBuyer, buildSeller } from "../document-requisites";
+import { DocumentType } from "../entities/receipt.entity";
+import type { DocumentContext } from "../frozen-document";
+import { getTemplateCapabilities } from "../templates/metadata";
+import { DOCUMENT_LABELS } from "../templates/translations/document-labels";
+import { DocumentRenderService, FrozenOrder } from "./document-render.service";
+import { TemplateService } from "./template.service";
+
+const NOW = new Date("2026-10-15T09:30:00Z");
+const SIGNOFF_STYLES = ["standard", "classic", "minimal", "corporate"];
+const OTHER_STYLES = [
+  "compact",
+  "modern",
+  "elegant",
+  "vintage",
+  "tech",
+  "wave",
+  "thermal",
+  "dark",
+  "branded",
+  "delivery",
+  "proforma",
+];
+const STAMPED_TYPES = [
+  DocumentType.INVOICE,
+  DocumentType.ACT,
+  DocumentType.QUOTE,
+];
+const UNSTAMPED_TYPES = [
+  DocumentType.SALES_RECEIPT,
+  DocumentType.PACKING_LIST,
+  DocumentType.RETURN_NOTE,
+];
+
+const order: FrozenOrder = {
+  id: "order-1",
+  currency: "UAH",
+  subtotal_cents: 205050,
+  total_cents: 205050,
+  created_at: "2026-10-14T12:34:00.000Z",
+  recipient: { name: "Іван Покупець", address: "Львів" },
+  items: [
+    {
+      product_name: "Розробка сайту",
+      qty: 1,
+      unit_price_cents: 150050,
+      line_total_cents: 150050,
+    },
+    {
+      product_name: "Консультація",
+      qty: 2,
+      unit_price_cents: 27500,
+      line_total_cents: 55000,
+    },
+  ],
+};
+
+const configFor = (templateId: string): DocumentConfig => {
+  const base = legacyConfig(null);
+  return {
+    ...base,
+    templateId,
+    documentLanguage: "uk",
+    company: {
+      ...base.company,
+      companyName: "Продавець",
+      companyTaxId: "12345678",
+      companyIban: "UA213223130000026007233566001",
+    },
+  };
+};
+
+const contextFor = (
+  type: DocumentType,
+  config: DocumentConfig,
+): DocumentContext => ({
+  request: {
+    type,
+    details:
+      type === DocumentType.ACT
+        ? {
+            contractRef: "Договір 7",
+            period: { from: "2026-10-01", to: "2026-10-31" },
+          }
+        : type === DocumentType.QUOTE
+          ? { validUntil: "2026-10-29" }
+          : type === DocumentType.RETURN_NOTE
+            ? { lines: [{ orderItemId: "item-1", qty: 1 }], reason: "Розмір" }
+            : { dueDate: "2026-10-20" },
+  },
+  ...(type === DocumentType.RETURN_NOTE
+    ? {
+        returnSource: {
+          kind: "waybill" as const,
+          number: "2026-000003",
+          date: "2026-10-10",
+        },
+      }
+    : {}),
+  seller: buildSeller(config.company, {
+    companyLegalForm: "ТОВ",
+    companyVatPayer: true,
+    companyVatId: "123456789012",
+    companySignatoryName: "Петренко Петро",
+    companySignatoryPosition: "Директор",
+  }),
+  buyer: buildBuyer({ name: "Іван Покупець", legal_name: "ТОВ Іван" }),
+  defaultPaymentTermDays: null,
+});
+
+const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+const hashOf = (bytes: Buffer) =>
+  createHash("sha256").update(bytes).digest("hex");
+const dataUri = (bytes: Buffer) =>
+  `data:image/png;base64,${bytes.toString("base64")}`;
+
+describe("signature and stamp in rendered documents", () => {
+  const templates = new TemplateService();
+  const renders = new DocumentRenderService(templates, undefined, undefined);
+  let signoff: SignoffSource;
+  let signatureUri: string;
+  let stampUri: string;
+
+  beforeAll(async () => {
+    await templates.ready;
+    const render = templates.renderTemplate.bind(templates);
+    jest
+      .spyOn(templates, "renderTemplate")
+      .mockImplementation((name, data) =>
+        render(name, { ...data, fontRegular: "FONT-R", fontBold: "FONT-B" }),
+      );
+    jest.useFakeTimers({
+      now: NOW,
+      doNotFake: [
+        "hrtime",
+        "nextTick",
+        "performance",
+        "queueMicrotask",
+        "setImmediate",
+        "clearImmediate",
+        "setInterval",
+        "clearInterval",
+        "setTimeout",
+        "clearTimeout",
+      ],
+    });
+    // Fixed bytes (tiny valid PNGs): the digests below must not depend on an encoder.
+    const signatureBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const stampBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    signoff = {
+      signature: { assetId: "sig-asset", bytes: signatureBytes },
+      stamp: { assetId: "stamp-asset", bytes: stampBytes },
+    };
+    signatureUri = dataUri(signatureBytes);
+    stampUri = dataUri(stampBytes);
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  const renderTyped = (
+    type: DocumentType,
+    style: string,
+    images?: SignoffSource,
+  ) => {
+    const config = configFor(style);
+    return renders.prepare(
+      "u1",
+      config,
+      order,
+      "2026-000007",
+      undefined,
+      contextFor(type, config),
+      images,
+    );
+  };
+  const renderWaybill = (style: string, images?: SignoffSource) =>
+    renders.prepare(
+      "u1",
+      configFor(style),
+      order,
+      "2026-000007",
+      undefined,
+      undefined,
+      images,
+    );
+
+  describe("typed documents", () => {
+    it.each(
+      STAMPED_TYPES.flatMap((type) =>
+        SIGNOFF_STYLES.map((s) => [type, s] as const),
+      ),
+    )(
+      "%s / %s prints the signature in the seller block and the stamp beside it",
+      async (type, style) => {
+        const { html, snapshot } = await renderTyped(type, style, signoff);
+
+        expect(html).toContain(
+          `<img class="doc-sign-image" src="${signatureUri.replace(/=/g, "&#x3D;")}" alt="">`,
+        );
+        expect(html).toContain('class="doc-stamp"');
+        expect(html).toContain(".doc-stamp { position: absolute;");
+        expect(html).toContain('class="doc-sign-line doc-sign-line-image"');
+        expect(snapshot.signoff).toEqual({
+          signatureAssetId: "sig-asset",
+          stampAssetId: "stamp-asset",
+          signatureSha256: hashOf(signoff.signature!.bytes),
+          stampSha256: hashOf(signoff.stamp!.bytes),
+        });
+      },
+    );
+
+    it.each(
+      UNSTAMPED_TYPES.flatMap((type) =>
+        SIGNOFF_STYLES.map((s) => [type, s] as const),
+      ),
+    )(
+      "%s / %s prints the signature but no stamp, whatever was uploaded",
+      async (type, style) => {
+        const { html } = await renderTyped(type, style, signoff);
+        expect(html).toContain('class="doc-sign-image"');
+        expect(html).not.toContain('class="doc-stamp"');
+      },
+    );
+
+    it.each(
+      [...STAMPED_TYPES, ...UNSTAMPED_TYPES].flatMap((type) =>
+        SIGNOFF_STYLES.map((s) => [type, s] as const),
+      ),
+    )(
+      "%s / %s without images is byte-identical to a render that was never given any",
+      async (type, style) => {
+        const never = await renderTyped(type, style);
+        const empty = await renderTyped(type, style, {});
+        expect(empty.html).toBe(never.html);
+        expect(never.html).not.toContain("doc-sign-image");
+        expect(never.html).not.toContain("doc-stamp");
+        expect("signoff" in never.snapshot).toBe(false);
+        expect("signoff" in empty.snapshot).toBe(false);
+      },
+    );
+
+    it("prints only the stamp when only a stamp is set", async () => {
+      const { html, snapshot } = await renderTyped(
+        DocumentType.INVOICE,
+        "standard",
+        {
+          stamp: signoff.stamp,
+        },
+      );
+      expect(html).toContain('class="doc-stamp"');
+      expect(html).not.toContain('class="doc-sign-image"');
+      expect(snapshot.signoff).toMatchObject({
+        signatureAssetId: null,
+        stampAssetId: "stamp-asset",
+      });
+      expect(snapshot.signoff).not.toHaveProperty("signatureSha256");
+    });
+
+    it("records ids and hashes in the snapshot, never the image bytes", async () => {
+      const { snapshot } = await renderTyped(
+        DocumentType.INVOICE,
+        "classic",
+        signoff,
+      );
+      const serialized = JSON.stringify(snapshot);
+      expect(serialized).not.toContain(signatureUri);
+      expect(serialized).not.toContain(
+        signoff.signature!.bytes.toString("base64"),
+      );
+    });
+
+    it("keeps the buyer's line a plain line to sign", async () => {
+      const { html } = await renderTyped(DocumentType.ACT, "standard", signoff);
+      expect(html).toContain('<div class="doc-sign-line"></div>');
+    });
+  });
+
+  describe("waybill", () => {
+    it.each(SIGNOFF_STYLES)(
+      "%s prints the signature and the stamp with their captions",
+      async (style) => {
+        const { html, snapshot } = await renderWaybill(style, signoff);
+
+        expect(html).toContain('<div class="signoff">');
+        expect(html).toContain(`src="${signatureUri.replace(/=/g, "&#x3D;")}"`);
+        expect(html).toContain(`src="${stampUri.replace(/=/g, "&#x3D;")}"`);
+        expect(html).toContain(DOCUMENT_LABELS.uk.signature);
+        expect(html).toContain(DOCUMENT_LABELS.uk.stamp);
+        expect(html).toContain(".signoff { display: flex;");
+        // Right before the footer, so it can stay with it on the last page.
+        expect(html.indexOf('<div class="signoff">')).toBeLessThan(
+          html.search(/class="footer(-section)?"/),
+        );
+        expect(snapshot.signoff).toMatchObject({
+          signatureAssetId: "sig-asset",
+          stampAssetId: "stamp-asset",
+        });
+      },
+    );
+
+    it.each(SIGNOFF_STYLES)(
+      "%s without images is byte-identical to a render that was never given any",
+      async (style) => {
+        const never = await renderWaybill(style);
+        const empty = await renderWaybill(style, {});
+        expect(empty.html).toBe(never.html);
+        expect(never.html).not.toContain("signoff");
+        expect("signoff" in never.snapshot).toBe(false);
+      },
+    );
+
+    it("prints a lone signature without a stamp column", async () => {
+      const { html } = await renderWaybill("standard", {
+        signature: signoff.signature,
+      });
+      expect(html).toContain('class="signoff-item signoff-signature"');
+      expect(html).not.toContain('class="signoff-item signoff-stamp"');
+    });
+
+    it.each(OTHER_STYLES)(
+      "%s (no signature block) ignores the images",
+      async (style) => {
+        const plain = await renderWaybill(style);
+        const withImages = await renderWaybill(style, signoff);
+        expect(withImages.html).toBe(plain.html);
+        expect("signoff" in withImages.snapshot).toBe(false);
+      },
+    );
+  });
+
+  describe("capabilities", () => {
+    it.each([...SIGNOFF_STYLES, ...OTHER_STYLES])(
+      "%s reports whether it prints the images",
+      (style) => {
+        expect(getTemplateCapabilities(style).signoff).toBe(
+          SIGNOFF_STYLES.includes(style),
+        );
+      },
+    );
+  });
+
+  describe("digests with images", () => {
+    // Pins the layout of the signed document; a change here is a visible change to it.
+    const digests = async () => {
+      const entries: Array<[string, string]> = [];
+      for (const style of SIGNOFF_STYLES) {
+        for (const type of STAMPED_TYPES)
+          entries.push([
+            `${type}.${style}`,
+            sha((await renderTyped(type, style, signoff)).html),
+          ]);
+        entries.push([
+          `waybill.${style}`,
+          sha((await renderWaybill(style, signoff)).html),
+        ]);
+      }
+      return Object.fromEntries(entries);
+    };
+
+    it("matches the recorded digests", async () => {
+      expect(await digests()).toEqual(SIGNED_SHA256);
+    });
+  });
+});
+
+// Filled from the first green run; see "digests with images".
+const SIGNED_SHA256: Record<string, string> = {
+  "act.classic":
+    "d61451b6965122c6bebb9d7e0026c4e5173c86f45d4466413f7b70e1b44dd904",
+  "act.corporate":
+    "799bf9ab5b7a6adf160741b9445e7fb13200168e0e88cea7fb4abe28e10a0e18",
+  "act.minimal":
+    "d93ff7ddd3b08ba0b086f04041b00262df47224f1f21507e9ea118490d938139",
+  "act.standard":
+    "537ed885b82a88a29da35c7f40672ba45b49bb7ced2af4bc621190e4d7c1e6db",
+  "invoice.classic":
+    "b9d119b9906e713cba1a721064199262d21d906e681e370c802ad81d12aa77ef",
+  "invoice.corporate":
+    "9d0e175166a32b50a08dd806d7791b524fc78da1313c525cb60f05c72f854c49",
+  "invoice.minimal":
+    "d9e3d8c972dd98a3de7411fdd741939933ca8d2ef10ed152a483771aeae7ceaf",
+  "invoice.standard":
+    "a3d513ce21d07449554ba34556da41770f31117a8ab1eb89be10111ccb402d84",
+  "quote.classic":
+    "ffd304dfa62e179d263d8f02ece520b6a30df877d97e9916d3d502abf159e96b",
+  "quote.corporate":
+    "15e3c34303c7bff6501f51d5bcbfe5145394b31ffdb89b84fc6895d7fedeef61",
+  "quote.minimal":
+    "4de47c3cd451774db74d2f80db9fa0d4ab63c253f5e717f25bb200d0bdfeaabe",
+  "quote.standard":
+    "7373fe0a89b25edc846954f790d7c75bfdac1915d44228b25f78d84ae92f2811",
+  "waybill.classic":
+    "a1b9862f10eb7a37c8a0a540775c65a933a2e0448247ab7063958383b4854a94",
+  "waybill.corporate":
+    "814a4a323d17624a99d3bbc312b617aee827a1b046e57cf16f09371f00d40b03",
+  "waybill.minimal":
+    "e185ddc9dbe5e7e5a0ac3093db9c27885a27dc337c584073d3f97a3a62165560",
+  "waybill.standard":
+    "a4573c9bedeb815e675538a4117910fe6f619377eb416789aa81ffd90861e5f0",
+};

@@ -5,6 +5,7 @@ import { buildBuyer, buildSeller } from "../document-requisites";
 import { DocumentContext } from "../frozen-document";
 import { DocumentType } from "../entities/receipt.entity";
 import { ReceiptTemplate, TemplateService } from "./template.service";
+import { documentYear } from "../receipt-number";
 import { DocumentRenderService, FrozenOrder } from "./document-render.service";
 
 const SELLER_IBAN = "UA213223130000026007233566001";
@@ -243,5 +244,25 @@ describe("DocumentRenderService: invoice and act", () => {
     await expect(
       renders.prepare("u1", config, order, "N", undefined, bare),
     ).rejects.toBeInstanceOf(ApiErrorResponse);
+  });
+
+  it("dates the document and the number from the one instant it is given (31 Dec to 1 Jan in Kyiv)", async () => {
+    const config = configFor("standard");
+    // 22:30 UTC on 31 December is already 1 January 2027 in Kyiv.
+    const now = new Date("2026-12-31T22:30:00Z");
+    const { snapshot } = await renders.prepare(
+      "u1",
+      config,
+      order,
+      "2027-000001",
+      undefined,
+      contextFor(DocumentType.INVOICE, config),
+      {},
+      now,
+    );
+    expect(snapshot.document?.issueDate).toBe("2027-01-01");
+    expect(snapshot.capturedAt).toBe(now.toISOString());
+    // The same instant gives the same year in the number.
+    expect(documentYear(now, config.formatting.timeZone)).toBe(2027);
   });
 });

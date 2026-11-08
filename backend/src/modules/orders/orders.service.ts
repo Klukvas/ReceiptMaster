@@ -1,3 +1,4 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
@@ -403,7 +404,11 @@ export class OrdersService {
 
     this.applyListFilters(queryBuilder, search, status, filters);
 
-    const sortColumn = ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
+    const sortColumn = pickSortColumn(
+      ORDER_SORTABLE_COLUMNS,
+      sortBy,
+      "order.created_at",
+    );
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 

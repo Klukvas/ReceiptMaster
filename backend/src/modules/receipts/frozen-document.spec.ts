@@ -92,6 +92,28 @@ describe("buildFrozenDocument: invoice due date", () => {
       /earlier than the issue date/,
     );
   });
+  it("reports an earlier due date with a stable code and the fields a client localizes from", () => {
+    const error = (() => {
+      try {
+        due(context({ details: { dueDate: "2026-11-02" } }));
+      } catch (caught) {
+        return caught;
+      }
+      throw new Error("expected a refusal");
+    })();
+
+    expect(error).toMatchObject({
+      statusCode: 400,
+      errorCode: "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
+    });
+    expect((error as { toJSON(): unknown }).toJSON()).toEqual({
+      error: expect.stringContaining("details.dueDate"),
+      errorCode: "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
+      field: "details.dueDate",
+      dueDate: "2026-11-02",
+      issueDate: "2026-11-03",
+    });
+  });
   it("keeps the frozen date and details of a replacement", () => {
     const frozen = buildFrozenDocument(
       context({

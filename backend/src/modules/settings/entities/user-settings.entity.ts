@@ -112,6 +112,13 @@ export class UserSettings {
   @Column({ type: "uuid", nullable: true })
   logo_asset_id: string | null;
 
+  /** Account-level signature and stamp images (document_assets of that kind). */
+  @Column({ type: "uuid", nullable: true, select: false })
+  signature_asset_id: string | null;
+
+  @Column({ type: "uuid", nullable: true, select: false })
+  stamp_asset_id: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

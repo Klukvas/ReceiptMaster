@@ -64,11 +64,17 @@ export function isCalendarDate(value: string): boolean {
 }
 
 /** Only one of `dueDate` / `paymentTermDays` is ever sent: the server refuses both. */
-export function buildInvoiceDetails(form: InvoiceForm): Built<InvoiceDetails> {
+export function buildInvoiceDetails(
+  form: InvoiceForm,
+  today?: string,
+): Built<InvoiceDetails> {
   if (form.mode === "date") {
-    return isCalendarDate(form.dueDate)
-      ? { ok: true, value: { dueDate: form.dueDate } }
-      : { ok: false, errors: { dueDate: "documents.errors.dueDateInvalid" } };
+    if (!isCalendarDate(form.dueDate))
+      return { ok: false, errors: { dueDate: "documents.errors.dueDateInvalid" } };
+    // `today` is the calendar day in the document time zone, as the server counts it.
+    if (today && form.dueDate < today)
+      return { ok: false, errors: { dueDate: "documents.errors.dueDateBeforeToday" } };
+    return { ok: true, value: { dueDate: form.dueDate } };
   }
   const days = Number(form.days);
   const isValid =
@@ -252,7 +258,7 @@ export function buildDocumentRequest(
     case null:
       return { ok: true, value: { type, ...overrides } };
     case "invoice":
-      return withDetails(buildInvoiceDetails(forms.invoice), (details) => ({
+      return withDetails(buildInvoiceDetails(forms.invoice, quote.today), (details) => ({
         type: "invoice",
         details,
         ...overrides,

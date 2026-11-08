@@ -46,6 +46,8 @@ export type TemplateCapabilities = {
   accent: boolean;
   terms: boolean;
   generatedAt: boolean;
+  /** The style prints the uploaded signature and stamp. */
+  signoff: boolean;
   paper: "A4" | "thermal";
   /** Document types the style can carry (backend: documentTypesFor in templates/metadata.ts). */
   documentTypes: string[];

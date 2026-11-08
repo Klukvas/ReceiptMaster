@@ -1,10 +1,17 @@
-import { HttpException, Injectable } from "@nestjs/common";
+import { HttpException, Injectable, Optional } from "@nestjs/common";
 import { createHash } from "crypto";
 import { Order, OrderStatus } from "../../orders/entities/order.entity";
 import { DocumentConfig, DocumentDraft } from "../../settings/document-config";
 import { DocumentAssetsService } from "../../settings/services/document-assets.service";
 import { TemplateService, ReceiptTemplate } from "./template.service";
-import { buildDocumentRenderData } from "./document-view";
+import {
+  SignoffImages,
+  buildDocumentRenderData,
+  languageOf,
+} from "./document-view";
+import { SignoffSource } from "../../../common/services/signoff-image";
+import { DocumentSignoffService } from "../../settings/services/document-signoff.service";
+import { DOCUMENT_LABELS } from "../templates/translations/document-labels";
 import {
   PlaywrightPdfGenerator,
   PdfOptions,
@@ -68,7 +75,36 @@ export type RenderSnapshot = {
   reconstructed?: boolean;
   /** Every typed document; a waybill snapshot has no such key. Never public. */
   document?: FrozenDocument;
+  /**
+   * Which signature/stamp images are embedded in the HTML. Ids and hashes only, never the
+   * bytes; present only when the style prints them and at least one is set, so a document
+   * without images keeps the snapshot it always had.
+   */
+  signoff?: SnapshotSignoff;
 };
+export type SnapshotSignoff = {
+  signatureAssetId: string | null;
+  stampAssetId: string | null;
+  signatureSha256?: string;
+  stampSha256?: string;
+};
+
+const sha256 = (bytes: Buffer) =>
+  createHash("sha256").update(bytes).digest("hex");
+const pngDataUri = (bytes: Buffer) =>
+  `data:image/png;base64,${bytes.toString("base64")}`;
+
+/** What the snapshot records about the images in `source`, if any. */
+function snapshotSignoff(source: SignoffSource): SnapshotSignoff | undefined {
+  const { signature, stamp } = source;
+  if (!signature && !stamp) return undefined;
+  return {
+    signatureAssetId: signature?.assetId ?? null,
+    stampAssetId: stamp?.assetId ?? null,
+    ...(signature ? { signatureSha256: sha256(signature.bytes) } : {}),
+    ...(stamp ? { stampSha256: sha256(stamp.bytes) } : {}),
+  };
+}
 
 export function captureOrder(order: Order): FrozenOrder {
   return {
@@ -152,6 +188,7 @@ export class DocumentRenderService {
     private readonly templates: TemplateService,
     private readonly renderer: PlaywrightPdfGenerator,
     private readonly assets: DocumentAssetsService,
+    @Optional() private readonly signoffs?: DocumentSignoffService,
   ) {}
   async prepare(
     userId: string,
@@ -160,9 +197,13 @@ export class DocumentRenderService {
     number: string,
     logo?: Buffer,
     document?: DocumentContext,
+    signoffSource: SignoffSource = {},
+    now: Date = new Date(),
   ) {
     await this.templates.ready;
     const caps = getTemplateCapabilities(config.templateId);
+    // A style without a signature block ignores the account's images entirely.
+    const signoff: SignoffSource = caps.signoff ? signoffSource : {};
     if (document)
       assertTemplateSupportsDocument(document.request.type, config.templateId);
     const visibleCompany = Object.fromEntries(
@@ -189,7 +230,6 @@ export class DocumentRenderService {
         ]),
       ),
     };
-    const now = new Date();
     const capturedAt = now.toISOString();
     const frozenDocument = document
       ? buildFrozenDocument(document, config, now)
@@ -205,8 +245,28 @@ export class DocumentRenderService {
     const money = (cents: number) =>
       formatDocumentMoney(cents, order.currency, config.formatting);
     const documentData = frozenDocument
-      ? buildDocumentRenderData(frozenDocument, order, number, config)
+      ? buildDocumentRenderData(frozenDocument, order, number, config, {
+          ...(signoff.signature
+            ? { signature: pngDataUri(signoff.signature.bytes) }
+            : {}),
+          ...(signoff.stamp ? { stamp: pngDataUri(signoff.stamp.bytes) } : {}),
+        } satisfies SignoffImages)
       : undefined;
+    const waybillSignoff =
+      !frozenDocument && (signoff.signature || signoff.stamp)
+        ? {
+            ...(signoff.signature
+              ? { signatureImage: pngDataUri(signoff.signature.bytes) }
+              : {}),
+            ...(signoff.stamp
+              ? { stampImage: pngDataUri(signoff.stamp.bytes) }
+              : {}),
+            labels: {
+              signature: DOCUMENT_LABELS[languageOf(config)].signature,
+              stamp: DOCUMENT_LABELS[languageOf(config)].stamp,
+            },
+          }
+        : undefined;
     const hidesPrices = documentData?.view.hidesItemPrices === true;
     const showsMoney = caps.money && !hidesPrices;
     const data = this.templates.prepareTemplateData(
@@ -250,6 +310,7 @@ export class DocumentRenderService {
         ...data,
         logoStyle,
         logoSlotStyle,
+        ...(waybillSignoff ? { signoff: waybillSignoff } : {}),
         ...(frozenDocument && documentData
           ? {
               documentTitle: frozenDocument.title,
@@ -325,6 +386,9 @@ export class DocumentRenderService {
       publicProjection,
       sourceRevision: 0,
       ...(frozenDocument ? { document: frozenDocument } : {}),
+      ...(snapshotSignoff(signoff)
+        ? { signoff: snapshotSignoff(signoff) }
+        : {}),
     };
     return { html, snapshot };
   }
@@ -345,6 +409,11 @@ export class DocumentRenderService {
         captureOrder(order),
         "PREVIEW-0001",
         logo,
+        undefined,
+        // The preview shows the stored images; a styles without a signature block drops them.
+        getTemplateCapabilities(draft.config.templateId).signoff
+          ? (await this.signoffs?.load(userId))?.source
+          : undefined,
       );
       return await this.renderer.generatePdf(html, snapshot.options);
     } finally {

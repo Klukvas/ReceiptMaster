@@ -35,6 +35,12 @@ export type SharedSchemaName =
   | "DocumentPresetResponse"
   | "DocumentPresetDeletedResponse"
   | "ReceiptProjection"
+  | "DocumentListItem"
+  | "NumberingSetting"
+  | "NumberingSettingsResponse"
+  | "NumberingUpdateRequest"
+  | "SignoffImage"
+  | "SignoffState"
   | "ReceiptListResponse"
   | "ReceiptVoidRequest"
   | "ReceiptShareResponse"
@@ -128,6 +134,29 @@ export const ApiLogoUploadBody = (): MethodDecorator =>
           additionalProperties: false,
         },
         encoding: { logo: { contentType: LOGO_MEDIA_TYPES } },
+      },
+    },
+  });
+
+/** Single-part multipart upload of a signature or stamp image (field `file`). */
+export const ApiSignoffUploadBody = (): MethodDecorator =>
+  ApiRequestBody({
+    required: true,
+    content: {
+      "multipart/form-data": {
+        schema: {
+          type: "object",
+          properties: {
+            file: {
+              type: "string",
+              format: "binary",
+              description: "PNG or JPEG, 32 to 4096 px a side, at most 2 MiB",
+            },
+          },
+          required: ["file"],
+          additionalProperties: false,
+        },
+        encoding: { file: { contentType: "image/png, image/jpeg" } },
       },
     },
   });

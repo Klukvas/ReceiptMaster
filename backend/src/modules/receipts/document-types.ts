@@ -161,7 +161,7 @@ export const DOCUMENT_TYPE_SPECS: Record<
     requiresMoney: true,
     requiredSeller: ["name", "taxId", "signatoryName", "signatoryPosition"],
     requiredBuyer: [],
-    requiresVatIdForPayer: false,
+    requiresVatIdForPayer: true,
     warnings: ["buyer.legalName", "buyer.taxId", "details.contractRef"],
     title: {
       uk: "Акт виконаних робіт (наданих послуг)",

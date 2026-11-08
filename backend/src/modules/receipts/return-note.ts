@@ -15,6 +15,12 @@ export type ReturnSource = {
   kind: "waybill" | "invoice" | "order";
   number: string;
   date: string;
+  /**
+   * The heading printed on the source document ("Рахунок на оплату", or a waybill's own
+   * title such as "Інвойс"). Absent for an order, and for a source issued before its
+   * snapshot kept a title, where the generic label is used.
+   */
+  title?: string;
 };
 
 export type ReturnShortfall = {

@@ -11,11 +11,9 @@ import { UserSettings } from "./entities/user-settings.entity";
 import { DocumentAsset } from "./entities/document-asset.entity";
 import { DocumentPreset } from "./entities/document-preset.entity";
 import { DocumentArtifact } from "../receipts/entities/document-artifact.entity";
-import {
-  DocumentType,
-  Receipt,
-  ReceiptStatus,
-} from "../receipts/entities/receipt.entity";
+import { Receipt, ReceiptStatus } from "../receipts/entities/receipt.entity";
+import { Order } from "../orders/entities/order.entity";
+import { sampleOrder } from "../receipts/services/document-render.service";
 import { formatDocumentDate } from "../../common/utils/document-formatting.util";
 // Its types alias the gitignored api-types.generated.ts, so backend ts-jest skips
 // frontend diagnostics (package.json jest.transform); the frontend typecheck owns them.
@@ -372,20 +370,22 @@ describe("durable document cleanup with synthetic storage only", () => {
         user_id: TENANT,
         status: ReceiptStatus.GENERATED,
       });
-    await f.db.transaction((manager) =>
-      (
-        f.receipts as unknown as {
-          cleanupOldReceipts: (
-            m: typeof manager,
-            id: string,
-            type: DocumentType,
-          ) => Promise<void>;
-        }
-      ).cleanupOldReceipts(manager, TENANT, DocumentType.WAYBILL),
-    );
-    expect(f.memory.rows(Receipt)).toHaveLength(9);
+    // Nine more generated documents make ten; the eleventh to be PROMOTED evicts the oldest.
+    const newOrderId = randomUUID();
+    await f.db.manager.save(Order, {
+      ...sampleOrder(TENANT),
+      id: newOrderId,
+      recipient_id: randomUUID(),
+      updated_at: new Date(),
+      is_locked: false,
+    });
+    const eleventh = await f.receipts.generateReceipt(newOrderId, f.user);
+    // Creating the row evicts nothing.
+    expect(f.memory.rows(Receipt).some((r) => r.id === active.id)).toBe(true);
+    await f.artifacts.execute(eleventh.id, TENANT, eleventh.generation_id);
+    expect(f.memory.rows(Receipt)).toHaveLength(10);
     expect(f.memory.rows(Receipt).some((r) => r.id === active.id)).toBe(false);
-    expect(f.objects.size).toBe(1);
+    expect(f.objects.size).toBe(2);
     expect(await f.assets.collectExpired(TENANT)).toBe(0);
     await expire(f);
     expect(await f.assets.collectExpired(TENANT)).toBe(1);

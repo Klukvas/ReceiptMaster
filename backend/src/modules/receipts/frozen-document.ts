@@ -149,10 +149,7 @@ function resolveInvoiceDetails(
 ): FrozenDetails {
   const term = resolveInvoiceTerm(input, defaultDays, issueDate);
   if (term.dueDate && term.dueDate < issueDate)
-    throw ApiErrors.VALIDATION_ERROR(
-      "details.dueDate",
-      "must not be earlier than the issue date",
-    );
+    throw ApiErrors.INVOICE_DUE_DATE_BEFORE_ISSUE_DATE(term.dueDate, issueDate);
   return term;
 }
 

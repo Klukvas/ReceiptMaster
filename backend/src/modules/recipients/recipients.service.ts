@@ -1,3 +1,4 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -195,8 +196,11 @@ export class RecipientsService {
       );
     }
 
-    const sortColumn =
-      RECIPIENT_SORTABLE_COLUMNS[sortBy] || "recipient.created_at";
+    const sortColumn = pickSortColumn(
+      RECIPIENT_SORTABLE_COLUMNS,
+      sortBy,
+      "recipient.created_at",
+    );
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     // Many recipients tie on a count or a sum (most have none), so a stable tiebreak keeps
     // pages from repeating or skipping rows.

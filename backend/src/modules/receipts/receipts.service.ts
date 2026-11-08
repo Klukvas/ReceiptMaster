@@ -1,10 +1,14 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { DocumentConfigService } from "../settings/services/document-config.service";
 import {
   DocumentRenderService,
   sampleOrder,
 } from "./services/document-render.service";
 import { ConflictException, Optional } from "@nestjs/common";
-import { ConfigSelection } from "../settings/document-config";
+import {
+  ConfigSelection,
+  DEFAULT_DOCUMENT_TIME_ZONE,
+} from "../settings/document-config";
 import { ReceiptSnapshotService } from "./services/receipt-snapshot.service";
 import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { Injectable, Logger } from "@nestjs/common";
@@ -12,8 +16,10 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import {
+  Brackets,
   Repository,
   DataSource,
+  SelectQueryBuilder,
   EntityManager,
   FindOptionsWhere,
   In,
@@ -26,6 +32,13 @@ import {
   ReceiptStatus,
 } from "./entities/receipt.entity";
 import { Order } from "../orders/entities/order.entity";
+import { accountTimeZone } from "./account-time-zone";
+import { SortOrder } from "../../common/dto/pagination.dto";
+import { containsPattern } from "../../common/utils/like-pattern.util";
+import {
+  DEFAULT_DOCUMENT_PAGE_SIZE,
+  DocumentListQuery,
+} from "./dto/list-documents-query.dto";
 import {
   GeneratableDocumentType,
   hasDocumentBlock,
@@ -39,8 +52,16 @@ import {
   ReceiptStyle,
 } from "./services/pdf-generator.service";
 import { KeyedMutex } from "../../common/utils/keyed-mutex.util";
-import { nextDocumentNumber, releaseDocumentNumber } from "./receipt-number";
-import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
+import {
+  DrawnNumber,
+  nextDocumentNumber,
+  raiseCounterToIssued,
+  releaseDocumentNumber,
+} from "./receipt-number";
+import {
+  DOCUMENTS_RETAINED_PER_TYPE,
+  isRetentionExempt,
+} from "./document-retention";
 import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import {
   frozenReturnLines,
@@ -63,6 +84,14 @@ import { runWithPublicToken } from "../../common/tenancy/tenant-context";
 
 const execFileAsync = promisify(execFile);
 
+/** Allowlist for `sortBy` on the documents page; anything else sorts by date. */
+const DOCUMENT_SORTABLE_COLUMNS: Readonly<Record<string, string>> = {
+  created_at: "r.created_at",
+  number: "r.number",
+  document_type: "r.document_type",
+  status: "r.status",
+};
+
 /** Only allow alphanumeric, hyphens, underscores, dots, and spaces in printer names */
 const SAFE_PRINTER_NAME = /^[a-zA-Z0-9_\-. ]+$/;
 
@@ -74,7 +103,7 @@ export const ORDER_CANCELLED_VOID_REASON = "order_cancelled";
  * and any pending candidate or replacement is dropped so no delayed worker can
  * promote it. The active PDF and its frozen content stay as history.
  */
-function voidedReceiptFields(reason: string, voidedAt: Date) {
+function voidedReceiptFields(reason: string | undefined, voidedAt: Date) {
   return {
     status: ReceiptStatus.VOID,
     voided_at: voidedAt,
@@ -110,6 +139,13 @@ function documentAlreadyExists(orderId: string, type: DocumentType) {
 }
 
 const ORDER_TYPE_UNIQUE_INDEX = "IDX_receipts_order_document_type";
+const NUMBER_UNIQUE_INDEX = "IDX_receipts_user_type_number";
+
+const isNumberCollision = (error: unknown): boolean =>
+  isUniqueViolationOf(error, NUMBER_UNIQUE_INDEX);
+
+/** Thrown after the counter was repaired; the generation is run once more. */
+class NumberCollisionRepaired extends Error {}
 
 /**
  * A voided document stays on its order as history. For an invoice, act or quotation it frees the slot
@@ -227,34 +263,90 @@ export class ReceiptsService {
       throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
     // A type that allows several per order has no slot to race for: the order lock and the
     // quantity ledger serialize it, so the in-process mutex below would add nothing.
-    if (!hasDocumentBlock(type) || specFor(type).multiplePerOrder)
-      return this.runGeneration(orderId, user, type, selection, details, file);
+    const run = () =>
+      this.runGenerationHealing(orderId, user, type, selection, details, file);
+    if (!hasDocumentBlock(type) || specFor(type).multiplePerOrder) return run();
     // Two requests for the same order and type must not both allocate a number: the second
     // waits, then finds the first one's PROCESSING row and returns it. In-process on purpose:
     // a lock-holding transaction around logo upload would pin a pooled connection per request.
     // Across processes the unique row index still allows one row; a rare loser may burn a number.
     return this.generationMutex.runExclusive(
       `${user.id}:${orderId}:${type}`,
-      () => this.runGeneration(orderId, user, type, selection, details, file),
+      run,
     );
+  }
+
+  /** One automatic retry after the counter was found behind an existing number. */
+  private async runGenerationHealing(
+    orderId: string,
+    user: User,
+    type: GeneratableDocumentType,
+    selection: ConfigSelection,
+    details?: DocumentDetailsInput,
+    file?: Express.Multer.File,
+  ): Promise<Receipt> {
+    try {
+      return await this.runGeneration(
+        orderId,
+        user,
+        type,
+        selection,
+        details,
+        file,
+      );
+    } catch (error) {
+      if (!(error instanceof NumberCollisionRepaired)) throw error;
+    }
+    try {
+      return await this.runGeneration(
+        orderId,
+        user,
+        type,
+        selection,
+        details,
+        file,
+      );
+    } catch (error) {
+      if (error instanceof NumberCollisionRepaired)
+        throw new ConflictException(
+          "Document numbering was out of sync and has been repaired. Try again.",
+        );
+      throw error;
+    }
+  }
+
+  /** Raises the counter to the highest number issued so the next draw is free. */
+  private async repairCounter(
+    userId: string,
+    type: DocumentType,
+  ): Promise<void> {
+    try {
+      await this.dataSource.transaction((manager) =>
+        raiseCounterToIssued(manager, userId, type),
+      );
+    } catch (error) {
+      this.logger.error(`Could not repair the ${type} counter: ${error}`);
+    }
   }
 
   private async releaseDrawnNumber(
     userId: string,
     type: DocumentType,
-    number: string | undefined,
+    drawn: DrawnNumber | undefined,
   ): Promise<void> {
-    if (!number) return;
+    if (!drawn) return;
     try {
       await releaseDocumentNumber(
         this.dataSource.manager,
         userId,
         type,
-        number,
+        drawn.value,
       );
     } catch (error) {
       // The original failure matters more; a leftover gap is harmless.
-      this.logger.warn(`Could not release ${type} number ${number}: ${error}`);
+      this.logger.warn(
+        `Could not release ${type} number ${drawn.number}: ${error}`,
+      );
     }
   }
 
@@ -327,37 +419,43 @@ export class ReceiptsService {
       await this.snapshots.preflight(user.id, orderId, selection, request);
     // A number drawn here but never committed is handed back below, so a late refusal
     // does not leave a gap in the sequence.
-    let drawnNumber: string | undefined;
-    const allocateNumber = async () => {
+    let drawn: DrawnNumber | undefined;
+    // The year in the number is the year in the document's time zone, so the number and the
+    // date printed next to it agree. The zone comes from the resolved configuration, which
+    // is why the draw happens inside `prepare`.
+    const allocateNumber = async (
+      timeZone: string = DEFAULT_DOCUMENT_TIME_ZONE,
+      now?: Date,
+    ) => {
       if (prior?.number) return prior.number;
-      drawnNumber = await nextDocumentNumber(
-        this.dataSource.manager,
-        user.id,
-        type,
-      );
-      return drawnNumber;
+      drawn = await nextDocumentNumber(this.dataSource.manager, user.id, type, {
+        timeZone,
+        now,
+      });
+      return drawn.number;
     };
     let receipt: Receipt;
+    let bodyFinished = false;
     try {
-      // A waybill takes its number first, as it always did. Invoice and act take it only after
-      // the logo is staged (bad file, quota, upload failure) so those refusals never burn one.
-      const eagerNumber = request ? undefined : await allocateNumber();
+      // The number is drawn only after the logo is staged (bad file, quota, upload failure),
+      // so those refusals never burn one.
       const prepared = retryFrozen
         ? undefined
         : await this.snapshots.prepare(
             user.id,
             orderId,
-            eagerNumber ?? allocateNumber,
+            allocateNumber,
             selection,
             file,
             previous?.pending_snapshot?.order,
             request,
           );
-      const number =
-        eagerNumber ?? prepared?.number ?? (await allocateNumber());
+      const number = prepared?.number ?? (await allocateNumber());
       if (prepared && previous && !previous.pending_snapshot?.order)
         prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
-      receipt = await this.dataSource.transaction(async (manager) => {
+      const generationBody = async (
+        manager: EntityManager,
+      ): Promise<Receipt> => {
         // Serialize tenant quota, then order identity and source validation. No external I/O here.
         await manager.query(
           "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
@@ -436,7 +534,6 @@ export class ReceiptsService {
             where: { id: existing.id, user_id: user.id },
           });
         } else {
-          await this.cleanupOldReceipts(manager, user.id, type);
           result = await manager.save(
             Receipt,
             manager.create(Receipt, {
@@ -465,9 +562,25 @@ export class ReceiptsService {
           }),
         );
         return result;
+      };
+      receipt = await this.dataSource.transaction(async (manager) => {
+        const row = await generationBody(manager);
+        // From here only COMMIT is left; if it fails we cannot tell whether it landed.
+        bodyFinished = true;
+        return row;
       });
     } catch (error) {
-      await this.releaseDrawnNumber(user.id, type, drawnNumber);
+      if (isNumberCollision(error) && drawn) {
+        // The counter is behind a number that already exists. Releasing would hand the same
+        // value out again, so instead raise the counter above everything issued, once, and
+        // let the caller retry with a fresh number.
+        await this.repairCounter(user.id, type);
+        throw new NumberCollisionRepaired();
+      }
+      // Released only when this number certainly never reached a committed document:
+      // anything before the transaction, or a failure inside it (rolled back). A failed COMMIT
+      // is ambiguous, and a gap is harmless where a reused number is not.
+      if (!bodyFinished) await this.releaseDrawnNumber(user.id, type, drawn);
       // Another process won the slot between our check and insert (the mutex is per process).
       if (isUniqueViolationOf(error, ORDER_TYPE_UNIQUE_INDEX)) {
         const winner = await this.receiptsRepository.findOne({
@@ -484,8 +597,8 @@ export class ReceiptsService {
       }
       throw error;
     }
-    if (drawnNumber && receipt.number !== drawnNumber)
-      await this.releaseDrawnNumber(user.id, type, drawnNumber);
+    if (drawn && receipt.number !== drawn.number)
+      await this.releaseDrawnNumber(user.id, type, drawn);
     void this.receiptOutbox.dispatch();
     return receipt;
   }
@@ -510,7 +623,7 @@ export class ReceiptsService {
     );
   }
 
-  async voidReceipt(id: string, user: User, reason: string): Promise<Receipt> {
+  async voidReceipt(id: string, user: User, reason?: string): Promise<Receipt> {
     return this.dataSource.transaction(async (manager) => {
       const observed = await manager.findOne(Receipt, {
         where: { id, user_id: user.id },
@@ -681,30 +794,90 @@ export class ReceiptsService {
     return result.affected ?? 0;
   }
 
+  /**
+   * The documents page: filters, search and sorting over the account's receipts, each with
+   * its order and the recipient's live name. Documents of soft-deleted orders are hidden.
+   * Offset/limit are safe with these joins because both are to-one.
+   */
   async findAll(
     user: User,
-    options?: { offset?: number; limit?: number; type?: DocumentType },
+    query: DocumentListQuery = {},
   ): Promise<{
     data: Receipt[];
     total: number;
     offset: number;
     limit: number;
   }> {
-    const offset = options?.offset ?? 0;
-    const limit = Math.min(options?.limit ?? 20, 100);
+    const offset = query.offset ?? 0;
+    const limit = Math.min(query.limit ?? DEFAULT_DOCUMENT_PAGE_SIZE, 100);
 
-    const [data, total] = await this.receiptsRepository.findAndCount({
-      where: {
-        user_id: user.id,
-        ...(options?.type ? { document_type: options.type } : {}),
-      },
-      relations: ["order", "order.recipient"],
-      order: { created_at: "DESC" },
-      skip: offset,
-      take: limit,
-    });
+    const qb = this.receiptsRepository
+      .createQueryBuilder("r")
+      // Soft-deleted orders are filtered explicitly below, so TypeORM must not add its
+      // own condition to the join (which would turn them into `order: null` rows).
+      .withDeleted()
+      .leftJoin("r.order", "o", "o.user_id = r.user_id")
+      .leftJoin("o.recipient", "rec")
+      .addSelect(["o.id", "o.order_number", "o.status", "rec.id", "rec.name"])
+      .where("r.user_id = :userId", { userId: user.id })
+      .andWhere("o.deleted_at IS NULL");
 
+    if (query.type)
+      qb.andWhere("r.document_type = :type", { type: query.type });
+    if (query.status)
+      qb.andWhere("r.status = :status", { status: query.status });
+    // Calendar days in the account's document time zone, both ends included. The bounds go
+    // to the database as dates and the zone as a name, never as JS Dates, so the result does
+    // not depend on the time zone of the server process. `created_at` holds UTC wall time.
+    if (query.startDate || query.endDate) {
+      const timeZone = await accountTimeZone(this.dataSource.manager, user.id);
+      if (query.startDate)
+        qb.andWhere(
+          `r.created_at >= (CAST(CAST(:startDate AS date) AS timestamp) AT TIME ZONE :zone) AT TIME ZONE 'UTC'`,
+          { startDate: query.startDate, zone: timeZone },
+        );
+      if (query.endDate)
+        qb.andWhere(
+          `r.created_at < (CAST(CAST(:endDate AS date) + 1 AS timestamp) AT TIME ZONE :zone) AT TIME ZONE 'UTC'`,
+          { endDate: query.endDate, zone: timeZone },
+        );
+    }
+    if (query.search) this.applyDocumentSearch(qb, query.search);
+
+    const column = pickSortColumn(
+      DOCUMENT_SORTABLE_COLUMNS,
+      query.sortBy,
+      "r.created_at",
+    );
+    const direction = query.sortOrder === SortOrder.ASC ? "ASC" : "DESC";
+    qb.orderBy(column, direction).addOrderBy("r.id", direction);
+
+    const [data, total] = await qb
+      .offset(offset)
+      .limit(limit)
+      .getManyAndCount();
     return { data, total, offset, limit };
+  }
+
+  private applyDocumentSearch(
+    qb: SelectQueryBuilder<Receipt>,
+    search: string,
+  ): void {
+    // "17" or "#17" finds order 17 as well as numbers and recipients containing 17.
+    const orderNumber = /^#?(\d{1,9})$/.exec(search)?.[1];
+    qb.andWhere(
+      new Brackets((inner) => {
+        inner
+          .where("r.number ILIKE :pattern")
+          .orWhere("rec.name ILIKE :pattern")
+          .orWhere("rec.legal_name ILIKE :pattern");
+        if (orderNumber) inner.orWhere("o.order_number = :orderNumber");
+      }),
+      {
+        pattern: containsPattern(search),
+        ...(orderNumber && { orderNumber: Number(orderNumber) }),
+      },
+    );
   }
 
   /**
@@ -725,7 +898,7 @@ export class ReceiptsService {
       document_type: type,
     };
     const count = await this.receiptsRepository.count({ where });
-    if (count < DOCUMENTS_RETAINED_PER_TYPE) {
+    if (count < DOCUMENTS_RETAINED_PER_TYPE || isRetentionExempt(type)) {
       return { limit: DOCUMENTS_RETAINED_PER_TYPE, count, replaces: null };
     }
 
@@ -968,41 +1141,6 @@ export class ReceiptsService {
     };
   }
 
-  /** Retire immutable keys transactionally; the scheduled collector handles storage after grace. */
-  private async cleanupOldReceipts(
-    manager: EntityManager,
-    userId: string,
-    type: DocumentType,
-  ): Promise<void> {
-    const where = {
-      user_id: userId,
-      status: ReceiptStatus.GENERATED,
-      document_type: type,
-    };
-    const total = await manager.count(Receipt, { where });
-    if (total < DOCUMENTS_RETAINED_PER_TYPE) return;
-    const old = await manager.find(Receipt, {
-      where,
-      select: [
-        "id",
-        "user_id",
-        "pdf_path",
-        "active_logo_asset_id",
-        "pending_logo_asset_id",
-      ],
-      order: { created_at: "ASC", id: "ASC" },
-      take: total - (DOCUMENTS_RETAINED_PER_TYPE - 1),
-    });
-    const locked = await this.artifacts.lockRetirements(old, userId, manager);
-    for (const receipt of locked) await this.artifacts.retire(receipt, manager);
-    for (const receipt of locked)
-      await manager.delete(Receipt, {
-        id: receipt.id,
-        user_id: userId,
-        status: ReceiptStatus.GENERATED,
-      });
-  }
-
   async getAvailablePrinters(): Promise<{ printers: string[] }> {
     try {
       const platform = process.platform;
@@ -1069,13 +1207,13 @@ export class ReceiptsService {
             parsed.key,
           );
           if (!exists) {
-            throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+            throw this.pdfFileMissing(receipt);
           }
         } else {
           await fs.access(receipt.pdf_path);
         }
       } catch {
-        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+        throw this.pdfFileMissing(receipt);
       }
 
       let filePathToPrint = receipt.pdf_path;
@@ -1284,6 +1422,17 @@ export class ReceiptsService {
     };
   }
 
+  /**
+   * The same fixed 404 whatever is wrong with the stored file; the storage path (bucket,
+   * key, user id) is internal and goes to the log only.
+   */
+  private pdfFileMissing(receipt: Pick<Receipt, "id" | "pdf_path">) {
+    this.logger.warn(
+      `PDF of receipt ${receipt.id} is not available at ${receipt.pdf_path}`,
+    );
+    return ApiErrors.FILE_NOT_FOUND("receipt PDF");
+  }
+
   async getPublicReceiptPdf(
     token: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
@@ -1313,14 +1462,14 @@ export class ReceiptsService {
         receipt.pdf_path,
       );
       if (!parsed) {
-        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+        throw this.pdfFileMissing(receipt);
       }
       const exists = await this.pdfStorageService.fileExists(
         parsed.bucket,
         parsed.key,
       );
       if (!exists) {
-        throw ApiErrors.FILE_NOT_FOUND(receipt.pdf_path);
+        throw this.pdfFileMissing(receipt);
       }
       buffer = await this.pdfStorageService.downloadFile(
         parsed.bucket,

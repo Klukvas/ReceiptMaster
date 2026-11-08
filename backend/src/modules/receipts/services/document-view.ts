@@ -9,6 +9,7 @@ import type { DocumentConfig } from "../../settings/document-config";
 import { DocumentLanguage, specFor } from "../document-types";
 import type { DocumentType } from "../entities/receipt.entity";
 import type { FrozenDocument } from "../frozen-document";
+import type { ReturnSource } from "../return-note";
 import {
   DOCUMENT_LABELS,
   DocumentLabels,
@@ -34,7 +35,16 @@ type PartyView = {
   vatLine: string;
 };
 
-type SignatoryView = { heading: string; position: string; name: string };
+type SignatoryView = {
+  heading: string;
+  position: string;
+  name: string;
+  /** Seller only: the account's signature image as a data URI. */
+  image?: string;
+};
+
+/** Signature and stamp as data URIs, built on the server and never from user input. */
+export type SignoffImages = { signature?: string; stamp?: string };
 
 /** Packing list summary under the items: how many lines and how many pieces in all. */
 type QuantitiesView = { lines: string; units: string };
@@ -83,6 +93,10 @@ export type DocumentView = {
     buyer?: SignatoryView;
     /** "Signature / Seal" or just "Signature", per the layout. */
     caption: string;
+    /** Only for a layout that carries a stamp (invoice, act, quotation). */
+    stampImage?: string;
+    /** Set when any image is present, to switch on the image CSS. */
+    hasImages?: true;
   };
 };
 
@@ -96,7 +110,7 @@ export type DocumentRenderData = {
   orderDate: string;
 };
 
-function languageOf(config: DocumentConfig): DocumentLanguage {
+export function languageOf(config: DocumentConfig): DocumentLanguage {
   const language = config.documentLanguage;
   return language === "uk" || language === "ru" ? language : "en";
 }
@@ -124,6 +138,20 @@ const RETURN_SOURCE_LABELS = {
   order: "returnSourceOrder",
 } as const;
 
+/** The source's own printed heading plus its number sign, else the generic label. */
+function returnSourceHeading(
+  source: ReturnSource,
+  labels: DocumentLabels,
+  language: DocumentLanguage,
+): string {
+  if (!source.title) return labels[RETURN_SOURCE_LABELS[source.kind]];
+  const sign = language === "en" ? "No." : "№";
+  // A custom title may already end in a number sign ("Накладна №", "Invoice No.", "Nr").
+  return /(№|(?:^|\s)(?:no|nr)\.?)\s*$/i.test(source.title)
+    ? source.title
+    : `${source.title} ${sign}`;
+}
+
 const joined = (...parts: string[]) => parts.filter(Boolean).join(" ");
 
 export function buildDocumentRenderData(
@@ -131,6 +159,7 @@ export function buildDocumentRenderData(
   order: DocumentOrderInput,
   number: string,
   config: DocumentConfig,
+  signoff: SignoffImages = {},
 ): DocumentRenderData {
   assertTotalsAgree(order);
   const language = languageOf(config);
@@ -170,6 +199,8 @@ export function buildDocumentRenderData(
     joined(labels.purposePrefix, number, labels.purposeFrom, issueDate) +
     (purposeVat ? `, ${purposeVat}` : "");
 
+  const stampImage = layout.signatures.stamp ? signoff.stamp : undefined;
+
   const view: DocumentView = {
     labels: layout.grandTotalLabel
       ? { ...labels, grandTotal: labels[layout.grandTotalLabel] }
@@ -178,7 +209,8 @@ export function buildDocumentRenderData(
       role: labels[layout.sellerRole],
       name: sellerName,
       codeLabel: taxLabel(seller.taxIdKind),
-      code: seller.taxId,
+      // A code whose kind is unknown is not printed under a label it cannot have.
+      code: seller.taxIdKind ? seller.taxId : "",
       address: seller.address,
       vatLine: layout.money ? vatLine : "",
     },
@@ -186,7 +218,7 @@ export function buildDocumentRenderData(
       role: labels[layout.buyerRole],
       name: buyerName,
       codeLabel: taxLabel(buyer.taxIdKind),
-      code: buyer.taxId,
+      code: buyer.taxIdKind ? buyer.taxId : "",
       address:
         layout.buyerAddress === "delivery"
           ? order.recipient.address || buyer.legalAddress
@@ -250,7 +282,7 @@ export function buildDocumentRenderData(
       ? {
           returnInfo: {
             source: joined(
-              labels[RETURN_SOURCE_LABELS[details.returnSource.kind]],
+              returnSourceHeading(details.returnSource, labels, language),
               details.returnSource.number,
               labels.purposeFrom,
               day(details.returnSource.date),
@@ -279,6 +311,7 @@ export function buildDocumentRenderData(
         heading: labels[layout.signatures.seller],
         position: seller.signatoryPosition,
         name: seller.signatoryName,
+        ...(signoff.signature ? { image: signoff.signature } : {}),
       },
       ...(layout.signatures.buyer
         ? {
@@ -292,6 +325,8 @@ export function buildDocumentRenderData(
       caption: layout.signatures.stamp
         ? `${labels.signature} / ${labels.stamp}`
         : labels.signature,
+      ...(stampImage ? { stampImage } : {}),
+      ...(signoff.signature || stampImage ? { hasImages: true as const } : {}),
     },
   };
 

@@ -19,4 +19,14 @@ export class DocumentCounter {
 
   @Column({ type: "integer", default: 0 })
   value: number;
+
+  /** Printed before the number; never ends with a digit (CHECK constraint). */
+  @Column({ type: "varchar", length: 16, default: "" })
+  prefix: string;
+
+  @Column({ type: "smallint", default: 6 })
+  padding: number;
+
+  @Column({ type: "boolean", default: true })
+  include_year: boolean;
 }

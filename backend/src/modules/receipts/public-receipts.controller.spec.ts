@@ -69,7 +69,8 @@ describe("PublicReceiptsController", () => {
       expect(mockRes.set).toHaveBeenCalledWith(
         expect.objectContaining({
           "Content-Type": "application/pdf",
-          "Content-Disposition": 'inline; filename="receipt-2025-000001.pdf"',
+          "Content-Disposition":
+            "inline; filename=\"receipt-2025-000001.pdf\"; filename*=UTF-8''receipt-2025-000001.pdf",
         }),
       );
       expect(mockRes.set).toHaveBeenCalledWith(

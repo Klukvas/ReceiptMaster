@@ -1,3 +1,4 @@
+import { QueryFailedError } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import { getQueueToken } from "@nestjs/bullmq";
 import { Test } from "@nestjs/testing";
@@ -58,7 +59,7 @@ class FakeLedger {
           remaining: this.lines.get(id).qty - this.lines.get(id).returned,
         }));
     }
-    return [{ value: 1 }];
+    return [{ value: 1, prefix: "", padding: 6, include_year: true }];
   });
 
   returned = (id: string) => this.lines.get(id).returned;
@@ -150,7 +151,15 @@ describe("ReceiptsService goods return notes", () => {
       manager: {
         query: jest.fn(async (sql: string) => {
           // Number counter: bump on draw, give back on release.
-          if (/\+ 1/.test(sql)) return [{ value: ++nextNumber }];
+          if (/\+ 1/.test(sql))
+            return [
+              {
+                value: ++nextNumber,
+                prefix: "",
+                padding: 6,
+                include_year: true,
+              },
+            ];
           if (/- 1/.test(sql)) {
             nextNumber -= 1;
             return [{ value: nextNumber }];
@@ -214,7 +223,8 @@ describe("ReceiptsService goods return notes", () => {
         Receipt,
         expect.anything(),
       );
-      expect(manager.count).toHaveBeenCalledTimes(1); // retention only
+      // Creating the row neither counts nor evicts: retention runs at promotion.
+      expect(manager.count).not.toHaveBeenCalled();
       expect(outbox.dispatch).toHaveBeenCalledTimes(1);
     });
 
@@ -305,23 +315,110 @@ describe("ReceiptsService goods return notes", () => {
     });
   });
 
+  describe("giving a drawn number back", () => {
+    const numberCollision = () =>
+      new QueryFailedError("insert", [], {
+        code: "23505",
+        constraint: "IDX_receipts_user_type_number",
+      } as never);
+
+    it("does not give it back when COMMIT fails: it may have landed", async () => {
+      const manager = wireTransaction();
+      dataSource.transaction.mockImplementation(async (callback) => {
+        await callback(manager);
+        throw new Error("connection lost during COMMIT");
+      });
+
+      await expect(issue([{ orderItemId: "item-a", qty: 1 }])).rejects.toThrow(
+        "COMMIT",
+      );
+
+      expect(nextNumber).toBe(1);
+    });
+
+    it("gives it back when the transaction body fails and rolls back", async () => {
+      wireTransaction();
+      snapshots.validatePrepared.mockRejectedValue(new Error("Order changed"));
+
+      await expect(issue([{ orderItemId: "item-a", qty: 1 }])).rejects.toThrow(
+        "Order changed",
+      );
+
+      expect(nextNumber).toBe(0);
+    });
+
+    it("gives it back when the failure comes before the transaction", async () => {
+      wireTransaction();
+      snapshots.prepare.mockImplementation(
+        async (_u: string, _o: string, number: () => Promise<string>) => {
+          await number();
+          throw new Error("logo upload failed");
+        },
+      );
+
+      await expect(
+        service.generateDocument(
+          "order-1",
+          user,
+          DocumentType.RETURN_NOTE,
+          { logoAction: "keep" },
+          { lines: [{ orderItemId: "item-a", qty: 1 }] },
+        ),
+      ).rejects.toThrow("logo upload failed");
+
+      expect(nextNumber).toBe(0);
+    });
+
+    it("on a number collision keeps the counter, repairs it, and retries once with a fresh number", async () => {
+      wireTransaction();
+      dataSource.transaction.mockImplementationOnce(async () => {
+        throw numberCollision();
+      });
+
+      await issue([{ orderItemId: "item-a", qty: 1 }]);
+
+      // Drew 1, collided (not released: that would hand out 1 again), drew 2 on the retry.
+      expect(nextNumber).toBe(2);
+      expect(saved).toHaveLength(1);
+      expect(saved[0].number).toMatch(/-000002$/);
+      expect(ledger.statements.some((sql) => /regexp_match/.test(sql))).toBe(
+        true,
+      );
+    });
+
+    it("answers 409 when the retry collides too", async () => {
+      const manager = wireTransaction();
+      dataSource.transaction
+        .mockReset()
+        .mockImplementationOnce(async () => {
+          throw numberCollision();
+        })
+        .mockImplementationOnce(async (callback) => callback(manager)) // the repair
+        .mockImplementationOnce(async () => {
+          throw numberCollision();
+        })
+        .mockImplementation(async (callback) => callback(manager));
+
+      await expect(
+        issue([{ orderItemId: "item-a", qty: 1 }]),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(saved).toHaveLength(0);
+    });
+  });
+
   describe("retention", () => {
-    it("evicts old notes without touching the ledger", async () => {
-      const old = Array.from({ length: 3 }, (_, index) => ({
-        id: `old-${index}`,
-        user_id: user.id,
-      }));
+    it("never evicts anything when a note row is created, and never touches the ledger", async () => {
       const manager = wireTransaction({
         count: jest.fn().mockResolvedValue(DOCUMENTS_RETAINED_PER_TYPE),
-        find: jest.fn().mockResolvedValue(old),
+        find: jest.fn().mockResolvedValue([{ id: "old-0", user_id: user.id }]),
       });
       ledger.lines.get("item-a").returned = 2;
       ledger.query.mockClear();
 
       await issue([{ orderItemId: "item-b", qty: 1 }]);
 
-      expect(manager.delete).toHaveBeenCalledTimes(old.length);
-      expect(artifacts.retire).toHaveBeenCalledTimes(old.length);
+      expect(manager.delete).not.toHaveBeenCalled();
+      expect(artifacts.retire).not.toHaveBeenCalled();
       expect(ledger.returned("item-a")).toBe(2);
       expect(ledger.statements.some((sql) => RELEASE.test(sql))).toBe(false);
     });

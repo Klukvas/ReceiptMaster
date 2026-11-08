@@ -128,6 +128,34 @@ describe("evaluateRequisites: act", () => {
       evaluateRequisites(DocumentType.ACT, unsigned, buyer, {}).missing,
     ).toEqual(["seller.signatoryName", "seller.signatoryPosition"]);
   });
+  it("requires the VAT number from a VAT payer, as an invoice does", () => {
+    const signatory = {
+      companySignatoryName: "Петренко П.П.",
+      companySignatoryPosition: "Директор",
+    };
+    const payer = buildSeller(company(), {
+      ...signatory,
+      companyVatPayer: true,
+    });
+    expect(
+      evaluateRequisites(DocumentType.ACT, payer, buyer, {}).missing,
+    ).toEqual(["seller.vatId"]);
+    const complete = buildSeller(company(), {
+      ...signatory,
+      companyVatPayer: true,
+      companyVatId: "123456789012",
+    });
+    expect(
+      evaluateRequisites(DocumentType.ACT, complete, buyer, {}).missing,
+    ).toEqual([]);
+    const nonPayer = buildSeller(company(), {
+      ...signatory,
+      companyVatPayer: false,
+    });
+    expect(
+      evaluateRequisites(DocumentType.ACT, nonPayer, buyer, {}).missing,
+    ).toEqual([]);
+  });
   it("warns about the buyer and the contract, and stops when given", () => {
     expect(
       evaluateRequisites(DocumentType.ACT, signed, buyer, {}).warnings,

@@ -21,6 +21,7 @@ import { DOCUMENT_TYPE_META, documentOf, isMultiplePerOrder, type CreatableType,
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { documentConfigQuery } from "../../hooks/useDocumentDraft";
+import { useSignoff } from "../../hooks/useSignoff";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
 import { useTranslation } from "../../hooks/useTranslation";
 import { selectClass } from "../settings/DocumentFormatting";
@@ -42,6 +43,11 @@ type Replacement = { number: string; limit: number; body: DocumentRequestBody };
 const EMPTY_ACT: ActForm = { contractRef: "", from: "", to: "" };
 const EMPTY_QUOTE_TERMS = { paymentTerms: "", deliveryTerms: "" };
 
+/** Server refusals of a details field that have a translated text of their own. */
+const SERVER_FIELD_ERRORS: Readonly<Record<string, string>> = {
+  dueDate: "documents.errors.dueDateServer",
+};
+
 export function CreateDocumentModal({
   order,
   type,
@@ -52,6 +58,10 @@ export function CreateDocumentModal({
   const createDocument = useCreateDocument();
   const queryClient = useQueryClient();
   const design = useTemplateChoice(type);
+  const signoff = useSignoff();
+  const willPrintSignoff =
+    Boolean(signoff.data?.signature || signoff.data?.stamp) &&
+    design.options.find((option) => option.id === design.selectedId)?.capabilities.signoff === true;
 
   const defaultDays = String(
     company.data?.defaultPaymentTermDays ?? DEFAULT_PAYMENT_TERM_DAYS,
@@ -141,11 +151,13 @@ export function CreateDocumentModal({
       return;
     }
     const path = validationField(error);
-    if (path?.startsWith("details.")) {
-      setFieldErrors({ [formFieldOf(path)]: "documents.errors.invalidField" });
+    const field = path?.startsWith("details.") ? formFieldOf(path) : null;
+    if (field) {
+      setFieldErrors({ [field]: SERVER_FIELD_ERRORS[field] ?? "documents.errors.invalidField" });
     }
     const { code, message } = parseApiError(error);
-    setSubmitError(message);
+    // A field with its own translated text must not repeat the server's English sentence.
+    if (!(field && SERVER_FIELD_ERRORS[field])) setSubmitError(message);
     // Someone else (or another tab) already issued it, or returned the units first: show the
     // order as it is now.
     if (
@@ -230,6 +242,7 @@ export function CreateDocumentModal({
             form={invoiceForm}
             errors={fieldErrors}
             onChange={setInvoiceEdits}
+            today={quoteBase.today}
           />
         )}
         {details === "act" && (
@@ -281,6 +294,11 @@ export function CreateDocumentModal({
           </select>
           {design.isAccountDesignUnfit && (
             <p className="text-xs text-content-tertiary">{t("documents.designFallback")}</p>
+          )}
+          {willPrintSignoff && (
+            <p data-testid="document-signoff-note" className="text-xs text-content-tertiary">
+              {t("signoff.willBeAdded")}
+            </p>
           )}
           {design.hasLoaded && design.options.length === 0 && (
             <p role="alert" className="text-sm text-danger-base">{t("documents.noDesign")}</p>
