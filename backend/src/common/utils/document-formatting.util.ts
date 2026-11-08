@@ -25,6 +25,28 @@ export function formatDocumentMoney(
     maximumFractionDigits: 2,
   }).format(cents / 100);
 }
+const NON_BREAKING_SPACES = /[\u00a0\u202f]/g;
+
+/**
+ * An amount for text a person copies into a bank app (the payment purpose): digits with
+ * ordinary spaces and the unit as letters. The currency symbol and the no-break spaces of
+ * `formatDocumentMoney` are rejected or mangled by some banks' forms.
+ */
+export function formatPlainAmount(
+  cents: number,
+  unit: string,
+  preferences: Formatting,
+): string {
+  if (!Number.isSafeInteger(cents)) throw new Error("Invalid money input");
+  const digits = new Intl.NumberFormat(preferences.numberLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(cents / 100)
+    .replace(NON_BREAKING_SPACES, " ");
+  return `${digits} ${unit}`;
+}
+
 export function formatDocumentDate(
   date: Date | string,
   language: string,

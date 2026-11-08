@@ -249,15 +249,48 @@ describeIsolatedPostgres(
       expect(await ids({ search: "\\" })).toEqual([]);
     });
 
+    it("sorts numbers by their counter value, not as text", async () => {
+      const sorter = await db.admin.getRepository(User).save({
+        email: `${randomUUID()}@list.invalid`,
+        password: "fixture",
+      });
+      const numbers = ["РФ-9", "РФ-10", "РФ-100", "АБ-2", "2026-000011"];
+      for (const [index, number] of numbers.entries())
+        await seed(sorter, {
+          recipient: { name: `Sorted ${index}` },
+          number,
+          createdAt: `2026-05-0${index + 1}T10:00:00.000Z`,
+        });
+
+      const ascending = await list(
+        { sortBy: "number", sortOrder: "ASC" as never },
+        sorter,
+      );
+      const descending = await list(
+        { sortBy: "number", sortOrder: "DESC" as never },
+        sorter,
+      );
+
+      expect(ascending.data.map((r) => r.number)).toEqual([
+        "АБ-2",
+        "РФ-9",
+        "РФ-10",
+        "2026-000011",
+        "РФ-100",
+      ]);
+      expect(descending.data.map((r) => r.number)).toEqual(
+        [...ascending.data.map((r) => r.number)].reverse(),
+      );
+    });
+
     it("sorts by an allowed key and breaks ties by id", async () => {
       const byNumber = await list({
         sortBy: "number",
         sortOrder: "ASC" as never,
       });
-      expect(byNumber.data.map((r) => r.number)).toEqual(
-        [...byNumber.data.map((r) => r.number)].sort((a, b) =>
-          a < b ? -1 : a > b ? 1 : 0,
-        ),
+      const counterValue = (text: string) => Number(/\d+$/.exec(text)?.[0]);
+      expect(byNumber.data.map((r) => counterValue(r.number))).toEqual(
+        byNumber.data.map((r) => counterValue(r.number)).sort((a, b) => a - b),
       );
       const sameNumber = byNumber.data.filter(
         (r) => r.number === "2026-000001",

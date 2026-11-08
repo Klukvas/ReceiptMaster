@@ -118,6 +118,23 @@ const checkClientValidation = async (results) => {
   });
 };
 
+const checkDraftSurvivesTabSwitch = async (results) => {
+  await withNumbering(VIEWPORTS[0].viewport, {}, async (page) => {
+    const invoice = row(page, "invoice");
+    await invoice.waitFor({ state: "visible" });
+    await invoice.getByLabel("Prefix").fill("DRAFT-");
+    await page.getByRole("tab").first().click();
+    await invoice.waitFor({ state: "hidden" });
+    await page.locator("#settings-tab-documents").click();
+    await invoice.waitFor({ state: "visible" });
+    results.check(
+      "a numbering draft survives a trip to another settings tab",
+      (await invoice.getByLabel("Prefix").inputValue()) === "DRAFT-",
+      await invoice.getByLabel("Prefix").inputValue(),
+    );
+  });
+};
+
 const checkSave = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withNumbering(viewport, {}, async (page, state) => {
@@ -199,7 +216,7 @@ const checkServerRefusals = async (results) => {
       const text = await invoice.getByRole("alert").innerText();
       results.check(
         "a 400 naming the prefix is shown under the prefix field",
-        text.includes("must not end with a digit") &&
+        text.includes("cannot end with a digit") && !text.includes("must not end") &&
           (await invoice.getByLabel("Prefix").getAttribute("aria-invalid")) === "true",
         text,
       );
@@ -212,6 +229,7 @@ export const run = async () => {
   await checkRows(results);
   await checkPreview(results);
   await checkClientValidation(results);
+  await checkDraftSurvivesTabSwitch(results);
   await checkSave(results);
   await checkServerRefusals(results);
   return results;

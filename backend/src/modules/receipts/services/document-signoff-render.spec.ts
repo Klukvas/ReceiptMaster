@@ -378,31 +378,31 @@ describe("signature and stamp in rendered documents", () => {
 // Filled from the first green run; see "digests with images".
 const SIGNED_SHA256: Record<string, string> = {
   "act.classic":
-    "d61451b6965122c6bebb9d7e0026c4e5173c86f45d4466413f7b70e1b44dd904",
+    "e7060218fb2787ad1b4ac58d61a168d3bce37b4df523bbc30d875591f23bd203",
   "act.corporate":
-    "799bf9ab5b7a6adf160741b9445e7fb13200168e0e88cea7fb4abe28e10a0e18",
+    "f9ba5950b6dcf04e2ce99511f845d75f3e489d640f3f6e5944bdbf7438bd42d2",
   "act.minimal":
-    "d93ff7ddd3b08ba0b086f04041b00262df47224f1f21507e9ea118490d938139",
+    "d0d306400b76047115dc1d2b14db90ea68d9c8493909de68cb29cea5202c2438",
   "act.standard":
-    "537ed885b82a88a29da35c7f40672ba45b49bb7ced2af4bc621190e4d7c1e6db",
+    "8217999643e6436de73c52e9b2ca71d5c817e5e0dc5740c5302e3fb46b0f85d9",
   "invoice.classic":
-    "b9d119b9906e713cba1a721064199262d21d906e681e370c802ad81d12aa77ef",
+    "9b0fd1a4533aa453ae104e1494b318f8590fb427db94e7ae6d8c73704b3403ef",
   "invoice.corporate":
-    "9d0e175166a32b50a08dd806d7791b524fc78da1313c525cb60f05c72f854c49",
+    "e28abdcfd2c097fa8fb7ea23b40eb023aaabda48ff5eb2688130ccc1d13f4328",
   "invoice.minimal":
-    "d9e3d8c972dd98a3de7411fdd741939933ca8d2ef10ed152a483771aeae7ceaf",
+    "4bf7f5187a6656aeb7e83176d2710f134e950dd45eab8b7df42967c6f7cff3d6",
   "invoice.standard":
-    "a3d513ce21d07449554ba34556da41770f31117a8ab1eb89be10111ccb402d84",
+    "acd544367f8901d0a7b95f092a0f6f810fb2a1145cefe78eb67226a1e5c4ff8b",
   "quote.classic":
-    "ffd304dfa62e179d263d8f02ece520b6a30df877d97e9916d3d502abf159e96b",
+    "17e2b5d29efa01d78f404bbc3edcf665fd021abddf4dc0d4b2c8e2587f0b489b",
   "quote.corporate":
-    "15e3c34303c7bff6501f51d5bcbfe5145394b31ffdb89b84fc6895d7fedeef61",
+    "8ea26176a50c391d89ad96ad86a41f4a1132387984e820ee5d76d4ef924680d2",
   "quote.minimal":
-    "4de47c3cd451774db74d2f80db9fa0d4ab63c253f5e717f25bb200d0bdfeaabe",
+    "11a5625237893d4e2bad22ad468c6a79788bc3b27e3637394d3de67350bec760",
   "quote.standard":
-    "7373fe0a89b25edc846954f790d7c75bfdac1915d44228b25f78d84ae92f2811",
+    "7f9c873593283ca369b54e8661cc8c8ac4e5540464d35f461d8a148b06740a98",
   "waybill.classic":
-    "a1b9862f10eb7a37c8a0a540775c65a933a2e0448247ab7063958383b4854a94",
+    "c0053839aa065e7ab9bba19fffaec6a4139da848434d3fe4b9e48c1b837c4c23",
   "waybill.corporate":
     "814a4a323d17624a99d3bbc312b617aee827a1b046e57cf16f09371f00d40b03",
   "waybill.minimal":

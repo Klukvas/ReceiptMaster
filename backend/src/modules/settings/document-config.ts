@@ -34,6 +34,16 @@ export const LOCALES = [
   "de-DE",
   "fr-FR",
 ] as const;
+/** A zone name `Intl` knows; fixed offsets such as "+05:00" are accepted by `Intl` but are not IANA names. */
+export function isIanaTimeZone(value: string): boolean {
+  if (/^[+-]/.test(value)) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 export const formattingSchema = z
   .object({
     numberLocale: z.enum(LOCALES),
@@ -46,14 +56,7 @@ export const formattingSchema = z
       .string()
       .min(1)
       .max(100)
-      .refine((value) => {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: value });
-          return !/^[+-]/.test(value);
-        } catch {
-          return false;
-        }
-      }, "Use a valid IANA time zone"),
+      .refine(isIanaTimeZone, "Use a valid IANA time zone"),
   })
   .strict();
 const companySchema = z

@@ -5,7 +5,7 @@ const PREFIX_CHECK = "CHK_document_counters_prefix";
 
 /**
  * Per-type number format on top of the counter: `prefix`, zero `padding` and whether the
- * UTC year is printed. The defaults ("", 6, true) reproduce the numbers issued so far
+ * calendar year (in the document's time zone, not UTC) is printed. The defaults ("", 6, true) reproduce the numbers issued so far
  * ("2026-000042") byte for byte, so existing accounts see no change.
  *
  * The prefix may not end with a digit: the number then always ends in one maximal digit

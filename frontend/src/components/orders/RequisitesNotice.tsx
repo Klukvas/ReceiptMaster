@@ -14,12 +14,19 @@ type RequisitesNoticeProps = {
   isRefusal: boolean;
 };
 
+/** Fields named "details.*" are filled in this very dialog, not on a settings or recipient form. */
+const isDialogField = (key: string): boolean => key.startsWith("details.");
+
 function FieldList({ keys }: { keys: readonly string[] }) {
   const { t } = useTranslation();
   return (
     <ul className="list-disc space-y-0.5 pl-5">
       {keys.map((key) => (
-        <li key={key}>{t(`documentFields.${key}`)}</li>
+        <li key={key}>
+          {isDialogField(key)
+            ? t("documents.fieldInThisDialog", { field: t(`documentFields.${key}`) })
+            : t(`documentFields.${key}`)}
+        </li>
       ))}
     </ul>
   );
@@ -70,7 +77,7 @@ export function RequisitesNotice({
         >
           <p className="flex items-center gap-2 font-medium text-warning-base">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden />
-            {t("documents.requisitesMissingTitle")}
+            {t(isRefusal ? "documents.requisitesRefusedTitle" : "documents.requisitesMissingTitle")}
           </p>
           <FieldList keys={gaps.fields} />
           <FixLinks keys={gaps.fields} recipientId={recipientId} />

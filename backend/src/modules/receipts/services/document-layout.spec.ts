@@ -52,29 +52,29 @@ const XSS = '<script>alert("x")</script>';
 // Digests of the rendered HTML; a change here is a visible change to the document.
 const GOLDEN_SHA256: Record<string, string> = {
   "invoice.standard.uk":
-    "6bafcf978010092a57b5a0dd1819dd52a3f6ededeb5b5c99f705329aa8345d9c",
+    "8bee904952723e5a31b34b18d722ee4c76585e9f468bd5784634c64b2023273f",
   "invoice.standard.ru":
-    "7a0f140ba57a56a7c4717135e8828a7d51300688940ef944bf62034bc0cc0abe",
+    "0a44bd34889be1c461043d52bb26eab5e49579b65bd1290fdec22c5f24ea1ee7",
   "invoice.standard.en":
-    "fd13357abaf832e9bc5d358c8665667a85800f2e1a01d84a0c0bb320d469b544",
+    "0a347da3e0de13a45935e61cd4dd14ae2e3855d1ea40366abdffe3fa72ed4518",
   "invoice.classic.uk":
-    "4226b16bf90aee6494bde04ba4809a5ca265cab6ebcb42ee869788f438732e25",
+    "a4be673f340030bf39a83ff1b85e6725f53a4744d54cace243a96b377ee7dbb0",
   "invoice.classic.ru":
-    "cec829276b4732e9ef20b7c6a5c6856d07cdfb76ea2db704c2389580de03ec3b",
+    "e6a6cd7879002b0dcadb63f6593e17f9d112da8dd7864d91a2aec4d5be93f148",
   "invoice.classic.en":
-    "54c968dd257c8970847c45954103dcba8c53890063e4e38a4c040e537f569be3",
+    "dc80278f68604b1aaead2aff2b692b976c12efad16a393d7c910845ce0657450",
   "invoice.minimal.uk":
-    "0d7004d227b1c3400cb81bbb5dd037b9d4c7190d98e7491fe30843df49da4252",
+    "4bdbac16563667ff7d485fc07f13945ce81e7980cbcf74c535f5848392ede051",
   "invoice.minimal.ru":
-    "000d18b27753d7eba5d69b97e0e0cbd552e96d2292e7eb7ee8109d47b31b1230",
+    "77a8eefc094279706d52d905081c82ace8e0aa20d018e3642abb33c5a31095b9",
   "invoice.minimal.en":
-    "00e3cb504b025068ad33b8f08c10c51e227f7bcbf5880a45b2cd6a1a0cff3ef1",
+    "d95834f40e235e70a4c9c25e10cbe595ecb534504dd905b0224b74edf45d0910",
   "invoice.corporate.uk":
-    "f86dbaae1e79be62fbc6eb97598f3c94861a3609a3689851522c9193ce9683bc",
+    "b3807e61c6f0d93fd47176403d0fde5dca52d9e006cc56fd863ab63de846f1cc",
   "invoice.corporate.ru":
-    "0bb6122588f81f88fa0ffb8d28270879c3d43a20295bc0be6c636f6b4984b891",
+    "0a9ee14a6d6d631eaf7fda5374dbf67d11ff4ac6d7298b5dfd9afd2a65b2a20e",
   "invoice.corporate.en":
-    "b74e131b942d653282d4e78383bf78b684d6db7c7f77e11be5483e1db5559d5f",
+    "30ccc085f77abd0c7600dca52a424585dd3f7fe236a5787df433510d898a3acf",
   "act.standard.uk":
     "1f628564df59d65b87d72c7912a0324e7ed5c6fe15e67c080df98f5daeddda33",
   "act.standard.ru":
@@ -82,11 +82,11 @@ const GOLDEN_SHA256: Record<string, string> = {
   "act.standard.en":
     "b4def70f0757c8dbefe7f248cfc394d721aaa359a7648f6a22955f5f20dc6946",
   "act.classic.uk":
-    "2fdad5d53ef8589a3121f122f3604f9d976caf44068682f16ba22eb241541a7f",
+    "a1b715a554b6898916fcc4825a9606f3344740eac8517ac73169fb553c67f340",
   "act.classic.ru":
-    "9d3e73a5801410760a559be63eea0f780c2000443462b63ba1356cf972aab639",
+    "33774b7d2d0c9b4024d8bb9cb3c70f5d93589edb44b2ef99aad87cf2b5e4298f",
   "act.classic.en":
-    "75399f213b65a2998bb150085211efc282e35a6a996a042e4fe5e12b9305e586",
+    "605013b78380f1ff7007b96e81c36e9723dc0e050ba3bfb437009dd6ce460898",
   "act.minimal.uk":
     "64443491ff80201c1dff1e5d87c0fb371b95c66d4673a4d8c0f7f1d5fbe310df",
   "act.minimal.ru":
@@ -100,29 +100,29 @@ const GOLDEN_SHA256: Record<string, string> = {
   "act.corporate.en":
     "c5eebfea657a877709a4fb1b77e99d8df034cf696b3ccba7b3b52706625348dd",
   "sales_receipt.standard.uk":
-    "2b57fc82f632f6a17e25867c07707e9c3a09e19fdeb4837dd5c4cbf362027c64",
+    "9d0be5b4f86b28c3c855ef4f6e231f113e5c04438d9b1e7febf5ec317b5711e1",
   "sales_receipt.standard.ru":
-    "48681ecfc65859e6b777bcdb4f03e3a2d9739bb3e328b0bf77c891fe424b341f",
+    "63a0f48b8afc12df563656f645b74678fdb2f8291a348b4e934729d3e31367e6",
   "sales_receipt.standard.en":
-    "ebde1e0d3c5caa6d2a2b31e2d0bb092143e8f4f824cc33fd340046019710d6f4",
+    "8d2a26f7d674bef9236c2774f83aaf5d81e264fbdce801bf48f98b96438b9a26",
   "sales_receipt.classic.uk":
-    "b760a599a2c50bb10f90b4190efd40f422882f55cc2f4a698f54fc56934a1255",
+    "1a5590000c88bd2fa4094d9c75f8bb65fb18cf621cdc0430ce024066a33173cf",
   "sales_receipt.classic.ru":
-    "01de20a7242b945a999f16a545352d75a6cea78e075602fa814f3c451a118d2d",
+    "553ef41b816587b13e48fb3ea6eeaf1ff34fa667ad3b7cbc7f19880952504ae4",
   "sales_receipt.classic.en":
-    "44dcf7de93276cf18728377e5b474c9a6bb622dc0da2ec1f9f1a2e8a29dfff30",
+    "57244e5dc1a117842efcc692376408b3844a66a0296f32004a7e4bf2ad1c6e1f",
   "sales_receipt.minimal.uk":
-    "3a8a91b8e3b6f5bc2655a7afd7af695b4a60e67e24cac356b83fe76f14da8b66",
+    "b6bc32dba6232f6e5abf65926344d8a78102553718ac1c4da45fe525d305261d",
   "sales_receipt.minimal.ru":
-    "39f894603bda03c61b572301273d54f16a8afa4104d710acfc654733b528ca29",
+    "3c41c9d9b3bf87019d055a5f31a72dc3f949b467a94767446aa72b77b6ddf1f5",
   "sales_receipt.minimal.en":
-    "cb6058e35877712769469effe4dfaa1e96d81f04792ecfdab3f07015c16531e1",
+    "39610b8064dd1ef3c977274d051e43069f075c2105cf702d5edc63ae36c485dd",
   "sales_receipt.corporate.uk":
-    "bd47d494b606cad3409b20a61642ad5721ade09141a0acc409c6a54d9c03fd79",
+    "bce43cf4b8ea63c6bdeb2eae286228eaf7478f95cf5e6d6c93c06f264a76070e",
   "sales_receipt.corporate.ru":
-    "c5a2d632c33c61c8d1dacbb5bc603bbd4b6803bd2fb8f9c47ef24040698ae65d",
+    "13a2b4cc566defdd11299f9e9001b6f1d5c7592d167a256134fe06923f133888",
   "sales_receipt.corporate.en":
-    "34b68dda78207f689b4c950fdda16be11d4d4c2d2372d591606f6c07b82e6e36",
+    "bec0fb7741f72961171e50f2da31129dc225acbee74b1ce1dca08d0366bb73ed",
   "packing_list.standard.uk":
     "1d1ed3dda0e0dac938bab901724552ee0c1baf093dcb8d72e397e153c1adf833",
   "packing_list.standard.ru":
@@ -130,11 +130,11 @@ const GOLDEN_SHA256: Record<string, string> = {
   "packing_list.standard.en":
     "9559061768bfc8c29e500eec793c3b63163299f78d128f2b85d52c81e5f7df42",
   "packing_list.classic.uk":
-    "4ad52dcf1470da4588d927ecd5488a75af72aecdfccc9c1308e00f5fbb95cb0f",
+    "e7992f643adc76d12f0880508be8dce23e115f5b62fe2564874609dc619b81e2",
   "packing_list.classic.ru":
-    "ec64f8449c6acc50c75a0a1e00429d8155f1c71c15dd448a0b3837331056e16e",
+    "129673a0e39b787dff8856739fe29a35f5a2c4ecc222e43e2d3f2be59b0c0803",
   "packing_list.classic.en":
-    "ef521510365ed5413dac76086b6e91b5e8bd3f17adf4a1c240a771608f04859f",
+    "dcc3e6c1b18d338236ad8f72a4e4718d3b0c627e8415248b30cc9fd9e090155a",
   "packing_list.minimal.uk":
     "7fee9ae7841724a3138301afbb9681b54547c2e19532ca9b5d27c3965b1f6039",
   "packing_list.minimal.ru":

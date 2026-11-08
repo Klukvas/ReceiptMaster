@@ -250,4 +250,47 @@ describe("AuditLogInterceptor", () => {
       },
     });
   });
+
+  describe("multipart document requests", () => {
+    const logged = (body: Record<string, unknown>) => {
+      const context = createMockContext(
+        "POST",
+        "ReceiptsController",
+        "createDocument",
+        { id: "u1" },
+        {},
+        body,
+      );
+      interceptor.intercept(context, createMockNext()).subscribe();
+      return auditLogService.log.mock.calls[0][0].newValues;
+    };
+
+    it("masks requisites inside the JSON payload string", () => {
+      const newValues = logged({
+        payload: JSON.stringify({
+          type: "invoice",
+          details: { contractRef: "No 5", buyerIban: "UA21" },
+          config: {
+            company: { companyTaxId: "12345678", companyName: "Acme" },
+          },
+        }),
+      });
+
+      expect(newValues).toEqual({
+        payload: {
+          type: "invoice",
+          details: { contractRef: "***", buyerIban: "***" },
+          config: { company: { companyTaxId: "***", companyName: "Acme" } },
+        },
+      });
+    });
+
+    it("hides a payload that is not JSON instead of logging it raw", () => {
+      expect(logged({ payload: "iban=UA213223130000026007233566001" })).toEqual(
+        {
+          payload: "***",
+        },
+      );
+    });
+  });
 });

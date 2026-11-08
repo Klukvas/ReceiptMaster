@@ -28,6 +28,7 @@ describe("OrdersController", () => {
         offset: 0,
         limit: 10,
       }),
+      findMatchingIds: jest.fn(),
       findOne: jest.fn().mockResolvedValue(mockOrder),
       confirm: jest
         .fn()
@@ -193,6 +194,40 @@ describe("OrdersController", () => {
         }),
       );
     });
+  });
+
+  describe("malformed list filters", () => {
+    const dateRange = {} as any;
+
+    it.each([
+      ["findAll", (c: OrdersController) => c.findAll],
+      ["findMatchingIds", (c: OrdersController) => c.findMatchingIds],
+    ])(
+      "%s answers 400 before the query, not a database error",
+      (name, pick) => {
+        const call = pick(controller).bind(controller) as any;
+
+        expect(() =>
+          call({ limit: 10, offset: 0 }, dateRange, mockReq, undefined, "abc"),
+        ).toThrow(expect.objectContaining({ statusCode: 400 }));
+        expect(() =>
+          call(
+            { limit: 10, offset: 0 },
+            dateRange,
+            mockReq,
+            undefined,
+            undefined,
+            undefined,
+            "not-a-uuid",
+          ),
+        ).toThrow(expect.objectContaining({ statusCode: 400 }));
+        // `?status=foo` used to reach the enum column and fail there with a 500.
+        expect(() =>
+          call({ limit: 10, offset: 0 }, dateRange, mockReq, "foo"),
+        ).toThrow(expect.objectContaining({ statusCode: 400 }));
+        expect(ordersService[name]).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("findOne", () => {

@@ -1,5 +1,7 @@
 import { isAxiosError } from "axios";
+import i18n from "./i18n";
 import { ErrorCode, parseApiError } from "./api-errors";
+import { PREFIX_MAX_LENGTH } from "./document-number-format";
 
 export type NumberingField = "prefix" | "padding" | "startNumber";
 
@@ -17,6 +19,13 @@ const minStartOf = (error: unknown): number | undefined => {
   if (!isAxiosError(error)) return undefined;
   const value = (error.response?.data as { minStart?: unknown } | undefined)?.minStart;
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+};
+
+const validationMessage = (field: NumberingField | undefined): string => {
+  if (field === "prefix") return i18n.t("numbering.errors.prefixRejected", { max: PREFIX_MAX_LENGTH });
+  if (field === "padding") return i18n.t("numbering.errors.paddingInvalid");
+  if (field === "startNumber") return i18n.t("numbering.errors.startInvalid");
+  return i18n.t("numbering.errors.rejected");
 };
 
 /**
@@ -38,7 +47,8 @@ export function numberingRefusal(
   }
   if (parsed.code === ErrorCode.VALIDATION_ERROR) {
     const field = FIELD_NAMES.find((name) => new RegExp(`\\b${name}\\b`).test(parsed.message));
-    return { field: field ?? null, message: parsed.message };
+    // The server's sentence is English, so the text comes from the locale files by field.
+    return { field: field ?? null, message: validationMessage(field) };
   }
   return { field: null, message: parsed.message };
 }

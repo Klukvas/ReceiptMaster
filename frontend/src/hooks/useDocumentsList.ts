@@ -19,6 +19,9 @@ export type DocumentFilters = {
 };
 
 const POLL_INTERVAL_MS = 4000;
+// About three minutes of visible polling; a document stuck "processing" longer than that is a
+// server problem, and polling forever would only keep hitting the API from a forgotten tab.
+const MAX_POLL_ATTEMPTS = 45;
 const SORT_FIELDS: readonly DocumentSortField[] = [
   "created_at",
   "number",
@@ -29,11 +32,17 @@ const SORT_FIELDS: readonly DocumentSortField[] = [
 const isSortField = (value: string | undefined): value is DocumentSortField =>
   SORT_FIELDS.includes(value as DocumentSortField);
 
-const isGenerating = (items: DocumentListItem[]): boolean =>
-  items.some(
-    (item) =>
-      item.status === "processing" || item.replacement_status === "processing",
-  );
+/** Ids of the rows still generating, so polling can tell "the same ones" from "a new one appeared". */
+const generatingKey = (items: DocumentListItem[]): string =>
+  items
+    .filter((item) => item.status === "processing" || item.replacement_status === "processing")
+    .map((item) => item.id)
+    .sort()
+    .join(",");
+
+/** A "From" later than "To" can match nothing; the filter bar says so instead of the request. */
+export const isRangeReversed = (filters: DocumentFilters): boolean =>
+  Boolean(filters.from && filters.to && filters.from > filters.to);
 
 /**
  * The documents list. It shares the "receipts" query key, so everything that already
@@ -43,6 +52,7 @@ export function useDocumentsList(
   columns: ColumnDef<DocumentListItem>[],
   filters: DocumentFilters,
   initialSearch: string,
+  initialPage: number,
 ) {
   const queryClient = useQueryClient();
 
@@ -58,6 +68,7 @@ export function useDocumentsList(
   const pagination = useServerPagination<DocumentListItem>({
     queryKey: "receipts",
     initialSearch,
+    initialPage,
     queryFn: (params) =>
       receiptsApi.getAll({
         ...params,
@@ -69,17 +80,41 @@ export function useDocumentsList(
     defaultSortOrder: "DESC",
     extraParams,
     storageKeyPrefix: "documents",
+    enabled: !isRangeReversed(filters),
   });
 
   // Generation can finish with no socket event reaching this page, so poll server state.
-  const generating = isGenerating(pagination.items);
+  // A new row starting to generate gets a fresh set of attempts, even after an earlier one used them up.
+  const reversed = isRangeReversed(filters);
+  const generating = generatingKey(reversed ? [] : pagination.items);
   useEffect(() => {
     if (!generating) return;
-    const intervalId = setInterval(() => {
+    let attempts = 0;
+    const refresh = () => {
       void queryClient.invalidateQueries({ queryKey: ["receipts"] });
+    };
+    const intervalId = setInterval(() => {
+      // A hidden tab does not need fresh rows, and its ticks do not use up the attempts.
+      if (document.hidden) return;
+      attempts += 1;
+      if (attempts > MAX_POLL_ATTEMPTS) {
+        clearInterval(intervalId);
+        return;
+      }
+      refresh();
     }, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [generating, queryClient]);
 
+  if (reversed) {
+    return { ...pagination, items: [], total: 0, totalPages: 0, isLoading: false, isFetching: false };
+  }
   return pagination;
 }

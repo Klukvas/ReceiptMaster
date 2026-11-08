@@ -153,7 +153,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {issuedQuote && (
             <p
-              role="status"
+              role="alert"
               data-testid="stale-quote-warning"
               className="p-3 rounded-lg border border-[var(--color-warning)] bg-[var(--color-warning-light)] text-sm font-medium text-content"
             >

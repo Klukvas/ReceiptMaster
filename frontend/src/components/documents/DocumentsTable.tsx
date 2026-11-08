@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
-import { formatDate, type DocumentListItem } from "../../lib/api";
+import type { DocumentListItem } from "../../lib/api";
+import { formatDocumentDateTime } from "../../lib/document-date-format";
+import { failedNextStep } from "../../lib/document-actions";
 import { documentLabelKey } from "../../lib/document-types";
 import { formatOrderNumber } from "../../lib/order-number";
 import { DataTable } from "../ui/DataTable";
@@ -10,7 +12,8 @@ import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { DocumentFailureReason } from "./DocumentFailureReason";
 import { DocumentRowActions } from "./DocumentRowActions";
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
-import { ORDER_LINK_CLASS } from "./useDocumentColumns";
+import { ORDER_LINK_CLASS, orderSearchLink } from "./useDocumentColumns";
+import { VoidedDocumentNote } from "./VoidedDocumentNote";
 
 type Pagination = ReturnType<typeof useServerPagination<DocumentListItem>>;
 
@@ -21,6 +24,7 @@ type DocumentsTableProps = {
   onShare: (document: DocumentListItem) => void;
   onVoid: (document: DocumentListItem) => void;
   onRetry: (document: DocumentListItem) => void;
+  retryingIds: ReadonlySet<string>;
 };
 
 export function DocumentsTable({
@@ -30,17 +34,20 @@ export function DocumentsTable({
   onShare,
   onVoid,
   onRetry,
+  retryingIds,
 }: DocumentsTableProps) {
   const { t } = useTranslation();
   const timeZone = useDocumentTimeZone();
 
-  const renderActions = (document: DocumentListItem) => (
+  const renderActions = (document: DocumentListItem, showLabels = false) => (
     <DocumentRowActions
       document={document}
       onDownload={onDownload}
       onShare={onShare}
       onVoid={onVoid}
       onRetry={onRetry}
+      retryingIds={retryingIds}
+      showLabels={showLabels}
     />
   );
 
@@ -62,14 +69,22 @@ export function DocumentsTable({
       </div>
       {document.status === "failed" && (
         <div className="mt-2">
-          <DocumentFailureReason message={document.error_message} />
+          <DocumentFailureReason message={document.error_message} nextStepKey={failedNextStep(document)} />
+        </div>
+      )}
+      {document.status === "void" && (
+        <div className="mt-2">
+          <VoidedDocumentNote
+            document_type={document.document_type}
+            void_reason={document.void_reason}
+          />
         </div>
       )}
       <p className="mt-2 text-sm text-content-secondary">
         {document.order ? (
           <>
             <Link
-              to={`/orders?search=${document.order.order_number}`}
+              to={orderSearchLink(document.order.order_number)}
               className={`${ORDER_LINK_CLASS} tabular-nums`}
             >
               {formatOrderNumber(document.order)}
@@ -81,9 +96,11 @@ export function DocumentsTable({
           "—"
         )}
       </p>
-      <div className="mt-2 flex items-center justify-between border-t border-[var(--color-border-light)] pt-2">
-        <span className="text-xs text-content-tertiary">{formatDate(document.created_at, timeZone)}</span>
-        {renderActions(document)}
+      <div className="mt-2 space-y-1 border-t border-[var(--color-border-light)] pt-2">
+        <span className="block text-xs text-content-tertiary">
+          {formatDocumentDateTime(document.created_at, timeZone)}
+        </span>
+        {renderActions(document, true)}
       </div>
     </div>
   );
@@ -93,7 +110,11 @@ export function DocumentsTable({
       items={pagination.items}
       total={pagination.total}
       isLoading={pagination.isLoading}
-      isFetching={pagination.isFetching}
+      // Only a page, sort or filter change shows the loading overlay; the 4 s polling refetch of
+      // a generating document must not cover the row actions or flicker aria-busy.
+      isFetching={
+        pagination.isFetching && (pagination.isShowingPreviousQuery || pagination.items.length === 0)
+      }
       error={pagination.error}
       onRetry={() => pagination.queryResult.refetch()}
       currentPage={pagination.currentPage}
@@ -123,7 +144,7 @@ export function DocumentsTable({
         )
       }
       emptySearchMessage={t("documentsPage.noMatches")}
-      renderActions={renderActions}
+      renderActions={(document) => renderActions(document)}
       renderCard={renderCard}
       compact
     />

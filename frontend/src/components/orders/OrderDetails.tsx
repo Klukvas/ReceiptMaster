@@ -238,11 +238,9 @@ export const OrderDetails = ({
  {item.product_name}
  </div>
  <div className="text-xs text-content-tertiary mt-0.5">
- {formatCurrency(
- item.unit_price_cents,
- order.currency,
- )}{""}
- x {item.qty}
+ {formatCurrency(item.unit_price_cents, order.currency)}
+ {" × "}
+ {item.qty}
  </div>
  </div>
  <span className="text-sm font-semibold tabular-nums text-content whitespace-nowrap">

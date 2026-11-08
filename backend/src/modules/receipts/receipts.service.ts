@@ -46,6 +46,10 @@ import {
   isReissuableType,
   specFor,
 } from "./document-types";
+import {
+  DocumentWarning,
+  signoffUnavailableWarning,
+} from "./document-warnings";
 import type { DocumentDetailsInput, DocumentRequest } from "./frozen-document";
 import {
   PdfGeneratorService,
@@ -66,6 +70,7 @@ import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import {
   frozenReturnLines,
   releaseReturnQuantities,
+  findRecentIdenticalReturnNote,
   reserveReturnQuantities,
 } from "./return-note-ledger";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
@@ -84,10 +89,17 @@ import { runWithPublicToken } from "../../common/tenancy/tenant-context";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * A number ends in one digit run that is exactly its counter value (prefixes never end in
+ * a digit), so the value is read back from the text: "9" sorts before "10", which the text
+ * itself would not. At most 18 digits, so the cast cannot overflow a bigint on odd data.
+ */
+const NUMBER_COUNTER_VALUE = `CAST(substring(r.number from '[0-9]{1,18}$') AS bigint)`;
+
 /** Allowlist for `sortBy` on the documents page; anything else sorts by date. */
 const DOCUMENT_SORTABLE_COLUMNS: Readonly<Record<string, string>> = {
   created_at: "r.created_at",
-  number: "r.number",
+  number: NUMBER_COUNTER_VALUE,
   document_type: "r.document_type",
   status: "r.status",
 };
@@ -131,6 +143,13 @@ export function documentFilename(receipt: {
     : `${type}-${receipt.number}.pdf`;
 }
 
+/** The row as returned to the caller of an issuing call, with that call's warnings. */
+function withWarnings(receipt: Receipt, warnings: DocumentWarning[]): Receipt {
+  return warnings.length > 0
+    ? Object.assign(new Receipt(), receipt, { warnings })
+    : receipt;
+}
+
 /** The waybill route keeps its original error and wording whichever endpoint asks. */
 function documentAlreadyExists(orderId: string, type: DocumentType) {
   return type === DocumentType.WAYBILL
@@ -171,7 +190,6 @@ async function hasClosedVoidedDocument(
 export class ReceiptsService {
   private readonly logger = new Logger(ReceiptsService.name);
   private readonly generationMutex = new KeyedMutex();
-  /** A PROCESSING receipt older than this is treated as stuck and may be retried. */
 
   constructor(
     @InjectRepository(Receipt)
@@ -261,14 +279,14 @@ export class ReceiptsService {
   ): Promise<Receipt> {
     if (!isGeneratableType(type))
       throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
-    // A type that allows several per order has no slot to race for: the order lock and the
-    // quantity ledger serialize it, so the in-process mutex below would add nothing.
     const run = () =>
       this.runGenerationHealing(orderId, user, type, selection, details, file);
-    if (!hasDocumentBlock(type) || specFor(type).multiplePerOrder) return run();
-    // Two requests for the same order and type must not both allocate a number: the second
-    // waits, then finds the first one's PROCESSING row and returns it. In-process on purpose:
-    // a lock-holding transaction around logo upload would pin a pooled connection per request.
+    // Two requests for the same order and type must not both draw a number: the late copies
+    // would meet the first one's row (or its identical return note) only after drawing, and
+    // only the highest drawn number can be handed back, so a double click left gaps in the
+    // sequence (waybills and return notes did, as they were not serialized). The second
+    // request waits, then returns the first one's result. In-process on purpose: a
+    // lock-holding transaction around logo upload would pin a pooled connection per request.
     // Across processes the unique row index still allows one row; a rare loser may burn a number.
     return this.generationMutex.runExclusive(
       `${user.id}:${orderId}:${type}`,
@@ -350,7 +368,28 @@ export class ReceiptsService {
     }
   }
 
-  private async runGeneration(
+  /**
+   * Requests for the same order and document type run one after another in this process.
+   * A double click otherwise lets every copy draw its own number before the duplicate is
+   * noticed; only the highest one can be handed back, so the sequence is left with gaps.
+   * Serialized, the late copies meet the first one's row before they draw anything.
+   */
+  private readonly issueLocks = new KeyedMutex();
+
+  private runGeneration(
+    orderId: string,
+    user: User,
+    type: GeneratableDocumentType,
+    selection: ConfigSelection,
+    details?: DocumentDetailsInput,
+    file?: Express.Multer.File,
+  ): Promise<Receipt> {
+    return this.issueLocks.runExclusive(`${user.id}:${orderId}:${type}`, () =>
+      this.runGenerationUnlocked(orderId, user, type, selection, details, file),
+    );
+  }
+
+  private async runGenerationUnlocked(
     orderId: string,
     user: User,
     type: GeneratableDocumentType,
@@ -360,6 +399,17 @@ export class ReceiptsService {
   ): Promise<Receipt> {
     const spec = specFor(type);
     const hasSingleSlot = !spec.multiplePerOrder;
+    // A double submit is answered before the quantity check, which the first request has
+    // already used up; the same check runs again under the order lock for a true race.
+    if (type === DocumentType.RETURN_NOTE && details?.lines) {
+      const duplicate = await findRecentIdenticalReturnNote(
+        this.dataSource.manager,
+        user.id,
+        orderId,
+        { lines: details.lines, reason: details.reason },
+      );
+      if (duplicate) return duplicate;
+    }
     // Voided rows are history, never a row to resume: a reissue starts fresh.
     const prior = hasSingleSlot
       ? await this.receiptsRepository.findOne({
@@ -436,6 +486,10 @@ export class ReceiptsService {
     };
     let receipt: Receipt;
     let bodyFinished = false;
+    let issueWarnings: DocumentWarning[] = [];
+    // An existing document returned unchanged (a double submit) was not built by this call,
+    // so this call's warnings do not describe it.
+    let isReturnedAsIs = false;
     try {
       // The number is drawn only after the logo is staged (bad file, quota, upload failure),
       // so those refusals never burn one.
@@ -450,6 +504,9 @@ export class ReceiptsService {
             previous?.pending_snapshot?.order,
             request,
           );
+      issueWarnings = signoffUnavailableWarning(
+        prepared?.signoffUnavailable ?? [],
+      );
       const number = prepared?.number ?? (await allocateNumber());
       if (prepared && previous && !previous.pending_snapshot?.order)
         prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
@@ -475,13 +532,28 @@ export class ReceiptsService {
         if (!order || !spec.allowedOrderStatuses.includes(order.status))
           throw ApiErrors.ORDER_CANNOT_BE_MODIFIED(orderId);
         // The order row is locked here, so the quantity check cannot race another note.
-        if (type === DocumentType.RETURN_NOTE)
+        if (type === DocumentType.RETURN_NOTE) {
+          const returnDetails = prepared?.snapshot.document?.details;
+          const duplicate = await findRecentIdenticalReturnNote(
+            manager,
+            user.id,
+            orderId,
+            {
+              lines: returnDetails?.returnLines ?? [],
+              reason: returnDetails?.returnReason,
+            },
+          );
+          if (duplicate) {
+            isReturnedAsIs = true;
+            return duplicate;
+          }
           await reserveReturnQuantities(
             manager,
             user.id,
             orderId,
-            prepared?.snapshot.document?.details.returnLines ?? [],
+            returnDetails?.returnLines ?? [],
           );
+        }
         const existing = hasSingleSlot
           ? await manager.findOne(Receipt, {
               where: {
@@ -495,8 +567,10 @@ export class ReceiptsService {
         if (
           existing?.status === ReceiptStatus.PROCESSING &&
           existing.generation_id
-        )
+        ) {
+          isReturnedAsIs = true;
           return existing;
+        }
         if (existing?.status === ReceiptStatus.GENERATED)
           throw documentAlreadyExists(orderId, type);
         if (
@@ -511,6 +585,10 @@ export class ReceiptsService {
         )
           throw documentAlreadyExists(orderId, type);
         if (previous && existing?.generation_id !== previous.generation_id)
+          throw new ConflictException("Generation changed; refresh and retry");
+        // The candidate was built around `number`; the row keeps its own, so a row that
+        // appeared since the number was chosen would print a number the document lacks.
+        if (existing && existing.number !== number)
           throw new ConflictException("Generation changed; refresh and retry");
         const generationId = crypto.randomUUID();
         const candidate = prepared
@@ -600,7 +678,7 @@ export class ReceiptsService {
     if (drawn && receipt.number !== drawn.number)
       await this.releaseDrawnNumber(user.id, type, drawn);
     void this.receiptOutbox.dispatch();
-    return receipt;
+    return isReturnedAsIs ? receipt : withWarnings(receipt, issueWarnings);
   }
 
   async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
@@ -850,7 +928,16 @@ export class ReceiptsService {
       "r.created_at",
     );
     const direction = query.sortOrder === SortOrder.ASC ? "ASC" : "DESC";
-    qb.orderBy(column, direction).addOrderBy("r.id", direction);
+    if (column === NUMBER_COUNTER_VALUE) {
+      // Numbers with the same value (other prefix or year) fall back to their text.
+      qb.orderBy(column, direction, "NULLS LAST").addOrderBy(
+        "r.number",
+        direction,
+      );
+    } else {
+      qb.orderBy(column, direction);
+    }
+    qb.addOrderBy("r.id", direction);
 
     const [data, total] = await qb
       .offset(offset)
@@ -1114,7 +1201,10 @@ export class ReceiptsService {
       });
     });
     void this.receiptOutbox.dispatch();
-    return result;
+    return withWarnings(
+      result,
+      signoffUnavailableWarning(prepared?.signoffUnavailable ?? []),
+    );
   }
 
   /**
@@ -1315,8 +1405,13 @@ export class ReceiptsService {
     receiptId: string,
     user: User,
   ): Promise<{ token: string; url: string }> {
+    // A document of a deleted order is gone for the user, so it cannot get a public link.
     const receipt = await this.receiptsRepository.findOne({
-      where: { id: receiptId, user_id: user.id },
+      where: {
+        id: receiptId,
+        user_id: user.id,
+        order: { deleted_at: IsNull() },
+      },
     });
 
     if (!receipt) {
@@ -1344,15 +1439,21 @@ export class ReceiptsService {
 
     const token = crypto.randomBytes(32).toString("hex");
 
-    const updated = await this.receiptsRepository.update(
-      {
+    // The order is checked again in the UPDATE itself: it may be deleted after the read above.
+    const updated = await this.receiptsRepository
+      .createQueryBuilder()
+      .update(Receipt)
+      .set({ public_token: token })
+      .where({
         id: receipt.id,
         user_id: user.id,
         status: ReceiptStatus.GENERATED,
         public_token: IsNull(),
-      },
-      { public_token: token },
-    );
+      })
+      .andWhere(
+        `EXISTS (SELECT 1 FROM "orders" "o" WHERE "o"."id" = "receipts"."order_id" AND "o"."deleted_at" IS NULL)`,
+      )
+      .execute();
     if (updated.affected) return { token, url: `${frontendUrl}/r/${token}` };
     const current = await this.receiptsRepository.findOne({
       where: {
@@ -1379,14 +1480,14 @@ export class ReceiptsService {
     }
 
     await this.receiptsRepository.update(
-      { id: receiptId },
+      { id: receiptId, user_id: user.id },
       { public_token: null },
     );
 
     this.logger.log(`Public token revoked for receipt ${receipt.number}`);
 
     return this.receiptsRepository.findOneOrFail({
-      where: { id: receiptId },
+      where: { id: receiptId, user_id: user.id },
     });
   }
 
@@ -1482,45 +1583,5 @@ export class ReceiptsService {
 
     const filename = documentFilename(receipt);
     return { buffer, filename };
-  }
-
-  async deleteReceiptFilesForOrder(
-    orderId: string,
-    userId: string,
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      // Same tenant -> order -> receipts -> assets order as creation/promotion.
-      await manager.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
-        [userId],
-      );
-      await manager.findOne(Order, {
-        where: { id: orderId, user_id: userId },
-        lock: { mode: "pessimistic_write" },
-      });
-      const receipts = await manager.find(Receipt, {
-        where: { order_id: orderId, user_id: userId },
-        select: [
-          "id",
-          "user_id",
-          "pdf_path",
-          "active_logo_asset_id",
-          "pending_logo_asset_id",
-        ],
-      });
-      const locked = await this.artifacts.lockRetirements(
-        receipts,
-        userId,
-        manager,
-        false,
-      );
-      for (const receipt of locked) {
-        await this.artifacts.retire(receipt, manager);
-        await manager.delete(Receipt, {
-          id: receipt.id,
-          user_id: receipt.user_id,
-        });
-      }
-    });
   }
 }

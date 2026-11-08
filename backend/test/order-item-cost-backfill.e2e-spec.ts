@@ -116,6 +116,16 @@ describeIsolatedPostgres(
         extra: { max: 2 },
       }).initialize();
 
+    // Selects only the columns that exist at this point of the migration chain;
+    // a whole-entity read would also name later columns such as returned_qty.
+    const findCostColumns = (id: string) =>
+      app
+        .getRepository(OrderItem)
+        .createQueryBuilder("item")
+        .select(["item.id", "item.unit_cost_cents"])
+        .where("item.id = :id", { id })
+        .getOne();
+
     const apply = () => current.runMigrations({ transaction: "all" });
 
     const revert = async () => {
@@ -317,15 +327,13 @@ describeIsolatedPostgres(
       await apply();
 
       const own = await runWithTenant(tenant, () =>
-        app.getRepository(OrderItem).findOneBy({ id: line.confirmed }),
+        findCostColumns(line.confirmed),
       );
 
       expect(own).toMatchObject({ unit_cost_cents: 100 });
       expect(own).not.toHaveProperty("unit_cost_estimated");
       expect(
-        await runWithTenant(rival, () =>
-          app.getRepository(OrderItem).findOneBy({ id: line.confirmed }),
-        ),
+        await runWithTenant(rival, () => findCostColumns(line.confirmed)),
       ).toBeNull();
     });
 
@@ -426,18 +434,16 @@ describeIsolatedPostgres(
       expect(await flagColumn()).toEqual([]);
       expect(await lineCosts()).toEqual(BEFORE_BACKFILL);
       expect(await current.showMigrations()).toBe(true);
-      // Why `down` needs the old image first: this entity's INSERT names the column.
+      // Why `down` needs the old image first: an INSERT naming the column fails
+      // once it is gone. Raw SQL, because the entity also maps later columns
+      // (returned_qty) that do not exist at this point of the chain.
       await expect(
         runWithTenant(tenant, () =>
-          app.getRepository(OrderItem).insert({
-            order_id: order.confirmed,
-            product_id: product.beans,
-            product_name: "Product",
-            unit_price_cents: 500,
-            qty: 1,
-            line_total_cents: 500,
-            user_id: tenant,
-          }),
+          app.query(
+            `INSERT INTO order_items (id, order_id, product_id, product_name, unit_price_cents, qty, line_total_cents, user_id, unit_cost_estimated)
+             VALUES ($1, $2, $3, 'Product', 500, 1, 500, $4, false)`,
+            [randomUUID(), order.confirmed, product.beans, tenant],
+          ),
         ),
       ).rejects.toThrow(/unit_cost_estimated/);
 

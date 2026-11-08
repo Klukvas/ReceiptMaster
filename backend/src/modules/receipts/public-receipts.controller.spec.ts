@@ -46,7 +46,24 @@ describe("PublicReceiptsController", () => {
         "__headers__",
         PublicReceiptsController.prototype.getPublicReceipt,
       ),
-    ).toEqual([{ name: "X-Robots-Tag", value: "noindex, nofollow" }]);
+    ).toEqual(
+      expect.arrayContaining([
+        { name: "X-Robots-Tag", value: "noindex, nofollow" },
+      ]),
+    );
+  });
+
+  it("keeps the JSON endpoint out of shared caches, so a revoked link stops working at once", () => {
+    expect(
+      Reflect.getMetadata(
+        "__headers__",
+        PublicReceiptsController.prototype.getPublicReceipt,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        { name: "Cache-Control", value: "private, no-store" },
+      ]),
+    );
   });
 
   describe("getPublicReceiptPdf", () => {
@@ -73,10 +90,10 @@ describe("PublicReceiptsController", () => {
             "inline; filename=\"receipt-2025-000001.pdf\"; filename*=UTF-8''receipt-2025-000001.pdf",
         }),
       );
-      expect(mockRes.set).toHaveBeenCalledWith(
-        "X-Robots-Tag",
-        "noindex, nofollow",
-      );
+      expect(mockRes.set).toHaveBeenCalledWith({
+        "X-Robots-Tag": "noindex, nofollow",
+        "Cache-Control": "private, no-store",
+      });
       expect(mockRes.send).toHaveBeenCalledWith(pdfBuffer);
     });
 
@@ -97,10 +114,10 @@ describe("PublicReceiptsController", () => {
       expect(mockRes.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Receipt not found" }),
       );
-      expect(mockRes.set).toHaveBeenCalledWith(
-        "X-Robots-Tag",
-        "noindex, nofollow",
-      );
+      expect(mockRes.set).toHaveBeenCalledWith({
+        "X-Robots-Tag": "noindex, nofollow",
+        "Cache-Control": "private, no-store",
+      });
     });
 
     it("should return 500 for unknown errors", async () => {
@@ -118,10 +135,10 @@ describe("PublicReceiptsController", () => {
       await controller.getPublicReceiptPdf("token", mockRes);
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.set).toHaveBeenCalledWith(
-        "X-Robots-Tag",
-        "noindex, nofollow",
-      );
+      expect(mockRes.set).toHaveBeenCalledWith({
+        "X-Robots-Tag": "noindex, nofollow",
+        "Cache-Control": "private, no-store",
+      });
     });
   });
 });

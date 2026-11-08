@@ -24,7 +24,7 @@ export const DocumentNumberingSettings = () => {
         <p>{t("numbering.warning")}</p>
       </div>
       {error ? (
-        <SettingsLoadError error={error} retry={refetch} />
+        <SettingsLoadError retry={refetch} />
       ) : isLoading || !settings ? (
         <div className="space-y-3" aria-busy="true" aria-label={t("common.loading")}>
           {[0, 1, 2].map((index) => (

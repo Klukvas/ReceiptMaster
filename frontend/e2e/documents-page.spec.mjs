@@ -83,7 +83,7 @@ const checkListing = async (results) => {
       );
       results.check(
         `${label}: the retention hint is shown`,
-        (await page.getByTestId("documents-retention-hint").innerText()).includes("10 most recent generated waybills, quotes, sales receipts and packing lists"),
+        (await page.getByTestId("documents-retention-hint").innerText()).includes("10 most recent waybills, quotes, sales receipts and packing lists"),
         "hint missing",
       );
       results.check(`${label}: no horizontal overflow`, await hasNoHorizontalOverflow(page), "page scrolls sideways");
@@ -266,6 +266,60 @@ const checkVoidRefusal = async (results) => {
   });
 };
 
+const checkPollingDoesNotCoverRows = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents", {}, async (page, state) => {
+    await visible(page.getByText("SAL-a5")).first().waitFor({ state: "visible" });
+    await page.evaluate(() => {
+      window.__busy = false;
+      new MutationObserver(() => {
+        if (document.querySelector('[aria-busy="true"]')) window.__busy = true;
+      }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
+    });
+    const before = (state.listQueries ?? []).length;
+    await settle(() => (state.listQueries ?? []).length >= before + 2, { timeoutMs: 12000 });
+    const overlays = await page.locator("table .backdrop-blur-\\[1px\\]").count();
+    results.check(
+      "background polling shows no loading overlay and never sets aria-busy",
+      overlays === 0 && (await page.evaluate(() => window.__busy)) === false,
+      `overlays=${overlays}`,
+    );
+    await visible(page.getByRole("button", { name: "Download: Invoice INV-a1" })).click();
+    results.check("a row action is clickable while polling", (await page.locator("main").count()) === 1, "page gone");
+  });
+};
+
+const checkReversedRange = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents?from=2026-03-10&to=2026-03-01", {}, async (page, state) => {
+    await page.getByTestId("documents-range-hint").waitFor({ state: "visible" });
+    await page.waitForTimeout(800);
+    results.check(
+      "a reversed date range sends no list request and shows an empty list",
+      (state.listQueries ?? []).length === 0 && (await visible(page.getByText("INV-a1")).count()) === 0,
+      JSON.stringify(state.listQueries),
+    );
+  });
+};
+
+const checkClearFocus = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents?type=invoice", {}, async (page) => {
+    await visible(page.getByText("INV-a1")).first().waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    const focused = await settle(() => page.evaluate(() => document.activeElement?.id === "documents-filter-type"));
+    results.check("after Clear filters focus moves to the first filter field", focused, "focus lost");
+  });
+};
+
+const checkRetryDoubleClick = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents", {}, async (page, state) => {
+    await visible(page.getByText("QUO-a4")).first().waitFor({ state: "visible" });
+    const button = visible(page.getByRole("button", { name: /^Create again: .* QUO-a4$/ }));
+    await button.dblclick();
+    await page.waitForTimeout(600);
+    const posts = state.requests.filter((request) => request === "POST /receipts/orders/o4/documents").length;
+    results.check("a double click on Create again sends one request", posts === 1, `posts=${posts}`);
+  });
+};
+
 const checkFailedRows = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withDocuments(viewport, "/documents", {}, async (page, state) => {
@@ -350,7 +404,7 @@ const checkTimeZone = async (results) => {
     const body = await page.locator("main").innerText();
     results.check(
       "table dates use the document time zone (UTC+14 moves 23:30Z to the next day)",
-      body.includes("11/03/2026, 13:30") && body.includes("Pacific/Kiritimati"),
+      body.includes("11 Mar 2026, 13:30") && body.includes("Pacific/Kiritimati"),
       body.slice(0, 500),
     );
   });
@@ -407,6 +461,10 @@ export const run = async () => {
   await checkActions(results);
   await checkFilters(results);
   await checkPolling(results);
+  await checkPollingDoesNotCoverRows(results);
+  await checkReversedRange(results);
+  await checkClearFocus(results);
+  await checkRetryDoubleClick(results);
   await checkVoidRefusal(results);
   await checkFailedRows(results);
   await checkClearFilters(results);

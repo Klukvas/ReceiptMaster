@@ -11,6 +11,7 @@ import {
 } from "../../settings/services/document-storage-sweep";
 
 import {
+  abandonUpload,
   reserveUpload,
   settleUpload,
   collectClaim,
@@ -46,7 +47,13 @@ export class DocumentArtifactsService {
       );
     });
     // An upload/commit error is ambiguous. Leave durable intent for reference-aware cleanup.
-    const url = await this.storage.uploadReceipt(buffer, filename, userId);
+    let url: string;
+    try {
+      url = await this.storage.uploadReceipt(buffer, filename, userId);
+    } catch (error) {
+      await abandonUpload(this.db, DocumentArtifact, lease);
+      throw error;
+    }
     const ready = await settleUpload(this.db, DocumentArtifact, lease);
     if (!ready) throw new ConflictException("PDF upload lease expired");
     return { id: lease.id, url, path: `object-storage://${object_key}` };

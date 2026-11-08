@@ -64,13 +64,14 @@ export const ConfirmModal = ({
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6">
-        <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+        <Button variant="secondary" onClick={onClose} disabled={isLoading} softDisabled>
           {dismissLabel ?? t("common.cancel")}
         </Button>
         <Button
           variant={buttonVariant}
           onClick={onConfirm}
           disabled={isLoading}
+          softDisabled
           className={
             buttonVariant === "danger"
               ? "border border-danger-base"

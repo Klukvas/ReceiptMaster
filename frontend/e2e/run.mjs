@@ -38,6 +38,7 @@ const SPECS = [
   { name: "document-types-parity", load: () => import("./document-types-parity.spec.mjs") },
   { name: "documents-orders", load: () => import("./documents-orders.spec.mjs") },
   { name: "documents-page", load: () => import("./documents-page.spec.mjs") },
+  { name: "documents-hardening", load: () => import("./documents-hardening.spec.mjs") },
   { name: "documents-dialogs", load: () => import("./documents-dialogs.spec.mjs") },
   { name: "settings-numbering", load: () => import("./settings-numbering.spec.mjs") },
   { name: "settings-signoff", load: () => import("./settings-signoff.spec.mjs") },

@@ -7,7 +7,11 @@ import type { DocumentConfig } from "../../settings/document-config";
 import { buildBuyer, buildSeller } from "../document-requisites";
 import { DocumentType } from "../entities/receipt.entity";
 import type { FrozenDocument } from "../frozen-document";
-import { buildDocumentRenderData, DocumentOrderInput } from "./document-view";
+import {
+  buildDocumentRenderData,
+  DocumentOrderInput,
+  nameWithLegalForm,
+} from "./document-view";
 
 const config: DocumentConfig = {
   ...legacyConfig(null),
@@ -123,6 +127,43 @@ describe("tax codes in the parties block", () => {
   });
 });
 
+describe("nameWithLegalForm", () => {
+  it.each([
+    ["ТОВ", "Ромашка", "ТОВ Ромашка"],
+    ["ТОВ", "ТОВ Ромашка", "ТОВ Ромашка"],
+    ["ТОВ", "тов Ромашка", "тов Ромашка"],
+    ["ТОВ", 'ТОВ "Ромашка"', 'ТОВ "Ромашка"'],
+    ["ТОВ", "ТОВ", "ТОВ"],
+    ["ТОВ", "Товариство друзів", "ТОВ Товариство друзів"],
+    ["", "Ромашка", "Ромашка"],
+    ["ФОП", "Іваненко", "ФОП Іваненко"],
+    ["Ltd.", "Ltd. Acme", "Ltd. Acme"],
+    ["Ltd.", "Ltdx Acme", "Ltd. Ltdx Acme"],
+  ])("%s + %s prints %s", (form, name, printed) => {
+    expect(nameWithLegalForm(form, name)).toBe(printed);
+  });
+
+  it("does not double the form in the seller line and the payee of an invoice", () => {
+    const seller = buildSeller(
+      {
+        ...config.company,
+        companyName: "ТОВ Ромашка",
+        companyTaxId: "12345678",
+        companyIban: "UA213223130000026007233566001",
+      },
+      { companyLegalForm: "ТОВ" },
+    );
+    const { view } = buildDocumentRenderData(
+      { ...frozenFor(DocumentType.INVOICE, false), seller },
+      order,
+      "N-1",
+      config,
+    );
+    expect(view.seller.name).toBe("ТОВ Ромашка");
+    expect(view.payment?.recipient).toBe("ТОВ Ромашка");
+  });
+});
+
 describe("buildDocumentRenderData", () => {
   it("splits the VAT of a payer's total and puts it in the payment purpose", () => {
     const { view } = buildDocumentRenderData(
@@ -138,9 +179,35 @@ describe("buildDocumentRenderData", () => {
     expect(view.totals.noVat).toBeUndefined();
     expect(view.totals.grandTotal).toBe(money(120000));
     expect(view.payment?.purpose).toBe(
-      `Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — ${money(20000)}`,
+      "Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — 200,00 грн",
     );
     expect(view.seller.vatLine).toBe("ІПН 123456789012");
+  });
+
+  it("writes the VAT amount in the purpose without a currency symbol or no-break spaces", () => {
+    const { view } = buildDocumentRenderData(
+      frozenFor(DocumentType.INVOICE, true),
+      {
+        ...order,
+        total_cents: 123456789,
+        items: [{ qty: 1, line_total_cents: 123456789 }],
+      },
+      "N-1",
+      config,
+    );
+    const purpose = view.payment?.purpose ?? "";
+    expect(purpose).toMatch(/— 205 761,32 грн$/);
+    expect(purpose).not.toMatch(/₴|[\u00a0\u202f]/);
+  });
+
+  it("keeps the ISO code as the unit for a non-hryvnia order", () => {
+    const { view } = buildDocumentRenderData(
+      frozenFor(DocumentType.INVOICE, true),
+      { ...order, currency: "USD" },
+      "N-1",
+      config,
+    );
+    expect(view.payment?.purpose).toMatch(/— 200,00 USD$/);
   });
 
   it("net plus VAT always equals the total", () => {

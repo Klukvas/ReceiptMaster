@@ -162,16 +162,27 @@ export function DataTable<T>({
 
  const getRowClass = rowClassName || defaultRowClass;
 
+ const ariaSortOf = (col: ColumnDef<T>) => {
+ if (!col.sortable) return undefined;
+ if (sortBy !== (col.sortKey || col.key)) return "none" as const;
+ return sortOrder ==="ASC" ? ("ascending" as const) : ("descending" as const);
+ };
+
+ const sortableColumns = visibleColumns.filter((col) => col.sortable);
+ const activeSortColumn = sortableColumns.find(
+ (col) => (col.sortKey || col.key) === sortBy,
+ );
+
  const renderSortIcon = (col: ColumnDef<T>) => {
  const colSortKey = col.sortKey || col.key;
  if (sortBy === colSortKey) {
  return sortOrder ==="ASC" ? (
- <ChevronUp className="w-3.5 h-3.5" />
+ <ChevronUp className="w-3.5 h-3.5" aria-hidden />
  ) : (
- <ChevronDown className="w-3.5 h-3.5" />
+ <ChevronDown className="w-3.5 h-3.5" aria-hidden />
  );
  }
- return <ArrowUpDown className="w-3.5 h-3.5 opacity-30" />;
+ return <ArrowUpDown className="w-3.5 h-3.5 opacity-30" aria-hidden />;
  };
 
  return (
@@ -260,11 +271,12 @@ export function DataTable<T>({
  </Card>
  )}
 
- {/* Desktop Table */}
- <div className="hidden lg:block bg-elevated rounded-2xl border border-[var(--color-border)] shadow-sm">
+ {/* Desktop Table: with a failed first load there is nothing to head, so only the error shows */}
+ {!(error && items.length === 0) && (
+ <div className="hidden lg:block bg-elevated rounded-2xl border border-[var(--color-border)] shadow-sm" aria-busy={isLoading || isFetching || undefined}>
  <div className="overflow-x-auto relative rounded-2xl">
  {isFetching && items.length > 0 && (
- <div className="absolute inset-0 bg-elevated/60 flex items-center justify-center z-10 backdrop-blur-[1px]">
+ <div aria-hidden className="pointer-events-none absolute inset-0 bg-elevated/60 flex items-center justify-center z-10 backdrop-blur-[1px]">
  <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
  </div>
  )}
@@ -285,6 +297,7 @@ export function DataTable<T>({
  {visibleColumns.map((col) => (
  <th
  key={col.key}
+ aria-sort={ariaSortOf(col)}
  className={`${compact ?"px-3" :"px-6"} py-3.5 text-left text-xs font-medium text-content-tertiary uppercase tracking-wider`}
  >
  {col.sortable ? (
@@ -313,7 +326,7 @@ export function DataTable<T>({
  {(isLoading || isFetching) && items.length === 0 ? (
  <tr>
  <td colSpan={colSpan} className="text-center py-16">
- <Loader2 className="w-5 h-5 animate-spin text-primary-500 mx-auto" />
+ <Loader2 role="status" aria-label={t("common.loading")} className="w-5 h-5 animate-spin text-primary-500 mx-auto" />
  </td>
  </tr>
  ) : error && items.length === 0 ? null : items.length === 0 ? (
@@ -321,7 +334,7 @@ export function DataTable<T>({
  <td colSpan={colSpan} className="px-6 py-16 text-center">
  <div className="flex flex-col items-center text-content-tertiary">
  {emptyIcon}
- <p className="mt-3 text-sm">
+ <p role="status" className="mt-3 text-sm">
  {searchQuery
  ? emptySearchMessage || t("common.noResults")
  : emptyMessage || t("common.noData")}
@@ -385,17 +398,46 @@ export function DataTable<T>({
  </table>
  </div>
  </div>
+ )}
 
  {/* Mobile View */}
- <div className="lg:hidden">
+ <div className="lg:hidden" aria-busy={isLoading || isFetching || undefined}>
+ {renderCard && sortableColumns.length > 0 && items.length > 0 && (
+ <div className="mb-3 flex items-center gap-2">
+ <label htmlFor="data-table-sort" className="text-xs font-medium text-content-tertiary">
+ {t("common.sortBy")}
+ </label>
+ <select
+ id="data-table-sort"
+ value={activeSortColumn?.key ?? ""}
+ onChange={(e) => onSort(e.target.value)}
+ className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content pointer-coarse:min-h-11"
+ >
+ {!activeSortColumn && <option value="" disabled />}
+ {sortableColumns.map((col) => (
+ <option key={col.key} value={col.key}>
+ {col.header}
+ </option>
+ ))}
+ </select>
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={() => activeSortColumn && onSort(activeSortColumn.key)}
+ aria-label={sortOrder ==="ASC" ? t("common.sortAscending") : t("common.sortDescending")}
+ >
+ {sortOrder ==="ASC" ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+ </Button>
+ </div>
+ )}
  {(isLoading || isFetching) && items.length === 0 ? (
  <div className="flex justify-center py-16">
- <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
+ <Loader2 role="status" aria-label={t("common.loading")} className="w-5 h-5 animate-spin text-primary-500" />
  </div>
  ) : error && items.length === 0 ? null : items.length === 0 ? (
  <div className="flex flex-col items-center text-content-tertiary py-16">
  {emptyIcon}
- <p className="mt-3 text-sm">
+ <p role="status" className="mt-3 text-sm">
  {searchQuery
  ? emptySearchMessage || t("common.noResults")
  : emptyMessage || t("common.noData")}

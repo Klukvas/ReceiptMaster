@@ -313,6 +313,9 @@ export const SettingsPage = () => {
     return VALID_TABS.includes(tabParam) ? tabParam : "company";
   });
 
+  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(activeTab === "documents");
+  if (activeTab === "documents" && !hasOpenedDocuments) setHasOpenedDocuments(true);
+
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
 
@@ -477,11 +480,12 @@ export const SettingsPage = () => {
           />
         </div>
 
-        {activeTab === "documents" && (
-          <>
+        {/* Mounted on first visit and then only hidden, so a numbering draft survives a trip to another tab. */}
+        {hasOpenedDocuments && (
+          <div hidden={activeTab !== "documents"} className="space-y-5">
             <DocumentNumberingSettings />
             <SignoffSettings />
-          </>
+          </div>
         )}
 
         {activeTab === "subscription" && <SubscriptionTab />}

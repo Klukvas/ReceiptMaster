@@ -160,6 +160,8 @@ export class ReceiptSnapshotService {
       config,
       new Date(),
     );
+    // A document without money (the packing list) prints no amount, so a bad one cannot fail it.
+    if (!specFor(request.type).requiresMoney) return;
     // A return note prints only the returned lines, so its quantities and amount are the ones judged.
     const printed = this.printedOrder(order, request);
     // The amount in words is drawn at render time; a bad currency or total must be refused now.
@@ -248,6 +250,7 @@ export class ReceiptSnapshotService {
       },
       // Pointers as read, usable or not: validatePrepared compares them, not the embedded ids.
       signoffPointers: signoffLoad?.pointers,
+      signoffUnavailable: signoffLoad?.unavailable ?? [],
       fingerprint: orderFingerprint(order),
       // Set only when the buyer is read live; a frozen buyer is not compared to the recipient.
       liveBuyerFingerprint:

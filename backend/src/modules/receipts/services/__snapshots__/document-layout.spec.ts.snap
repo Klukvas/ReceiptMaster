@@ -72,7 +72,7 @@ exports[`invoice and act layout readable .doc-* fragments (standard, uk) invoice
           <div><span class="doc-label">Одержувач:</span> ТОВ Продавець</div>
           <div><span class="doc-label">IBAN:</span> UA213223130000026007233566001</div>
           <div><span class="doc-label">Банк:</span> АТ Банк</div>
-          <div><span class="doc-label">Призначення платежу:</span> Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — 341,75 ₴</div>
+          <div><span class="doc-label">Призначення платежу:</span> Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — 341,75 грн</div>
         </div>
 ---
 <div class="doc-totals">

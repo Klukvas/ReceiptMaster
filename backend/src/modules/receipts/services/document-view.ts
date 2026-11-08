@@ -1,6 +1,7 @@
 import {
   formatDocumentDateOnly,
   formatDocumentMoney,
+  formatPlainAmount,
 } from "../../../common/utils/document-formatting.util";
 import { ApiErrors } from "../../../common/errors/ApiError";
 import { amountInWords } from "../../../common/utils/amount-in-words.util";
@@ -152,6 +153,27 @@ function returnSourceHeading(
     : `${source.title} ${sign}`;
 }
 
+/** "грн" reads naturally in a Ukrainian or Russian purpose; any other currency keeps its ISO code. */
+const purposeCurrencyUnit = (currency: string, language: string): string =>
+  currency === "UAH" && language !== "en" ? "грн" : currency;
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * "ТОВ" + "Ромашка" prints "ТОВ Ромашка", but a name the user already typed with the form
+ * ("ТОВ Ромашка") is not prefixed a second time. The form must end at a word boundary, so
+ * "ТОВ" does not match the start of "Товариство".
+ */
+export function nameWithLegalForm(legalForm: string, name: string): string {
+  if (!legalForm) return name;
+  const startsWithForm = new RegExp(
+    `^${escapeRegExp(legalForm)}(?![\\p{L}\\p{N}])`,
+    "iu",
+  );
+  return startsWithForm.test(name) ? name : joined(legalForm, name);
+}
+
 const joined = (...parts: string[]) => parts.filter(Boolean).join(" ");
 
 export function buildDocumentRenderData(
@@ -187,11 +209,15 @@ export function buildDocumentRenderData(
       : seller.vatPayer === false
         ? labels.vatNonPayer
         : "";
-  const sellerName = joined(seller.legalForm, seller.name);
+  const sellerName = nameWithLegalForm(seller.legalForm, seller.name);
   const buyerName = buyer.legalName || buyer.name;
 
   const purposeVat = vat
-    ? `${labels.purposeVat} ${rate}% — ${money(vat.vat)}`
+    ? `${labels.purposeVat} ${rate}% — ${formatPlainAmount(
+        vat.vat,
+        purposeCurrencyUnit(order.currency, language),
+        config.formatting,
+      )}`
     : seller.vatPayer === false
       ? labels.purposeNoVat
       : "";

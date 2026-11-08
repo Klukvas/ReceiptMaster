@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
+import type { DocumentWarning } from "../document-warnings";
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { Order } from "../../orders/entities/order.entity";
 import { User } from "../../users/entities/user.entity";
@@ -174,4 +175,7 @@ export class Receipt {
   @ManyToOne(() => Order, (order) => order.receipts)
   @JoinColumn({ name: "order_id" })
   order: Order;
+
+  /** Not a column: set only on the row returned by the call that issued the document. */
+  warnings?: DocumentWarning[];
 }

@@ -12,7 +12,7 @@ import { Recipient } from "../../recipients/entities/recipient.entity";
 const GOLDEN_SHA256: Record<string, string> = {
   standard: "436fc6c725a27823227d4edf51b65c9fe23cb5304845fff600a8dadb9f8fc523",
   compact: "659c3b0a0f8b17c58c6c03889a82c0d26bce3ff224f483bd8d073ff05a466cc0",
-  classic: "693ed50f72dc435c834a82d181f083e4b845a89e40141c12770c8a5b38fd6d99",
+  classic: "6498cc2efc3d2f53649d9c78de03e2f8ec6ed104301adf7fff996012d4618ac7",
   modern: "da26f4e5f5490c9a4cacc435b4ba4222757f8272fa1ccd55254f583a317b0655",
   elegant: "d98355d041a1a2dea0e6a306ce1366a03fb3773cc6da2128c21aa9d9eb5105d8",
   vintage: "6a4bbbec234a244c21a5197163e6736fbcf2d9a7c3b3413febeccefbfc13c739",
@@ -24,7 +24,7 @@ const GOLDEN_SHA256: Record<string, string> = {
   dark: "e3e45a3921b516a508361c92577e3ec4d68758c3323352772f356776f194b041",
   branded: "da46466a78c6bc8205f28386038db5d1836b1d531d9b71956478bfcfd9edadaa",
   delivery: "3e91fd1172a093de4911e373428cddff0d5f8805ca7e440fc24a79234e87b162",
-  proforma: "d95a4253e8efcae8122a466dd2372314ee22fb83a0e3253bb601de02053f6502",
+  proforma: "a9b7cb1427530c764458c5633d4411a3d569c15e9bfe6b543d8527e0713c72ef",
 };
 
 const order = Object.assign(new Order(), {

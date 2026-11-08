@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, type Order, type Receipt } from "../../lib/api";
+import { notifyIssueWarnings } from "../../lib/issue-warnings";
 import { documentEnvelope, type DocumentConfig } from "../../lib/document-config";
 import { localizedDocumentError } from "../../lib/document-error";
 import { isGeneratableType, waybillOf } from "../../lib/document-types";
@@ -72,13 +73,14 @@ export function CustomizeDocumentModal({
             }
           : {}),
       };
-      await api.post(
+      const response = await api.post(
         active
           ? `/receipts/${active.id}/regenerate`
           : `/receipts/orders/${order.id}/receipt`,
         documentEnvelope(payload, model.file),
         { headers: { "Content-Type": "multipart/form-data" } },
       );
+      notifyIssueWarnings(response.data);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["orders"] }),
         cache.invalidateQueries({ queryKey: ["receipts"] }),

@@ -35,8 +35,6 @@ const requestFor = (qty: number, orderItemId = "item-a"): DocumentRequest => ({
   details: { lines: [{ orderItemId, qty }] },
 });
 
-const createdAt = (iso: string) => new Date(iso);
-
 describe("ReceiptSnapshotService goods return preflight", () => {
   let documents: Partial<Record<DocumentType, { number: string; at: Date }>>;
   let order: Order;
@@ -175,6 +173,44 @@ describe("ReceiptSnapshotService goods return preflight", () => {
   });
 });
 
+describe("ReceiptSnapshotService preflight of a document without money", () => {
+  it("does not judge the amount of a packing list, which prints none", async () => {
+    const order = baseOrder({ total_cents: -1 } as never);
+    const configs = {
+      resolve: jest.fn(async () => ({
+        config: {
+          ...legacyConfig(null),
+          documentLanguage: "uk" as const,
+          company: {
+            ...legacyConfig(null).company,
+            companyName: "ТОВ Продавець",
+          },
+        },
+      })),
+      assertTemplate: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new ReceiptSnapshotService(
+      {
+        manager: {
+          findOne: jest.fn(async (entity) => (entity === Order ? order : null)),
+        },
+      } as never,
+      configs as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.preflight(
+        USER,
+        "order-1",
+        { logoAction: "keep" },
+        { type: DocumentType.PACKING_LIST, details: {} },
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe("ReceiptSnapshotService.prepare: one instant for number and date", () => {
   it("hands the same `now` to the number draw and to the render", async () => {
     const order = baseOrder();
@@ -213,7 +249,7 @@ describe("ReceiptSnapshotService.prepare: one instant for number and date", () =
     expect(drawn).toHaveLength(1);
     expect(drawn[0].zone).toBe("Europe/Kyiv");
     const renderArgs = renders.prepare.mock.calls[0] as unknown[];
-    expect(renderArgs.at(-1)).toBe(drawn[0].now);
+    expect(renderArgs[renderArgs.length - 1]).toBe(drawn[0].now);
   });
 });
 

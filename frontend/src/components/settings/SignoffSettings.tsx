@@ -36,7 +36,7 @@ export const SignoffSettings = () => {
         </div>
       )}
       {error ? (
-        <SettingsLoadError error={error} retry={refetch} />
+        <SettingsLoadError retry={refetch} announcement="status" />
       ) : isLoading || !data ? (
         <div
           className="grid grid-cols-1 gap-4 md:grid-cols-2"

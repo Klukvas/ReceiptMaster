@@ -307,7 +307,7 @@ const checkCreateGroup = async (results) => {
           (await page.getByRole("group", { name: "Create document" }).getByRole("menuitem").allInnerTexts())
             .map((text) => text.trim())
             .join("|") === "Quote…" &&
-          !items.includes("Generate waybill"),
+          !items.includes("Create waybill"),
         `menu items: ${items.join(" | ")}`,
       );
     });
@@ -317,7 +317,7 @@ const checkCreateGroup = async (results) => {
       const group = page.getByRole("group", { name: "Create document" });
       results.check(
         `${label}: a confirmed order lists quote, invoice, act, sales receipt, packing list and return note under "Create document", beside the one-click waybill`,
-        items.includes("Generate waybill") &&
+        items.includes("Create waybill") &&
           (await group.getByRole("menuitem").allInnerTexts()).map((text) => text.trim()).join("|") ===
             "Quote…|Invoice…|Act of Completed Work…|Sales receipt…|Packing list…|Return note…",
         `menu items: ${items.join(" | ")}`,
@@ -396,9 +396,9 @@ const checkInvoiceCreation = async (results) => {
 
   await withDocumentPage(DESKTOP, {}, async (page, state) => {
     const dialog = await openCreateDialog(page, "Invoice…");
-    await dialog.getByLabel("Due date").check();
+    await dialog.getByRole("radio", { name: "Pay by" }).check();
     const dueDate = daysFromToday(30);
-    await dialog.getByLabel("Pay by").fill(dueDate);
+    await dialog.locator("#document-due-date").fill(dueDate);
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     await settle(() => (state.created ?? []).length === 1);
     results.check(
@@ -418,7 +418,7 @@ const checkActCreation = async (results) => {
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     results.check(
       "an act period that ends before it starts is refused on the client",
-      (await dialog.getByText("The period start cannot be after its end").count()) === 1 &&
+      (await dialog.getByText("The end date is earlier than the start date").count()) === 1 &&
         (state.created ?? []).length === 0,
       JSON.stringify(state.created),
     );
@@ -767,7 +767,7 @@ const checkQuoteVoidReissue = async (results) => {
       "no quote card",
     );
     await page.locator('[data-document-type="quote"]').getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: "Void: Quote" });
+    const confirm = page.getByRole("dialog", { name: /Void Quote/ });
     await confirm.waitFor({ state: "visible" });
     await confirm.getByRole("button", { name: "Void", exact: true }).click();
     await settle(() => (state.voided ?? []).length === 1);
@@ -920,7 +920,7 @@ const checkReturnNoteDialog = async (results) => {
         `${label}: nothing is ticked and the note says it is informational and does not change stock`,
         !(await tick(dialog, DRIPPER).isChecked()) &&
           /does not change stock/i.test(await dialog.getByTestId("document-create-note").innerText()) &&
-          /not a fiscal document/i.test(await dialog.getByTestId("document-create-note").innerText()),
+          /not a tax document/i.test(await dialog.getByTestId("document-create-note").innerText()),
         await dialog.innerText(),
       );
       results.check(`${label}: the return note dialog fits the viewport`, await hasNoHorizontalOverflow(page), "horizontal overflow");
@@ -1002,7 +1002,7 @@ const checkReturnNoteSeveral = async (results) => {
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     await page.locator('[data-document-type="return_note"]').first().getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: "Void: Return note" });
+    const confirm = page.getByRole("dialog", { name: /Void Return note/ });
     await confirm.waitFor({ state: "visible" });
     results.check(
       "voiding a return note says its quantities become available again",
@@ -1079,11 +1079,11 @@ const checkVoid = async (results) => {
   await withDocumentPage(DESKTOP, { order: withInvoice }, async (page, state) => {
     await openDetails(page);
     await page.locator('[data-document-type="invoice"]').getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: "Void: Invoice" });
+    const confirm = page.getByRole("dialog", { name: /Void Invoice/ });
     await confirm.waitFor({ state: "visible" });
     results.check(
       "voiding an invoice says a new one can be issued under a new number",
-      (await confirm.innerText()).includes("you can issue a new Invoice with a new number"),
+      (await confirm.innerText()).includes("you can create a new Invoice with a new number"),
       await confirm.innerText(),
     );
     await confirm.getByLabel("Reason (optional)").fill("Wrong amount");
@@ -1205,14 +1205,14 @@ const checkVoidedWaybill = async (results) => {
       const items = await menuOf(page);
       results.check(
         `${label}: a voided waybill cannot be generated again from the menu, a voided invoice can`,
-        !items.includes("Generate waybill") && items.includes("Invoice…") && items.includes("Act of Completed Work…"),
+        !items.includes("Create waybill") && items.includes("Invoice…") && items.includes("Act of Completed Work…"),
         `menu items: ${items.join(" | ")}`,
       );
       await page.keyboard.press("Escape");
       await openDetails(page);
       results.check(
         `${label}: nor from the order details`,
-        (await page.getByRole("button", { name: "Generate waybill" }).count()) === 0,
+        (await page.getByRole("button", { name: "Create waybill" }).count()) === 0,
         "generate button visible",
       );
       const invoice = await page.locator('[data-document-type="invoice"]').innerText();

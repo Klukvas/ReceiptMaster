@@ -239,77 +239,68 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
       ),
     );
   }
-  it.each(["promotion", "orderdelete"])(
-    "%s eviction racing repair has no receipt/lease cycle",
-    async (mode) => {
-      const { candidate } = await setup();
-      const locks = new Locks(),
-        start = deferred(),
-        attempted = deferred();
-      let triggered = false;
-      locks.attempted = (tx, key) => {
-        if (
-          tx === "R" &&
-          key === (mode === "orderdelete" ? "Order:orderB" : "Receipt:B")
-        )
-          attempted.resolve();
-      };
-      locks.acquired = async (tx, key) => {
-        if (
-          tx === "E" &&
-          !triggered &&
-          (key === "Receipt:B" || key.endsWith("/old.pdf"))
-        ) {
-          triggered = true;
-          start.resolve();
-          await attempted.promise;
-        }
-      };
-      const m = installTransactions(locks, () => (!triggered ? "E" : "R"));
-      const repair = (async () => {
-        await start.promise;
-        return f.artifacts.repair("B", TENANT);
-      })();
-      const eviction = (async () => {
-        try {
-          if (mode === "orderdelete") {
-            await f.receipts.deleteReceiptFilesForOrder("orderB", TENANT);
-          } else {
-            await f.db.manager.save(Receipt, candidate);
-            await f.artifacts.execute("A", TENANT, "jobA");
-          }
-        } finally {
-          locks.release("E");
-        }
-      })();
-      const results = await Promise.allSettled([eviction, repair]);
-      saveTrace(mode, locks, results);
-      expect(
-        results.some(
-          (r) => r.status === "rejected" && /DEADLOCK/.test(String(r.reason)),
-        ),
-      ).toBe(false);
-      expect(results[0].status).toBe("fulfilled");
-      expect(f.memory.rows(Receipt).some((r) => r.id === "B")).toBe(false);
-      expect(
-        locks.trace.findIndex((s) => s === "E locks Receipt:B"),
-      ).toBeLessThan(
-        locks.trace.findIndex(
-          (s) => s === `E locks pdf:receipts/${TENANT}/old.pdf`,
-        ),
-      );
-      expect(
-        f.memory.rows(Receipt).filter((r) => r.status === "generated").length,
-      ).toBeLessThanOrEqual(10);
-    },
-  );
-  it("refetches the new PDF after waiting on an in-flight actual repair receipt lock", async () => {
+  it("promotion eviction racing repair has no receipt/lease cycle", async () => {
+    const { candidate } = await setup();
+    const locks = new Locks(),
+      start = deferred(),
+      attempted = deferred();
+    let triggered = false;
+    // The eviction locks the evicted document's order before the document, so a repair of
+    // that document queues on the order row, which the eviction already holds.
+    locks.attempted = (tx, key) => {
+      if (tx === "R" && key === "Order:orderB") attempted.resolve();
+    };
+    locks.acquired = async (tx, key) => {
+      if (
+        tx === "E" &&
+        !triggered &&
+        (key === "Receipt:B" || key.endsWith("/old.pdf"))
+      ) {
+        triggered = true;
+        start.resolve();
+        await attempted.promise;
+      }
+    };
+    installTransactions(locks, () => (!triggered ? "E" : "R"));
+    const repair = (async () => {
+      await start.promise;
+      return f.artifacts.repair("B", TENANT);
+    })();
+    const eviction = (async () => {
+      try {
+        await f.db.manager.save(Receipt, candidate);
+        await f.artifacts.execute("A", TENANT, "jobA");
+      } finally {
+        locks.release("E");
+      }
+    })();
+    const results = await Promise.allSettled([eviction, repair]);
+    saveTrace("promotion", locks, results);
+    expect(
+      results.some(
+        (r) => r.status === "rejected" && /DEADLOCK/.test(String(r.reason)),
+      ),
+    ).toBe(false);
+    expect(results[0].status).toBe("fulfilled");
+    expect(f.memory.rows(Receipt).some((r) => r.id === "B")).toBe(false);
+    expect(
+      locks.trace.findIndex((s) => s === "E locks Receipt:B"),
+    ).toBeLessThan(
+      locks.trace.findIndex(
+        (s) => s === `E locks pdf:receipts/${TENANT}/old.pdf`,
+      ),
+    );
+    expect(
+      f.memory.rows(Receipt).filter((r) => r.status === "generated").length,
+    ).toBeLessThanOrEqual(10);
+  });
+  it("refetches the new PDF after waiting on an in-flight actual repair order lock", async () => {
     const { b } = await setup();
     const locks = new Locks(),
       held = deferred(),
       attempted = deferred();
     locks.attempted = (tx, key) => {
-      if (tx === "E" && key === "Receipt:B") attempted.resolve();
+      if (tx === "E" && key === "Order:orderB") attempted.resolve();
     };
     locks.acquired = async (tx, key) => {
       if (tx === "R" && key === "Receipt:B") {
@@ -335,7 +326,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
     const results = await Promise.allSettled([repair, eviction]);
     saveTrace("wait-refetch", locks, results);
     expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
-    expect(locks.trace).toContain("E waits R on Receipt:B");
+    expect(locks.trace).toContain("E waits R on Order:orderB");
     expect(
       locks.trace.some((s) =>
         s.startsWith(`E locks pdf:receipts/${TENANT}/repair-B-`),

@@ -91,6 +91,16 @@ describeIsolatedPostgres(
          WHERE tablename = 'order_items' ORDER BY policyname`,
       );
 
+    // Selects only the columns that exist at this point of the migration chain;
+    // a whole-entity read would also name later columns such as returned_qty.
+    const findCostColumns = (id: string) =>
+      app
+        .getRepository(OrderItem)
+        .createQueryBuilder("item")
+        .select(["item.id", "item.unit_cost_cents"])
+        .where("item.id = :id", { id })
+        .getOne();
+
     const migrateToLatest = () => current.runMigrations({ transaction: "all" });
 
     beforeAll(async () => {
@@ -220,14 +230,10 @@ describeIsolatedPostgres(
       );
 
       expect(
-        await runWithTenant(tenant, () =>
-          app.getRepository(OrderItem).findOneBy({ id: lineId }),
-        ),
+        await runWithTenant(tenant, () => findCostColumns(lineId)),
       ).toMatchObject({ unit_cost_cents: 120 });
       expect(
-        await runWithTenant(otherTenant, () =>
-          app.getRepository(OrderItem).findOneBy({ id: lineId }),
-        ),
+        await runWithTenant(otherTenant, () => findCostColumns(lineId)),
       ).toBeNull();
       await current.query("DELETE FROM order_items WHERE id = $1", [lineId]);
     });

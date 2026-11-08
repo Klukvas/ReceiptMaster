@@ -22,6 +22,8 @@ export const FALLBACK_PAYMENT_TERM_DAYS = 5;
 export const QUOTE_DEFAULT_VALIDITY_DAYS = 14;
 /** The furthest a quotation's validity may reach past its issue date. */
 export const QUOTE_MAX_VALIDITY_DAYS = 365;
+/** The furthest an invoice due date may lie from the issue date: the same as `paymentTermDays` allows. */
+export const INVOICE_MAX_TERM_DAYS = 365;
 
 export type DocumentDetailsInput = {
   dueDate?: string;
@@ -150,6 +152,15 @@ function resolveInvoiceDetails(
   const term = resolveInvoiceTerm(input, defaultDays, issueDate);
   if (term.dueDate && term.dueDate < issueDate)
     throw ApiErrors.INVOICE_DUE_DATE_BEFORE_ISSUE_DATE(term.dueDate, issueDate);
+  if (
+    term.dueDateSource === "request_date" &&
+    term.dueDate &&
+    term.dueDate > addDaysToDate(issueDate, INVOICE_MAX_TERM_DAYS)
+  )
+    throw ApiErrors.VALIDATION_ERROR(
+      "details.dueDate",
+      `must be within ${INVOICE_MAX_TERM_DAYS} days of the issue date`,
+    );
   return term;
 }
 

@@ -300,7 +300,7 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
       "Водяной знак PROFORMA",
       "Банковские реквизиты",
       "Условия оплаты",
-      "Условия доставки",
+      "Условия поставки",
     ],
     colors: {
       primary: "#1E40AF",

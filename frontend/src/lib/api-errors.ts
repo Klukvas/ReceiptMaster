@@ -58,6 +58,8 @@ export const ErrorCode = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   REQUIRED_FIELD_MISSING: "REQUIRED_FIELD_MISSING",
 
+  RATE_LIMITED: "RATE_LIMITED",
+
   // General errors
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   UNAUTHORIZED: "UNAUTHORIZED",
@@ -185,6 +187,17 @@ export function parseApiError(error: unknown): {
   // Check if it's an Axios error with API error response
   if (isAxiosError(error) && error.response?.data) {
     const data = error.response.data as Partial<ApiErrorResponse>;
+
+    if (data.errorCode === ErrorCode.RATE_LIMITED) {
+      const seconds = (data as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+      return {
+        message:
+          typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
+            ? i18n.t("errors.rateLimitedIn", { seconds: Math.ceil(seconds) })
+            : i18n.t("errors.rateLimited"),
+        code: ErrorCode.RATE_LIMITED,
+      };
+    }
 
     if (data.error && data.errorCode) {
       const detail = serverDetail(data.error);

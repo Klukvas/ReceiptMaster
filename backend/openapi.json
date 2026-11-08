@@ -111,6 +111,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -584,6 +585,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -853,6 +855,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -957,6 +960,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID"
           }
         },
         "tags": [
@@ -1060,6 +1066,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -1160,6 +1167,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID"
           }
         },
         "tags": [
@@ -1821,7 +1831,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -1868,6 +1878,16 @@
           },
           "413": {
             "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1943,7 +1963,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -1990,6 +2010,16 @@
           },
           "413": {
             "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2065,7 +2095,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2112,6 +2142,16 @@
           },
           "413": {
             "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2187,7 +2227,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2244,6 +2284,16 @@
           },
           "422": {
             "description": "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them. A goods return note asking for more than is left to return is refused with RETURN_QUANTITY_EXCEEDED; `items` lists each line with the requested and remaining quantity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2434,8 +2484,15 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "400": {
+            "description": "type is not a document type (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2623,6 +2680,12 @@
         "responses": {
           "201": {
             "description": "Test PDF generated"
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)"
+          },
+          "500": {
+            "description": "Could not generate the preview"
           }
         },
         "tags": [
@@ -2691,7 +2754,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2746,6 +2809,16 @@
               }
             }
           },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Ошибка при регенерации PDF"
           }
@@ -2785,8 +2858,25 @@
               }
             }
           },
+          "400": {
+            "description": "Only a generated document can be shared (not one still processing, failed or voided)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Receipt not found"
+            "description": "Document not found, or its order was deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2932,7 +3022,7 @@
             }
           },
           "429": {
-            "description": "Two previews are already rendering; retry shortly",
+            "description": "More than 30 previews a minute (RATE_LIMITED), or two previews are already rendering; retry shortly",
             "content": {
               "application/json": {
                 "schema": {
@@ -4434,6 +4524,16 @@
               }
             }
           },
+          "400": {
+            "description": "Unknown kind (not signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No image of this kind is set",
             "content": {
@@ -4507,7 +4607,7 @@
             }
           },
           "400": {
-            "description": "Not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
+            "description": "Unknown kind, not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4527,7 +4627,7 @@
             }
           },
           "429": {
-            "description": "More than 10 uploads a minute",
+            "description": "More than 10 uploads a minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4562,6 +4662,16 @@
         "responses": {
           "204": {
             "description": "Removed or already absent"
+          },
+          "400": {
+            "description": "Unknown kind (not signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4922,6 +5032,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -8099,6 +8210,151 @@
           "replacement_error": {
             "type": "string",
             "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "document_type",
+          "number",
+          "pdf_url",
+          "hash",
+          "status",
+          "template_id",
+          "template_version",
+          "progress",
+          "error_message",
+          "created_at",
+          "voided_at",
+          "void_reason",
+          "public_token",
+          "active_revision",
+          "replacement_status",
+          "replacement_error"
+        ]
+      },
+      "ReceiptIssueResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "void_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "active_revision": {
+            "type": "integer"
+          },
+          "replacement_status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "replacement_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "SIGNOFF_UNAVAILABLE"
+                  ]
+                },
+                "kinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "signature",
+                      "stamp"
+                    ]
+                  },
+                  "minItems": 1
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "kinds",
+                "message"
+              ]
+            }
           }
         },
         "required": [

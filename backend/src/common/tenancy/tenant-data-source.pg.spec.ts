@@ -1,5 +1,5 @@
 import { ConflictException } from "@nestjs/common";
-import { DataSource } from "typeorm";
+import { DataSource, UpdateQueryBuilder } from "typeorm";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { join } from "path";
 import { Client } from "pg";
@@ -726,7 +726,9 @@ describeIsolatedPostgres(
         public_token: null,
       });
       const repository = source.getRepository(Receipt);
-      const update = repository.update.bind(repository);
+      // generatePublicToken writes through a query builder UPDATE, so the race is paused
+      // right before that statement runs; only the service's own UPDATE is intercepted.
+      const execute = UpdateQueryBuilder.prototype.execute;
       let resume: () => void;
       let started: () => void;
       const paused = new Promise<void>((resolve) => {
@@ -736,11 +738,10 @@ describeIsolatedPostgres(
         started = resolve;
       });
       const intercepted = jest
-        .spyOn(repository, "update")
-        .mockImplementationOnce(async (criteria, values) => {
+        .spyOn(UpdateQueryBuilder.prototype, "execute")
+        .mockImplementationOnce(function (this: UpdateQueryBuilder<Receipt>) {
           started();
-          await paused;
-          return update(criteria, values);
+          return paused.then(() => execute.call(this));
         });
       try {
         const service = new ReceiptsService(

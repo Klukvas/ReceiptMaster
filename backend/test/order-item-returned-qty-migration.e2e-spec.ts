@@ -17,7 +17,6 @@ import {
 const MIGRATIONS_DIR = join(__dirname, "../src/config/migrations");
 const NEW_MIGRATION_FILE = "1793300000000-AddOrderItemReturnedQty.ts";
 const NEW_MIGRATION = "AddOrderItemReturnedQty1793300000000";
-const TYPE_INDEX = "IDX_receipts_order_document_type";
 const ENTITIES = [join(__dirname, "../src/**/*.entity.ts")];
 
 /**
@@ -37,7 +36,6 @@ describeIsolatedPostgres(
     const roles: string[] = [];
     let root: Client;
     let current: DataSource;
-    let sequence = 0;
 
     const migrationFiles = readdirSync(MIGRATIONS_DIR)
       .filter((file) => file.endsWith(".ts") && file <= NEW_MIGRATION_FILE)
@@ -120,6 +118,17 @@ describeIsolatedPostgres(
         roles,
       }),
     );
+
+    it("stops with a message naming the problem while a line has a negative qty, and changes nothing", async () => {
+      const broken = await insertLine(-1);
+
+      await expect(migrateToLatest()).rejects.toThrow(
+        /1 order line\(s\) have a negative qty/,
+      );
+      expect(await column()).toBeUndefined();
+
+      await current.query(`DELETE FROM order_items WHERE id = $1`, [broken]);
+    });
 
     it("is the only pending migration and adds a non-null column defaulting to zero", async () => {
       const legacy = await insertLine(2);

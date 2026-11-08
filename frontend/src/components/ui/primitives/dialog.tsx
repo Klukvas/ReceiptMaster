@@ -64,13 +64,12 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
 
     requestAnimationFrame(() => {
       if (!dialogRef.current) return;
-      // Focus the first focusable child, falling back to the container
+      // A field marked data-autofocus wins; otherwise the first control that is not the header's
+      // Close button, so a form opens on its first field and a screen reader does not start on "Close".
+      const preferred = dialogRef.current.querySelector<HTMLElement>("[data-autofocus]");
       const focusable = getFocusableElements(dialogRef.current);
-      if (focusable.length > 0) {
-        focusable[0].focus();
-      } else {
-        dialogRef.current.focus();
-      }
+      const first = focusable.find((el) => !el.hasAttribute("data-dialog-close")) ?? focusable[0];
+      (preferred ?? first ?? dialogRef.current).focus();
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {

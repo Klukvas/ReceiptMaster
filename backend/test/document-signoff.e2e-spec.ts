@@ -413,6 +413,7 @@ describeIsolatedPostgres(
 
         const invoice = await generate(DocumentType.INVOICE);
         const row = await stored(invoice.id);
+        expect(invoice.warnings).toBeUndefined();
 
         const html = (
           await db.admin.query(
@@ -474,7 +475,9 @@ describeIsolatedPostgres(
         const stamp = await replace("stamp", originalStamp);
         const invoice = await generate(DocumentType.INVOICE);
         await promote(invoice);
-        const printedAtIssue = services.renderedHtml.at(-1) as string;
+        const printedAtIssue = services.renderedHtml[
+          services.renderedHtml.length - 1
+        ] as string;
 
         const replacement = await picture(250, 250, 0);
         await replace("signature", replacement);
@@ -498,7 +501,9 @@ describeIsolatedPostgres(
           ),
         );
 
-        const reprinted = services.renderedHtml.at(-1) as string;
+        const reprinted = services.renderedHtml[
+          services.renderedHtml.length - 1
+        ] as string;
         expect(reprinted).toBe(printedAtIssue);
         expect(reprinted).toContain(
           await dataUri(originalSignature, "signature"),
@@ -629,6 +634,14 @@ describeIsolatedPostgres(
           for (const receipt of [invoice, waybill]) {
             // No 409 loop: the pointer is unchanged between reading and the check.
             expect(receipt.status).toBe("processing");
+            // Issued anyway, but the caller is told what is missing.
+            expect(receipt.warnings).toEqual([
+              {
+                code: "SIGNOFF_UNAVAILABLE",
+                kinds: ["signature"],
+                message: expect.any(String),
+              },
+            ]);
             expect(
               (await stored(receipt.id)).pending_snapshot?.signoff,
             ).toMatchObject({
@@ -674,6 +687,7 @@ describeIsolatedPostgres(
 
         const waybill = await generate(DocumentType.WAYBILL);
 
+        expect(waybill.warnings).toBeUndefined();
         expect((await stored(waybill.id)).pending_snapshot).not.toHaveProperty(
           "signoff",
         );

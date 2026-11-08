@@ -1,4 +1,10 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 
 @Entity("document_artifacts")
 @Index(["user_id", "lease_expires_at"])
@@ -12,4 +18,5 @@ export class DocumentArtifact {
   @Column({ type: "uuid", default: () => "gen_random_uuid()" })
   cleanup_token: string;
   @Column({ type: "integer", default: 0 }) cleanup_attempts: number;
+  @CreateDateColumn({ type: "timestamptz" }) created_at: Date;
 }

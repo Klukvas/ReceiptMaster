@@ -68,13 +68,30 @@ class FakeLedger {
 describe("ReceiptsService goods return notes", () => {
   let service: ReceiptsService;
   let receiptsRepo: { findOne: jest.Mock; count: jest.Mock };
-  let dataSource: { manager: { query: jest.Mock }; transaction: jest.Mock };
+  let dataSource: {
+    manager: {
+      query: jest.Mock;
+      createQueryBuilder: jest.Mock;
+      findOneOrFail: jest.Mock;
+    };
+    transaction: jest.Mock;
+  };
   let snapshots: Record<string, jest.Mock>;
   let artifacts: { lockRetirements: jest.Mock; retire: jest.Mock };
   let outbox: { dispatch: jest.Mock };
   let ledger: FakeLedger;
   let saved: Array<Record<string, unknown>>;
   let nextNumber: number;
+  /** What the duplicate lookup finds: notes created moments ago for this order. */
+  let recentNotes: Array<Record<string, unknown>>;
+
+  const recentNotesQuery = () => {
+    const query: Record<string, jest.Mock> = {};
+    for (const name of ["addSelect", "where", "andWhere"])
+      query[name] = jest.fn(() => query);
+    query.getMany = jest.fn(async () => recentNotes);
+    return query;
+  };
 
   const order = {
     id: "order-1",
@@ -104,6 +121,7 @@ describe("ReceiptsService goods return notes", () => {
       count: jest.fn().mockResolvedValue(0),
       find: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
+      createQueryBuilder: jest.fn(recentNotesQuery),
       ...extra,
     };
     dataSource.transaction.mockImplementation(async (callback) =>
@@ -142,6 +160,7 @@ describe("ReceiptsService goods return notes", () => {
       ]),
     );
     saved = [];
+    recentNotes = [];
     nextNumber = 0;
     receiptsRepo = {
       findOne: jest.fn().mockResolvedValue(null),
@@ -149,6 +168,8 @@ describe("ReceiptsService goods return notes", () => {
     };
     dataSource = {
       manager: {
+        createQueryBuilder: jest.fn(recentNotesQuery),
+        findOneOrFail: jest.fn(async () => ({ id: "first-note" })),
         query: jest.fn(async (sql: string) => {
           // Number counter: bump on draw, give back on release.
           if (/\+ 1/.test(sql))
@@ -312,6 +333,129 @@ describe("ReceiptsService goods return notes", () => {
         issue([{ orderItemId: "item-a", qty: 1 }]),
       ).rejects.toMatchObject({ errorCode: "ORDER_CANNOT_BE_MODIFIED" });
       expect(ledger.returned("item-a")).toBe(0);
+    });
+  });
+
+  describe("a double submit", () => {
+    const lines = [{ orderItemId: "item-a", qty: 2 }];
+    const firstNote = (reason?: string) => ({
+      id: "first-note",
+      document_type: DocumentType.RETURN_NOTE,
+      active_snapshot: null,
+      pending_snapshot: {
+        document: {
+          details: {
+            returnLines: [...lines].reverse(),
+            ...(reason ? { returnReason: reason } : {}),
+          },
+        },
+      },
+    });
+
+    it("returns the first note without preflight, a number or the ledger", async () => {
+      recentNotes = [firstNote("Брак")];
+      const manager = wireTransaction();
+      prepareReturning(lines);
+
+      const result = await service.generateDocument(
+        "order-1",
+        user,
+        DocumentType.RETURN_NOTE,
+        { logoAction: "keep" },
+        { lines, reason: "Брак" },
+      );
+
+      expect(result).toEqual({ id: "first-note" });
+      expect(snapshots.preflight).not.toHaveBeenCalled();
+      expect(snapshots.prepare).not.toHaveBeenCalled();
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+      expect(manager.query).not.toHaveBeenCalled();
+      expect(ledger.returned("item-a")).toBe(0);
+    });
+
+    it.each([
+      ["another reason", [firstNote("Брак")], lines, "Інше"],
+      [
+        "no reason where the first had one",
+        [firstNote("Брак")],
+        lines,
+        undefined,
+      ],
+      [
+        "another quantity",
+        [firstNote()],
+        [{ orderItemId: "item-a", qty: 1 }],
+        undefined,
+      ],
+      ["no recent note", [], lines, undefined],
+    ])("issues a new note for %s", async (_name, found, requested, reason) => {
+      recentNotes = found;
+      wireTransaction();
+
+      prepareReturning(requested);
+      await service.generateDocument(
+        "order-1",
+        user,
+        DocumentType.RETURN_NOTE,
+        { logoAction: "keep" },
+        { lines: requested, ...(reason ? { reason } : {}) },
+      );
+
+      expect(snapshots.prepare).toHaveBeenCalled();
+      expect(ledger.returned("item-a")).toBe(requested[0].qty);
+    });
+
+    it("also answers with the first note when it only shows up under the order lock", async () => {
+      const manager = wireTransaction();
+      manager.createQueryBuilder.mockImplementation(() => {
+        const query = recentNotesQuery();
+        query.getMany.mockResolvedValue([firstNote()]);
+        return query;
+      });
+      manager.findOneOrFail.mockResolvedValue({
+        id: "first-note",
+        status: "processing",
+      });
+
+      const result = await issue(lines);
+
+      expect(result).toMatchObject({ id: "first-note" });
+      expect(ledger.returned("item-a")).toBe(0);
+      expect(saved).toEqual([]);
+      // The number drawn for the losing request is handed back.
+      expect(nextNumber).toBe(0);
+    });
+
+    it("does not put this call's signature warning on the first note it returns", async () => {
+      const manager = wireTransaction();
+      manager.createQueryBuilder.mockImplementation(() => {
+        const query = recentNotesQuery();
+        query.getMany.mockResolvedValue([firstNote()]);
+        return query;
+      });
+      manager.findOneOrFail.mockResolvedValue({
+        id: "first-note",
+        status: "processing",
+      });
+      snapshots.prepare.mockImplementation(
+        async (_u: string, _o: string, number: () => Promise<string>) => ({
+          html: "frozen",
+          number: await number(),
+          snapshot: snapshotWith(lines),
+          signoffUnavailable: ["signature"],
+        }),
+      );
+
+      const result = await service.generateDocument(
+        "order-1",
+        user,
+        DocumentType.RETURN_NOTE,
+        { logoAction: "keep" },
+        { lines },
+      );
+
+      expect(result).toMatchObject({ id: "first-note" });
+      expect(result).not.toHaveProperty("warnings");
     });
   });
 

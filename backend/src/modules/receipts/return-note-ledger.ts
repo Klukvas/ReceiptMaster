@@ -1,4 +1,4 @@
-import { EntityManager } from "typeorm";
+import { EntityManager, In } from "typeorm";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { Order } from "../orders/entities/order.entity";
 import {
@@ -113,7 +113,9 @@ export async function releaseReturnQuantities(
 }
 
 type FrozenSnapshot = {
-  document?: { details: { returnLines?: ReturnLine[] } };
+  document?: {
+    details: { returnLines?: ReturnLine[]; returnReason?: string };
+  };
 } | null;
 
 /**
@@ -206,4 +208,54 @@ export async function resolveReturnSource(
     number: String(order.order_number),
     date: issueDateIn(new Date(order.created_at), timeZone),
   };
+}
+
+/**
+ * A second identical request this soon is a double click or a client retry, not a second
+ * return: a person does not give back the same lines twice within seconds.
+ */
+export const DUPLICATE_RETURN_WINDOW_SECONDS = 10;
+
+const linesKey = (lines: readonly ReturnLine[]): string =>
+  [...lines]
+    .sort(byItemId)
+    .map((line) => `${line.orderItemId}:${line.qty}`)
+    .join(",");
+
+/**
+ * The note an identical request created a moment ago (same lines and reason, not voided or
+ * failed), or null. Must run after the order row is locked: the first request has committed
+ * by then, so concurrent double submits, in this process or another, find each other.
+ */
+export async function findRecentIdenticalReturnNote(
+  manager: EntityManager,
+  userId: string,
+  orderId: string,
+  request: { lines: readonly ReturnLine[]; reason?: string },
+): Promise<Receipt | null> {
+  const recent = await manager
+    .createQueryBuilder(Receipt, "r")
+    .addSelect(["r.active_snapshot", "r.pending_snapshot"])
+    .where("r.order_id = :orderId AND r.user_id = :userId", { orderId, userId })
+    .andWhere("r.document_type = :type", { type: DocumentType.RETURN_NOTE })
+    .andWhere({
+      status: In([ReceiptStatus.PROCESSING, ReceiptStatus.GENERATED]),
+    })
+    .andWhere(
+      `r.created_at > now() - interval '${DUPLICATE_RETURN_WINDOW_SECONDS} seconds'`,
+    )
+    .getMany();
+  const wanted = linesKey(request.lines);
+  const match = recent.find((note) => {
+    const snapshot = note.active_snapshot ?? note.pending_snapshot;
+    return (
+      linesKey(frozenReturnLines(note)) === wanted &&
+      (snapshot?.document?.details.returnReason ?? "") ===
+        (request.reason ?? "")
+    );
+  });
+  if (!match) return null;
+  return manager.findOneOrFail(Receipt, {
+    where: { id: match.id, user_id: userId },
+  });
 }

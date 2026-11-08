@@ -1,14 +1,10 @@
 import "reflect-metadata";
-import { ConflictException } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { CacheService } from "../src/common/services/cache.service";
 import { ApiErrorResponse } from "../src/common/errors/ApiError";
 import { OrdersService } from "../src/modules/orders/orders.service";
-import {
-  Order,
-  OrderStatus,
-} from "../src/modules/orders/entities/order.entity";
+import { Order } from "../src/modules/orders/entities/order.entity";
 import { OrderItem } from "../src/modules/orders/entities/order-item.entity";
 import { IdempotencyKey } from "../src/modules/orders/entities/idempotency-key.entity";
 import {
@@ -24,7 +20,6 @@ import { UserSettings } from "../src/modules/settings/entities/user-settings.ent
 import { DocumentAssetsService } from "../src/modules/settings/services/document-assets.service";
 import { DocumentConfigService } from "../src/modules/settings/services/document-config.service";
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
-import { ReceiptsController } from "../src/modules/receipts/receipts.controller";
 import {
   DocumentType,
   Receipt,
@@ -331,8 +326,9 @@ describeIsolatedPostgres(
       await giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]);
       expect(await counter()).toBe(1);
 
+      // A different reason: an identical request would be a double submit, not a second return.
       const error = (await rejection(
-        giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]),
+        giveBack(order, [{ orderItemId: items[0].id, qty: 2 }], "Ще раз"),
       )) as ApiErrorResponse;
 
       expect(error.errorCode).toBe("RETURN_QUANTITY_EXCEEDED");
@@ -348,11 +344,11 @@ describeIsolatedPostgres(
     it("lets exactly one of two concurrent notes take the last pieces", async () => {
       const { order, items } = await confirmedOrder([2]);
 
-      const settled = await Promise.allSettled([
-        giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]),
-        giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]),
-        giveBack(order, [{ orderItemId: items[0].id, qty: 2 }]),
-      ]);
+      const settled = await Promise.allSettled(
+        ["A", "B", "C"].map((reason) =>
+          giveBack(order, [{ orderItemId: items[0].id, qty: 2 }], reason),
+        ),
+      );
 
       const accepted = settled.filter((r) => r.status === "fulfilled");
       const refused = settled.filter(
@@ -366,6 +362,68 @@ describeIsolatedPostgres(
         });
       expect(await returnedQty(items[0])).toBe(2);
       expect(await noteCount(order)).toBe(1);
+    });
+
+    it("answers a repeated identical request with the first note: one note, one number, the ledger counted once", async () => {
+      const { order, items } = await confirmedOrder();
+      const lines = [{ orderItemId: items[0].id, qty: 1 }];
+
+      const first = await giveBack(order, lines, "Брак");
+      const second = await giveBack(order, lines, "Брак");
+
+      expect(second.id).toBe(first.id);
+      expect(second.number).toBe(first.number);
+      expect(await noteCount(order)).toBe(1);
+      expect(await returnedQty(items[0])).toBe(1);
+      expect(await counter()).toBe(1);
+    });
+
+    it("returns the first note to a double submit even when it took the last pieces", async () => {
+      const { order, items } = await confirmedOrder([2]);
+      const lines = [{ orderItemId: items[0].id, qty: 2 }];
+
+      const first = await giveBack(order, lines);
+      const second = await giveBack(order, lines);
+
+      expect(second.id).toBe(first.id);
+      expect(await returnedQty(items[0])).toBe(2);
+      expect(await noteCount(order)).toBe(1);
+    });
+
+    it("creates one note from concurrent identical requests", async () => {
+      const { order, items } = await confirmedOrder();
+      const lines = [{ orderItemId: items[0].id, qty: 1 }];
+
+      const notes = await Promise.all(
+        [1, 2, 3, 4].map(() => giveBack(order, lines, "Брак")),
+      );
+
+      expect(new Set(notes.map((note) => note.id)).size).toBe(1);
+      expect(await noteCount(order)).toBe(1);
+      expect(await returnedQty(items[0])).toBe(1);
+    });
+
+    it("treats other lines, quantities or a reason as a new return", async () => {
+      const { order, items } = await confirmedOrder();
+
+      await giveBack(order, [{ orderItemId: items[0].id, qty: 1 }], "Брак");
+      await giveBack(order, [{ orderItemId: items[0].id, qty: 1 }], "Інше");
+      await giveBack(order, [{ orderItemId: items[0].id, qty: 1 }]);
+
+      expect(await noteCount(order)).toBe(3);
+      expect(await returnedQty(items[0])).toBe(3);
+    });
+
+    it("does not treat a voided note as a duplicate", async () => {
+      const { order, items } = await confirmedOrder();
+      const lines = [{ orderItemId: items[0].id, qty: 1 }];
+      const first = await giveBack(order, lines, "Брак");
+      await asTenant(() => receipts.voidReceipt(first.id, user, "помилка"));
+
+      const again = await giveBack(order, lines, "Брак");
+
+      expect(again.id).not.toBe(first.id);
+      expect(await returnedQty(items[0])).toBe(1);
     });
 
     it("gives the quantities back when a note is voided and accepts them again", async () => {
@@ -468,9 +526,11 @@ describeIsolatedPostgres(
       const { order, items } = await confirmedOrder([12]);
       const issued: Receipt[] = [];
       for (let index = 0; index < 11; index++) {
-        const note = await giveBack(order, [
-          { orderItemId: items[0].id, qty: 1 },
-        ]);
+        const note = await giveBack(
+          order,
+          [{ orderItemId: items[0].id, qty: 1 }],
+          `Повернення ${index}`,
+        );
         await promote(note);
         issued.push(note);
       }

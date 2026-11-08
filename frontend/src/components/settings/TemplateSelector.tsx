@@ -159,7 +159,7 @@ export const TemplateSelector = () => {
   };
 
   if (designError)
-    return <SettingsLoadError error={designError} retry={refetchDesign} />;
+    return <SettingsLoadError retry={refetchDesign} />;
   if (isLoadingTemplates || isLoadingCurrent) {
     return (
       <SettingsSection

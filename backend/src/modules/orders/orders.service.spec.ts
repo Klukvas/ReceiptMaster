@@ -126,7 +126,9 @@ describe("OrdersService", () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       findOneOrFail: jest.fn().mockImplementation(async () => ({
         ...locked,
-        status: manager.update.mock.calls.at(-1)?.[2]?.status,
+        status:
+          manager.update.mock.calls[manager.update.mock.calls.length - 1]?.[2]
+            ?.status,
       })),
     };
     dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));

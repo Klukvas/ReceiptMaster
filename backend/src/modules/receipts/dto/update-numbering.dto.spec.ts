@@ -33,6 +33,9 @@ describe("parseUpdateNumbering", () => {
   it.each([
     ["ends with a digit", "INV1"],
     ["ends with a digit after a separator", "A-2"],
+    ["ends with an Arabic-Indic digit", "A\u0663"],
+    ["ends with a fullwidth digit", "A\uff12"],
+    ["ends with a superscript digit", "A\u00b2"],
     ["contains a slash", "A/B"],
     ["contains a backslash", "A\\B"],
     ["contains a quote", 'A"B'],
@@ -48,6 +51,15 @@ describe("parseUpdateNumbering", () => {
       errorCode: "VALIDATION_ERROR",
     });
     expect(error.message).toContain("prefix");
+  });
+
+  it("names the length, not the characters, for a prefix that is too long", () => {
+    expect(refusal({ ...valid, prefix: "ABCDEFGHIJKLMNOPQ" }).message).toMatch(
+      /longer than|shorter than|16/,
+    );
+    expect(
+      refusal({ ...valid, prefix: "ABCDEFGHIJKLMNOPQ" }).message,
+    ).not.toMatch(/may contain only/);
   });
 
   it("accepts exactly 16 characters", () => {

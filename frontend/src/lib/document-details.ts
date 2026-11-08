@@ -87,12 +87,13 @@ export function buildInvoiceDetails(
     : { ok: false, errors: { paymentTermDays: "documents.errors.termDaysInvalid" } };
 }
 
+/** Which of the two period dates is wrong, so each input carries its own message. */
 function periodErrors(form: ActForm): DetailsErrors {
   const { from, to } = form;
   if (from === "" && to === "") return {};
-  if (!isCalendarDate(from) || !isCalendarDate(to))
-    return { period: "documents.errors.periodIncomplete" };
-  return from > to ? { period: "documents.errors.periodOrder" } : {};
+  if (!isCalendarDate(from)) return { periodFrom: "documents.errors.periodFromRequired" };
+  if (!isCalendarDate(to)) return { periodTo: "documents.errors.periodToRequired" };
+  return from > to ? { periodTo: "documents.errors.periodOrder" } : {};
 }
 
 export function buildActDetails(form: ActForm): Built<ActDetails> {
@@ -288,6 +289,7 @@ export function buildDocumentRequest(
 
 /** Maps a server path like `details.period.from` to the form field that shows it. */
 export function formFieldOf(serverPath: string): string {
-  const [, field] = serverPath.split(".");
+  const [, field, part] = serverPath.split(".");
+  if (field === "period") return part === "to" ? "periodTo" : "periodFrom";
   return field ?? serverPath;
 }

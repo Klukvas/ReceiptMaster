@@ -4,6 +4,7 @@ import { DataSource, EntityManager, MoreThan } from "typeorm";
 import { DocumentAsset } from "../entities/document-asset.entity";
 import { DocumentArtifact } from "../../receipts/entities/document-artifact.entity";
 import {
+  LATE_WRITE_WINDOW_MS,
   scheduleStorageSweep,
   STORAGE_BATCH,
   STORAGE_GRACE_MS,
@@ -73,8 +74,38 @@ export async function settleUpload<T extends StoredObject>(
   });
 }
 
+/** The PUT was rejected or its outcome is unknown. A late write may still land, so the
+ * durable intent stays (`upload_pending`), but the row becomes a deleting tombstone: only
+ * `uploading` rows count against the live-upload cap, and a storage outage must not lock
+ * the account out of generating documents and uploading images for the whole 24 h lease.
+ * Failures here are logged and never mask the original upload error.
+ */
+export async function abandonUpload(
+  db: DataSource,
+  entity: StoredEntity,
+  original: StoredObject,
+): Promise<void> {
+  try {
+    await db.manager.update(
+      entity,
+      { id: original.id, user_id: original.user_id, state: "uploading" },
+      { state: "deleting", cleanup_token: randomUUID() },
+    );
+  } catch (error) {
+    logger.warn(
+      `Could not release a failed upload lease: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
+}
+
+function isWithinLateWriteWindow(asset: StoredObject): boolean {
+  return (
+    Date.now() - new Date(asset.created_at).getTime() < LATE_WRITE_WINDOW_MS
+  );
+}
+
 /** A claim token fences database finalization, including a resumed uploader's fresh intent.
- * Unsettled PUTs retain tombstones; they can complete arbitrarily late. Deleting tombstones
+ * Unsettled PUTs retain tombstones for `LATE_WRITE_WINDOW_MS`, then the row goes. Deleting tombstones
  * never consume live upload capacity, even when retries extend their cleanup deadline.
  * Storage calls are always outside transactions. Failed claims move behind peers.
  */
@@ -92,7 +123,7 @@ export async function collectClaim(
   };
   try {
     await remove();
-    if (asset.upload_pending) {
+    if (asset.upload_pending && isWithinLateWriteWindow(asset)) {
       await db.manager.update(entity, where, {
         lease_expires_at: new Date(Date.now() + STORAGE_GRACE_MS),
       });

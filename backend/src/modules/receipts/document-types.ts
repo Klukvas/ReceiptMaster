@@ -75,7 +75,7 @@ export type DocumentLayoutSpec = {
   /** Label of the notice printed above the parties; null for none. */
   notice: NoticeLabelKey | null;
   /** Replaces the label of the grand total line when the default does not fit the document. */
-  grandTotalLabel?: "offerTotal" | "returnTotal";
+  grandTotalLabel?: "offerTotal" | "saleTotal" | "returnTotal";
   /** Which of the buyer's addresses leads: the legal one, or the delivery one. */
   buyerAddress: "legal" | "delivery";
   /** Signature columns; the buyer's is reserved only when `buyer` is set. */
@@ -204,6 +204,7 @@ export const DOCUMENT_TYPE_SPECS: Record<
       completionStatement: false,
       money: true,
       notice: "nonFiscalNotice",
+      grandTotalLabel: "saleTotal",
       buyerAddress: "legal",
       signatures: { seller: "sellerSignature", stamp: false },
       allowedStyles: DOCUMENT_STYLES,

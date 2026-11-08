@@ -134,7 +134,7 @@ export const CompanyInfoCustomizer = () => {
         }
       >
         {error ? (
-          <SettingsLoadError error={error} retry={refetch} />
+          <SettingsLoadError retry={refetch} />
         ) : isLoading ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

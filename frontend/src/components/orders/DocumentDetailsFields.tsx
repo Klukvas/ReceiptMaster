@@ -42,10 +42,12 @@ export function InvoiceDetailsFields({
       </legend>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {TERM_MODES.map((mode) => (
-          <label key={mode} className="flex items-center gap-2 text-sm">
+          <label key={mode} className="flex items-center gap-2 py-1 text-sm pointer-coarse:min-h-11 pointer-coarse:pr-3">
             <input
               type="radio"
               name="payment-term-mode"
+              className="h-4 w-4 pointer-coarse:h-5 pointer-coarse:w-5"
+              data-autofocus={form.mode === mode || undefined}
               checked={form.mode === mode}
               onChange={() => onChange({ ...form, mode })}
             />
@@ -92,6 +94,7 @@ export function ActDetailsFields({
     <div className="space-y-4">
       <Input
         id="document-contract-ref"
+        data-autofocus
         label={t("documents.contractRef")}
         placeholder={t("documents.contractRefPlaceholder")}
         maxLength={MAX_CONTRACT_REF_LENGTH}
@@ -109,6 +112,7 @@ export function ActDetailsFields({
           <Input
             id="document-period-from"
             aria-label={t("documents.periodFrom")}
+            error={translated(t, errors, "periodFrom")}
             type="date"
             value={form.from}
             max={form.to || undefined}
@@ -117,17 +121,13 @@ export function ActDetailsFields({
           <Input
             id="document-period-to"
             aria-label={t("documents.periodTo")}
+            error={translated(t, errors, "periodTo")}
             type="date"
             value={form.to}
             min={form.from || undefined}
             onChange={(event) => onChange({ ...form, to: event.target.value })}
           />
         </div>
-        {errors.period && (
-          <p role="alert" className="text-sm text-[var(--color-danger)]">
-            {t(errors.period)}
-          </p>
-        )}
         <p className="text-xs text-content-tertiary">
           {t("documents.periodHint")}
         </p>
@@ -148,6 +148,7 @@ export function QuoteDetailsFields({
       <div className="space-y-1">
         <Input
           id="document-valid-until"
+          data-autofocus
           label={t("documents.validUntil")}
           type="date"
           min={today}

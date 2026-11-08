@@ -19,7 +19,8 @@ import {
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger";
-import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
+import { Throttle } from "@nestjs/throttler";
+import { UserThrottlerGuard } from "../../common/guards/user-throttler.guard";
 import { Response } from "express";
 import { ApiErrors } from "../../common/errors/ApiError";
 import {
@@ -61,7 +62,10 @@ export class DocumentSignoffController {
       "image/png": { schema: { type: "string", format: "binary" } },
     },
   })
-  @ApiFailureResponses({ 404: "No image of this kind is set" })
+  @ApiFailureResponses({
+    400: "Unknown kind (not signature or stamp)",
+    404: "No image of this kind is set",
+  })
   async image(
     @Param("kind", KIND_PIPE) kind: SignoffKind,
     @Request() req: { user: User },
@@ -79,7 +83,7 @@ export class DocumentSignoffController {
   }
 
   @Put(":kind")
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @UseInterceptors(
     FileInterceptor("file", {
@@ -96,9 +100,9 @@ export class DocumentSignoffController {
   @ApiSignoffUploadBody()
   @ApiDataResponse(200, "SignoffImage", "The new image")
   @ApiFailureResponses({
-    400: "Not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
+    400: "Unknown kind, not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
     413: "File above 2 MiB",
-    429: "More than 10 uploads a minute",
+    429: "More than 10 uploads a minute (RATE_LIMITED)",
   })
   replace(
     @Param("kind", KIND_PIPE) kind: SignoffKind,
@@ -113,6 +117,7 @@ export class DocumentSignoffController {
   @HttpCode(204)
   @ApiOperation({ summary: "Remove the signature or stamp image (idempotent)" })
   @ApiResponse({ status: 204, description: "Removed or already absent" })
+  @ApiFailureResponses({ 400: "Unknown kind (not signature or stamp)" })
   async remove(
     @Param("kind", KIND_PIPE) kind: SignoffKind,
     @Request() req: { user: User },

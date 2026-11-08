@@ -144,7 +144,7 @@ const checkInvoiceDueDate = async (results) => {
   const clockAt = "2026-06-10T23:30:00.000Z";
   await withOrdersPage({ viewport: VIEWPORTS[2].viewport, clockAt, timeZone: "Pacific/Kiritimati" }, async (page, state) => {
     const dialog = await openCreateDialog(page, "Invoice…");
-    await dialog.getByRole("radio", { name: "Due date" }).check();
+    await dialog.getByRole("radio", { name: "Pay by" }).check();
     const due = dialog.locator("#document-due-date");
     results.check(
       "the due date picker starts at today in the document time zone, not the browser's",

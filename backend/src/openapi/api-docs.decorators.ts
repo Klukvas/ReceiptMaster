@@ -35,6 +35,7 @@ export type SharedSchemaName =
   | "DocumentPresetResponse"
   | "DocumentPresetDeletedResponse"
   | "ReceiptProjection"
+  | "ReceiptIssueResult"
   | "DocumentListItem"
   | "NumberingSetting"
   | "NumberingSettingsResponse"

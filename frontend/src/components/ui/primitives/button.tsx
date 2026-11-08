@@ -44,19 +44,40 @@ interface ButtonProps
     React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   loading?: boolean;
+  /**
+   * Keeps the button focusable while it is inert (`aria-disabled` instead of `disabled`), so a
+   * keyboard user who pressed it is not thrown to the top of the page when it goes busy.
+   */
+  softDisabled?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { className, variant, size, loading = false, disabled, children, ...props },
+    {
+      className,
+      variant,
+      size,
+      loading = false,
+      softDisabled = false,
+      disabled,
+      onClick,
+      children,
+      ...props
+    },
     ref,
   ) => {
+    const isInert = Boolean(disabled) || loading;
     return (
       <button
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(
+          buttonVariants({ variant, size, className }),
+          softDisabled && "aria-disabled:pointer-events-none aria-disabled:opacity-50",
+        )}
         ref={ref}
-        disabled={disabled || loading}
+        disabled={softDisabled ? undefined : isInert}
+        aria-disabled={softDisabled && isInert ? true : undefined}
         aria-busy={loading || undefined}
+        onClick={softDisabled && isInert ? (event) => event.preventDefault() : onClick}
         {...props}
       >
         {loading && (

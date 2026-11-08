@@ -172,6 +172,17 @@ describe("releaseDocumentNumber", () => {
     );
   });
 
+  it.each([DocumentType.INVOICE, DocumentType.WAYBILL])(
+    "reads the %s result as plain rows: the UPDATE sits in a CTE, not bare",
+    async (type) => {
+      // A bare UPDATE ... RETURNING answers `[rows, count]` from the postgres driver, which
+      // made `rows.length` always 2 and hid a refused release.
+      const manager = { query: jest.fn().mockResolvedValue([]) };
+      await releaseDocumentNumber(manager as never, "u", type, 3);
+      expect(manager.query.mock.calls[0][0]).toMatch(/^\s*WITH /);
+    },
+  );
+
   it("leaves the gap when a later number was already handed out", async () => {
     const manager = { query: jest.fn().mockResolvedValue([]) };
     expect(
@@ -219,6 +230,11 @@ describe("raiseCounterToIssued", () => {
       calls.findIndex((sql) => /MAX\(/.test(sql)),
     );
     expect(calls.some((sql) => /GREATEST\("value"/.test(sql))).toBe(true);
+    // The raise is read back as plain rows (CTE), and reads all 10 digits of a number.
+    expect(calls.find((sql) => /GREATEST\("value"/.test(sql))).toMatch(
+      /^\s*WITH /,
+    );
+    expect(calls.find((sql) => /MAX\(/.test(sql))).toContain("{1,10}");
     expect(calls.some((sql) => /"users"/.test(sql))).toBe(false);
   });
 

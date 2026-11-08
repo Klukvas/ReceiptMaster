@@ -46,7 +46,7 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
   return (
     <section aria-labelledby="order-documents-heading" className="mt-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 id="order-documents-heading" className="text-[11px] font-semibold uppercase tracking-wider text-content-tertiary">
+        <h3 id="order-documents-heading" tabIndex={-1} className="text-[11px] outline-none font-semibold uppercase tracking-wider text-content-tertiary">
           {t("documents.sectionTitle")}
         </h3>
         <div className="flex flex-wrap gap-2">
@@ -79,7 +79,13 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
       )}
       {creating && <CreateDocumentModal order={order} type={creating} onClose={() => setCreating(null)} />}
       {replacing && <CustomizeDocumentModal order={order} document={replacing} onClose={() => setReplacing(null)} />}
-      {voiding && <VoidDocumentModal document={voiding} onClose={() => setVoiding(null)} />}
+      {voiding && (
+        <VoidDocumentModal
+          document={voiding}
+          focusFallbackId="order-documents-heading"
+          onClose={() => setVoiding(null)}
+        />
+      )}
     </section>
   );
 }

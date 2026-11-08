@@ -18,6 +18,7 @@ import { STORAGE_GRACE_MS, STORAGE_BATCH } from "./document-storage-sweep";
 import { DocumentDraft } from "../document-config";
 
 import {
+  abandonUpload,
   reserveUpload,
   settleUpload,
   collectClaim,
@@ -169,7 +170,12 @@ export class DocumentAssetsService {
       await manager.save(DocumentAsset, asset);
     });
     // Rejection can mean a remote PUT is still in flight; retain upload_pending intent.
-    await this.storage.uploadImmutable(bytes, userId, id, prefix);
+    try {
+      await this.storage.uploadImmutable(bytes, userId, id, prefix);
+    } catch (error) {
+      await abandonUpload(this.db, DocumentAsset, asset);
+      throw error;
+    }
     const ready = await settleUpload(this.db, DocumentAsset, asset);
     if (!ready) throw new ConflictException("Image upload lease expired");
     return asset;

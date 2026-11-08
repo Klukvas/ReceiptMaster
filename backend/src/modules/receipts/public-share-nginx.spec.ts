@@ -36,3 +36,24 @@ describe("public share page /r/:token in nginx.conf", () => {
     expect(shareLocation()).toMatch(/try_files [^;]*\/index\.html/);
   });
 });
+
+/** Body of `location /api/ { ... }`, nested `if { }` blocks included. */
+const apiLocation = (): string => {
+  const start = CONFIG.indexOf("location /api/ {");
+  if (start < 0) throw new Error("nginx.conf has no `location /api/` block");
+  let depth = 0;
+  for (let index = CONFIG.indexOf("{", start); index < CONFIG.length; index++) {
+    if (CONFIG[index] === "{") depth++;
+    if (CONFIG[index] === "}" && --depth === 0)
+      return CONFIG.slice(start, index);
+  }
+  throw new Error("unterminated `location /api/` block");
+};
+
+describe("upload size limit in nginx.conf", () => {
+  it("lets /api/ take the 6 MiB document requests instead of nginx's 1m default", () => {
+    const match = /client_max_body_size\s+(\d+)m;/.exec(apiLocation());
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeGreaterThanOrEqual(7);
+  });
+});

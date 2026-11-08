@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, EntityManager } from "typeorm";
 import {
@@ -27,6 +32,8 @@ export interface SignoffState {
 /** The images a render can use, plus the pointers they were read under. */
 export interface SignoffLoad {
   source: SignoffSource;
+  /** Kinds that are set on the account but could not be read, so they are not in `source`. */
+  unavailable: SignoffKind[];
   /** What `user_settings` pointed at, usable or not; compared again under the settings lock. */
   pointers: SignoffPointers;
 }
@@ -35,6 +42,16 @@ export interface SignoffPointers {
   signature: string | null;
   stamp: string | null;
 }
+
+/**
+ * Pauses before the second and third attempt to read an image. A storage blip must not
+ * silently strip the signature from a document that is about to be issued; a missing or
+ * corrupt image (an HTTP error from the asset check) is final and is not retried.
+ */
+export const SIGNOFF_READ_RETRY_DELAYS_MS: readonly number[] = [150, 450];
+
+const pause = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const COLUMN = {
   signature: "signature_asset_id",
@@ -79,29 +96,49 @@ export class DocumentSignoffService {
    */
   async load(userId: string): Promise<SignoffLoad> {
     const pointers = await this.pointers(userId);
-    const entries = await Promise.all(
+    const reads = await Promise.all(
       SIGNOFF_KINDS.map(async (kind) => {
         const assetId = pointers[kind];
         if (!assetId) return undefined;
         try {
-          const bytes = await this.assets.readSignoff(userId, assetId, kind);
-          return [kind, { assetId, bytes }] as const;
+          const bytes = await this.readWithRetry(userId, assetId, kind);
+          return { kind, image: { assetId, bytes } };
         } catch (error) {
           this.logger.warn(
             `Printing without the ${kind} image: user ${userId}, asset ${assetId}: ${
               error instanceof Error ? error.message : String(error)
             }`,
           );
-          return undefined;
+          return { kind, image: undefined };
         }
       }),
     );
+    const attempted = reads.filter((read) => read !== undefined);
     return {
       source: Object.fromEntries(
-        entries.filter((entry) => entry !== undefined),
+        attempted.flatMap(({ kind, image }) => (image ? [[kind, image]] : [])),
+      ),
+      unavailable: attempted.flatMap(({ kind, image }) =>
+        image ? [] : [kind],
       ),
       pointers,
     };
+  }
+
+  private async readWithRetry(
+    userId: string,
+    assetId: string,
+    kind: SignoffKind,
+  ): Promise<Buffer> {
+    for (const delay of SIGNOFF_READ_RETRY_DELAYS_MS) {
+      try {
+        return await this.assets.readSignoff(userId, assetId, kind);
+      } catch (error) {
+        if (error instanceof HttpException) throw error;
+        await pause(delay);
+      }
+    }
+    return this.assets.readSignoff(userId, assetId, kind);
   }
 
   async get(userId: string): Promise<SignoffState> {

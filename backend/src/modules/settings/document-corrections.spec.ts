@@ -18,6 +18,7 @@ import { formatDocumentDate } from "../../common/utils/document-formatting.util"
 // Its types alias the gitignored api-types.generated.ts, so backend ts-jest skips
 // frontend diagnostics (package.json jest.transform); the frontend typecheck owns them.
 import { documentDate } from "../../../../frontend/src/lib/document-config";
+import { LATE_WRITE_WINDOW_MS } from "./services/document-storage-sweep";
 import { DocumentStorageMaintenanceService } from "../receipts/services/document-storage-maintenance.service";
 import { tenantStore } from "../../common/tenancy/tenant-context";
 import { DocumentStorageLeases1792100000001 } from "../../config/migrations/1792100000001-DocumentStorageLeases";
@@ -159,7 +160,8 @@ describe("durable document cleanup with synthetic storage only", () => {
     await expect(
       f.leases.upload(Buffer.from("%PDF"), "failed.pdf", TENANT),
     ).rejects.toThrow("upload failure");
-    expect(f.memory.rows(DocumentArtifact)[0].state).toBe("uploading");
+    // The failed lease becomes a tombstone at once, so it cannot block new uploads.
+    expect(f.memory.rows(DocumentArtifact)[0].state).toBe("deleting");
     expect(f.memory.rows(DocumentArtifact)[0].upload_pending).toBe(true);
     await expire(f);
     expect(await f.leases.collectExpired(TENANT)).toBe(1);
@@ -167,6 +169,26 @@ describe("durable document cleanup with synthetic storage only", () => {
     expect(f.memory.rows(DocumentArtifact)).toHaveLength(1);
     expect(f.memory.rows(DocumentArtifact)[0].state).toBe("deleting");
     expect(f.objects.size).toBe(0);
+  });
+  it("drops the tombstone of a failed upload once the late-write window has passed", async () => {
+    f.failures.upload = true;
+    await expect(
+      f.leases.upload(Buffer.from("%PDF"), "failed.pdf", TENANT),
+    ).rejects.toThrow("upload failure");
+    await expire(f);
+    expect(await f.leases.collectExpired(TENANT)).toBe(1);
+    expect(f.memory.rows(DocumentArtifact)).toHaveLength(1);
+
+    for (const row of f.memory.rows(DocumentArtifact))
+      await f.db.manager.update(
+        DocumentArtifact,
+        { id: row.id },
+        { created_at: new Date(Date.now() - LATE_WRITE_WINDOW_MS - 1000) },
+      );
+    await expire(f);
+
+    expect(await f.leases.collectExpired(TENANT)).toBe(1);
+    expect(f.memory.rows(DocumentArtifact)).toHaveLength(0);
   });
   it("collects confirmed lost promotion and repair uploads; retains the active PDF", async () => {
     const created = await f.receipts.generateReceipt(ORDER_ID, f.user);

@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  ParseUUIDPipe,
   Delete,
   Query,
   UseGuards,
@@ -134,7 +135,10 @@ export class ProductsController {
   @ApiOperation({ summary: "Получить товар по ID" })
   @ApiResponse({ status: 200, description: "Товар найден", type: Product })
   @ApiResponse({ status: 404, description: "Товар не найден" })
-  findOne(@Param("id") id: string, @Request() req: { user: User }) {
+  findOne(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.productsService.findOne(id, req.user);
   }
 
@@ -151,7 +155,7 @@ export class ProductsController {
     409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT), or another live product already has the new name (PRODUCT_ALREADY_EXISTS)",
   })
   update(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() updateProductDto: UpdateProductDto,
     @Request() req: { user: User },
   ) {
@@ -170,7 +174,10 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: "Товар успешно удален" })
   @ApiResponse({ status: 400, description: "Невозможно удалить товар" })
   @ApiResponse({ status: 404, description: "Товар не найден" })
-  remove(@Param("id") id: string, @Request() req: { user: User }) {
+  remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.productsService.remove(id, req.user);
   }
 }

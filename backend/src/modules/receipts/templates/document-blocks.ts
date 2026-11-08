@@ -42,6 +42,7 @@ const documentStyles = `
   {{/if}}
   {{#if document.signatures.hasImages}}
   .doc-signature { position: relative; }
+  .doc-signature:only-child { flex: 0 1 50%; }
   .doc-sign-line-image { display: flex; align-items: flex-end; height: 58px; }
   .doc-sign-image { max-height: 56px; max-width: 200px; object-fit: contain; }
   .doc-stamp { position: absolute; width: 110px; height: 110px; object-fit: contain; right: 0; top: -10px; }

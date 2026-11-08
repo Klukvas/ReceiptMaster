@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { notifyIssueWarnings } from "../lib/issue-warnings";
 import { receiptsApi, type DocumentRequestBody, type Receipt } from "../lib/api";
 
 export type CreateDocumentInput = {
@@ -14,7 +15,8 @@ export const useCreateDocument = () => {
   return useMutation<Receipt, unknown, CreateDocumentInput>({
     mutationFn: async ({ orderId, body, logo }) =>
       (await receiptsApi.createDocument(orderId, body, logo)).data,
-    onSuccess: async () => {
+    onSuccess: async (receipt) => {
+      notifyIssueWarnings(receipt);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["orders"] }),
         queryClient.invalidateQueries({ queryKey: ["receipts"] }),

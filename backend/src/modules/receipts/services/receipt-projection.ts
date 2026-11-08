@@ -24,6 +24,17 @@ export function receiptProjection(receipt: Receipt) {
 }
 
 /**
+ * The projection returned by the calls that issue a document: the same keys plus
+ * `warnings`, present only when there is something to warn about.
+ */
+export function issuedDocument(receipt: Receipt) {
+  return {
+    ...receiptProjection(receipt),
+    ...(receipt.warnings?.length ? { warnings: receipt.warnings } : {}),
+  };
+}
+
+/**
  * A projection plus the order it belongs to, for the documents page. Pure addition:
  * every `receiptProjection` key keeps its name and meaning. The recipient name is the
  * live one, not the name frozen into the document.

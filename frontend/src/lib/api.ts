@@ -695,7 +695,7 @@ const DATE_LOCALES: Record<string, string> = {
   uk: "uk-UA",
   en: "en-GB",
 };
-const dateLocale = (): string =>
+export const dateLocale = (): string =>
   DATE_LOCALES[i18n.language?.split("-")[0] ?? "en"] ?? "en-GB";
 
 /** `timeZone` shows the moment on that zone's clock (the document zone) instead of the viewer's. */

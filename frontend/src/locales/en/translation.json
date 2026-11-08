@@ -43,7 +43,10 @@
     "actions": "Actions",
     "columns": "Columns",
     "saving": "Saving...",
-    "retry": "Retry"
+    "retry": "Retry",
+    "sortBy": "Sort by",
+    "sortAscending": "Ascending order. Tap to reverse.",
+    "sortDescending": "Descending order. Tap to reverse."
   },
   "auth": {
     "login": "Login",
@@ -148,7 +151,7 @@
     "addAtLeastOneProduct": "Add at least one product",
     "insufficientQuantity": "Insufficient quantity. Available: {{available}} pcs",
     "insufficientStock": "Insufficient stock",
-    "generateReceipt": "Generate waybill",
+    "generateReceipt": "Create waybill",
     "receiptLimitNotice": "The {{limit}} most recent documents are kept, so the oldest one was removed. Its public link no longer works.",
     "customPriceTooltip": "Override price per unit",
     "customPriceDefault": "Default",
@@ -481,7 +484,7 @@
     "paymentTermsLabel": "Payment Terms",
     "paymentTermsPlaceholder": "e.g., Net 30 days from invoice date",
     "paymentTermsHint": "Displayed on proforma invoice template",
-    "deliveryTermsLabel": "Delivery Terms",
+    "deliveryTermsLabel": "Delivery terms",
     "deliveryTermsPlaceholder": "e.g., EXW, FOB, CIF — Incoterms 2020",
     "deliveryTermsHint": "Displayed on proforma invoice template",
     "loadFailed": "Could not load settings. Changes are disabled until you retry.",
@@ -998,6 +1001,8 @@
     "receiptPrintFailed": "Failed to print document",
     "productNotFound": "Product not found",
     "productAlreadyExists": "Product with this name already exists",
+    "productQuantityConflict": "This product's stock changed while you were editing, so nothing was saved. Reload and try again.",
+    "httpException": "Server error. Try again in a moment.",
     "recipientNotFound": "Recipient not found",
     "recipientAlreadyExists": "Recipient with this email already exists",
     "recipientHasOrders": "This recipient can't be deleted: it has orders, including deleted ones kept for history",
@@ -1025,7 +1030,9 @@
     "returnQuantityExceeded": "You cannot return more than is left of an item. Check the quantities and try again.",
     "reconstructionRequired": "This document has no saved draft to repeat. Customize it to rebuild it.",
     "numberingStartTooLow": "The starting number cannot be lower than the next number to be issued",
-    "invoiceDueDateBeforeIssueDate": "The due date cannot be before the issue date"
+    "invoiceDueDateBeforeIssueDate": "The due date cannot be before the issue date",
+    "rateLimited": "Too many requests. Try again in a moment.",
+    "rateLimitedIn": "Too many requests. Try again in {{seconds}} s."
   },
   "document": {
     "interfaceLanguage": "Interface language",
@@ -1088,7 +1095,7 @@
     "saved": "Saved settings",
     "discard": "Discard",
     "saveChanges": "Save changes",
-    "generateDocument": "Generate this document",
+    "generateDocument": "Create this document",
     "customizeDocument": "Customize document",
     "replaceDocument": "Replace document",
     "replaceHelp": "A successful replacement updates the PDF at existing share links. The current PDF stays available while rendering.",
@@ -1149,14 +1156,14 @@
       "quote": "A quote is not an invoice and does not lock the order. To send an updated one, void the current quote and create a new one.",
       "sales_receipt": "This is not a fiscal document: it confirms a sale but does not replace a fiscal register receipt.",
       "packing_list": "A packing list shows no prices. Once it is created, the order is locked against editing.",
-      "return_note": "This is an informational document: it does not change stock, is not a fiscal document and is not a tax invoice adjustment calculation. An order can have several return notes."
+      "return_note": "This document only records that goods came back. It does not refund money, does not change stock and is not a tax document: it does not replace a tax invoice adjustment. An order can have several return notes."
     },
-    "designFallback": "Your usual design cannot carry this document type, so another one is preselected.",
+    "designFallback": "Your usual design does not support this document type, so another one was picked for it. The design saved in your settings stays as it is.",
     "noDesign": "No design is available for this document type.",
     "paymentTerm": "Payment term",
     "paymentTermMode": {
       "days": "Number of days",
-      "date": "Due date"
+      "date": "Pay by"
     },
     "paymentTermDays": "Days to pay",
     "dueDate": "Pay by",
@@ -1172,17 +1179,16 @@
     "quotePaymentTermsPlaceholder": "E.g. 50% upfront, the rest on receipt",
     "quoteDeliveryTerms": "Delivery terms",
     "quoteDeliveryTermsPlaceholder": "E.g. delivery within 3 business days",
-    "requisitesMissingTitle": "Some requisites are missing for this document",
-    "requisitesWarningsTitle": "Not filled in (the document can still be created)",
+    "requisitesMissingTitle": "Fill these in first: the document cannot be created without them",
+    "requisitesWarningsTitle": "Optional: the document will be created without them",
     "fillSellerRequisites": "Fill in the seller requisites",
     "fillBuyerRequisites": "Fill in the recipient requisites",
     "replaceOldestTitle": "Replace the oldest document?",
-    "replaceOldestMessage": "The {{limit}} most recent documents of this type ({{type}}) are kept. Creating a new one removes {{number}}, and its public link stops working.",
+    "replaceOldestMessage": "Only the {{limit}} most recent documents of this type ({{type}}) are kept. Creating this one permanently deletes the oldest, {{number}}, and its public link stops working. Download it first if you need a copy.",
     "errors": {
       "dueDateInvalid": "Enter a valid date",
       "termDaysInvalid": "Enter a whole number from 1 to 365",
-      "periodIncomplete": "Enter both period dates",
-      "periodOrder": "The period start cannot be after its end",
+      "periodOrder": "The end date is earlier than the start date",
       "contractRefTooLong": "At most 200 characters",
       "validUntilInvalid": "Enter a valid date",
       "validUntilBeforeIssue": "The date cannot be before today",
@@ -1195,7 +1201,9 @@
       "invalidField": "Check this field",
       "dueDateBeforeToday": "The due date cannot be before today",
       "dueDateServer": "This due date is not accepted. Choose today or a later date.",
-      "voidReasonInvalid": "The reason is not accepted. Use up to {{max}} characters."
+      "voidReasonInvalid": "The reason is not accepted. Use up to {{max}} characters.",
+      "periodFromRequired": "Enter the period start date",
+      "periodToRequired": "Enter the period end date"
     },
     "status": {
       "generated": "Ready",
@@ -1206,16 +1214,16 @@
     "download": "Download",
     "replace": "Replace",
     "void": "Void",
-    "voidTitle": "Void: {{type}}",
-    "voidMessageFinal": "The document will be voided and its public link turned off. You cannot issue another document of this type ({{type}}) for this order.",
+    "voidTitle": "Void {{type}} {{number}}",
+    "voidMessageFinal": "The document will be voided and its public link turned off. You cannot create another document of this type ({{type}}) for this order.",
     "voidReason": "Reason (optional)",
     "voided": "Document voided: {{type}}",
     "voidedBecause": "Reason: {{reason}}",
     "history": "Voided ({{count}})",
     "voidedOn": "voided {{date}}",
     "reissueNote": "Voided {{number}} stays in the history. A new number will be issued.",
-    "voidMessageReissuable": "The document will be voided and its public link turned off. It stays in the order's history, and you can issue a new {{type}} with a new number.",
-    "voidMessageRepeatable": "The document will be voided and its public link disabled. The quantities it returned become available for a new return note again.",
+    "voidMessageReissuable": "The document will be voided and its public link turned off. It stays in the order's history, and you can create a new {{type}} with a new number.",
+    "voidMessageRepeatable": "The document will be voided and its public link turned off. The quantities it returned become available for a new return note again.",
     "createAgain": "Create a new return note.",
     "returnNote": {
       "linesTitle": "Items to return",
@@ -1229,7 +1237,8 @@
       "fullyReturned": "Fully returned",
       "reason": "Reason for the return",
       "reasonPlaceholder": "Optional. E.g. damaged packaging",
-      "hint": "This document does not refund money and does not change stock."
+      "hint": "This document does not refund money and does not change stock.",
+      "maxHint": "Up to {{max}}"
     },
     "voidReasons": {
       "order_cancelled": "The order was cancelled"
@@ -1239,7 +1248,13 @@
       "reconstruction": "The saved draft of this document is missing. Create the document again from the order.",
       "generationFailed": "The document could not be generated. Try again.",
       "unknown": "The document could not be generated. Try again or contact support."
-    }
+    },
+    "requisitesRefusedTitle": "The document was not created: these details are missing",
+    "fieldInThisDialog": "{{field}} (a field in this dialog)",
+    "voidedNoReason": "No reason was given.",
+    "voidedReissuable": "A new {{type}} can be created from the order, with a new number.",
+    "voidedFinal": "A new {{type}} cannot be created for this order.",
+    "voidedRepeatable": "Its quantities are available for a new return note."
   },
   "documentFields": {
     "seller": {
@@ -1267,7 +1282,8 @@
   "documentsPage": {
     "title": "Documents",
     "subtitle": "Every document issued from your orders",
-    "retentionHint": "The 10 most recent generated waybills, quotes, sales receipts and packing lists are kept; invoices, acts, return notes, voided and failed documents stay.",
+    "retentionHint": "Only the {{limit}} most recent waybills, quotes, sales receipts and packing lists of each type are kept: when you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
+    "retentionHintGeneric": "Only the most recent waybills, quotes, sales receipts and packing lists of each type are kept: when you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
     "filters": "Document filters",
     "type": "Type",
     "allTypes": "All types",
@@ -1287,7 +1303,9 @@
     "replacing": "Replacing",
     "replacementFailed": "Replacement failed",
     "createAgain": "Create again",
-    "timeZoneHint": "Dates are counted by calendar day in the {{zone}} time zone."
+    "timeZoneHint": "Dates are counted by calendar day in the {{zone}} time zone.",
+    "rangeReversed": "The “From” date is later than the “To” date, so nothing can match. Swap them or clear one.",
+    "failedReturnNote": "Open the order and create a new return note."
   },
   "numbering": {
     "title": "Document numbering",
@@ -1296,23 +1314,28 @@
     "prefix": "Prefix",
     "padding": "Digits in the number",
     "startNumber": "Start from",
-    "startHint": "Next number: {{min}}. It can only be raised.",
+    "startHint": "Minimum: {{min}}. It can only be raised, so a number is never issued twice.",
     "includeYear": "Include the year",
-    "preview": "Preview",
-    "nextNumber": "Next number",
+    "preview": "Number example",
     "saved": "Numbering saved: {{type}}",
     "errors": {
       "prefixInvalid": "Up to {{max}} letters, digits, spaces and . _ - only",
       "prefixEndsWithDigit": "The prefix cannot end with a digit",
       "startInvalid": "Enter a whole number from 1 to 2,000,000,000",
+      "prefixRejected": "The prefix is not accepted: up to {{max}} letters, digits, spaces and . _ - only, and it cannot end with a digit",
+      "paddingInvalid": "Choose the number of digits from the list",
+      "rejected": "The numbering was not accepted. Check the prefix, the number of digits and the start number.",
       "startTooLow": "The start number must be at least {{min}}: lower numbers are already used"
-    }
+    },
+    "prefixHint": "Optional. Include the separator in it: “{{example}}” gives {{example}}0001.",
+    "paddingHint": "Zero-padded: {{value}} becomes {{example}}.",
+    "yearHint": "The counter does not restart each year; only the year inside the number changes."
   },
   "signoff": {
     "title": "Signature and stamp",
-    "description": "Upload a signature and a stamp to print them on your documents.",
-    "note": "Documents that were already issued do not change. The signature and stamp are printed in the Standard, Classic, Minimal and Corporate styles. A scanned signature or stamp image is not a qualified electronic signature.",
-    "styleUnsupported": "Your current style ({{style}}) does not print the signature and stamp. Switch to Standard, Classic, Minimal or Corporate to use them.",
+    "description": "Upload a signature and a company stamp to add them to your documents.",
+    "note": "Documents that were already issued do not change. The signature and stamp are added in the “Standard”, “Classic”, “Minimal” and “Corporate” designs. A scanned signature or stamp image is not a qualified electronic signature.",
+    "styleUnsupported": "Your current design ({{style}}) does not add the signature and stamp. Switch to “Standard”, “Classic”, “Minimal” or “Corporate” to use them.",
     "signature": "Signature",
     "stamp": "Stamp",
     "signatureHint": "PNG with a transparent background, about 800×300 px.",
@@ -1333,7 +1356,13 @@
     "errors": {
       "type": "Only PNG and JPEG images are accepted",
       "tooLarge": "The image is larger than 2 MB",
-      "rateLimited": "Too many uploads. Try again in a minute"
+      "empty": "The file is empty. Choose another image.",
+      "server": "The image could not be saved or loaded because of a server problem. Try again in a moment."
+    },
+    "unavailable": {
+      "signature": "The document was issued without your signature: the image file is unavailable. Upload it again in Settings → Documents.",
+      "stamp": "The document was issued without your company stamp: the image file is unavailable. Upload it again in Settings → Documents.",
+      "both": "The document was issued without your signature and company stamp: the image files are unavailable. Upload them again in Settings → Documents."
     }
   }
 }

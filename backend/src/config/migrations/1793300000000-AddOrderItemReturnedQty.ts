@@ -17,6 +17,16 @@ export class AddOrderItemReturnedQty1793300000000
   name = "AddOrderItemReturnedQty1793300000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // The CHECK needs 0 <= qty on every existing row; say which rows break it instead of
+    // leaving a bare constraint violation in the deploy log.
+    const [{ count }] = await queryRunner.query(
+      `SELECT count(*)::int AS count FROM "order_items" WHERE "qty" < 0`,
+    );
+    if (count > 0) {
+      throw new Error(
+        `Cannot add order_items.returned_qty: ${count} order line(s) have a negative qty. Fix them first: SELECT id, order_id, qty FROM order_items WHERE qty < 0`,
+      );
+    }
     await queryRunner.query(
       `ALTER TABLE "order_items" ADD COLUMN "returned_qty" integer NOT NULL DEFAULT 0 CONSTRAINT "${CONSTRAINT}" CHECK ("returned_qty" >= 0 AND "returned_qty" <= "qty")`,
     );

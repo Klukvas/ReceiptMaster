@@ -7,12 +7,14 @@ import {
 } from "../modules/receipts/entities/receipt.entity";
 import {
   documentListItem,
+  issuedDocument,
   receiptProjection,
 } from "../modules/receipts/services/receipt-projection";
 import {
   PRIMARY_COLOR_PATTERN,
   SHARED_SCHEMAS,
   documentListItemSchema,
+  receiptIssueResultSchema,
   receiptProjectionSchema,
   sharedComponents,
 } from "./api-components";
@@ -60,6 +62,53 @@ describe("shared OpenAPI components", () => {
       Object.keys(receiptProjectionSchema.shape).sort(),
     );
     expect(receiptProjectionSchema.safeParse(wire).success).toBe(true);
+  });
+
+  it("documents what issuedDocument() adds: warnings only when there are some", () => {
+    const base = {
+      id: "0b8c6f35-6cc4-4c2a-9b2c-6f7e0c1d2e3f",
+      order_id: "1c9d7a46-7dd5-4d3b-8c3d-7a8f1d2e3f40",
+      document_type: DocumentType.INVOICE,
+      number: "2026-000001",
+      pdf_url: null,
+      hash: null,
+      status: ReceiptStatus.PROCESSING,
+      template_id: "standard",
+      template_version: 1,
+      progress: 0,
+      error_message: null,
+      created_at: new Date("2026-10-29T10:00:00Z"),
+      voided_at: null,
+      void_reason: null,
+      public_token: null,
+      active_revision: 0,
+      replacement_status: null,
+      replacement_error: null,
+    } as unknown as Receipt;
+    const warned = {
+      ...base,
+      warnings: [
+        {
+          code: "SIGNOFF_UNAVAILABLE" as const,
+          kinds: ["signature" as const],
+          message: "The signature or stamp image could not be read.",
+        },
+      ],
+    } as Receipt;
+
+    const plain = JSON.parse(JSON.stringify(issuedDocument(base)));
+    const withWarning = JSON.parse(JSON.stringify(issuedDocument(warned)));
+
+    expect(plain).not.toHaveProperty("warnings");
+    expect(Object.keys(plain).sort()).toEqual(
+      Object.keys(receiptProjectionSchema.shape).sort(),
+    );
+    expect(receiptIssueResultSchema.safeParse(plain).success).toBe(true);
+    expect(receiptIssueResultSchema.safeParse(withWarning).success).toBe(true);
+    expect(withWarning.warnings).toHaveLength(1);
+    expect(
+      issuedDocument({ ...base, warnings: [] } as Receipt),
+    ).not.toHaveProperty("warnings");
   });
 
   it("documents exactly what documentListItem() puts on the wire, and only adds `order`", () => {

@@ -48,6 +48,8 @@ export type DocumentLabels = {
   quoteNotice: string;
   /** Grand total line of the quotation, which is not "due" yet. */
   offerTotal: string;
+  /** Grand total line of the sales receipt, which is handed over at the sale, not "due" later. */
+  saleTotal: string;
   /** Return note: signature headings, total line, notice and the "made against" block. */
   returnedBy: string;
   returnTotal: string;
@@ -111,6 +113,7 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
     offerTotal: "Загальна вартість",
+    saleTotal: "Всього",
     returnedBy: "Повернув",
     returnTotal: "Вартість повернутого товару",
     returnNotice:
@@ -171,6 +174,7 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "Предложение не является счётом и не является основанием для оплаты или бухгалтерского учёта",
     offerTotal: "Общая стоимость",
+    saleTotal: "Всего",
     returnedBy: "Вернул",
     returnTotal: "Стоимость возвращённого товара",
     returnNotice:
@@ -231,6 +235,7 @@ export const DOCUMENT_LABELS = {
     quoteNotice:
       "This quotation is not an invoice and is not a basis for payment or accounting",
     offerTotal: "Total",
+    saleTotal: "Total",
     returnedBy: "Returned by",
     returnTotal: "Value of returned goods",
     returnNotice:

@@ -13,6 +13,7 @@ type DocumentsFilterBarProps = {
   timeZone: string;
 };
 
+const FIRST_FIELD_ID = "documents-filter-type";
 const FIELD_CLASS =
   "w-full px-3 py-2 pointer-coarse:min-h-11 text-sm border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 transition-all";
 const LABEL_CLASS =
@@ -21,6 +22,9 @@ const LABEL_CLASS =
 export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, timeZone }: DocumentsFilterBarProps) {
   const { t } = useTranslation();
   const hasFilters = hasSearch || Object.values(filters).some(Boolean);
+  // Typing can still produce a reversed range even though the pickers limit each other.
+  const isRangeReversed = Boolean(filters.from && filters.to && filters.from > filters.to);
+  const rangeHintId = "documents-filter-range-hint";
 
   return (
     <div
@@ -29,12 +33,12 @@ export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, time
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
     >
       <div>
-        <label htmlFor="documents-filter-type" className={LABEL_CLASS}>
+        <label htmlFor={FIRST_FIELD_ID} className={LABEL_CLASS}>
           {t("documentsPage.type")}
         </label>
         <div className="relative">
           <select
-            id="documents-filter-type"
+            id={FIRST_FIELD_ID}
             value={filters.type}
             onChange={(event) => onChange("type", event.target.value)}
             className={`${FIELD_CLASS} appearance-none pr-8`}
@@ -80,6 +84,8 @@ export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, time
           type="date"
           value={filters.from}
           max={filters.to || undefined}
+          aria-invalid={isRangeReversed || undefined}
+          aria-describedby={isRangeReversed ? rangeHintId : undefined}
           onChange={(event) => onChange("from", event.target.value)}
           className={FIELD_CLASS}
         />
@@ -94,6 +100,8 @@ export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, time
           type="date"
           value={filters.to}
           min={filters.from || undefined}
+          aria-invalid={isRangeReversed || undefined}
+          aria-describedby={isRangeReversed ? rangeHintId : undefined}
           onChange={(event) => onChange("to", event.target.value)}
           className={FIELD_CLASS}
         />
@@ -102,7 +110,11 @@ export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, time
         {hasFilters && (
           <button
             type="button"
-            onClick={onClear}
+            onClick={() => {
+              onClear();
+              // The button disappears once nothing is filtered; keep keyboard focus on the page.
+              document.getElementById(FIRST_FIELD_ID)?.focus();
+            }}
             className="inline-flex items-center gap-1 px-2 py-2 pointer-coarse:min-h-11 text-sm font-medium text-content-tertiary transition-colors hover:text-content-secondary"
           >
             <X className="h-3.5 w-3.5" aria-hidden />
@@ -110,6 +122,16 @@ export function DocumentsFilterBar({ filters, onChange, onClear, hasSearch, time
           </button>
         )}
       </div>
+      {isRangeReversed && (
+        <p
+          id={rangeHintId}
+          role="alert"
+          data-testid="documents-range-hint"
+          className="text-xs text-danger-base sm:col-span-2 lg:col-span-5"
+        >
+          {t("documentsPage.rangeReversed")}
+        </p>
+      )}
       <p className="text-xs text-content-tertiary sm:col-span-2 lg:col-span-5" data-testid="documents-timezone-hint">
         {t("documentsPage.timeZoneHint", { zone: timeZone })}
       </p>

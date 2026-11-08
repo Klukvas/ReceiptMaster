@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { PaginatedResponse, PaginationParams } from '../lib/api';
 
@@ -27,6 +27,10 @@ export interface UseServerPaginationOptions<T> {
   storageKeyPrefix?: string;
   /** Search text to start with, e.g. from a deep link. */
   initialSearch?: string;
+  /** Page to start on, e.g. from a deep link (1-based). */
+  initialPage?: number;
+  /** False holds the request back (e.g. while the filters cannot match anything). */
+  enabled?: boolean;
 }
 
 export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
@@ -41,9 +45,11 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     debounceMs = 400,
     storageKeyPrefix,
     initialSearch = '',
+    initialPage = 1,
+    enabled = true,
   } = options;
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
     if (storageKeyPrefix) {
       const saved = localStorage.getItem(`${storageKeyPrefix}_itemsPerPage`);
@@ -71,11 +77,16 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     );
   });
 
-  // Debounce search
+  // Debounce search. The page goes back to 1 only when the text really changed, so a deep link
+  // to page 3 is not thrown to page 1 by the first debounce tick.
+  const settledSearch = useRef(initialSearch);
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setCurrentPage(1);
+      if (searchQuery !== settledSearch.current) {
+        settledSearch.current = searchQuery;
+        setCurrentPage(1);
+      }
     }, debounceMs);
     return () => clearTimeout(timer);
   }, [searchQuery, debounceMs]);
@@ -112,6 +123,7 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   const queryResult = useQuery({
     queryKey: [queryKey, fullParams],
     queryFn: () => queryFn(fullParams),
+    enabled,
     placeholderData: (previousData: { data: PaginatedResponse<T> } | undefined) => previousData,
   });
 
@@ -171,6 +183,8 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     total,
     isLoading: queryResult.isLoading,
     isFetching: queryResult.isFetching,
+    /** True while the rows on screen belong to the previous query (page, sort or filter just changed). */
+    isShowingPreviousQuery: queryResult.isPlaceholderData,
     isSearchPending: searchQuery.trim() !== debouncedSearch.trim(),
     error: queryResult.error,
     currentPage,

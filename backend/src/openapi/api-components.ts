@@ -68,6 +68,22 @@ export const receiptProjectionSchema = z.object({
   replacement_error: z.string().nullable(),
 });
 
+/** Mirrors `issuedDocument()`: the projection plus the optional issue-time warnings. */
+export const receiptIssueResultSchema = receiptProjectionSchema.extend({
+  warnings: z
+    .array(
+      z.object({
+        code: z.literal("SIGNOFF_UNAVAILABLE"),
+        kinds: z.array(z.enum(["signature", "stamp"])).min(1),
+        message: z.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Present only when something is missing from the issued document: SIGNOFF_UNAVAILABLE means the signature or stamp image set on the account could not be read, so the document was issued without it",
+    ),
+});
+
 /** Mirrors `documentListItem()`: the projection plus the order the document belongs to. */
 export const documentListItemSchema = receiptProjectionSchema.extend({
   order: z
@@ -158,6 +174,7 @@ export const SHARED_SCHEMAS = {
   DocumentPresetResponse: data(preset),
   DocumentPresetDeletedResponse: data(z.object({ deleted: z.literal(true) })),
   ReceiptProjection: receiptProjectionSchema,
+  ReceiptIssueResult: receiptIssueResultSchema,
   DocumentListItem: documentListItemSchema,
   NumberingSetting: numberingSettingSchema,
   NumberingSettingsResponse: z.object({

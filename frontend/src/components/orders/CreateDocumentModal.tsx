@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type DocumentRequestBody, type Order } from "../../lib/api";
@@ -10,17 +10,20 @@ import {
   EMPTY_RETURN_NOTE,
   formFieldOf,
   quoteDefaults,
+  type QuoteDefaults,
   type ActForm,
   type DetailsErrors,
   type InvoiceForm,
   type QuoteForm,
   type ReturnNoteForm,
 } from "../../lib/document-details";
+import { focusDetailsField } from "../../lib/document-field-focus";
 import { forecastRequisites } from "../../lib/document-requisites";
 import { DOCUMENT_TYPE_META, documentOf, isMultiplePerOrder, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { documentConfigQuery } from "../../hooks/useDocumentDraft";
+import { useDocumentNow } from "../../hooks/useDocumentNow";
 import { useSignoff } from "../../hooks/useSignoff";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -73,22 +76,31 @@ export function CreateDocumentModal({
     dueDate: "",
     ...invoiceEdits,
   };
+  // Only the fields the user changed are kept: copying the whole form would freeze the term in
+  // days at the fallback if the mode is switched before the account's default has loaded.
+  const editInvoice = (next: InvoiceForm) =>
+    setInvoiceEdits((previous) => ({
+      ...previous,
+      ...Object.fromEntries(
+        Object.entries(next).filter(
+          ([field, value]) => value !== invoiceForm[field as keyof InvoiceForm],
+        ),
+      ),
+    }));
   const [actForm, setActForm] = useState<ActForm>(EMPTY_ACT);
-  // "Today" is the day in the account's document time zone, as the server counts it. The
-  // clock is read once so the suggestion does not drift if the dialog stays open past midnight.
+  // "Today" is the day in the account's document time zone, as the server counts it. The clock
+  // moves on when that day changes, so a dialog left open past midnight does not offer yesterday.
   const documentConfig = useQuery(documentConfigQuery);
   const timeZone = documentConfig.data?.config.formatting.timeZone;
-  const [openedAt] = useState(() => new Date());
-  const quoteBase = useMemo(
-    () => quoteDefaults(timeZone, openedAt),
-    [timeZone, openedAt],
-  );
+  const now = useDocumentNow(timeZone);
+  const quoteBase = useMemo(() => quoteDefaults(timeZone, now), [timeZone, now]);
   const [quoteEdits, setQuoteEdits] = useState<Partial<QuoteForm>>({});
-  const quoteForm: QuoteForm = {
-    validUntil: quoteBase.validUntil,
+  const quoteFormFor = (base: QuoteDefaults): QuoteForm => ({
+    validUntil: base.validUntil,
     ...EMPTY_QUOTE_TERMS,
     ...quoteEdits,
-  };
+  });
+  const quoteForm = quoteFormFor(quoteBase);
 
   // Only what the user touched is kept, so an untouched date still follows the time zone
   // once the account's settings arrive.
@@ -109,6 +121,12 @@ export function CreateDocumentModal({
   const [refusal, setRefusal] = useState<RequisitesError | null>(null);
   const [replacement, setReplacement] = useState<Replacement | null>(null);
   const [isCheckingRetention, setIsCheckingRetention] = useState(false);
+
+  // After a refusal, a keyboard or screen-reader user lands on the first field to fix.
+  useEffect(() => {
+    const [firstField] = Object.keys(fieldErrors);
+    if (firstField) focusDetailsField(firstField);
+  }, [fieldErrors]);
 
   const meta: DocumentTypeMeta = DOCUMENT_TYPE_META[type];
   const { labelKey, details, createNoteKey } = meta;
@@ -169,7 +187,7 @@ export function CreateDocumentModal({
 
   const close = () => {
     // Closing mid-request would hide the outcome of a document that is still being created.
-    if (!isBusy) onClose();
+    if (!isBusy && !isSendingRef.current && !isSubmittingRef.current) onClose();
   };
 
   const submit = async () => {
@@ -188,16 +206,19 @@ export function CreateDocumentModal({
     setFieldErrors({});
     setSubmitError("");
     setRefusal(null);
+    // Read the clock again: the day may have turned since the dialog opened, and the limits and the
+    // untouched default date must follow it.
+    const clock = quoteDefaults(timeZone, new Date());
     const built = buildDocumentRequest(
       type,
       {
         invoice: invoiceForm,
         act: actForm,
-        quote: quoteForm,
+        quote: quoteFormFor(clock),
         returnNote: returnForm,
         items: order.items,
       },
-      quoteBase,
+      clock,
       (design.selectedId || undefined) as DocumentConfig["templateId"] | undefined,
     );
     if (!built.ok) {
@@ -241,7 +262,7 @@ export function CreateDocumentModal({
           <InvoiceDetailsFields
             form={invoiceForm}
             errors={fieldErrors}
-            onChange={setInvoiceEdits}
+            onChange={editInvoice}
             today={quoteBase.today}
           />
         )}
@@ -282,6 +303,7 @@ export function CreateDocumentModal({
           <select
             id="document-design"
             className={selectClass}
+            data-autofocus={details === null || undefined}
             value={design.selectedId}
             disabled={design.options.length === 0}
             onChange={(event) => design.choose(event.target.value)}
@@ -314,10 +336,14 @@ export function CreateDocumentModal({
         )}
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={close} disabled={isBusy}>
+          <Button type="button" variant="secondary" onClick={close} disabled={isBusy} softDisabled>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={isBusy || (design.hasLoaded && design.options.length === 0)}>
+          <Button
+            type="submit"
+            softDisabled
+            disabled={isBusy || (design.hasLoaded && design.options.length === 0)}
+          >
             {isBusy ? t("common.saving") : t("documents.create")}
           </Button>
         </div>

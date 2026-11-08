@@ -1,15 +1,24 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { formatDate, type DocumentListItem } from "../../lib/api";
+import type { DocumentListItem } from "../../lib/api";
+import { formatDocumentDateTime } from "../../lib/document-date-format";
+import { failedNextStep } from "../../lib/document-actions";
 import { documentLabelKey } from "../../lib/document-types";
 import { formatOrderNumber } from "../../lib/order-number";
 import type { ColumnDef } from "../../hooks/useServerPagination";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { DocumentFailureReason } from "./DocumentFailureReason";
+import { VoidedDocumentNote } from "./VoidedDocumentNote";
 import { DocumentStatusBadge } from "./DocumentStatusBadge";
 
-export const ORDER_LINK_CLASS = "font-medium text-accent-base hover:underline";
+// On touch the link is a 44px-tall target, since it sits between larger controls.
+export const ORDER_LINK_CLASS =
+  "font-medium text-accent-base hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center";
+
+/** Order numbers are digits today, but the query string must hold whatever the backend sends. */
+export const orderSearchLink = (orderNumber: string | number): string =>
+  `/orders?search=${encodeURIComponent(String(orderNumber))}`;
 
 /** Columns of the documents table; the page hands them to the pagination hook, which owns sorting and visibility. */
 export function useDocumentColumns(): ColumnDef<DocumentListItem>[] {
@@ -42,7 +51,7 @@ export function useDocumentColumns(): ColumnDef<DocumentListItem>[] {
         render: (doc) =>
           doc.order ? (
             <Link
-              to={`/orders?search=${doc.order.order_number}`}
+              to={orderSearchLink(doc.order.order_number)}
               className={`${ORDER_LINK_CLASS} tabular-nums`}
             >
               {formatOrderNumber(doc.order)}
@@ -71,8 +80,16 @@ export function useDocumentColumns(): ColumnDef<DocumentListItem>[] {
           <div className="space-y-1">
             <DocumentStatusBadge status={doc.status} replacementStatus={doc.replacement_status} />
             {doc.status === "failed" && (
-              <div className="max-w-[220px] whitespace-normal">
-                <DocumentFailureReason message={doc.error_message} />
+              <div className="max-w-[220px] whitespace-normal [overflow-wrap:anywhere]">
+                <DocumentFailureReason message={doc.error_message} nextStepKey={failedNextStep(doc)} />
+              </div>
+            )}
+            {doc.status === "void" && (
+              <div className="max-w-[220px] whitespace-normal [overflow-wrap:anywhere]">
+                <VoidedDocumentNote
+                  document_type={doc.document_type}
+                  void_reason={doc.void_reason}
+                />
               </div>
             )}
           </div>
@@ -83,7 +100,7 @@ export function useDocumentColumns(): ColumnDef<DocumentListItem>[] {
         header: t("documentsPage.date"),
         sortable: true,
         render: (doc) => (
-          <span className="text-sm text-content-tertiary">{formatDate(doc.created_at, timeZone)}</span>
+          <span className="text-sm text-content-tertiary">{formatDocumentDateTime(doc.created_at, timeZone)}</span>
         ),
       },
     ],

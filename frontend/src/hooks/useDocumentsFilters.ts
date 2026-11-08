@@ -19,7 +19,12 @@ const oneOf = (value: string | null, allowed: readonly string[]): string =>
 const dateOrEmpty = (value: string | null): string =>
   value !== null && DATE_PATTERN.test(value) ? value : "";
 
-/** The documents filters live in the URL (?type=&status=&from=&to=&search=), so a reload or a link keeps them. */
+const pageOrFirst = (value: string | null): number => {
+  const page = Number(value);
+  return Number.isInteger(page) && page >= 1 ? page : 1;
+};
+
+/** The documents filters live in the URL (?type=&status=&from=&to=&search=&page=), so a reload or a link keeps them. */
 export function useDocumentsFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -62,7 +67,7 @@ export function useDocumentsFilters() {
   const clearFilters = useCallback(
     () =>
       commit((params) => {
-        for (const key of ["type", "status", "from", "to", "search"]) params.delete(key);
+        for (const key of ["type", "status", "from", "to", "search", "page"]) params.delete(key);
       }),
     [commit],
   );
@@ -70,7 +75,7 @@ export function useDocumentsFilters() {
   return {
     filters,
     urlSearch: searchParams.get("search") ?? "",
-    initialSearch: searchParams.get("search") ?? "",
+    urlPage: pageOrFirst(searchParams.get("page")),
     setParam,
     clearFilters,
   };

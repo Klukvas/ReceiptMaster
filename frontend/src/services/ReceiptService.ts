@@ -1,5 +1,6 @@
 import { receiptsApi, type DocumentRequestBody, type Receipt } from "../lib/api";
 import { isGeneratableType, type DocumentType, type GeneratableType } from "../lib/document-types";
+import { notifyIssueWarnings } from "../lib/issue-warnings";
 import { notificationService } from "./NotificationService";
 import { parseApiError } from "../lib/api-errors";
 import i18n from "../lib/i18n";
@@ -109,7 +110,7 @@ export class ReceiptService {
 
   async generateReceipt(orderId: string): Promise<void> {
     try {
-      await receiptsApi.create(orderId);
+      notifyIssueWarnings((await receiptsApi.create(orderId)).data);
       notificationService.success(i18n.t("receipts.generateStarted"));
     } catch (error) {
       const apiError = parseApiError(error);
@@ -130,7 +131,7 @@ export class ReceiptService {
     const body = retryBody(type);
     if (!body) return;
     try {
-      await receiptsApi.createDocument(orderId, body);
+      notifyIssueWarnings((await receiptsApi.createDocument(orderId, body)).data);
       notificationService.success(i18n.t("receipts.generateStarted"));
     } catch (error) {
       const apiError = parseApiError(error);

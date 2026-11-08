@@ -460,6 +460,25 @@ describeIsolatedPostgres(
         expect(left).toContain(promoted?.id);
       });
 
+      it("unlocks the order of an evicted waybill, but not one an invoice still locks", async () => {
+        const orders = await Promise.all(
+          Array.from({ length: LIMIT }, () => confirmedOrder()),
+        );
+        // The two oldest waybills sit on orders 0 and 1; order 1 also carries an invoice.
+        for (const order of orders) await issued(order, DocumentType.WAYBILL);
+        await issued(orders[1], DocumentType.INVOICE);
+        expect(await isLocked(orders[0])).toBe(true);
+
+        await promote(DocumentType.WAYBILL);
+
+        expect(await isLocked(orders[0])).toBe(false);
+        // Order 1's waybill is still within the cap, so only order 0 lost its document.
+        expect(await isLocked(orders[1])).toBe(true);
+        const next = await promote(DocumentType.WAYBILL);
+        expect(next?.status).toBe(ReceiptStatus.GENERATED);
+        expect(await isLocked(orders[1])).toBe(true);
+      });
+
       it("ten generated invoices do not count toward the waybill limit", async () => {
         const invoices = await generatedOfType(DocumentType.INVOICE, LIMIT);
         await generatedOfType(DocumentType.WAYBILL, 9);

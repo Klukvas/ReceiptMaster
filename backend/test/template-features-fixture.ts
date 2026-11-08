@@ -61,9 +61,32 @@ export class MemoryDatabase {
   rows(entity: Entity): Row[] {
     return this.tables.get(entity.name) || [];
   }
-  private matches(row: Row, filter: Row = {}): boolean {
-    return Object.entries(filter).every(([key, value]) =>
-      value && typeof value === "object" && "_type" in value
+  /** Only the relations the production code filters through are modelled; an unknown
+   * nested filter throws instead of silently matching everything. */
+  private static readonly RELATIONS = new Map<
+    Entity,
+    Record<string, { target: Entity; foreignKey: string }>
+  >([[Receipt, { order: { target: Order, foreignKey: "order_id" } }]]);
+  private matches(row: Row, filter: Row = {}, entity?: Entity): boolean {
+    return Object.entries(filter).every(([key, value]) => {
+      const relation = entity && MemoryDatabase.RELATIONS.get(entity)?.[key];
+      if (
+        value &&
+        typeof value === "object" &&
+        !("_type" in value) &&
+        !(value instanceof Date)
+      ) {
+        if (!relation)
+          throw new Error(`Fixture cannot match nested filter "${key}"`);
+        // Inner-join semantics: a row whose related row is missing never matches.
+        const related = this.rows(relation.target).find(
+          (candidate) => candidate.id === row[relation.foreignKey],
+        );
+        return (
+          !!related && this.matches(related, value as Row, relation.target)
+        );
+      }
+      return value && typeof value === "object" && "_type" in value
         ? value._type === "isNull"
           ? row[key] == null
           : value._type === "moreThan"
@@ -77,7 +100,22 @@ export class MemoryDatabase {
                   Array.isArray(value._value) &&
                   value._value.includes(row[key])
                 : false
-        : row[key] === value,
+        : row[key] === value;
+    });
+  }
+  /** Understands exactly one raw predicate: "the receipt's order is not soft-deleted". */
+  private matchesRaw(row: Row, sql: string, entity: Entity): boolean {
+    const notDeletedOrder =
+      entity === Receipt &&
+      /EXISTS \(SELECT 1 FROM "orders" "o" WHERE "o"\."id" = "receipts"\."order_id" AND "o"\."deleted_at" IS NULL\)/.test(
+        sql,
+      );
+    if (!notDeletedOrder)
+      throw new Error(`Fixture cannot evaluate raw condition: ${sql}`);
+    return this.matches(
+      row,
+      { order: { deleted_at: { _type: "isNull" } } },
+      entity,
     );
   }
   repository(entity: Entity): Repository<never> {
@@ -85,7 +123,7 @@ export class MemoryDatabase {
       create: (value: Row) => ({ ...value }),
       findOne: async (options: { where?: Row; select?: string[] }) => {
         const row = this.rows(entity).find((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         return row
           ? options.select
@@ -97,7 +135,7 @@ export class MemoryDatabase {
       },
       findOneOrFail: async (options: { where?: Row }) => {
         const row = this.rows(entity).find((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         if (!row) throw new Error("Fixture row not found");
         return this.project(entity, row);
@@ -111,7 +149,7 @@ export class MemoryDatabase {
         } = {},
       ) =>
         this.rows(entity)
-          .filter((value) => this.matches(value, options.where))
+          .filter((value) => this.matches(value, options.where, entity))
           .sort((a, b) => {
             for (const [key, direction] of Object.entries(
               options.order || {},
@@ -138,13 +176,14 @@ export class MemoryDatabase {
           ),
       findAndCount: async (options: { where?: Row } = {}) => {
         const rows = this.rows(entity).filter((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         return [rows.map((value) => this.project(entity, value)), rows.length];
       },
       count: async (options: { where?: Row } = {}) =>
-        this.rows(entity).filter((value) => this.matches(value, options.where))
-          .length,
+        this.rows(entity).filter((value) =>
+          this.matches(value, options.where, entity),
+        ).length,
       save: async (value: Row) => {
         const id = value.id || randomUUID(),
           now = new Date();
@@ -169,12 +208,12 @@ export class MemoryDatabase {
       },
       update: async (filter: Row, patch: Row) => {
         const found = this.rows(entity).filter((value) =>
-          this.matches(value, filter),
+          this.matches(value, filter, entity),
         );
         this.tables.set(
           entity.name,
           this.rows(entity).map((row) =>
-            this.matches(row, filter)
+            this.matches(row, filter, entity)
               ? { ...row, ...structuredClone(patch) }
               : row,
           ),
@@ -188,18 +227,54 @@ export class MemoryDatabase {
           this.rows(entity).filter((row) =>
             Array.isArray(filter)
               ? !filter.includes(String(row.id))
-              : !this.matches(row, filter),
+              : !this.matches(row, filter, entity),
           ),
         );
         this.writes.push(`delete:${entity.name}`);
       },
       createQueryBuilder: () => {
         let params: Row = {};
+        let patch: Row | null = null;
+        let filter: Row = {};
+        let isUpdate = false;
+        const rawConditions: string[] = [];
         const qb = {
           addSelect: () => qb,
-          where: (_sql: string, values: Row) => {
-            params = values;
+          update: () => {
+            isUpdate = true;
             return qb;
+          },
+          set: (value: Row) => {
+            patch = value;
+            return qb;
+          },
+          where: (condition: string | Row, values?: Row) => {
+            if (typeof condition === "string") params = values || {};
+            else filter = { ...filter, ...condition };
+            return qb;
+          },
+          andWhere: (sql: string) => {
+            rawConditions.push(sql);
+            return qb;
+          },
+          execute: async () => {
+            if (!isUpdate || !patch)
+              throw new Error("Fixture query builder only executes UPDATE");
+            const applied = patch;
+            const targets = this.rows(entity).filter(
+              (row) =>
+                this.matches(row, filter, entity) &&
+                rawConditions.every((sql) => this.matchesRaw(row, sql, entity)),
+            );
+            const ids = new Set(targets.map((row) => row.id));
+            this.tables.set(
+              entity.name,
+              this.rows(entity).map((row) =>
+                ids.has(row.id) ? { ...row, ...structuredClone(applied) } : row,
+              ),
+            );
+            this.writes.push(`update:${entity.name}`);
+            return { affected: targets.length, raw: [], generatedMaps: [] };
           },
           getOne: async () => {
             const row = this.rows(entity).find(

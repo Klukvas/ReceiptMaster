@@ -14,6 +14,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     | "link";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
+  /** Stay focusable while disabled or loading (see the primitive). */
+  softDisabled?: boolean;
 }
 
 const sizeMap = {

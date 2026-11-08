@@ -222,6 +222,21 @@ export function voidedDocumentsOf(
     .sort(newestFirst);
 }
 
+/**
+ * Whether no later document of the same type exists. A repeatable type (return note) keeps every
+ * note in the list, so an old void one must not stand for the order once a newer note is live.
+ */
+export function isNewestOfType(
+  order: Pick<OrderWithDocuments, "receipts">,
+  document: Receipt,
+): boolean {
+  return !documentsOf(order).some(
+    (other) =>
+      other.document_type === document.document_type &&
+      other.created_at.localeCompare(document.created_at) > 0,
+  );
+}
+
 /** The current document of every type the order has, oldest first. */
 export function currentDocumentsOf(
   order: Pick<OrderWithDocuments, "receipts">,

@@ -54,40 +54,46 @@ export const useDeleteSignoff = (kind: SignoffKind) => {
   });
 };
 
+type LoadedPreview = { assetId: string; url: string };
+
 /**
  * The stored image as an object URL for an <img>. The endpoint needs the bearer token, so a plain
  * src cannot reach it. The URL is revoked when the image changes or the component unmounts.
  */
 export function useSignoffPreviewUrl(kind: SignoffKind, image: SignoffImage | null) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [hasFailed, setHasFailed] = useState(false);
   // assetId changes on every upload, so it identifies the bytes to show.
   const assetId = image?.assetId ?? null;
+  const [loaded, setLoaded] = useState<LoadedPreview | null>(null);
+  const [failedAssetId, setFailedAssetId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!assetId) {
-      setUrl(null);
-      setHasFailed(false);
-      return;
-    }
+    if (!assetId) return;
     let isCurrent = true;
     let objectUrl: string | null = null;
-    setHasFailed(false);
     settingsApi
       .getSignoffImage(kind)
       .then((response) => {
         if (!isCurrent) return;
         objectUrl = URL.createObjectURL(response.data);
-        setUrl(objectUrl);
+        setLoaded({ assetId, url: objectUrl });
       })
       .catch(() => {
-        if (isCurrent) setHasFailed(true);
+        if (isCurrent) setFailedAssetId(assetId);
       });
     return () => {
       isCurrent = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (!objectUrl) return;
+      URL.revokeObjectURL(objectUrl);
+      // Going back to an earlier asset must not briefly render its revoked URL.
+      const revoked = objectUrl;
+      setLoaded((previous) => (previous?.url === revoked ? null : previous));
     };
   }, [kind, assetId]);
 
-  return { url: assetId ? url : null, hasFailed };
+  // A URL revoked by the cleanup above must never be rendered, so it is matched to the current
+  // asset instead of being cleared in the effect: the replaced file shows the loading state, not a broken image.
+  return {
+    url: assetId && loaded?.assetId === assetId ? loaded.url : null,
+    hasFailed: assetId !== null && failedAssetId === assetId,
+  };
 }

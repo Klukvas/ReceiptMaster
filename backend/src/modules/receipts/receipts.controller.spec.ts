@@ -265,6 +265,27 @@ describe("ReceiptsController", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
     });
+
+    it("does not leak the internal error message to the client", async () => {
+      receiptsService.generateTestReceipt.mockRejectedValue(
+        new Error("ENOENT /srv/secret/path chromium crashed"),
+      );
+      const mockRes = {
+        set: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+
+      await controller.testPreview(mockReq, mockRes);
+
+      const body = mockRes.json.mock.calls[0][0];
+      expect(body).toEqual({
+        error: "Could not generate the preview",
+        errorCode: "PREVIEW_FAILED",
+      });
+      expect(JSON.stringify(body)).not.toContain("secret");
+    });
   });
 
   describe("regenerateReceiptPdf", () => {

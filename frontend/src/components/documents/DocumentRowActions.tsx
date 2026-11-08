@@ -15,10 +15,17 @@ type DocumentRowActionsProps = {
   onShare: (document: DocumentListItem) => void;
   onVoid: (document: DocumentListItem) => void;
   onRetry: (document: DocumentListItem) => void;
+  /** Rows whose "create again" request is still in flight; the action ignores clicks meanwhile. */
+  retryingIds?: ReadonlySet<string>;
+  /** Cards have room for a word next to each icon; the dense table relies on the tooltip. */
+  showLabels?: boolean;
 };
 
-const BUTTON_CLASS =
-  "rounded-lg p-1.5 pointer-coarse:p-3.5 text-content-tertiary transition-colors hover:bg-surface-alt hover:text-content-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]";
+const FOCUS_CLASS =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]";
+// 16px icon + 14px padding each side = 44px on touch.
+const ICON_BUTTON_CLASS = `rounded-lg p-1.5 pointer-coarse:p-3.5 text-content-tertiary transition-colors hover:bg-surface-alt hover:text-content-secondary ${FOCUS_CLASS}`;
+const LABELED_BUTTON_CLASS = `inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 min-h-9 pointer-coarse:min-h-11 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-alt ${FOCUS_CLASS}`;
 
 /** Download, share and void for one document, each only where the document's state allows it. */
 export function DocumentRowActions({
@@ -27,56 +34,68 @@ export function DocumentRowActions({
   onShare,
   onVoid,
   onRetry,
+  retryingIds,
+  showLabels = false,
 }: DocumentRowActionsProps) {
   const { t } = useTranslation();
   const subject = `${t(documentLabelKey(document.document_type))} ${document.number}`;
+  const buttonClass = showLabels ? LABELED_BUTTON_CLASS : ICON_BUTTON_CLASS;
+
+  const actions = [
+    {
+      isShown: canDownloadDocument(document),
+      label: t("documents.download"),
+      icon: Download,
+      run: onDownload,
+      extraClass: "",
+      isPending: false,
+    },
+    {
+      isShown: canShareDocument(document),
+      label: t("receipts.share"),
+      icon: Share2,
+      run: onShare,
+      extraClass: "",
+      isPending: false,
+    },
+    {
+      isShown: canRetryDocument(document),
+      label: t("documentsPage.createAgain"),
+      icon: RefreshCw,
+      run: onRetry,
+      extraClass: "",
+      isPending: retryingIds?.has(document.id) ?? false,
+    },
+    {
+      isShown: canVoidDocument(document),
+      label: t("documents.void"),
+      icon: Ban,
+      run: onVoid,
+      extraClass: "hover:text-danger-base",
+      isPending: false,
+    },
+  ];
 
   return (
-    <div className="flex items-center justify-end gap-1">
-      {canDownloadDocument(document) && (
-        <button
-          type="button"
-          className={BUTTON_CLASS}
-          onClick={() => onDownload(document)}
-          title={t("documents.download")}
-          aria-label={`${t("documents.download")}: ${subject}`}
-        >
-          <Download className="h-4 w-4" aria-hidden />
-        </button>
-      )}
-      {canShareDocument(document) && (
-        <button
-          type="button"
-          className={BUTTON_CLASS}
-          onClick={() => onShare(document)}
-          title={t("receipts.share")}
-          aria-label={`${t("receipts.share")}: ${subject}`}
-        >
-          <Share2 className="h-4 w-4" aria-hidden />
-        </button>
-      )}
-      {canRetryDocument(document) && (
-        <button
-          type="button"
-          className={BUTTON_CLASS}
-          onClick={() => onRetry(document)}
-          title={t("documentsPage.createAgain")}
-          aria-label={`${t("documentsPage.createAgain")}: ${subject}`}
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden />
-        </button>
-      )}
-      {canVoidDocument(document) && (
-        <button
-          type="button"
-          className={`${BUTTON_CLASS} hover:text-danger-base`}
-          onClick={() => onVoid(document)}
-          title={t("documents.void")}
-          aria-label={`${t("documents.void")}: ${subject}`}
-        >
-          <Ban className="h-4 w-4" aria-hidden />
-        </button>
-      )}
+    <div className={`flex items-center gap-1 ${showLabels ? "flex-wrap justify-start" : "justify-end"}`}>
+      {actions
+        .filter((action) => action.isShown)
+        .map(({ label, icon: Icon, run, extraClass, isPending }) => (
+          <button
+            key={label}
+            type="button"
+            className={`${buttonClass} ${extraClass} ${isPending ? "opacity-50" : ""}`}
+            aria-disabled={isPending || undefined}
+            onClick={() => {
+              if (!isPending) run(document);
+            }}
+            title={label}
+            aria-label={`${label}: ${subject}`}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {showLabels && <span aria-hidden>{label}</span>}
+          </button>
+        ))}
     </div>
   );
 }

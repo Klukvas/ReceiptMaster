@@ -20,3 +20,11 @@ export const canRetryDocument = (
   document: ActionSubject & Pick<Receipt, "document_type">,
 ): boolean =>
   document.status === "failed" && document.document_type !== "return_note";
+
+/** What a failed row without a retry button tells the user to do instead. */
+export const failedNextStep = (
+  document: ActionSubject & Pick<Receipt, "document_type">,
+): string | undefined =>
+  document.status === "failed" && !canRetryDocument(document)
+    ? "documentsPage.failedReturnNote"
+    : undefined;

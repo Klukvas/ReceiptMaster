@@ -97,6 +97,18 @@ describe("signature and stamp over HTTP", () => {
     });
   });
 
+  it("limits uploads to 10 a minute per user with RATE_LIMITED", async () => {
+    const file = await png();
+    for (let i = 0; i < 10; i++) await put("signature", file).expect(200);
+
+    const response = await put("signature", file).expect(429);
+
+    expect(response.body).toMatchObject({
+      errorCode: "RATE_LIMITED",
+      retryAfterSeconds: expect.any(Number),
+    });
+  });
+
   it("serves the stored image as a private, non-sniffable PNG", async () => {
     await put("stamp", await png(400, 400)).expect(200);
 

@@ -53,7 +53,7 @@ export const AutoReceiptSetting = () => {
     >
       {error ? (
         <div className="mt-4">
-          <SettingsLoadError error={error} retry={refetch} />
+          <SettingsLoadError retry={refetch} />
         </div>
       ) : (
         <div className="mt-4 space-y-3">

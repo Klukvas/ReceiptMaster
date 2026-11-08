@@ -13,7 +13,7 @@ import {
   isRetentionExempt,
 } from "../document-retention";
 import { specFor } from "../document-types";
-import { isLockingDocumentType } from "../order-lock";
+import { isLockingDocumentType, syncOrderLock } from "../order-lock";
 import { Order } from "../../orders/entities/order.entity";
 import { DocumentRenderService } from "./document-render.service";
 import { DocumentArtifactsService } from "./document-artifacts.service";
@@ -199,6 +199,7 @@ export class ReceiptArtifactService {
       select: [
         "id",
         "user_id",
+        "order_id",
         "pdf_path",
         "active_logo_asset_id",
         "pending_logo_asset_id",
@@ -206,6 +207,18 @@ export class ReceiptArtifactService {
       order: { created_at: "ASC", id: "ASC" },
       take: total - DOCUMENTS_RETAINED_PER_TYPE,
     });
+    // An evicted locking document may have been the last one holding its order locked.
+    // The orders are locked first, in id order and before any receipt of theirs, so the
+    // lock-flag recount below sees a stable set of documents.
+    const orderIds = isLockingDocumentType(type)
+      ? [...new Set(oldest.map((row) => row.order_id))].sort()
+      : [];
+    for (const orderId of orderIds)
+      await manager.findOne(Order, {
+        where: { id: orderId, user_id: userId },
+        select: ["id"],
+        lock: { mode: "pessimistic_write" },
+      });
     const locked = await this.lockRetirements(oldest, userId, manager);
     for (const old of locked) await this.retire(old, manager);
     for (const old of locked)
@@ -214,6 +227,8 @@ export class ReceiptArtifactService {
         user_id: userId,
         status: ReceiptStatus.GENERATED,
       });
+    for (const orderId of orderIds)
+      await syncOrderLock(manager, orderId, userId);
   }
 
   private matches(receipt: Receipt, generationId: string): boolean {

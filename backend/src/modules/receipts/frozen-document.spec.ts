@@ -92,6 +92,14 @@ describe("buildFrozenDocument: invoice due date", () => {
       /earlier than the issue date/,
     );
   });
+  it("accepts a due date 365 days out and rejects one a day further", () => {
+    expect(due(context({ details: { dueDate: "2027-11-03" } })).dueDate).toBe(
+      "2027-11-03",
+    );
+    expect(() => due(context({ details: { dueDate: "2027-11-04" } }))).toThrow(
+      /details\.dueDate: must be within 365 days of the issue date/,
+    );
+  });
   it("reports an earlier due date with a stable code and the fields a client localizes from", () => {
     const error = (() => {
       try {

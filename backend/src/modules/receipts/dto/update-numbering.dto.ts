@@ -23,7 +23,8 @@ export const MAX_START_NUMBER = 2_000_000_000;
  * Letters, digits and a few separators. `/`, `\`, `"` and control characters are not in
  * the set: they would break the download file name and HTML attributes.
  */
-const PREFIX_PATTERN = /^[\p{L}\p{N}._ -]{0,16}$/u;
+// Length is checked by @MaxLength, so a too-long prefix reports its length, not its characters.
+const PREFIX_PATTERN = /^[\p{L}\p{N}._ -]*$/u;
 export class UpdateNumberingDto {
   @ApiProperty({ maxLength: MAX_PREFIX_LENGTH })
   @Trimmed()
@@ -34,8 +35,9 @@ export class UpdateNumberingDto {
       'prefix may contain only letters, digits and . _ - and spaces (no / \\ " or control characters)',
   })
   // A prefix ending in a digit would let two formats print the same text for different
-  // counter values; the migration's CHECK enforces the same.
-  @Matches(/^(?![\s\S]*[0-9]$)/, {
+  // counter values. Any Unicode digit counts here (the migration's CHECK knows only 0-9,
+  // which is what the counter value is read back with).
+  @Matches(/^(?![\s\S]*\p{N}$)/u, {
     message: "prefix must not end with a digit",
   })
   prefix: string;

@@ -353,8 +353,25 @@ describe("ReceiptsService", () => {
       expect(listQuery.addOrderBy).toHaveBeenCalledWith("r.id", "DESC");
     });
 
+    it("sorts by number as the counter value read from the text, then the text, then the id", async () => {
+      await service.findAll(mockUser, {
+        sortBy: "number",
+        sortOrder: "ASC" as never,
+      });
+      expect(listQuery.orderBy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /CAST\(substring\(r\.number from '\[0-9\]\{1,18\}\$'\) AS bigint\)/,
+        ),
+        "ASC",
+        "NULLS LAST",
+      );
+      expect(listQuery.addOrderBy.mock.calls).toEqual([
+        ["r.number", "ASC"],
+        ["r.id", "ASC"],
+      ]);
+    });
+
     it.each([
-      ["number", "r.number"],
       ["document_type", "r.document_type"],
       ["status", "r.status"],
     ])("sorts by %s from the allowlist", async (sortBy, column) => {
@@ -411,7 +428,8 @@ describe("ReceiptsService", () => {
     it("uses Europe/Kyiv for an account without a saved configuration", async () => {
       dataSource.manager.query.mockResolvedValueOnce([]);
       await service.findAll(mockUser, { startDate: "2026-03-01" });
-      const [, params] = listQuery.andWhere.mock.calls.at(-1)!;
+      const [, params] =
+        listQuery.andWhere.mock.calls[listQuery.andWhere.mock.calls.length - 1];
       expect(params.zone).toBe("Europe/Kyiv");
     });
 
@@ -420,7 +438,8 @@ describe("ReceiptsService", () => {
         { zone: "Mars/Olympus" },
       ]);
       await service.findAll(mockUser, { endDate: "2026-03-01" });
-      const [, params] = listQuery.andWhere.mock.calls.at(-1)!;
+      const [, params] =
+        listQuery.andWhere.mock.calls[listQuery.andWhere.mock.calls.length - 1];
       expect(params.zone).toBe("Europe/Kyiv");
     });
 
@@ -431,17 +450,20 @@ describe("ReceiptsService", () => {
 
     it("escapes LIKE wildcards in the search and adds the order number for digits", async () => {
       await service.findAll(mockUser, { search: "50%_off" });
-      const [, plain] = listQuery.andWhere.mock.calls.at(-1)!;
+      const [, plain] =
+        listQuery.andWhere.mock.calls[listQuery.andWhere.mock.calls.length - 1];
       expect(plain).toEqual({ pattern: "%50\\%\\_off%" });
 
       await service.findAll(mockUser, { search: "#17" });
-      const [, numeric] = listQuery.andWhere.mock.calls.at(-1)!;
+      const [, numeric] =
+        listQuery.andWhere.mock.calls[listQuery.andWhere.mock.calls.length - 1];
       expect(numeric).toEqual({ pattern: "%#17%", orderNumber: 17 });
     });
 
     it("does not treat a number too large for an order as an order number", async () => {
       await service.findAll(mockUser, { search: "12345678901234" });
-      const [, values] = listQuery.andWhere.mock.calls.at(-1)!;
+      const [, values] =
+        listQuery.andWhere.mock.calls[listQuery.andWhere.mock.calls.length - 1];
       expect(values).not.toHaveProperty("orderNumber");
     });
 
@@ -755,6 +777,34 @@ describe("ReceiptsService", () => {
       expect(snapshots.prepare).not.toHaveBeenCalled();
     });
 
+    it("serializes concurrent waybill requests so a double click draws no extra number", async () => {
+      const pending = {
+        ...mockReceipt,
+        status: ReceiptStatus.PROCESSING,
+        generation_id: "g1",
+      };
+      // The first request sees no row; by the time the second one starts, the first
+      // has committed its PROCESSING row, so the second must return it without preparing.
+      let firstFinished = false;
+      receiptsRepo.findOne.mockImplementation(async () =>
+        firstFinished ? pending : null,
+      );
+      snapshots.prepare.mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        firstFinished = true;
+        throw new Error("stop after the first draw");
+      });
+
+      const results = await Promise.allSettled([
+        service.generateDocument("order-1", mockUser, DocumentType.WAYBILL),
+        service.generateDocument("order-1", mockUser, DocumentType.WAYBILL),
+      ]);
+
+      expect(snapshots.prepare).toHaveBeenCalledTimes(1);
+      expect(results[0].status).toBe("rejected");
+      expect(results[1]).toEqual({ status: "fulfilled", value: pending });
+    });
+
     it("answers a lost cross-process race with the winner's pending row", async () => {
       const manager = transaction();
       const winner = {
@@ -993,31 +1043,6 @@ describe("ReceiptsService", () => {
     });
   });
 
-  describe("deleteReceiptFilesForOrder", () => {
-    it("retires storage intent and removes pointers in the same transaction without deleting S3", async () => {
-      const manager = {
-        query: jest.fn().mockResolvedValue([]),
-        find: jest.fn().mockResolvedValue([mockReceipt]),
-        findOne: jest.fn().mockResolvedValue(mockOrder),
-        delete: jest.fn(),
-      };
-      dataSource.transaction.mockImplementation((fn) => fn(manager));
-      await service.deleteReceiptFilesForOrder("order-1", "user-1");
-      expect(artifacts.retire).toHaveBeenCalledWith(mockReceipt, manager);
-      expect(manager.delete).toHaveBeenCalledWith(Receipt, {
-        id: mockReceipt.id,
-        user_id: mockReceipt.user_id,
-      });
-      expect(pdfStorageService.deleteFile).not.toHaveBeenCalled();
-    });
-    it("propagates DB errors so pointer removal cannot silently lose cleanup intent", async () => {
-      dataSource.transaction.mockRejectedValue(new Error("DB error"));
-      await expect(
-        service.deleteReceiptFilesForOrder("order-1", "user-1"),
-      ).rejects.toThrow("DB error");
-    });
-  });
-
   describe("getReceiptPdf", () => {
     it("returns an existing local PDF without resolving current settings", async () => {
       receiptsRepo.findOne.mockResolvedValue(mockReceipt);
@@ -1198,6 +1223,18 @@ describe("ReceiptsService", () => {
   });
 
   describe("generatePublicToken", () => {
+    const tokenUpdate = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn(),
+    };
+    beforeEach(() => {
+      tokenUpdate.execute.mockResolvedValue({ affected: 1 });
+      receiptsRepo.createQueryBuilder = jest.fn().mockReturnValue(tokenUpdate);
+    });
+
     it("should generate a public token for a generated receipt", async () => {
       receiptsRepo.findOne.mockResolvedValue({
         ...mockReceipt,
@@ -1213,10 +1250,44 @@ describe("ReceiptsService", () => {
       expect(result.token).toBeDefined();
       expect(result.token).toHaveLength(64);
       expect(result.url).toContain("/r/");
-      expect(receiptsRepo.update).toHaveBeenCalledWith(
-        expect.objectContaining({ status: ReceiptStatus.GENERATED }),
-        { public_token: expect.any(String) },
+      expect(tokenUpdate.set).toHaveBeenCalledWith({
+        public_token: expect.any(String),
+      });
+      // Re-checked inside the UPDATE, so an order deleted in between gets no link.
+      expect(tokenUpdate.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('"o"."deleted_at" IS NULL'),
       );
+    });
+
+    it("looks the receipt up only while its order is not deleted", async () => {
+      receiptsRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.generatePublicToken("receipt-1", mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+
+      expect(receiptsRepo.findOne).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: "receipt-1",
+          order: { deleted_at: expect.anything() },
+        }),
+      });
+    });
+
+    it("does not report a link when the order was deleted before the UPDATE", async () => {
+      receiptsRepo.findOne
+        .mockResolvedValueOnce({
+          ...mockReceipt,
+          status: ReceiptStatus.GENERATED,
+          public_token: null,
+        })
+        .mockResolvedValueOnce(null);
+      tokenUpdate.execute.mockResolvedValue({ affected: 0 });
+      (service as any).configService = { get: jest.fn().mockReturnValue("x") };
+
+      await expect(
+        service.generatePublicToken("receipt-1", mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
     });
 
     it("should return existing token if already shared", async () => {
@@ -1281,9 +1352,12 @@ describe("ReceiptsService", () => {
       await service.revokePublicToken("receipt-1", mockUser);
 
       expect(receiptsRepo.update).toHaveBeenCalledWith(
-        { id: "receipt-1" },
+        { id: "receipt-1", user_id: mockUser.id },
         expect.objectContaining({ public_token: null }),
       );
+      expect(receiptsRepo.findOneOrFail).toHaveBeenCalledWith({
+        where: { id: "receipt-1", user_id: mockUser.id },
+      });
     });
 
     it("should throw if receipt not found", async () => {

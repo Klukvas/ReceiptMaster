@@ -41,6 +41,12 @@ export interface DrawnNumber {
   value: number;
 }
 
+/** Digits of the largest counter value: MAX_START_NUMBER (2e9) plus the numbers drawn after it. */
+const MAX_COUNTER_DIGITS = 10;
+
+/** The counter column is a 32-bit integer; a longer digit run in a hand-made number cannot be a counter value. */
+const MAX_COUNTER_VALUE = 2_147_483_647;
+
 interface CounterRow {
   value: number;
   prefix: string;
@@ -110,10 +116,16 @@ export async function releaseDocumentNumber(
   return rows.length > 0;
 }
 
+// A bare UPDATE ... RETURNING comes back from the postgres driver as `[rows, count]`, so
+// every statement here that is read as rows is wrapped: a CTE UPDATE followed by a SELECT
+// answers with the plain row array.
 const RELEASE_COUNTER = `
-  UPDATE "document_counters" SET "value" = "value" - 1
-  WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
-  RETURNING "value"`;
+  WITH released AS (
+    UPDATE "document_counters" SET "value" = "value" - 1
+    WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
+    RETURNING "value"
+  )
+  SELECT "value" FROM released`;
 
 const RELEASE_WAYBILL_COUNTER = `
   WITH released AS (
@@ -169,19 +181,23 @@ export async function raiseCounterToIssued(
     `SELECT 1 FROM "document_counters" WHERE "user_id" = $1 AND "document_type" = $2 FOR UPDATE`,
     [userId, type],
   );
-  // The counter value is the trailing digit run of a number (see formatDocumentNumber).
+  // The counter value is the trailing digit run of a number (see formatDocumentNumber);
+  // read all of it: the start number allows 10 digits (MAX_START_NUMBER is 2e9).
   const [{ highest }]: Array<{ highest: string | null }> = await manager.query(
     `SELECT MAX(("m")[1]::bigint) AS highest
      FROM (
-       SELECT regexp_match("number", '([0-9]{1,9})$') AS "m" FROM "receipts"
+       SELECT regexp_match("number", '([0-9]{1,${MAX_COUNTER_DIGITS}})$') AS "m" FROM "receipts"
        WHERE "user_id" = $1 AND "document_type" = $2
-     ) AS "numbers" WHERE "m" IS NOT NULL`,
+     ) AS "numbers" WHERE "m" IS NOT NULL AND ("m")[1]::bigint <= ${MAX_COUNTER_VALUE}`,
     [userId, type],
   );
   const issued = Number(highest ?? 0);
   const [{ value }]: Array<{ value: number }> = await manager.query(
-    `UPDATE "document_counters" SET "value" = GREATEST("value", $3)
-     WHERE "user_id" = $1 AND "document_type" = $2 RETURNING "value"`,
+    `WITH raised AS (
+       UPDATE "document_counters" SET "value" = GREATEST("value", $3)
+       WHERE "user_id" = $1 AND "document_type" = $2 RETURNING "value"
+     )
+     SELECT "value" FROM raised`,
     [userId, type, issued],
   );
   if (type === DocumentType.WAYBILL)

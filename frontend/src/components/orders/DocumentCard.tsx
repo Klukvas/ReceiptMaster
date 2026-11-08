@@ -1,11 +1,13 @@
 import { Ban, Download, Loader2, Printer, RefreshCw, Share2, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { formatDate, type Receipt } from "../../lib/api";
+import type { Receipt } from "../../lib/api";
+import { formatDocumentDateTime } from "../../lib/document-date-format";
 import { documentLabelKey, isMultiplePerOrder } from "../../lib/document-types";
+import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { DocumentFailureReason } from "../documents/DocumentFailureReason";
-import { voidReasonText } from "./void-reason";
+import { VoidedDocumentNote } from "../documents/VoidedDocumentNote";
 
 export type DocumentCardActions = {
   onDownload: (documentId: string) => void;
@@ -27,6 +29,7 @@ function StatusBadge({ status }: { status: Receipt["status"] }) {
   const { t } = useTranslation();
   return (
     <span
+      aria-live="polite"
       className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}
     >
       {status === "processing" && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
@@ -80,6 +83,7 @@ type DocumentCardProps = {
 
 export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
   const { t } = useTranslation();
+  const timeZone = useDocumentTimeZone();
   return (
     <li
       data-testid="document-card"
@@ -90,14 +94,14 @@ export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-content">{t(documentLabelKey(document.document_type))}</p>
           <p className="truncate text-xs text-content-tertiary">
-            {document.number} · {formatDate(document.created_at)}
+            {document.number} · {formatDocumentDateTime(document.created_at, timeZone)}
           </p>
         </div>
         <StatusBadge status={document.status} />
       </div>
       {document.status === "generated" && <GeneratedActions document={document} actions={actions} />}
-      {document.status === "void" && document.void_reason && (
-        <p className="text-xs text-content-tertiary">{t("documents.voidedBecause", { reason: voidReasonText(t, document.void_reason) })}</p>
+      {document.status === "void" && (
+        <VoidedDocumentNote document_type={document.document_type} void_reason={document.void_reason} />
       )}
       {document.status === "failed" && (
         <div className="space-y-2">

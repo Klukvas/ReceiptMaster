@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-06
+**Last Updated:** 2026-11-08
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -521,6 +521,14 @@ File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but sta
 - `backend/src/config/trusted-proxy.ts` — `trustReverseProxy(app)` (`trust proxy` = 1 hop, the
   frontend nginx), called from `main.ts`; per-IP throttles depend on it
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
+- `backend/src/common/guards/user-throttler.guard.ts` — `UserThrottlerGuard`, a `ThrottlerGuard`
+  that counts per signed-in user id (`user:<id>`, falling back to `req.ip`) instead of per address,
+  and answers `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }` (plus the library's
+  `Retry-After`). Use it after `JwtAuthGuard` on expensive authenticated routes with
+  `@UseGuards(UserThrottlerGuard) @Throttle({ default: { ttl, limit } })`; the counter key includes
+  the handler, so each route has its own budget, unless the route carries `@ThrottleBucket("name")`: all routes with the same bucket name share one counter. The default in-memory storage is per process
+  (single server today). In use on the document issuing routes (20/min in ONE bucket, `document-issue`: the three `/receipt*` routes, `/documents` and `/:id/regenerate`, via the `IssueThrottle()` decorator), `POST /receipts/test-preview` (10/min), `POST /receipts/preview` (30/min, a live preview re-renders as the form changes) and `PUT /settings/signoff/:kind` (10/min), all answering `429 RATE_LIMITED`.
+  `receipts-throttle.http.spec.ts` shows the pattern with the real guard stack.
 
 ### Middleware (Request Context)
 
@@ -625,6 +633,7 @@ export class AuditLogInterceptor implements NestInterceptor {
 **Behavior:**
 - Logs all mutations (POST/PUT/PATCH/DELETE) to the `audit_log` table
 - Sanitizes the body recursively: passwords/tokens and counterparty/bank requisites (any key containing `iban`, `taxId`, `legalName`, `legalAddress`, `bankName`, `vatId`, `signatory`, `contractRef`, `companyAddress`, snake or camel case) are stored as `***`, so `audit_logs` shows that a field changed but not its value
+- A multipart document request carries its JSON in one `payload` string field; the interceptor parses it first so the same masking applies inside (a `payload` that is not JSON is stored as `***`, never raw)
 - Runs after the handler returns (in `tap()`), so it has the response data
 
 ### Filters (Global Exception Handler)
@@ -1255,6 +1264,8 @@ never deleted to make it pass). After the first reissue of a quotation an order 
 Both migrations are additive; add the names to `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` (kept sorted) in `scripts/deploy-production.sh` (done). Their `down` is real, and `deploy-production.sh`'s rollback notice says what an old image does not do.
 
 - `DocumentNumberingFormat1793400000000` adds `document_counters.prefix varchar(16) NOT NULL DEFAULT ''`, `padding smallint NOT NULL DEFAULT 6`, `include_year boolean NOT NULL DEFAULT true`, with `CHK_document_counters_padding` (1 to 9) and `CHK_document_counters_prefix` (no trailing digit, none of `/ \ "` or control characters). Constant defaults, so no table rewrite and every existing row keeps printing `YYYY-NNNNNN`. The old image never reads the columns and keeps issuing `YYYY-NNNNNN` numbers from the same counters.
+- `DocumentArtifactCreatedAt1793600000000` adds `document_artifacts.created_at timestamptz NOT NULL DEFAULT now()` (a stable default, no table rewrite; existing rows get the migration time, which only postpones their cleanup), the clock for dropping a failed upload's tombstone after `LATE_WRITE_WINDOW_MS`. The old image never reads it; `down` drops the column. It is listed in `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` of `scripts/deploy-production.sh`, which refuse a history they do not know.
+- `AddOrderItemReturnedQty1793300000000` first counts order lines with a negative `qty` and stops with a message naming how to list them (the CHECK would fail anyway, but without saying which rows). `DocumentNumberingFormat1793400000000` prints the calendar year **in the document's time zone**, not UTC.
 - `DocumentSignoffAssets1793500000000` adds `document_assets.kind` (`logo` default; `CHK_document_assets_kind` allows `logo`, `signature`, `stamp`), widens the width/height CHECKs from 600 to 800 (a signature is stored up to 800 px wide), adds nullable `user_settings.signature_asset_id` / `stamp_asset_id` (FK to `document_assets(id)`, `select: false` on the entity so settings reads and saves never touch them), creates the trigger function `document_settings_signoff_owner` (the asset belongs to the same user **and** has the column's kind) and tightens `document_settings_logo_owner` to `kind = 'logo'`. `down` drops the trigger/function/columns, restores the logo function, deletes signature/stamp rows (lifting FORCE row security for that statement; the owner role is otherwise subject to it) and restores the 600 px CHECKs.
 - **Rolling the image back after `DocumentSignoffAssets1793500000000` is not harmless.** The old `collectExpired` does not know `signature_asset_id` / `stamp_asset_id`, so about 24 hours after the rollback it deletes the storage objects of the *active* signature and stamp (the rows stay, `state = 'deleting'`, because of the foreign key). Rolling forward again, `DocumentSignoffService.load` skips such an asset with a warning and documents generate without the image; the signature and stamp must be uploaded again. The deploy script's rollback notice says this. Reverting the migration itself deletes the rows but not the `signoffs/` objects, which stay orphaned until a bucket lifecycle rule or a manual cleanup removes them.
 - Test suites that build the schema by hand (`test/template-features-sql.e2e-spec.ts`) must also apply this migration, because the `DocumentAsset` and `UserSettings` entities map its columns.
@@ -1291,7 +1302,7 @@ LogoStorageService accepts validated PNG/JPEG/GIF/static SVG buffers and normali
 
 FIX2 fencing: initial promotions take the same tenant advisory lock as creation and evict only oldest existing generated receipts when needed, so multiple queued initial candidates cannot exceed ten generated documents. Replacement reconciliation CAS includes observed processing state, active revision and pending ID; promotion/new candidates/void win. Workers emit progress only after a conditional observed-candidate claim, with no async gap before emission. Missing-path/hash repair uses SQL `IS NULL` guards.
 
-Upload cleanup records now carry `upload_pending`, `cleanup_token` and capped retry attempts (unapplied migration `1792100000002-DocumentUploadFencing`). Across logos and PDFs, at most 25 live unexpired uploading leases per tenant may reserve intent, serialized separately from content transactions. Expired uncertain PUTs retain deleting tombstones and repeat reference-checked collection after 24 hours until the uploader settles. Deleting tombstones never consume upload capacity, including when collection extends their cleanup retry time; ordinary new uploads need no operational reconciliation. Arbitrary process suspension is not assumed to have a finite lifetime, so uncertain metadata is never forgotten by a TTL. Settlement fences expired uploaders and refreshes/recreates reference-aware cleanup intent with a new token. Collector finalization CAS cannot remove that refreshed intent. Each object failure moves its retry time by exponential backoff capped at 24 hours; each collector runs independently. No S3/browser work occurs in DB transactions. Migration backfills use temporary owner-only policies in a transaction and drop them before commit, preserving FORCE RLS. The settings logo-owner trigger covers changes to both logo pointer and tenant key.
+Upload cleanup records now carry `upload_pending`, `cleanup_token` and capped retry attempts (unapplied migration `1792100000002-DocumentUploadFencing`). Across logos and PDFs, at most 25 live unexpired uploading leases per tenant may reserve intent, serialized separately from content transactions. Expired uncertain PUTs retain deleting tombstones and repeat reference-checked collection after 24 hours until the uploader settles. A rejected or failed PUT turns its lease into such a tombstone at once (`abandonUpload`, `document-storage-cleanup.ts`; the intent stays for a late write), so a storage outage cannot fill the 25 live slots and lock the tenant out of documents and image uploads for the 24 h lease. Deleting tombstones never consume upload capacity, including when collection extends their cleanup retry time; ordinary new uploads need no operational reconciliation. A tombstone of an unsettled PUT is kept for `LATE_WRITE_WINDOW_MS` (7 days after the upload started, `document-storage-sweep.ts`; the storage client times out after 60 s and the lease is 24 h, so a week is far beyond any real late write) and each daily pass deletes the object again; the first pass after the window deletes the object one last time and drops the row (`collectClaim`, using `created_at`, which `document_artifacts` has since `DocumentArtifactCreatedAt1793600000000`; `document_assets` always had it), so a failed upload no longer costs a delete every 24 h forever. Settlement fences expired uploaders and refreshes/recreates reference-aware cleanup intent with a new token. Collector finalization CAS cannot remove that refreshed intent. Each object failure moves its retry time by exponential backoff capped at 24 hours; each collector runs independently. No S3/browser work occurs in DB transactions. Migration backfills use temporary owner-only policies in a transaction and drop them before commit, preserving FORCE RLS. The settings logo-owner trigger covers changes to both logo pointer and tenant key.
 
 Installed TypeORM MigrationExecutor uses its default `all` transaction mode for all three document migrations. Neither storage migration declares a per-migration transaction override; both backfill guards require an active transaction. Synthetic executor regressions cover ordered up/down, temporary owner-only SELECT/UPDATE policies removed before commit, and rollback without residual policies. Live PostgreSQL behavior remains an opt-in verification.
 
@@ -1305,6 +1316,8 @@ Never index an allowlist literal with `sortBy` (`MAP[sortBy] || default`): `cons
 ## Public share page in nginx
 
 `frontend/nginx.conf` has a dedicated `location ^~ /r/` for the share page: `Referrer-Policy: no-referrer` (the token in the URL must not leak in a `Referer`), `X-Robots-Tag: noindex, nofollow`, and the server-level security headers repeated, because an `add_header` inside a location replaces all inherited ones. It still serves the SPA (`try_files /index.html`). `src/modules/receipts/public-share-nginx.spec.ts` reads the file and pins these headers; verified with a local `nginx` against a copy of the config.
+
+`location /api/` sets `client_max_body_size 7m;` (nginx's default is 1m): document requests may be 6 MiB (logo up to 5 MiB plus the payload field) and the same spec pins it. A stored time zone that is not an IANA name (including a fixed offset such as `+05:00`, which `Intl` accepts) is treated as unset by `accountTimeZone`, with the same `isIanaTimeZone` the document-config schema applies on save.
 
 ## Retention, numbers and the documents list: where the rules live
 

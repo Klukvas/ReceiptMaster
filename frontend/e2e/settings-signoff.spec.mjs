@@ -74,7 +74,7 @@ const checkPreview = async (results) => {
       const note = await page.getByRole("note").filter({ hasText: "qualified" }).innerText();
       results.check(
         `${label}: the note says issued documents do not change and names the styles`,
-        note.includes("already issued") && note.includes("Standard, Classic, Minimal and Corporate") && note.includes("not a qualified electronic signature"),
+        note.includes("already issued") && note.includes("\u201cStandard\u201d, \u201cClassic\u201d, \u201cMinimal\u201d and \u201cCorporate\u201d") && note.includes("not a qualified electronic signature"),
         note,
       );
       results.check(`${label}: no horizontal overflow`, await hasNoHorizontalOverflow(page), "page scrolls sideways");
@@ -135,7 +135,8 @@ const checkUpload = async (results) => {
 const checkServerErrors = async (results) => {
   const cases = [
     { status: 413, body: { error: "Payload Too Large", errorCode: "HTTP_EXCEPTION" }, text: "2 MB" },
-    { status: 429, body: { error: "Too Many Requests", errorCode: "HTTP_EXCEPTION" }, text: "Too many uploads" },
+    { status: 429, body: { error: "Too Many Requests", errorCode: "HTTP_EXCEPTION" }, text: "Too many requests. Try again in a moment." },
+    { status: 429, body: { error: "Too Many Requests", errorCode: "RATE_LIMITED", retryAfterSeconds: 12 }, text: "Try again in 12 s" },
     { status: 400, body: { error: "Validation error for stamp: not an image", errorCode: "VALIDATION_ERROR" }, text: "not an image" },
   ];
   for (const failure of cases) {

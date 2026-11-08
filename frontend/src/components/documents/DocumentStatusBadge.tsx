@@ -19,7 +19,8 @@ export function DocumentStatusBadge({
 }: Pick<Receipt, "status"> & { replacementStatus: Receipt["replacement_status"] }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
+    // The region exists from the first render, so a later "Replacing" / "Replacement failed" is announced.
+    <span className="inline-flex flex-wrap items-center gap-1.5" aria-live="polite">
       <span className={`${BADGE_CLASS} ${STATUS_STYLE[status]}`}>
         {status === "processing" && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
         {status === "failed" && <TriangleAlert className="h-3 w-3" aria-hidden />}

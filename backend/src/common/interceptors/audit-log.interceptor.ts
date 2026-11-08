@@ -65,7 +65,24 @@ export class AuditLogInterceptor implements NestInterceptor {
 
   private sanitize(body: Record<string, any>): Record<string, any> | undefined {
     if (!body || typeof body !== "object") return undefined;
-    return maskSensitive(body, 0) as Record<string, any>;
+    return maskSensitive(unpackMultipartPayload(body), 0) as Record<
+      string,
+      any
+    >;
+  }
+}
+
+/**
+ * A multipart document request carries its JSON in one `payload` string field, which key
+ * masking cannot see into. Open it so the requisites inside are masked like in a JSON body;
+ * a string that is not JSON is hidden altogether rather than logged raw.
+ */
+function unpackMultipartPayload(body: Record<string, any>) {
+  if (typeof body.payload !== "string") return body;
+  try {
+    return { ...body, payload: JSON.parse(body.payload) as unknown };
+  } catch {
+    return { ...body, payload: MASKED };
   }
 }
 

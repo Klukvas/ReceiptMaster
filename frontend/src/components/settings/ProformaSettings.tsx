@@ -97,7 +97,7 @@ export const ProformaSettings = () => {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useReceiptDesignSettings();
   if (error && !data)
-    return <SettingsLoadError error={error} retry={refetch} />;
+    return <SettingsLoadError retry={refetch} />;
   if (isLoading || !data) return <Loader2 className="h-5 w-5 animate-spin" />;
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">
@@ -115,7 +115,7 @@ export const ProformaSettings = () => {
           </p>
         </div>
       </div>
-      {error && <SettingsLoadError error={error} retry={refetch} />}
+      {error && <SettingsLoadError retry={refetch} />}
       <div className="space-y-4">
         <TermsField
           disabled={Boolean(error)}
