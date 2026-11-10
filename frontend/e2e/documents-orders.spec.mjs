@@ -433,6 +433,55 @@ const checkActCreation = async (results) => {
       JSON.stringify(state.created),
     );
   });
+
+  await withDocumentPage(DESKTOP, {}, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Act of Completed Work…");
+    const text = dialog.getByLabel("Completion statement");
+    const counter = dialog.getByTestId("completion-text-counter");
+    const standard = "The work has been completed in full; the parties have no claims against each other.";
+    results.check(
+      "the act form shows the standard sentence as the placeholder and an empty counter",
+      (await text.getAttribute("placeholder")) === standard && (await counter.innerText()) === "0/300",
+      `${await text.getAttribute("placeholder")} | ${await counter.innerText()}`,
+    );
+    results.check(
+      "no reset button while the text is the standard one",
+      (await dialog.getByTestId("completion-text-reset").count()) === 0,
+      "reset offered",
+    );
+    await text.fill("  Accepted without remarks.  ");
+    results.check(
+      "the counter counts the trimmed text",
+      (await counter.innerText()) === "25/300",
+      await counter.innerText(),
+    );
+    await dialog.getByTestId("completion-text-reset").click();
+    results.check(
+      "reset returns to the standard text",
+      (await text.inputValue()) === "" && (await counter.innerText()) === "0/300",
+      await text.inputValue(),
+    );
+    await text.fill("   ");
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    await settle(() => (state.created ?? []).length === 1);
+    results.check(
+      "a blank or untouched completion text is not sent",
+      !("completionText" in (state.created?.[0]?.details ?? {})),
+      JSON.stringify(state.created),
+    );
+  });
+
+  await withDocumentPage(DESKTOP, {}, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Act of Completed Work…");
+    await dialog.getByLabel("Completion statement").fill("  Accepted without remarks.  ");
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    await settle(() => (state.created ?? []).length === 1);
+    results.check(
+      "a custom completion text is sent trimmed",
+      state.created?.[0]?.details?.completionText === "Accepted without remarks.",
+      JSON.stringify(state.created),
+    );
+  });
 };
 
 const checkDetaillessCreation = async (results) => {

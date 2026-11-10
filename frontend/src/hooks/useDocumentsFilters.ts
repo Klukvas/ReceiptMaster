@@ -38,11 +38,22 @@ export function useDocumentsFilters() {
     [searchParams],
   );
 
-  // Two changes in one tick (a date and a search, say) must both land, so each builds on the
-  // latest params rather than on the ones of the last render.
+  // Several changes in quick succession (a status, then two dates) must all land, so each builds on
+  // the latest params rather than on the ones of the last render. `inFlight` lists what we have
+  // committed but the router has not rendered yet: a render of an older entry is stale and must
+  // not roll the latest params back, while an unlisted value is a real navigation (Back, a link).
   const latestParams = useRef(searchParams);
+  const inFlight = useRef<string[]>([]);
   useEffect(() => {
-    latestParams.current = searchParams;
+    const rendered = searchParams.toString();
+    const position = inFlight.current.indexOf(rendered);
+    if (position === -1) {
+      inFlight.current = [];
+      latestParams.current = searchParams;
+      return;
+    }
+    inFlight.current = inFlight.current.slice(position + 1);
+    if (inFlight.current.length === 0) latestParams.current = searchParams;
   }, [searchParams]);
 
   const commit = useCallback(
@@ -50,6 +61,7 @@ export function useDocumentsFilters() {
       const next = new URLSearchParams(latestParams.current);
       change(next);
       latestParams.current = next;
+      inFlight.current = [...inFlight.current, next.toString()];
       setSearchParams(next, { replace: true });
     },
     [setSearchParams],

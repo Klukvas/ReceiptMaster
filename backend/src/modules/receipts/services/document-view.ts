@@ -71,6 +71,8 @@ export type DocumentView = {
   notice?: string;
   /** The items table drops its price and amount columns. */
   hidesItemPrices?: true;
+  /** The style leaves out its "Original" mark (sales receipt, quotation, return note). */
+  hidesOriginalMark?: true;
   /** Absent for a document that prints no money. */
   totals?: {
     total: string;
@@ -226,6 +228,11 @@ export function buildDocumentRenderData(
     (purposeVat ? `, ${purposeVat}` : "");
 
   const stampImage = layout.signatures.stamp ? signoff.stamp : undefined;
+  // The same switches the waybill honours; the invoice and act keep the seller's address
+  // and tax code because the document is meaningless without them.
+  const isShown = (field: keyof DocumentConfig["visibility"]) =>
+    config.visibility[field] !== false;
+  const showsSellerRequisites = layout.mandatorySellerRequisites;
 
   const view: DocumentView = {
     labels: layout.grandTotalLabel
@@ -236,8 +243,14 @@ export function buildDocumentRenderData(
       name: sellerName,
       codeLabel: taxLabel(seller.taxIdKind),
       // A code whose kind is unknown is not printed under a label it cannot have.
-      code: seller.taxIdKind ? seller.taxId : "",
-      address: seller.address,
+      code:
+        seller.taxIdKind && (showsSellerRequisites || isShown("companyTaxId"))
+          ? seller.taxId
+          : "",
+      address:
+        showsSellerRequisites || isShown("companyAddress")
+          ? seller.address
+          : "",
       vatLine: layout.money ? vatLine : "",
     },
     buyer: {
@@ -247,7 +260,9 @@ export function buildDocumentRenderData(
       code: buyer.taxIdKind ? buyer.taxId : "",
       address:
         layout.buyerAddress === "delivery"
-          ? order.recipient.address || buyer.legalAddress
+          ? isShown("recipientAddress")
+            ? order.recipient.address || buyer.legalAddress
+            : ""
           : buyer.legalAddress || order.recipient.address || "",
       vatLine: "",
     },
@@ -262,6 +277,7 @@ export function buildDocumentRenderData(
         }
       : {}),
     ...(layout.notice ? { notice: labels[layout.notice] } : {}),
+    ...(layout.originalMark ? {} : { hidesOriginalMark: true as const }),
     ...(layout.money
       ? {
           totals: {
@@ -320,7 +336,7 @@ export function buildDocumentRenderData(
     ...(layout.completionStatement
       ? {
           act: {
-            statement: labels.actStatement,
+            statement: details.completionText ?? labels.actStatement,
             ...(details.contractRef
               ? { contractRef: details.contractRef }
               : {}),

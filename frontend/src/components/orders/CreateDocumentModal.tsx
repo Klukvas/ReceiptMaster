@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { templateDisplayName } from "../../lib/template-name";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type DocumentRequestBody, type Order } from "../../lib/api";
@@ -43,7 +44,7 @@ type CreateDocumentModalProps = {
 
 type Replacement = { number: string; limit: number; body: DocumentRequestBody };
 
-const EMPTY_ACT: ActForm = { contractRef: "", from: "", to: "" };
+const EMPTY_ACT: ActForm = { contractRef: "", completionText: "", from: "", to: "" };
 const EMPTY_QUOTE_TERMS = { paymentTerms: "", deliveryTerms: "" };
 
 /** Server refusals of a details field that have a translated text of their own. */
@@ -310,7 +311,7 @@ export function CreateDocumentModal({
           >
             {design.options.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.name}
+                {templateDisplayName(t, option)}
               </option>
             ))}
           </select>

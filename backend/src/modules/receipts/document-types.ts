@@ -85,6 +85,13 @@ export type DocumentLayoutSpec = {
     /** Whether the caption asks for a seal ("Signature / Seal") next to the signature. */
     stamp: boolean;
   };
+  /** Whether the style's "Original" mark is printed (styles that have one: Corporate). */
+  originalMark: boolean;
+  /**
+   * The seller's address and tax code are part of the document's meaning (invoice, act),
+   * so the visibility switches of the style do not hide them.
+   */
+  mandatorySellerRequisites: boolean;
   /** HTML styles that carry the document's blocks; any other style is refused. */
   allowedStyles: readonly string[];
 };
@@ -152,6 +159,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       notice: null,
       buyerAddress: "legal",
       signatures: { seller: "issuedBy", stamp: true },
+      originalMark: true,
+      mandatorySellerRequisites: true,
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -181,6 +190,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
         buyer: "fromCustomer",
         stamp: true,
       },
+      originalMark: true,
+      mandatorySellerRequisites: true,
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -207,6 +218,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       grandTotalLabel: "saleTotal",
       buyerAddress: "legal",
       signatures: { seller: "sellerSignature", stamp: false },
+      originalMark: false,
+      mandatorySellerRequisites: false,
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -236,6 +249,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
         buyer: "receivedBy",
         stamp: false,
       },
+      originalMark: true,
+      mandatorySellerRequisites: false,
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -262,6 +277,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       grandTotalLabel: "offerTotal",
       buyerAddress: "legal",
       signatures: { seller: "fromSupplier", stamp: true },
+      originalMark: false,
+      mandatorySellerRequisites: false,
       allowedStyles: DOCUMENT_STYLES,
     },
   },
@@ -293,6 +310,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
         buyer: "returnedBy",
         stamp: false,
       },
+      originalMark: false,
+      mandatorySellerRequisites: false,
       allowedStyles: DOCUMENT_STYLES,
     },
   },

@@ -392,7 +392,9 @@
         <!-- Document Type Header -->
         <div class="document-header">
             <div class="document-type-center">{{receiptTitle}}</div>
+            {{#unless document.hidesOriginalMark}}
             <div class="document-type-right">{{#if translations.original}}{{translations.original}}{{else}}Original{{/if}}</div>
+            {{/unless}}
         </div>
         
         <!-- Client Details -->
@@ -510,6 +512,22 @@
         </div>
         {{/unless}}
         {{#if document}}
+        {{#if footerTitle}}
+        <div class="footer-section">
+            <div class="note-section">
+                <div class="note-label">{{footerTitle}}</div>
+            </div>
+            {{#if footerSubtitle}}
+            <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
+            {{/if}}
+        </div>
+        {{else}}
+        {{#if footerSubtitle}}
+        <div class="footer-section">
+            <div class="note-content">{{footerSubtitle}}</div>
+        </div>
+        {{/if}}
+        {{/if}}
         </div>
         {{/if}}
     </div>

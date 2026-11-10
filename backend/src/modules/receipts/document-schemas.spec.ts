@@ -1,4 +1,5 @@
 import {
+  ACT_COMPLETION_TEXT_MAX_LENGTH,
   actDetailsSchema,
   documentGenerationSchema,
   documentTypeProbe,
@@ -50,6 +51,26 @@ describe("actDetailsSchema", () => {
     });
     expect(parsed.contractRef).toBe("Договір №5");
   });
+  it("trims the completion text and accepts 1 to 300 characters", () => {
+    expect(
+      actDetailsSchema.parse({ completionText: "  Прийнято без зауважень.  " })
+        .completionText,
+    ).toBe("Прийнято без зауважень.");
+    expect(
+      actDetailsSchema.safeParse({
+        completionText: "x".repeat(ACT_COMPLETION_TEXT_MAX_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(ACT_COMPLETION_TEXT_MAX_LENGTH).toBe(300);
+  });
+  it.each([
+    [{ completionText: "" }],
+    [{ completionText: "   " }],
+    [{ completionText: "x".repeat(301) }],
+    [{ completionText: 5 }],
+  ])("rejects the completion text in %j", (value) =>
+    expect(actDetailsSchema.safeParse(value).success).toBe(false),
+  );
   it("accepts a one-day period", () => {
     expect(
       actDetailsSchema.safeParse({

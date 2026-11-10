@@ -396,7 +396,7 @@ const SIGNED_SHA256: Record<string, string> = {
   "quote.classic":
     "17e2b5d29efa01d78f404bbc3edcf665fd021abddf4dc0d4b2c8e2587f0b489b",
   "quote.corporate":
-    "8ea26176a50c391d89ad96ad86a41f4a1132387984e820ee5d76d4ef924680d2",
+    "732cd19d9f8ee74a1ed59242b2ae75d4799f2e0fb69a381f0c39c84cf04f64dc",
   "quote.minimal":
     "11a5625237893d4e2bad22ad468c6a79788bc3b27e3637394d3de67350bec760",
   "quote.standard":

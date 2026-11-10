@@ -1,6 +1,17 @@
 import { EntityManager } from "typeorm";
 import { DocumentType } from "./entities/receipt.entity";
 import { issueDateIn } from "./frozen-document";
+import {
+  BUMP_COUNTER,
+  BUMP_WAYBILL_COUNTER,
+  HIGHEST_ISSUED_IN_YEAR,
+  MAX_COUNTER_DIGITS,
+  MAX_COUNTER_VALUE,
+  RAISE_YEAR_COUNTER,
+  RELEASE_COUNTER,
+  RELEASE_WAYBILL_COUNTER,
+  RELEASE_YEAR_COUNTER,
+} from "./receipt-number-sql";
 
 /** The year printed in a number: the calendar year in the document's time zone. */
 export function documentYear(now: Date, timeZone: string): number {
@@ -21,37 +32,45 @@ export const DEFAULT_NUMBER_FORMAT: NumberFormat = {
   includeYear: true,
 };
 
+/** The prefix ends in a letter or digit, so the number would run into it without a separator. */
+const RUNS_INTO_NUMBER = /[\p{L}\p{N}]$/u;
+
+/** Inserted when a prefix such as "КП" (spaces are trimmed on save) does not end in a separator. */
+const PREFIX_SEPARATOR = "-";
+
 /**
- * Prints a counter value, e.g. "РФ-2026-000043". The prefix never ends with a digit, so
- * the number always ends in one digit run that is exactly the value: different formats
- * cannot print the same text for different values.
+ * Prints a counter value, e.g. "РФ-2026-000043". A prefix that ends in a letter gets a
+ * "-" before the rest ("КП" prints "КП-2026-000043"); one that ends in a separator
+ * ("РФ-", "A.") is used as typed. The prefix never ends with a digit, so the number always
+ * ends in one digit run that is exactly the value: different formats cannot print the
+ * same text for different values. Applies to new draws only; issued numbers stay as printed.
  */
 export function formatDocumentNumber(
   format: NumberFormat,
   value: number,
   year: number,
 ): string {
+  const separator = RUNS_INTO_NUMBER.test(format.prefix)
+    ? PREFIX_SEPARATOR
+    : "";
   const yearPart = format.includeYear ? `${year}-` : "";
-  return `${format.prefix}${yearPart}${String(value).padStart(format.padding, "0")}`;
+  return `${format.prefix}${separator}${yearPart}${String(value).padStart(format.padding, "0")}`;
 }
 
 export interface DrawnNumber {
   number: string;
   /** The counter value behind the number, for `releaseDocumentNumber`. */
   value: number;
+  /** Set when the number came from a yearly counter: the year to release it from. */
+  year?: number;
 }
-
-/** Digits of the largest counter value: MAX_START_NUMBER (2e9) plus the numbers drawn after it. */
-const MAX_COUNTER_DIGITS = 10;
-
-/** The counter column is a 32-bit integer; a longer digit run in a hand-made number cannot be a counter value. */
-const MAX_COUNTER_VALUE = 2_147_483_647;
 
 interface CounterRow {
   value: number;
   prefix: string;
   padding: number;
   include_year: boolean;
+  reset_every_year: boolean;
 }
 
 /**
@@ -65,6 +84,11 @@ interface CounterRow {
  * the value, so a prefix change racing a draw yields a whole old or whole new number.
  * The unique index on (user_id, document_type, number) is the backstop.
  *
+ * With the yearly reset on, the same statement bumps the counter of the document's year
+ * (`document_year_counters`), creating it above the start number and the numbers already
+ * issued that year, so the first draw of a new year and a retry across midnight cannot
+ * repeat a number or skip one.
+ *
  * Waybills also keep `users.receipt_counter` in step for one release, and count from the
  * higher of the two counters, so an image rolled back (and forward again) without reverting
  * the migration does not hand out numbers that already exist.
@@ -75,9 +99,10 @@ export async function nextDocumentNumber(
   type: DocumentType,
   options: { timeZone: string; now?: Date },
 ): Promise<DrawnNumber> {
+  const year = documentYear(options.now ?? new Date(), options.timeZone);
   const rows: CounterRow[] = await manager.query(
     type === DocumentType.WAYBILL ? BUMP_WAYBILL_COUNTER : BUMP_COUNTER,
-    [userId, type],
+    [userId, type, year],
   );
   if (rows.length === 0)
     throw new Error(`Could not bump the ${type} counter for user ${userId}`);
@@ -90,9 +115,9 @@ export async function nextDocumentNumber(
       includeYear: row.include_year,
     },
     value,
-    documentYear(options.now ?? new Date(), options.timeZone),
+    year,
   );
-  return { number, value };
+  return { number, value, ...(row.reset_every_year ? { year } : {}) };
 }
 
 /**
@@ -100,87 +125,73 @@ export async function nextDocumentNumber(
  * generation does not leave a gap in the sequence. Works by value, not by text, so it is
  * independent of the format. Only possible while the counter still stands at that value:
  * if another generation took the next one in the meantime, the gap stays (renumbering
- * later documents would be worse).
+ * later documents would be worse). A number from a yearly counter goes back to that year.
  */
 export async function releaseDocumentNumber(
   manager: EntityManager,
   userId: string,
   type: DocumentType,
   value: number,
+  year?: number,
 ): Promise<boolean> {
   if (!Number.isSafeInteger(value) || value < 1) return false;
-  const rows: unknown[] = await manager.query(
-    type === DocumentType.WAYBILL ? RELEASE_WAYBILL_COUNTER : RELEASE_COUNTER,
-    [userId, type, value],
-  );
+  const rows: unknown[] =
+    year !== undefined
+      ? await manager.query(RELEASE_YEAR_COUNTER, [userId, type, value, year])
+      : await manager.query(
+          type === DocumentType.WAYBILL
+            ? RELEASE_WAYBILL_COUNTER
+            : RELEASE_COUNTER,
+          [userId, type, value],
+        );
   return rows.length > 0;
 }
 
-// A bare UPDATE ... RETURNING comes back from the postgres driver as `[rows, count]`, so
-// every statement here that is read as rows is wrapped: a CTE UPDATE followed by a SELECT
-// answers with the plain row array.
-const RELEASE_COUNTER = `
-  WITH released AS (
-    UPDATE "document_counters" SET "value" = "value" - 1
-    WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
-    RETURNING "value"
-  )
-  SELECT "value" FROM released`;
-
-const RELEASE_WAYBILL_COUNTER = `
-  WITH released AS (
-    UPDATE "document_counters" SET "value" = "value" - 1
-    WHERE "user_id" = $1 AND "document_type" = $2 AND "value" = $3
-    RETURNING "value"
-  ), legacy AS (
-    UPDATE "users" SET "receipt_counter" = "receipt_counter" - 1
-    WHERE "id" = $1 AND "receipt_counter" = $3 AND EXISTS (SELECT 1 FROM released)
-  )
-  SELECT "value" FROM released`;
-
-const BUMP_COUNTER = `
-  INSERT INTO "document_counters" ("user_id", "document_type", "value")
-  VALUES ($1, $2, 1)
-  ON CONFLICT ("user_id", "document_type")
-  DO UPDATE SET "value" = "document_counters"."value" + 1
-  RETURNING "value", "prefix", "padding", "include_year"`;
-
-// Counts from the higher of the two counters: an image rolled back and rolled forward
-// again leaves `users.receipt_counter` ahead of the new table, and the older image only
-// ever writes the old one.
-const BUMP_WAYBILL_COUNTER = `
-  WITH bumped AS (
-    INSERT INTO "document_counters" ("user_id", "document_type", "value")
-    SELECT "id", $2, "receipt_counter" + 1 FROM "users" WHERE "id" = $1
-    ON CONFLICT ("user_id", "document_type")
-    DO UPDATE SET "value" = GREATEST("document_counters"."value", EXCLUDED."value" - 1) + 1
-    RETURNING "value", "prefix", "padding", "include_year"
-  ), legacy AS (
-    UPDATE "users" SET "receipt_counter" = bumped."value"
-    FROM bumped WHERE "users"."id" = $1
-  )
-  SELECT "value", "prefix", "padding", "include_year" FROM bumped`;
+/** The highest counter value among the numbers an account issued in one year (0 for none). */
+export async function highestIssuedInYear(
+  manager: EntityManager,
+  userId: string,
+  type: DocumentType,
+  year: number,
+): Promise<number> {
+  const [{ highest }]: Array<{ highest: string | null }> = await manager.query(
+    HIGHEST_ISSUED_IN_YEAR,
+    [userId, type, year],
+  );
+  return Number(highest ?? 0);
+}
 
 /**
  * Self-heal for a counter that fell behind the numbers actually issued (a restored backup,
  * a hand-edited row, an old image): raises it to the highest counter value found in the
  * account's numbers of that type. Locks the counter row first, then (waybill) the user row,
- * the order the draw takes them in. Never lowers anything.
+ * the order the draw takes them in. Never lowers anything. With the yearly reset on it
+ * raises the counter of `year` to the numbers issued in that year.
  */
 export async function raiseCounterToIssued(
   manager: EntityManager,
   userId: string,
   type: DocumentType,
+  year?: number,
 ): Promise<number> {
   await manager.query(
     `INSERT INTO "document_counters" ("user_id", "document_type") VALUES ($1, $2)
      ON CONFLICT ("user_id", "document_type") DO NOTHING`,
     [userId, type],
   );
-  await manager.query(
-    `SELECT 1 FROM "document_counters" WHERE "user_id" = $1 AND "document_type" = $2 FOR UPDATE`,
-    [userId, type],
-  );
+  const [counter]: Array<{ reset_every_year: boolean; start_number: number }> =
+    await manager.query(
+      `SELECT "reset_every_year", "start_number" FROM "document_counters"
+       WHERE "user_id" = $1 AND "document_type" = $2 FOR UPDATE`,
+      [userId, type],
+    );
+  if (counter.reset_every_year && year !== undefined) {
+    const [{ value }]: Array<{ value: number }> = await manager.query(
+      RAISE_YEAR_COUNTER,
+      [userId, type, year, counter.start_number],
+    );
+    return Number(value);
+  }
   // The counter value is the trailing digit run of a number (see formatDocumentNumber);
   // read all of it: the start number allows 10 digits (MAX_START_NUMBER is 2e9).
   const [{ highest }]: Array<{ highest: string | null }> = await manager.query(

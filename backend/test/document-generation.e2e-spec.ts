@@ -478,6 +478,64 @@ describeIsolatedPostgres(
       });
     });
 
+    describe("a retry of a failed document", () => {
+      it("keeps the issue date, number and buyer of the first attempt even with an explicit configuration", async () => {
+        const order = await confirmedOrder();
+        const first = await generate(order, DocumentType.INVOICE, {
+          paymentTermDays: 5,
+        });
+        // The first attempt happened on the last day of an earlier year.
+        await db.admin.query(
+          `UPDATE receipts SET status = 'failed',
+             pending_snapshot = jsonb_set(pending_snapshot, '{document,issueDate}', '"2025-12-31"')
+           WHERE id = $1`,
+          [first.id],
+        );
+
+        const retried = await generate(order, DocumentType.INVOICE, {
+          paymentTermDays: 10,
+        });
+
+        const row = await stored(retried.id);
+        expect(retried.id).toBe(first.id);
+        expect(retried.number).toBe(first.number);
+        expect(row.pending_snapshot?.document).toMatchObject({
+          issueDate: "2025-12-31",
+          details: { dueDate: "2026-01-10" },
+        });
+        expect(await counter(DocumentType.INVOICE)).toBe(1);
+      });
+
+      it("freezes a custom act completion text and keeps it through a replacement", async () => {
+        const order = await confirmedOrder();
+        const act = await generate(order, DocumentType.ACT, {
+          completionText: "Роботи прийнято без зауважень.",
+        });
+        const issued = await stored(act.id);
+        expect(issued.pending_snapshot?.document?.details.completionText).toBe(
+          "Роботи прийнято без зауважень.",
+        );
+        await promote(act);
+
+        await asTenant(() =>
+          receipts.regenerateReceiptPdf(act.id, user, {
+            mode: "replace",
+            expectedActiveRevision: 1,
+            confirmReconstruction: false,
+            selection: KEEP,
+          }),
+        );
+
+        const replaced = await stored(act.id);
+        expect(replaced.pending_snapshot?.document?.details).toMatchObject({
+          completionText: "Роботи прийнято без зауважень.",
+        });
+        expect(replaced.pending_snapshot?.document?.issueDate).toBe(
+          issued.pending_snapshot?.document?.issueDate,
+        );
+      });
+    });
+
     describe("reissue after void", () => {
       it.each([DocumentType.INVOICE, DocumentType.ACT])(
         "a voided %s is replaced by a new one with the next number and the void row stays as history",

@@ -43,6 +43,8 @@ const SPECS = [
   { name: "settings-numbering", load: () => import("./settings-numbering.spec.mjs") },
   { name: "settings-signoff", load: () => import("./settings-signoff.spec.mjs") },
   { name: "requisites-forms", load: () => import("./requisites-forms.spec.mjs") },
+  { name: "numbering-format-parity", load: () => import("./numbering-format-parity.spec.mjs") },
+  { name: "tax-id-checksum", load: () => import("./tax-id-checksum.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

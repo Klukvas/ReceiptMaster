@@ -101,6 +101,11 @@ export const numberingSettingSchema = z.object({
   prefix: z.string().max(16),
   padding: z.number().int().min(1).max(9),
   includeYear: z.boolean(),
+  resetEveryYear: z
+    .boolean()
+    .describe(
+      "The counter restarts every calendar year; nextValue and minStart then describe the current year",
+    ),
   nextValue: z.number().int().min(1),
   minStart: z.number().int().min(1),
   nextNumber: z.string(),
@@ -116,6 +121,12 @@ export const numberingUpdateRequestSchema = z.object({
     ),
   padding: z.number().int().min(1).max(9),
   includeYear: z.boolean(),
+  resetEveryYear: z
+    .boolean()
+    .optional()
+    .describe(
+      "Restart the counter every calendar year (in the document time zone); requires includeYear. Omitted keeps the saved value (default false). A new year starts at the saved start number, or after the numbers already issued that year",
+    ),
   startNumber: z
     .number()
     .int()

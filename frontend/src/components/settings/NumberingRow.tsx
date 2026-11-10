@@ -17,13 +17,21 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 
-type RowForm = { prefix: string; padding: number; includeYear: boolean; startText: string };
+type RowForm = {
+  prefix: string;
+  padding: number;
+  includeYear: boolean;
+  resetEveryYear: boolean;
+  startText: string;
+};
 type ServerErrors = Partial<Record<NumberingField, string>>;
 
 const INPUT_CLASS =
   "w-full px-3 py-2 pointer-coarse:min-h-11 text-sm border rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400";
 const HINT_CLASS = "mt-1 text-xs text-content-tertiary";
 const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-content-tertiary";
+const CHECKBOX_CLASS =
+  "h-4 w-4 rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)] disabled:cursor-not-allowed disabled:opacity-60 pointer-coarse:h-5 pointer-coarse:w-5";
 const paddingOptions = Array.from(
   { length: PADDING_MAX - PADDING_MIN + 1 },
   (_, index) => PADDING_MIN + index,
@@ -33,6 +41,7 @@ const formOf = (setting: NumberingSetting): RowForm => ({
   prefix: setting.prefix,
   padding: setting.padding,
   includeYear: setting.includeYear,
+  resetEveryYear: setting.resetEveryYear,
   startText: "",
 });
 
@@ -78,6 +87,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
     form.prefix.trim() !== setting.prefix ||
     form.padding !== setting.padding ||
     form.includeYear !== setting.includeYear ||
+    form.resetEveryYear !== setting.resetEveryYear ||
     startText !== "";
   const canSave = isDirty && Object.keys(clientErrors).length === 0 && !update.isPending;
 
@@ -107,6 +117,8 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
           prefix: form.prefix.trim(),
           padding: form.padding,
           includeYear: form.includeYear,
+          // Absent means "keep" on the server, so it is sent only when it changed.
+          ...(form.resetEveryYear !== setting.resetEveryYear ? { resetEveryYear: form.resetEveryYear } : {}),
           ...(startNumber !== null ? { startNumber } : {}),
         },
       },
@@ -204,7 +216,9 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
             className={`${INPUT_CLASS} ${borderOf(Boolean(errorOf("startNumber")))}`}
           />
           <p id={idOf("start-hint")} className={HINT_CLASS}>
-            {t("numbering.startHint", { min: setting.minStart })}
+            {t(form.resetEveryYear ? "numbering.startHintYearly" : "numbering.startHint", {
+              min: setting.minStart,
+            })}
           </p>
           <FieldError id={idOf("start-error")} message={errorOf("startNumber")} />
         </div>
@@ -214,16 +228,49 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
               type="checkbox"
               checked={form.includeYear}
               aria-describedby={form.includeYear ? idOf("year-hint") : undefined}
-              onChange={(event) => change({ includeYear: event.target.checked }, [])}
-              className="h-4 w-4 rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)] pointer-coarse:h-5 pointer-coarse:w-5"
+              // Yearly restart prints the year, so switching the year off switches it off too.
+              onChange={(event) =>
+                change(
+                  event.target.checked
+                    ? { includeYear: true }
+                    : { includeYear: false, resetEveryYear: false },
+                  ["resetEveryYear"],
+                )
+              }
+              className={CHECKBOX_CLASS}
             />
             {t("numbering.includeYear")}
           </label>
-          {form.includeYear && (
+          {form.includeYear && !form.resetEveryYear && (
             <p id={idOf("year-hint")} className={HINT_CLASS}>
               {t("numbering.yearHint")}
             </p>
           )}
+          <label
+            className={`flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11 ${
+              form.includeYear ? "cursor-pointer text-content-secondary" : "cursor-not-allowed text-content-tertiary"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={form.resetEveryYear}
+              disabled={!form.includeYear}
+              aria-describedby={idOf("reset-hint")}
+              onChange={(event) => change({ resetEveryYear: event.target.checked }, ["resetEveryYear"])}
+              className={CHECKBOX_CLASS}
+            />
+            {t("numbering.resetEveryYear")}
+          </label>
+          <p id={idOf("reset-hint")} className={HINT_CLASS}>
+            {t(
+              !form.includeYear
+                ? "numbering.resetNeedsYear"
+                : form.resetEveryYear
+                  ? "numbering.resetEveryYearHint"
+                  : "numbering.resetEveryYearOffHint",
+            )}
+          </p>
+          <FieldError id={idOf("reset-error")} message={errorOf("resetEveryYear")} />
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">

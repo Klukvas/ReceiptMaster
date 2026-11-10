@@ -1,7 +1,9 @@
 import { Input } from "../ui/Input";
+import { useReceiptDesignSettings } from "../../hooks/useReceiptDesignSettings";
 import type { TFunction } from "i18next";
 import { useTranslation } from "../../hooks/useTranslation";
 import {
+  MAX_ACT_COMPLETION_TEXT_LENGTH,
   MAX_CONTRACT_REF_LENGTH,
   MAX_PAYMENT_TERM_DAYS,
   MAX_QUOTE_TERMS_LENGTH,
@@ -90,6 +92,11 @@ export function ActDetailsFields({
   onChange,
 }: FieldsProps<ActForm>) {
   const { t } = useTranslation();
+  const design = useReceiptDesignSettings();
+  // The sentence is printed in the document language, which may differ from the interface's.
+  const standardText = t("documents.actCompletionStandard", { lng: design.data?.templateLanguage });
+  const completionError = translated(t, errors, "completionText");
+  const length = form.completionText.trim().length;
   return (
     <div className="space-y-4">
       <Input
@@ -104,6 +111,47 @@ export function ActDetailsFields({
         }
         error={translated(t, errors, "contractRef")}
       />
+      <div className="space-y-1">
+        <label htmlFor="document-completion-text" className="block text-sm font-medium text-content-secondary">
+          {t("documents.completionText")}
+        </label>
+        <textarea
+          id="document-completion-text"
+          rows={3}
+          maxLength={MAX_ACT_COMPLETION_TEXT_LENGTH}
+          placeholder={standardText}
+          aria-invalid={completionError ? true : undefined}
+          aria-describedby={`document-completion-hint${completionError ? " document-completion-error" : ""}`}
+          className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+          value={form.completionText}
+          onChange={(event) => onChange({ ...form, completionText: event.target.value })}
+        />
+        <div className="flex items-start justify-between gap-3 text-xs text-content-tertiary">
+          <p id="document-completion-hint">
+            {form.completionText.trim() === ""
+              ? t("documents.completionTextStandardHint")
+              : t("documents.completionTextCustomHint")}
+          </p>
+          <span data-testid="completion-text-counter" className="shrink-0 tabular-nums">
+            {length}/{MAX_ACT_COMPLETION_TEXT_LENGTH}
+          </span>
+        </div>
+        {form.completionText !== "" && (
+          <button
+            type="button"
+            data-testid="completion-text-reset"
+            className="text-xs font-medium text-accent-base hover:underline pointer-coarse:min-h-11"
+            onClick={() => onChange({ ...form, completionText: "" })}
+          >
+            {t("documents.completionTextReset")}
+          </button>
+        )}
+        {completionError && (
+          <p id="document-completion-error" role="alert" className="text-sm text-[var(--color-danger)]">
+            {completionError}
+          </p>
+        )}
+      </div>
       <fieldset className="space-y-1">
         <legend className="mb-1 text-sm font-medium text-content-secondary">
           {t("documents.period")}

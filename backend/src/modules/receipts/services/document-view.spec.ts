@@ -576,3 +576,104 @@ describe("buildDocumentRenderData", () => {
     });
   });
 });
+
+/** A frozen document of any typed document type; the view tests below do not read its details. */
+const frozenOfType = (
+  type: DocumentType,
+  overrides: Partial<FrozenDocument> = {},
+) => frozenFor(DocumentType.SALES_RECEIPT, true, { type, ...overrides });
+
+describe("visibility switches on typed documents", () => {
+  const hidden: DocumentConfig = {
+    ...config,
+    visibility: {
+      ...config.visibility,
+      companyAddress: false,
+      companyTaxId: false,
+      recipientAddress: false,
+    },
+  };
+  const viewOf = (type: DocumentType, cfg = hidden) =>
+    buildDocumentRenderData(frozenOfType(type), order, "N", cfg).view;
+
+  it.each([
+    DocumentType.SALES_RECEIPT,
+    DocumentType.PACKING_LIST,
+    DocumentType.QUOTE,
+    DocumentType.RETURN_NOTE,
+  ])("%s drops the seller's address and tax code when hidden", (type) => {
+    const { seller } = viewOf(type);
+    expect(seller.address).toBe("");
+    expect(seller.code).toBe("");
+  });
+
+  it.each([DocumentType.INVOICE, DocumentType.ACT])(
+    "%s keeps the seller's address and tax code: they are part of the document",
+    (type) => {
+      const { seller } = viewOf(type);
+      expect(seller.address).toBe("Київ, вул. Продавця 1");
+      expect(seller.code).toBe("12345678");
+    },
+  );
+
+  it("prints everything while the switches stay on (the default)", () => {
+    const { seller } = viewOf(DocumentType.SALES_RECEIPT, config);
+    expect(seller.address).toBe("Київ, вул. Продавця 1");
+    expect(seller.code).toBe("12345678");
+  });
+
+  it("hides the delivery address of a packing list, but not a legal address elsewhere", () => {
+    expect(viewOf(DocumentType.PACKING_LIST).buyer.address).toBe("");
+    const legal = buildBuyer({ name: "Іван", legal_address: "Львів, 2" });
+    const view = buildDocumentRenderData(
+      frozenOfType(DocumentType.SALES_RECEIPT, { buyer: legal }),
+      order,
+      "N",
+      hidden,
+    ).view;
+    expect(view.buyer.address).toBe("Львів, 2");
+  });
+});
+
+describe("original mark", () => {
+  const hides = (type: DocumentType) =>
+    buildDocumentRenderData(frozenOfType(type), order, "N", config).view
+      .hidesOriginalMark;
+
+  it.each([
+    DocumentType.SALES_RECEIPT,
+    DocumentType.QUOTE,
+    DocumentType.RETURN_NOTE,
+  ])("is hidden on %s", (type) => {
+    expect(hides(type)).toBe(true);
+  });
+
+  it.each([DocumentType.INVOICE, DocumentType.ACT, DocumentType.PACKING_LIST])(
+    "is kept on %s",
+    (type) => {
+      expect(hides(type)).toBeUndefined();
+    },
+  );
+});
+
+describe("act completion text", () => {
+  const act = (completionText?: string) =>
+    buildDocumentRenderData(
+      frozenFor(DocumentType.ACT, true, {
+        details: { contractRef: "Договір 7", completionText },
+      }),
+      order,
+      "N",
+      config,
+    ).view.act?.statement;
+
+  it("prints the language default without a custom text", () => {
+    expect(act()).toMatch(/^Роботи виконано в повному обсязі/);
+  });
+
+  it("prints the frozen custom text instead", () => {
+    expect(act("Роботи прийнято без зауважень.")).toBe(
+      "Роботи прийнято без зауважень.",
+    );
+  });
+});

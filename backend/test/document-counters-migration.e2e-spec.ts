@@ -6,6 +6,7 @@ import { Client } from "pg";
 import { DataSource } from "typeorm";
 import { applyRuntimeGrants } from "./helpers/db-roles";
 import { DocumentNumberingFormat1793400000000 } from "../src/config/migrations/1793400000000-DocumentNumberingFormat";
+import { DocumentCounterYear1793700000000 } from "../src/config/migrations/1793700000000-DocumentCounterYear";
 import { DocumentType } from "../src/modules/receipts/entities/receipt.entity";
 import { nextDocumentNumber } from "../src/modules/receipts/receipt-number";
 
@@ -65,20 +66,34 @@ describeIsolatedPostgres(
         synchronize: false,
       }).initialize();
 
-    // The draw statement also reads the number-format columns that a later migration adds,
-    // so it is applied after this suite's own migration (it is not part of its subject).
-    const addFormatColumns = async () => {
+    // The draw statement also reads the number-format and yearly-reset columns that later
+    // migrations add, so they are applied after this suite's own migration (they are not
+    // part of its subject).
+    const addColumnsOf = async (
+      column: string,
+      migration: {
+        up(runner: ReturnType<DataSource["createQueryRunner"]>): Promise<void>;
+      },
+    ) => {
       const [present] = await current.query(
         `SELECT 1 AS present FROM information_schema.columns
-         WHERE table_name = 'document_counters' AND column_name = 'prefix'`,
+         WHERE table_name = 'document_counters' AND column_name = $1`,
+        [column],
       );
       if (present) return;
       const runner = current.createQueryRunner();
       try {
-        await new DocumentNumberingFormat1793400000000().up(runner);
+        await migration.up(runner);
       } finally {
         await runner.release();
       }
+    };
+    const addFormatColumns = async () => {
+      await addColumnsOf("prefix", new DocumentNumberingFormat1793400000000());
+      await addColumnsOf(
+        "reset_every_year",
+        new DocumentCounterYear1793700000000(),
+      );
     };
 
     const migrateToLatest = async () => {
@@ -373,6 +388,8 @@ describeIsolatedPostgres(
         ]),
       ).toEqual([{ receipt_counter: 8 }]);
 
+      // Created by the later migration this suite applies by hand; it goes with the table it extends.
+      await current.query(`DROP TABLE IF EXISTS document_year_counters`);
       const reapplied = await migrateToLatest();
 
       expect(reapplied.map((migration) => migration.name)).toEqual([

@@ -5,6 +5,7 @@ import { Button } from"../ui/Button";
 import { receiptsApi } from"../../lib/api";
 import toast from"react-hot-toast";
 import { useTranslation } from"../../hooks/useTranslation";
+import { useSignoff } from"../../hooks/useSignoff";
 
 interface ShareReceiptModalProps {
  isOpen: boolean;
@@ -18,6 +19,9 @@ export const ShareReceiptModal = ({
  receiptId,
 }: ShareReceiptModalProps) => {
  const { t } = useTranslation();
+ const signoff = useSignoff();
+ // The link opens the PDF to anyone, so say so when a signature or stamp is stored.
+ const hasSignoff = Boolean(signoff.data?.signature || signoff.data?.stamp);
  const [shareUrl, setShareUrl] = useState<string | null>(null);
  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
  const [loading, setLoading] = useState(false);
@@ -125,6 +129,16 @@ export const ShareReceiptModal = ({
  </Button>
  </div>
  </div>
+
+ {hasSignoff && (
+ <p
+ role="note"
+ data-testid="share-signoff-note"
+ className="p-3 rounded-lg bg-[var(--color-warning-light)] text-warning-base text-xs"
+ >
+ {t("signoff.shareNote")}
+ </p>
+ )}
 
  <div className="pt-2 border-t border-[var(--color-border-light)]">
  {confirmingRevoke ? (

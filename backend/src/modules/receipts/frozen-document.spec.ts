@@ -296,6 +296,51 @@ describe("buildFrozenDocument", () => {
     });
     expect(frozen.warnings).not.toContain("details.contractRef");
   });
+  it("freezes a custom completion text and carries it over on a replacement", () => {
+    const first = buildFrozenDocument(
+      context({
+        type: DocumentType.ACT,
+        details: { completionText: "Прийнято без зауважень." },
+      }),
+      config,
+      NOW,
+    );
+    expect(first.details.completionText).toBe("Прийнято без зауважень.");
+    const replaced = buildFrozenDocument(
+      context({
+        type: DocumentType.ACT,
+        carryOver: {
+          buyer: buildBuyer({ name: "Старий" }),
+          issueDate: first.issueDate,
+          details: first.details,
+        },
+      }),
+      config,
+      NOW,
+    );
+    expect(replaced.details.completionText).toBe("Прийнято без зауважень.");
+  });
+  it("freezes no completion text when none was given (the language default prints)", () => {
+    const frozen = buildFrozenDocument(
+      context({ type: DocumentType.ACT, details: {} }),
+      config,
+      NOW,
+    );
+    expect(frozen.details).not.toHaveProperty("completionText");
+  });
+  it("keeps the first attempt's issue date when a retry is built later", () => {
+    const retry = buildFrozenDocument(
+      context({
+        carryOver: {
+          buyer: buildBuyer({ name: "Покупець" }),
+          issueDate: "2026-12-31",
+        },
+      }),
+      config,
+      new Date("2027-01-02T10:00:00Z"),
+    );
+    expect(retry.issueDate).toBe("2026-12-31");
+  });
   it("freezes the VAT rate and lets a replacement keep the old one", () => {
     expect(buildFrozenDocument(context(), config, NOW).vatRatePercent).toBe(20);
     const carried = buildFrozenDocument(

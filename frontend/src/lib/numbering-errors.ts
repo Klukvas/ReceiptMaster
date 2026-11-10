@@ -3,7 +3,7 @@ import i18n from "./i18n";
 import { ErrorCode, parseApiError } from "./api-errors";
 import { PREFIX_MAX_LENGTH } from "./document-number-format";
 
-export type NumberingField = "prefix" | "padding" | "startNumber";
+export type NumberingField = "prefix" | "padding" | "startNumber" | "resetEveryYear";
 
 export type NumberingRefusal = {
   /** The field the server pointed at, or null for a problem with the request as a whole. */
@@ -13,7 +13,7 @@ export type NumberingRefusal = {
   minStart?: number;
 };
 
-const FIELD_NAMES: readonly NumberingField[] = ["prefix", "padding", "startNumber"];
+const FIELD_NAMES: readonly NumberingField[] = ["prefix", "padding", "startNumber", "resetEveryYear"];
 
 const minStartOf = (error: unknown): number | undefined => {
   if (!isAxiosError(error)) return undefined;
@@ -25,6 +25,7 @@ const validationMessage = (field: NumberingField | undefined): string => {
   if (field === "prefix") return i18n.t("numbering.errors.prefixRejected", { max: PREFIX_MAX_LENGTH });
   if (field === "padding") return i18n.t("numbering.errors.paddingInvalid");
   if (field === "startNumber") return i18n.t("numbering.errors.startInvalid");
+  if (field === "resetEveryYear") return i18n.t("numbering.resetNeedsYear");
   return i18n.t("numbering.errors.rejected");
 };
 

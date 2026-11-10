@@ -337,10 +337,11 @@ export class ReceiptsService {
   private async repairCounter(
     userId: string,
     type: DocumentType,
+    year?: number,
   ): Promise<void> {
     try {
       await this.dataSource.transaction((manager) =>
-        raiseCounterToIssued(manager, userId, type),
+        raiseCounterToIssued(manager, userId, type, year),
       );
     } catch (error) {
       this.logger.error(`Could not repair the ${type} counter: ${error}`);
@@ -359,6 +360,7 @@ export class ReceiptsService {
         userId,
         type,
         drawn.value,
+        drawn.year,
       );
     } catch (error) {
       // The original failure matters more; a leftover gap is harmless.
@@ -456,12 +458,20 @@ export class ReceiptsService {
         message:
           "No frozen candidate exists. Customize this document explicitly to reconstruct it.",
       });
-    const frozenBuyer = previous?.pending_snapshot?.document?.buyer;
+    // A retry of a FAILED document is the same document: it keeps the first attempt's buyer
+    // and issue date (the number stays too, `allocateNumber`), so the date printed next to
+    // the number never moves to the year of the retry.
+    const frozenFirstAttempt = previous?.pending_snapshot?.document;
     const request: DocumentRequest | undefined = hasDocumentBlock(type)
       ? {
           type,
           details: details ?? {},
-          carryOver: frozenBuyer ? { buyer: frozenBuyer } : undefined,
+          carryOver: frozenFirstAttempt
+            ? {
+                buyer: frozenFirstAttempt.buyer,
+                issueDate: frozenFirstAttempt.issueDate,
+              }
+            : undefined,
         }
       : undefined;
     // Every refusal that can be known without a number comes first, so it never burns one.
@@ -652,7 +662,7 @@ export class ReceiptsService {
         // The counter is behind a number that already exists. Releasing would hand the same
         // value out again, so instead raise the counter above everything issued, once, and
         // let the caller retry with a fresh number.
-        await this.repairCounter(user.id, type);
+        await this.repairCounter(user.id, type, drawn.year);
         throw new NumberCollisionRepaired();
       }
       // Released only when this number certainly never reached a committed document:

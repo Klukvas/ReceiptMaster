@@ -8,6 +8,7 @@ import {
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { CompanyRequisitesCard } from "./CompanyRequisitesCard";
@@ -261,7 +262,7 @@ export function DocumentEditor({
                         value={value.id}
                         disabled={value.locked || !fitsType(value)}
                       >
-                        {value.name}
+                        {templateDisplayName(t, value)}
                         {value.locked ? " 🔒" : ""}
                       </option>
                     ))}

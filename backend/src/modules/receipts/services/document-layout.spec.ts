@@ -118,11 +118,11 @@ const GOLDEN_SHA256: Record<string, string> = {
   "sales_receipt.minimal.en":
     "39610b8064dd1ef3c977274d051e43069f075c2105cf702d5edc63ae36c485dd",
   "sales_receipt.corporate.uk":
-    "bce43cf4b8ea63c6bdeb2eae286228eaf7478f95cf5e6d6c93c06f264a76070e",
+    "51a8911b723df00fe20a868ef7723db42889702521be7b89a2fa8c802b6aac6d",
   "sales_receipt.corporate.ru":
-    "13a2b4cc566defdd11299f9e9001b6f1d5c7592d167a256134fe06923f133888",
+    "be191c3f2bcdbb6d5ddbbac31490dab8b27ec2f7d9469b79d4b74be57a1ba108",
   "sales_receipt.corporate.en":
-    "bec0fb7741f72961171e50f2da31129dc225acbee74b1ce1dca08d0366bb73ed",
+    "f3ad97ad49fb43417b33f35fd6520bfb348f4e6b0a5ec8e537448519f50cb30f",
   "packing_list.standard.uk":
     "1d1ed3dda0e0dac938bab901724552ee0c1baf093dcb8d72e397e153c1adf833",
   "packing_list.standard.ru":
@@ -883,6 +883,79 @@ describe("invoice and act layout", () => {
           expect(html).toContain("&lt;script&gt;");
         }
       }
+    });
+  });
+
+  describe("Original mark and footer in the corporate style", () => {
+    const ORIGINAL = { uk: "Оригінал", ru: "Оригинал", en: "Original" };
+    const renderWith = async (
+      type: TypedDocument,
+      language: DocumentLanguage,
+      footer: { footerTitle?: string; footerSubtitle?: string } = {},
+      style = "corporate",
+    ) => {
+      const config = { ...configFor(style, language), ...footer };
+      const { html } = await renders.prepare(
+        "u1",
+        config,
+        order(),
+        "2026-000007",
+        Buffer.from("logo"),
+        contextFor(type, config),
+      );
+      return html;
+    };
+
+    it.each(LANGUAGES)(
+      "prints the mark on invoice, act and packing list, not on sales receipt, quotation or return note (%s)",
+      async (language) => {
+        const marked: TypedDocument[] = [
+          DocumentType.INVOICE,
+          DocumentType.ACT,
+          DocumentType.PACKING_LIST,
+        ];
+        const unmarked: TypedDocument[] = [
+          DocumentType.SALES_RECEIPT,
+          DocumentType.QUOTE,
+          DocumentType.RETURN_NOTE,
+        ];
+        for (const type of marked)
+          expect(await renderWith(type, language)).toContain(
+            `document-type-right">${ORIGINAL[language]}<`,
+          );
+        for (const type of unmarked)
+          expect(await renderWith(type, language)).not.toContain(
+            'class="document-type-right"',
+          );
+      },
+    );
+
+    it.each(STYLES)(
+      "no style prints the word on a sales receipt (%s)",
+      async (style) => {
+        for (const language of LANGUAGES)
+          expect(
+            await renderWith(DocumentType.SALES_RECEIPT, language, {}, style),
+          ).not.toContain(`>${ORIGINAL[language]}<`);
+      },
+    );
+
+    it("prints the user's footer text on a typed document", async () => {
+      const html = await renderWith(DocumentType.INVOICE, "uk", {
+        footerTitle: "Дякуємо за співпрацю",
+        footerSubtitle: "Гаряча лінія 0 800 000 000",
+      });
+      expect(html).toContain("Дякуємо за співпрацю");
+      expect(html).toContain("Гаряча лінія 0 800 000 000");
+    });
+
+    it("prints a lone subtitle, and nothing when no footer is set", async () => {
+      const lone = await renderWith(DocumentType.ACT, "uk", {
+        footerSubtitle: "Тільки підзаголовок",
+      });
+      expect(lone).toContain("Тільки підзаголовок");
+      const none = await renderWith(DocumentType.ACT, "uk");
+      expect(none).not.toContain('class="footer-section"');
     });
   });
 });

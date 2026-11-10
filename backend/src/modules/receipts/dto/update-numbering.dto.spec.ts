@@ -101,6 +101,45 @@ describe("parseUpdateNumbering", () => {
     );
   });
 
+  it("accepts resetEveryYear with the year in the number and leaves it undefined when omitted", () => {
+    expect(
+      parseUpdateNumbering({ ...valid, resetEveryYear: true }).resetEveryYear,
+    ).toBe(true);
+    expect(
+      parseUpdateNumbering({ ...valid, resetEveryYear: false }).resetEveryYear,
+    ).toBe(false);
+    expect(parseUpdateNumbering(valid).resetEveryYear).toBeUndefined();
+  });
+
+  it("accepts resetEveryYear false without the year", () => {
+    expect(
+      parseUpdateNumbering({
+        ...valid,
+        includeYear: false,
+        resetEveryYear: false,
+      }).resetEveryYear,
+    ).toBe(false);
+  });
+
+  it("refuses resetEveryYear without the year in the number, naming the field", () => {
+    const error = refusal({
+      ...valid,
+      includeYear: false,
+      resetEveryYear: true,
+    });
+    expect(error).toMatchObject({
+      statusCode: 400,
+      errorCode: "VALIDATION_ERROR",
+    });
+    expect(error.message).toContain("resetEveryYear");
+  });
+
+  it.each(["yes", 1])("refuses resetEveryYear %p", (resetEveryYear) => {
+    expect(refusal({ ...valid, resetEveryYear }).message).toContain(
+      "resetEveryYear",
+    );
+  });
+
   it.each([undefined, null, "text", []])("refuses the body %p", (body) => {
     expect(refusal(body).errorCode).toBe("VALIDATION_ERROR");
   });
@@ -114,5 +153,6 @@ describe("NumberingUpdateRequest documentation", () => {
     expect(shape.padding.maxValue).toBe(9);
     expect(shape.startNumber.unwrap().minValue).toBe(1);
     expect(shape.startNumber.unwrap().maxValue).toBe(2_000_000_000);
+    expect(shape.resetEveryYear.isOptional()).toBe(true);
   });
 });

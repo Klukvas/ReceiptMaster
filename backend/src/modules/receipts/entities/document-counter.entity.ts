@@ -29,4 +29,12 @@ export class DocumentCounter {
 
   @Column({ type: "boolean", default: true })
   include_year: boolean;
+
+  /** The counter restarts every calendar year (kept in `document_year_counters`); needs `include_year`. */
+  @Column({ type: "boolean", default: false })
+  reset_every_year: boolean;
+
+  /** The value a new year's counter starts at. */
+  @Column({ type: "integer", default: 1 })
+  start_number: number;
 }

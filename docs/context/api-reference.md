@@ -1,6 +1,6 @@
 # API Reference
 
-**Last Updated:** 2026-11-08
+**Last Updated:** 2026-11-10
 
 **Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
@@ -1156,7 +1156,7 @@ Generic generation for the supported types. `/receipts/orders/:orderId/receipt*`
   details?: InvoiceDetails | ActDetails | QuoteDetails | ReturnNoteDetails    // invoice, act, quote (default {}) and return_note (required)
 }
 InvoiceDetails = { dueDate?: "YYYY-MM-DD", paymentTermDays?: 1..365 }  // at most one of the two
-ActDetails     = { contractRef?: string (1..200, trimmed), period?: { from, to } }  // ISO dates, from <= to
+ActDetails     = { contractRef?: string (1..200, trimmed), completionText?: string (1..300, trimmed), period?: { from, to } }  // ISO dates, from <= to; completionText replaces the printed "work completed in full" sentence (default: the language's standard sentence), frozen into snapshot.document.details and kept by a replacement
 QuoteDetails   = { validUntil?: "YYYY-MM-DD", paymentTerms?: string, deliveryTerms?: string }  // terms trimmed, 1..300 chars; strict (dueDate / paymentTermDays are a 400)
 ReturnNoteDetails = { lines: { orderItemId: uuid, qty: int >= 1 }[] (1..200, each orderItemId once), reason?: string }  // reason trimmed, 1..300; strict; no default
 ```
@@ -1167,7 +1167,7 @@ ReturnNoteDetails = { lines: { orderItemId: uuid, qty: int >= 1 }[] (1..200, eac
 
 `return_note` (накладна на повернення товару; ru «накладная на возврат товара», en "Goods Return Note") records goods that come back under an order. It needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), is **informational**: it does **not** change stock, is **not a fiscal document** and **not a settlement/tax-invoice adjustment («розрахунок коригування»)**, and **does not lock** the order. `details.lines` is required (a missing `details` or an empty `lines` is `400 VALIDATION_ERROR`); every `orderItemId` must belong to the order. Unlike every other type, an order may carry **several live return notes** (partial returns): they are not limited by the one-document-per-type rule and do not conflict with each other (no `DOCUMENT_ALREADY_EXISTS`). The limit is the ledger: each `OrderItem` exposes `returned_qty` (units already taken back by earlier non-void return notes, `0 <= returned_qty <= qty`), so a request may return at most `qty - returned_qty` of a line. Asking for more is `422 RETURN_QUANTITY_EXCEEDED` with `items: [{ orderItemId, requested, remaining }]`, and no number is drawn. The ledger is read when the request arrives and checked again atomically at issue time, so two parallel notes cannot both take the last unit. A **voided** return note gives its quantities back (the ledger decreases). Return notes are never evicted by the retention cap. `details.lines` is mandatory (never defaulted), so there is no blind `{details:{}}` retry of a failed note; the UI offers no retry button for it and asks for a new note instead.
 
-An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 INVOICE_DUE_DATE_BEFORE_ISSUE_DATE` with the stable body `{ error, errorCode, field: "details.dueDate", dueDate, issueDate }` (both dates `YYYY-MM-DD`; the client localizes from `errorCode` and shows `field`); it is raised in preflight, so no number is burned. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate; `{}` retries the frozen candidate.
+An invoice's due date is `issueDate` (the generation day in the document's time zone) plus `paymentTermDays`, else the settings' `defaultPaymentTermDays`, else 5 days; an explicit `dueDate` earlier than the issue date is `400 INVOICE_DUE_DATE_BEFORE_ISSUE_DATE` with the stable body `{ error, errorCode, field: "details.dueDate", dueDate, issueDate }` (both dates `YYYY-MM-DD`; the client localizes from `errorCode` and shows `field`); it is raised in preflight, so no number is burned. The heading is fixed per type and language (uk "Рахунок на оплату" / "Акт виконаних робіт (наданих послуг)", ru "Счёт на оплату" / "Акт выполненных работ (оказанных услуг)", en "Invoice" / "Act of Completed Work (Services Rendered)") and ignores a custom title. Requests with a non-empty `details` are explicit input and rebuild a FAILED candidate (which keeps the number, the buyer and the issue date of the first attempt); `{}` retries the frozen candidate.
 
 **Response** (201): `ReceiptIssueResult` = `ReceiptProjection` plus the optional `warnings` (below) (`document_type` set; PDF is produced asynchronously, as for a waybill). The PDF file name is `invoice-<number>.pdf` / `act-<number>.pdf` / `sales_receipt-<number>.pdf` / `packing_list-<number>.pdf` / `quote-<number>.pdf` / `return_note-<number>.pdf`; a waybill stays `receipt-<number>.pdf`.
 
@@ -1187,7 +1187,7 @@ An invoice's due date is `issueDate` (the generation day in the document's time 
 - 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, never for `return_note`; or a voided waybill/sales receipt/packing list: those types are not reissued; a voided invoice, act or quote is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
 - 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
 - 422 `RETURN_QUANTITY_EXCEEDED` — a `return_note` asks for more of a line than is left to return (`qty - returned_qty`); `items` lists each short line with `requested` and `remaining`.
-- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`, and `seller.vatId` when `companyVatPayer` is true (as an invoice does); sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches.
+- 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`, and `seller.vatId` when `companyVatPayer` is true (as an invoice does); sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches. The document PDF honours the switches `companyAddress`, `companyTaxId` (seller address / tax code) and `recipientAddress` (delivery address of a packing list), except that invoice and act always print the seller's address and tax code. Corporate prints its "Original" mark on invoice, act and packing list only (not on sales receipt, quotation, return note).
 
 The requisites, issue/due/validity dates, title and the VAT rate (`vatRatePercent`, 20 today, kept by a replacement) are frozen in `snapshot.document`, which is never part of the public projection. The public **JSON** (`GET /public/receipts/:token`) is unchanged: it shows the seller's IBAN and tax code only as the style's visibility settings allow, exactly as for a waybill, and never the buyer's IBAN/tax id, the seller's VAT id (ІПН), the signatory, VAT amounts or the amount in words. For a packing list the public JSON has `money: false`, no `subtotal_cents`/`total_cents`, and items with only `product_name` and `qty`. The **PDF** behind `GET /public/receipts/:token/pdf` is the document itself and carries every requisite the invoice or act prints (both parties' codes and addresses, the payment details, the ІПН, the signatory); anyone holding the link can download it, so revoke the share token to withdraw it.
 
@@ -2033,6 +2033,7 @@ type NumberingSetting = {
   prefix: string,        // 0 to 16 characters, default ""
   padding: number,       // 1 to 9, default 6
   includeYear: boolean,  // default true
+  resetEveryYear: boolean, // default false: the counter restarts every calendar year (document time zone); nextValue/minStart then describe the current year
   nextValue: number,     // the counter value the next document gets (for a waybill: higher of document_counters and users.receipt_counter, plus 1)
   minStart: number,      // lowest startNumber that is still accepted; equals nextValue
   nextNumber: string     // preview, e.g. "РФ-2026-000043"
@@ -2051,15 +2052,16 @@ type NumberingSetting = {
   prefix: string,        // trimmed; letters, digits, . _ - and space only; at most 16; MUST NOT end with a digit; no / \ " or control characters
   padding: number,       // integer 1..9
   includeYear: boolean,
-  startNumber?: number   // integer 1..2_000_000_000; only raises the counter so that the next number is this one
+  resetEveryYear?: boolean, // omitted: the saved value is kept (false for an account that never set it); true requires includeYear: true
+  startNumber?: number   // integer 1..2_000_000_000; only raises the counter so that the next number is this one (with resetEveryYear: this year's counter, and every later year starts at it)
 }
 ```
-Format printed: `prefix + (includeYear ? "<UTC year>-" : "") + String(value).padStart(padding, "0")`. With the defaults (`""`, 6, `true`) that is exactly the old `2026-000042`.
+Format printed: `prefix + separator + (includeYear ? "<year>-" : "") + String(value).padStart(padding, "0")`, the year being the one in the document's time zone and `separator` a `"-"` inserted only when the trimmed prefix ends in a letter or digit (`"КП"` prints `КП-2026-000001`; `"РФ-"`, `"A."` are used as typed). Numbers already issued are never rewritten. With the defaults (`""`, 6, `true`) that is exactly the old `2026-000042`.
 
 **Response** (200): `NumberingSetting` (the saved one).
 
 **Errors:**
-- 400 `VALIDATION_ERROR` — the message names the field (`prefix`, `padding`, `includeYear` or `startNumber`) or `type` (unknown document type)
+- 400 `VALIDATION_ERROR` — the message names the field (`prefix`, `padding`, `includeYear`, `resetEveryYear` (not a boolean, or true without `includeYear`) or `startNumber`) or `type` (unknown document type)
 - 409 `NUMBERING_START_TOO_LOW` — `startNumber` would reuse a number already issued. Body: `{ error, errorCode, minStart }`; `minStart` is the lowest start that is accepted. Nothing is saved (not even the format)
 
 The change applies to documents drawn after it; issued documents keep their number. A retry of a failed document keeps its number. A voided invoice, act or quotation issued again gets a number in the format that applies at that moment.

@@ -11,6 +11,11 @@ import {
 import { Recipient } from "../src/modules/recipients/entities/recipient.entity";
 import { UserSettings } from "../src/modules/settings/entities/user-settings.entity";
 import { User } from "../src/modules/users/entities/user.entity";
+import {
+  nextDocumentNumber,
+  raiseCounterToIssued,
+  releaseDocumentNumber,
+} from "../src/modules/receipts/receipt-number";
 import { UpdateNumberingDto } from "../src/modules/receipts/dto/update-numbering.dto";
 import {
   DocumentType,
@@ -145,6 +150,7 @@ describeIsolatedPostgres(
           prefix: "",
           padding: 6,
           includeYear: true,
+          resetEveryYear: false,
           nextValue: 1,
           minStart: 1,
           nextNumber: `${YEAR}-000001`,
@@ -191,7 +197,7 @@ describeIsolatedPostgres(
         padding: 3,
         includeYear: false,
       });
-      expect((await generate(DocumentType.INVOICE)).number).toBe("INV001");
+      expect((await generate(DocumentType.INVOICE)).number).toBe("INV-001");
     });
 
     it("refuses a start below a number already used and reports the minimum", async () => {
@@ -417,6 +423,301 @@ describeIsolatedPostgres(
       expect(
         crossed.types.find((t) => t.documentType === DocumentType.INVOICE),
       ).toMatchObject({ prefix: "", nextValue: 1 });
+    });
+
+    describe("yearly reset", () => {
+      const KYIV = "Europe/Kyiv";
+      const inYear = (year: number) => new Date(`${year}-06-15T12:00:00Z`);
+      const draw = (type: DocumentType, now: Date) =>
+        asTenant(() =>
+          nextDocumentNumber(db.app.manager, user.id, type, {
+            timeZone: KYIV,
+            now,
+          }),
+        );
+      const yearRows = (type: DocumentType) =>
+        db.admin.query(
+          `SELECT year, value FROM document_year_counters
+           WHERE user_id = $1 AND document_type = $2 ORDER BY year`,
+          [user.id, type],
+        );
+      const issue = async (number: string, type = DocumentType.INVOICE) => {
+        const order = await confirmedOrder();
+        await db.admin.query(
+          `INSERT INTO receipts (id, order_id, number, user_id, document_type) VALUES ($1, $2, $3, $4, $5)`,
+          [randomUUID(), order.id, number, user.id, type],
+        );
+      };
+
+      it("changes nothing while the switch is off: no yearly rows, one flat counter across years", async () => {
+        expect((await draw(DocumentType.INVOICE, inYear(YEAR))).number).toBe(
+          `${YEAR}-000001`,
+        );
+        expect(
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 1))).number,
+        ).toBe(`${YEAR + 1}-000002`);
+        expect(await yearRows(DocumentType.INVOICE)).toEqual([]);
+      });
+
+      it("continues the numbers already issued this year, then restarts at one in the next", async () => {
+        await generate(DocumentType.INVOICE);
+        await generate(DocumentType.INVOICE);
+
+        const saved = await setFormat(DocumentType.INVOICE, {
+          resetEveryYear: true,
+        });
+        expect(saved).toMatchObject({
+          resetEveryYear: true,
+          nextValue: 3,
+          minStart: 3,
+          nextNumber: `${YEAR}-000003`,
+        });
+
+        const numbers = [
+          (await draw(DocumentType.INVOICE, inYear(YEAR))).number,
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 1))).number,
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 1))).number,
+          (await draw(DocumentType.INVOICE, inYear(YEAR))).number,
+        ];
+        expect(numbers).toEqual([
+          `${YEAR}-000003`,
+          `${YEAR + 1}-000001`,
+          `${YEAR + 1}-000002`,
+          `${YEAR}-000004`,
+        ]);
+        // The flat counter stays where it was: it is not used while the switch is on.
+        expect((await counterRow(DocumentType.INVOICE)).value).toBe(2);
+      });
+
+      it("takes the year in the document's time zone at the border", async () => {
+        await setFormat(DocumentType.ACT, { resetEveryYear: true });
+        const lateKyiv = new Date(`${YEAR}-12-31T22:30:00Z`); // already next year in Kyiv
+        const earlyKyiv = new Date(`${YEAR}-12-31T21:30:00Z`);
+        expect((await draw(DocumentType.ACT, earlyKyiv)).number).toBe(
+          `${YEAR}-000001`,
+        );
+        expect((await draw(DocumentType.ACT, lateKyiv)).number).toBe(
+          `${YEAR + 1}-000001`,
+        );
+      });
+
+      it("gives every parallel draw across the border of the year its own number, with no gaps", async () => {
+        await setFormat(DocumentType.QUOTE, { resetEveryYear: true });
+        const before = new Date(`${YEAR}-12-31T21:30:00Z`);
+        const after = new Date(`${YEAR}-12-31T22:30:00Z`);
+
+        const drawn = await Promise.all(
+          Array.from({ length: 24 }, (_, index) =>
+            draw(DocumentType.QUOTE, index % 2 === 0 ? before : after),
+          ),
+        );
+
+        const numbers = drawn.map((entry) => entry.number);
+        expect(new Set(numbers).size).toBe(24);
+        const valuesOf = (year: number) =>
+          drawn
+            .filter((entry) => entry.year === year)
+            .map((entry) => entry.value)
+            .sort((a, b) => a - b);
+        const expected = Array.from({ length: 12 }, (_, index) => index + 1);
+        expect(valuesOf(YEAR)).toEqual(expected);
+        expect(valuesOf(YEAR + 1)).toEqual(expected);
+        expect(await yearRows(DocumentType.QUOTE)).toEqual([
+          { year: YEAR, value: 12 },
+          { year: YEAR + 1, value: 12 },
+        ]);
+      });
+
+      it("hands a number back to its own year, and only while it is the latest", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        const first = await draw(DocumentType.INVOICE, inYear(YEAR + 2));
+        const release = (value: number) =>
+          asTenant(() =>
+            releaseDocumentNumber(
+              db.app.manager,
+              user.id,
+              DocumentType.INVOICE,
+              value,
+              YEAR + 2,
+            ),
+          );
+
+        expect(await release(first.value)).toBe(true);
+        expect(
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 2))).number,
+        ).toBe(first.number);
+        const second = await draw(DocumentType.INVOICE, inYear(YEAR + 2));
+        expect(await release(first.value)).toBe(false);
+        expect(second.value).toBe(2);
+      });
+
+      it("starts a new year above numbers already issued in it, even by hand", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        await issue(`${YEAR + 3}-000050`);
+        await issue(`A${YEAR + 3}-000049`);
+        await issue(`${YEAR + 4}-000900`);
+
+        expect(
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 3))).number,
+        ).toBe(`${YEAR + 3}-000051`);
+      });
+
+      it("ignores hand-made numbers that are not a year and a counter value", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        await issue("ABC");
+        await issue(`${YEAR + 6}-`);
+        await issue(`${YEAR + 6}-99999999999`); // eleven digits: not a counter value
+        await issue(`${YEAR + 6}-4294967296`); // does not fit the 32-bit counter
+        await issue(`${YEAR + 6}00-000500`); // the year is not a four-digit run
+        await issue(`${YEAR + 6}-000020`);
+
+        expect(
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 6))).number,
+        ).toBe(`${YEAR + 6}-000021`);
+      });
+
+      it("repairs only the colliding year's counter", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        await draw(DocumentType.INVOICE, inYear(YEAR));
+        await draw(DocumentType.INVOICE, inYear(YEAR + 1));
+        await issue(`${YEAR + 1}-000040`);
+        await issue(`${YEAR}-000900`);
+
+        const raised = await asTenant(() =>
+          db.app.transaction((manager) =>
+            raiseCounterToIssued(
+              manager,
+              user.id,
+              DocumentType.INVOICE,
+              YEAR + 1,
+            ),
+          ),
+        );
+
+        expect(raised).toBe(40);
+        expect(await yearRows(DocumentType.INVOICE)).toEqual([
+          { year: YEAR, value: 1 },
+          { year: YEAR + 1, value: 40 },
+        ]);
+      });
+
+      it("starts every new year at the saved start number and judges a new start against this year", async () => {
+        await setFormat(DocumentType.INVOICE, {
+          resetEveryYear: true,
+          startNumber: 100,
+        });
+        expect((await draw(DocumentType.INVOICE, inYear(YEAR))).number).toBe(
+          `${YEAR}-000100`,
+        );
+        expect(
+          (await draw(DocumentType.INVOICE, inYear(YEAR + 5))).number,
+        ).toBe(`${YEAR + 5}-000100`);
+
+        const refusal = await setFormat(DocumentType.INVOICE, {
+          resetEveryYear: true,
+          startNumber: 50,
+        }).catch((error: unknown) => error);
+        expect(refusal).toMatchObject({
+          errorCode: "NUMBERING_START_TOO_LOW",
+          details: { minStart: 101 },
+        });
+      });
+
+      it("does not let a switched-off counter fall below what the reset already issued", async () => {
+        await generate(DocumentType.INVOICE);
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        for (let index = 0; index < 4; index++)
+          await draw(DocumentType.INVOICE, inYear(YEAR));
+
+        const off = await setFormat(DocumentType.INVOICE, {
+          resetEveryYear: false,
+        });
+
+        // The year counter stood at 5 (1 issued before the switch, 4 after).
+        expect(off).toMatchObject({ resetEveryYear: false, nextValue: 6 });
+        expect((await draw(DocumentType.INVOICE, inYear(YEAR))).number).toBe(
+          `${YEAR}-000006`,
+        );
+      });
+
+      it("keeps the saved switch when a save leaves it out, and refuses to drop the year under it", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        const kept = await setFormat(DocumentType.INVOICE, { prefix: "КП" });
+        expect(kept).toMatchObject({ resetEveryYear: true, prefix: "КП" });
+
+        const refusal = await setFormat(DocumentType.INVOICE, {
+          includeYear: false,
+        }).catch((error: unknown) => error);
+        expect(refusal).toMatchObject({
+          statusCode: 400,
+          errorCode: "VALIDATION_ERROR",
+        });
+        expect((await draw(DocumentType.INVOICE, inYear(YEAR))).number).toBe(
+          `КП-${YEAR}-000001`,
+        );
+      });
+
+      it("refuses, at the database, a reset without the year in the number", async () => {
+        await expect(
+          db.admin.query(
+            `INSERT INTO document_counters (user_id, document_type, reset_every_year, include_year)
+             VALUES ($1, 'act', true, false)`,
+            [user.id],
+          ),
+        ).rejects.toMatchObject({ code: "23514" });
+        await expect(
+          db.admin.query(
+            `INSERT INTO document_counters (user_id, document_type, start_number) VALUES ($1, 'act', 0)`,
+            [user.id],
+          ),
+        ).rejects.toMatchObject({ code: "23514" });
+      });
+
+      it("leaves users.receipt_counter alone for a waybill under the reset", async () => {
+        await db.admin.query(
+          `UPDATE users SET receipt_counter = 7 WHERE id = $1`,
+          [user.id],
+        );
+        await setFormat(DocumentType.WAYBILL, { resetEveryYear: true });
+
+        const first = await draw(DocumentType.WAYBILL, inYear(YEAR + 1));
+
+        expect(first.number).toBe(`${YEAR + 1}-000001`);
+        expect(
+          (
+            await db.admin.query(
+              `SELECT receipt_counter FROM users WHERE id = $1`,
+              [user.id],
+            )
+          )[0].receipt_counter,
+        ).toBe(7);
+      });
+
+      it("keeps one account's yearly counters out of reach of another", async () => {
+        await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
+        await draw(DocumentType.INVOICE, inYear(YEAR));
+        const other = await db.admin.getRepository(User).save({
+          email: `${randomUUID()}@numbering.invalid`,
+          password: "fixture",
+        });
+
+        const theirs = await asTenant(
+          () => services.numbering.list(other.id),
+          other,
+        );
+
+        expect(
+          theirs.types.find((t) => t.documentType === DocumentType.INVOICE),
+        ).toMatchObject({ resetEveryYear: false, nextValue: 1 });
+        const peeked = await asTenant(
+          () =>
+            db.app.query(`SELECT * FROM document_year_counters`) as Promise<
+              unknown[]
+            >,
+          other,
+        );
+        expect(peeked).toEqual([]);
+      });
     });
 
     it("refuses a prefix the database would not accept, even if validation were bypassed", async () => {

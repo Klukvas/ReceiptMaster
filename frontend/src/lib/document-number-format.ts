@@ -1,7 +1,9 @@
 /**
  * Client mirror of the backend document number format, used only for the live preview while
  * a numbering row is edited. The authoritative next number is `NumberingSetting.nextNumber`.
- * Format: prefix + (includeYear ? "YYYY-" : "") + value zero-padded to `padding`.
+ * Format: prefix + separator + (includeYear ? "YYYY-" : "") + value zero-padded to `padding`.
+ * The separator is "-" when the trimmed prefix ends in a letter or digit ("КП" prints
+ * "КП-2026-000001"); a prefix ending in a separator ("РФ-", "A.") is used as typed.
  */
 export const PREFIX_MAX_LENGTH = 16;
 export const PADDING_MIN = 1;
@@ -22,6 +24,9 @@ export function prefixProblem(prefix: string): PrefixProblem | null {
   return null;
 }
 
+const RUNS_INTO_NUMBER = /[\p{L}\p{N}]$/u;
+const PREFIX_SEPARATOR = "-";
+
 export type NumberFormatParts = {
   prefix: string;
   padding: number;
@@ -33,8 +38,10 @@ export function formatDocumentNumber(
   value: number,
   year: number = new Date().getUTCFullYear(),
 ): string {
+  const trimmed = prefix.trim();
+  const separator = RUNS_INTO_NUMBER.test(trimmed) ? PREFIX_SEPARATOR : "";
   const yearPart = includeYear ? `${year}-` : "";
-  return `${prefix.trim()}${yearPart}${String(value).padStart(padding, "0")}`;
+  return `${trimmed}${separator}${yearPart}${String(value).padStart(padding, "0")}`;
 }
 
 /** A whole number within the server's accepted start range, else null. */

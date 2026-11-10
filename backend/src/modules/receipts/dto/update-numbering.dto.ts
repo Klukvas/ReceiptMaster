@@ -52,6 +52,14 @@ export class UpdateNumberingDto {
   @IsBoolean()
   includeYear: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      "Restart the counter every calendar year (in the document time zone). Requires includeYear. Omitted: the saved value is kept (off for an account that never set it).",
+  })
+  @IsOptional()
+  @IsBoolean()
+  resetEveryYear?: boolean;
+
   @ApiPropertyOptional({ minimum: 1, maximum: MAX_START_NUMBER })
   @IsOptional()
   @IsInt()
@@ -59,6 +67,10 @@ export class UpdateNumberingDto {
   @Max(MAX_START_NUMBER)
   startNumber?: number;
 }
+
+/** The year restart needs the year in the number: numbers of two years would collide otherwise. */
+export const RESET_NEEDS_YEAR_MESSAGE =
+  "resetEveryYear requires includeYear to be true";
 
 /**
  * Validates a raw request body. Done by hand (not by the global ValidationPipe) so every
@@ -78,5 +90,10 @@ export function parseUpdateNumbering(body: unknown): UpdateNumberingDto {
     const message = Object.values(first.constraints ?? {})[0] ?? "is invalid";
     throw ApiErrors.VALIDATION_ERROR(first.property, message);
   }
+  if (dto.resetEveryYear === true && !dto.includeYear)
+    throw ApiErrors.VALIDATION_ERROR(
+      "resetEveryYear",
+      RESET_NEEDS_YEAR_MESSAGE,
+    );
   return dto;
 }

@@ -29,6 +29,7 @@ export type DocumentDetailsInput = {
   dueDate?: string;
   paymentTermDays?: number;
   contractRef?: string;
+  completionText?: string;
   period?: { from: string; to: string };
   validUntil?: string;
   paymentTerms?: string;
@@ -53,6 +54,8 @@ export type FrozenDetails = {
   dueDate?: string;
   dueDateSource?: DueDateSource;
   contractRef?: string;
+  /** Act: the custom completion sentence; absent means the language default is printed. */
+  completionText?: string;
   period?: { from: string; to: string };
   validUntil?: string;
   validUntilSource?: ValidUntilSource;
@@ -220,6 +223,9 @@ function resolveDetails(
     case DocumentType.ACT:
       return {
         ...(input.contractRef ? { contractRef: input.contractRef } : {}),
+        ...(input.completionText
+          ? { completionText: input.completionText }
+          : {}),
         ...(input.period ? { period: input.period } : {}),
       };
     case DocumentType.QUOTE:

@@ -9,6 +9,7 @@ import { settingsApi, type ReceiptDesignSettings } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { SettingsSection } from "./SettingsSection";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 import { UpgradeModal } from "../subscription/UpgradeModal";
@@ -286,7 +287,7 @@ export const TemplateSelector = () => {
               {/* Template Info */}
               <div className="space-y-2.5">
                 <h3 className="font-semibold text-content text-sm">
-                  {template.name}
+                  {templateDisplayName(t, template)}
                 </h3>
 
                 <p className="text-xs text-content-tertiary leading-relaxed line-clamp-2">

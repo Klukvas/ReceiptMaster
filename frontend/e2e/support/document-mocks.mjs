@@ -272,12 +272,13 @@ export const documentsListHandlers = (state) => [
 
 export const NUMBERING_TYPES = ["waybill", "invoice", "quote", "act", "sales_receipt", "packing_list", "return_note"];
 
+// Mirrors the backend: a prefix ending in a letter or digit gets a "-" before the rest.
 const numberOf = (setting, year = new Date().getUTCFullYear()) =>
-  `${setting.prefix}${setting.includeYear ? `${year}-` : ""}${String(setting.nextValue).padStart(setting.padding, "0")}`;
+  `${setting.prefix}${/[\p{L}\p{N}]$/u.test(setting.prefix) ? "-" : ""}${setting.includeYear ? `${year}-` : ""}${String(setting.nextValue).padStart(setting.padding, "0")}`;
 
 /** A numbering setting as the API returns it. */
 export const numberingSetting = (documentType, extra = {}) => {
-  const setting = { documentType, prefix: "", padding: 6, includeYear: true, nextValue: 43, minStart: 43, ...extra };
+  const setting = { documentType, prefix: "", padding: 6, includeYear: true, resetEveryYear: false, nextValue: 43, minStart: 43, ...extra };
   return { ...setting, nextNumber: numberOf(setting) };
 };
 
@@ -300,11 +301,20 @@ export const numberingHandlers = (state) => [
       return answer(json, route, failure, status);
     }
     const current = state.numbering.find((setting) => setting.documentType === put[1]);
+    const resetEveryYear = payload.resetEveryYear ?? current.resetEveryYear;
+    if (resetEveryYear && !payload.includeYear)
+      return answer(
+        json,
+        route,
+        { error: "Validation error for resetEveryYear: needs includeYear", errorCode: "VALIDATION_ERROR" },
+        400,
+      );
     const nextValue = payload.startNumber ?? current.nextValue;
     const saved = numberingSetting(put[1], {
       prefix: payload.prefix,
       padding: payload.padding,
       includeYear: payload.includeYear,
+      resetEveryYear,
       nextValue,
       minStart: nextValue,
     });

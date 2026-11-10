@@ -1,4 +1,5 @@
 import { useTranslation } from "../../hooks/useTranslation";
+import { TaxIdChecksumHint } from "./TaxIdChecksumHint";
 import { isValidEdrpou, isValidRnokpp, isValidUaIban, normalizeIban } from "../../lib/ua-requisites";
 
 /**
@@ -10,6 +11,7 @@ export function CompanyFieldNote({ field, value }: { field: string; value: strin
   const text = value.trim();
   if (text === "") return null;
   const key = noteKeyFor(field, text);
+  if (!key && field === "companyTaxId") return <TaxIdChecksumHint value={text} className="mt-1" />;
   return key ? (
     <p role="status" className="mt-1 text-xs text-warning-base">
       {t(key)}

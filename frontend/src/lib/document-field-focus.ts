@@ -3,6 +3,7 @@ const DETAIL_FIELD_IDS: Readonly<Record<string, string>> = {
   dueDate: "document-due-date",
   paymentTermDays: "document-term-days",
   contractRef: "document-contract-ref",
+  completionText: "document-completion-text",
   periodFrom: "document-period-from",
   periodTo: "document-period-to",
   validUntil: "document-valid-until",

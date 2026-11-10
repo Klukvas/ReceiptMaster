@@ -12,6 +12,7 @@ import {
 } from "../../lib/recipient-requisites";
 import { TAX_ID_KINDS } from "../../lib/ua-requisites";
 import { selectClass } from "../settings/DocumentFormatting";
+import { TaxIdChecksumHint } from "../settings/TaxIdChecksumHint";
 import { Input } from "../ui/Input";
 
 type RequisitesFieldsProps = {
@@ -97,6 +98,14 @@ export function RecipientRequisitesFields({
                 ))}
               </select>
             </div>
+            {/* Only when the format itself is fine: a malformed code already has a blocking error. */}
+            {!errors.tax_id && (
+              <TaxIdChecksumHint
+                value={draft.tax_id}
+                pickedKind={draft.tax_id_kind}
+                className="sm:col-span-2"
+              />
+            )}
           </div>
           <Input
             id="recipient-iban"

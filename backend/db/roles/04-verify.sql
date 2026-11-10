@@ -93,7 +93,7 @@ BEGIN
   SELECT string_agg(t.name, ', ') INTO found
     FROM unnest(ARRAY['orders', 'order_items', 'products', 'recipients', 'receipts',
                       'document_assets', 'document_presets', 'document_artifacts',
-                      'document_counters']) AS t(name)
+                      'document_counters', 'document_year_counters']) AS t(name)
    WHERE NOT EXISTS (SELECT FROM pg_class c
                       WHERE c.relnamespace = 'public'::regnamespace
                         AND c.relname = t.name AND c.relrowsecurity);
@@ -101,7 +101,7 @@ BEGIN
 
   SELECT string_agg(t.name, ', ') INTO found
     FROM unnest(ARRAY['document_assets', 'document_presets', 'document_artifacts',
-                      'document_counters']) AS t(name)
+                      'document_counters', 'document_year_counters']) AS t(name)
    WHERE NOT EXISTS (SELECT FROM pg_class c
                       WHERE c.relnamespace = 'public'::regnamespace
                         AND c.relname = t.name AND c.relforcerowsecurity);

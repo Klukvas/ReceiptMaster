@@ -30,8 +30,18 @@ export const invoiceDetailsSchema = z
     "Choose dueDate or paymentTermDays, not both",
   );
 
+/** Longest custom completion sentence an act may carry. */
+export const ACT_COMPLETION_TEXT_MAX_LENGTH = 300;
+
 export const actDetailsSchema = z
   .object({
+    /** Replaces the printed "work completed in full" sentence; without it the language default is printed. */
+    completionText: z
+      .string()
+      .trim()
+      .min(1)
+      .max(ACT_COMPLETION_TEXT_MAX_LENGTH)
+      .optional(),
     contractRef: z.string().trim().min(1).max(200).optional(),
     period: z
       .object({ from: calendarDate, to: calendarDate })

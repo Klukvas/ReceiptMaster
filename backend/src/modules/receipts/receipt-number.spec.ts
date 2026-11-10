@@ -12,6 +12,7 @@ const counterRow = (value: number, overrides: object = {}) => ({
   prefix: "",
   padding: 6,
   include_year: true,
+  reset_every_year: false,
   ...overrides,
 });
 
@@ -27,11 +28,42 @@ describe("formatDocumentNumber", () => {
 
   it.each([
     [{ prefix: "РФ-", padding: 6, includeYear: true }, 43, "РФ-2026-000043"],
-    [{ prefix: "INV", padding: 4, includeYear: false }, 7, "INV0007"],
+    [{ prefix: "INV", padding: 4, includeYear: false }, 7, "INV-0007"],
     [{ prefix: "", padding: 1, includeYear: false }, 12, "12"],
     [{ prefix: "A ", padding: 9, includeYear: true }, 5, "A 2026-000000005"],
   ])("formats %j for %d", (format, value, expected) => {
     expect(formatDocumentNumber(format, value, 2026)).toBe(expected);
+  });
+
+  it.each([
+    ["КП", "КП-2026-000001"],
+    ["INV", "INV-2026-000001"],
+    ["КП-", "КП-2026-000001"],
+    ["A.", "A.2026-000001"],
+    ["A_", "A_2026-000001"],
+    ["A ", "A 2026-000001"],
+    ["", "2026-000001"],
+  ])(
+    "separates the prefix %j from the rest only when it ends in a letter",
+    (prefix, expected) => {
+      expect(
+        formatDocumentNumber(
+          { prefix, padding: 6, includeYear: true },
+          1,
+          2026,
+        ),
+      ).toBe(expected);
+    },
+  );
+
+  it("separates a letter prefix from a number without the year too", () => {
+    expect(
+      formatDocumentNumber(
+        { prefix: "КП", padding: 3, includeYear: false },
+        7,
+        2026,
+      ),
+    ).toBe("КП-007");
   });
 
   it("does not truncate a value wider than the padding", () => {
@@ -80,7 +112,7 @@ describe("nextDocumentNumber", () => {
     ).toEqual({ number: "2026-000042", value: 42 });
     expect(manager.query).toHaveBeenCalledWith(
       expect.stringContaining('ON CONFLICT ("user_id", "document_type")'),
-      ["user-1", DocumentType.INVOICE],
+      ["user-1", DocumentType.INVOICE, 2026],
     );
   });
 
@@ -95,9 +127,7 @@ describe("nextDocumentNumber", () => {
         timeZone: "UTC",
       }),
     ).toEqual({ number: "РФ-2026-000043", value: 43 });
-    expect(manager.query.mock.calls[0][0]).toContain(
-      'RETURNING "value", "prefix", "padding", "include_year"',
-    );
+    expect(manager.query.mock.calls[0][0]).toContain('"reset_every_year"');
   });
 
   it.each([
@@ -132,9 +162,6 @@ describe("nextDocumentNumber", () => {
 
     expect(manager.query.mock.calls[0][0]).toContain('"receipt_counter"');
     expect(manager.query.mock.calls[1][0]).not.toContain('"receipt_counter"');
-    expect(manager.query.mock.calls[0][0]).toContain(
-      '"include_year" FROM bumped',
-    );
   });
 
   it("fails when nothing was bumped and propagates database errors", async () => {
@@ -216,6 +243,8 @@ describe("raiseCounterToIssued", () => {
     const manager = {
       query: jest.fn(async (sql: string) => {
         calls.push(sql);
+        if (/FOR UPDATE/.test(sql))
+          return [{ reset_every_year: false, start_number: 1 }];
         if (/MAX\(/.test(sql)) return [{ highest: "57" }];
         if (/RETURNING "value"/.test(sql)) return [{ value: 57 }];
         return [];
@@ -241,16 +270,98 @@ describe("raiseCounterToIssued", () => {
   it("keeps the legacy waybill counter in step", async () => {
     const manager = {
       query: jest.fn(async (sql: string) =>
-        /MAX\(/.test(sql)
-          ? [{ highest: null }]
-          : /RETURNING "value"/.test(sql)
-            ? [{ value: 4 }]
-            : [],
+        /FOR UPDATE/.test(sql)
+          ? [{ reset_every_year: false, start_number: 1 }]
+          : /MAX\(/.test(sql)
+            ? [{ highest: null }]
+            : /RETURNING "value"/.test(sql)
+              ? [{ value: 4 }]
+              : [],
       ),
     };
     await raiseCounterToIssued(manager as never, "u", DocumentType.WAYBILL);
     expect(
       manager.query.mock.calls.some(([sql]) => /"receipt_counter"/.test(sql)),
     ).toBe(true);
+  });
+});
+
+describe("yearly reset", () => {
+  const draw = (rows: object[], now: string, timeZone = "UTC") => {
+    const manager = { query: jest.fn().mockResolvedValue(rows) };
+    return nextDocumentNumber(manager as never, "u", DocumentType.INVOICE, {
+      timeZone,
+      now: new Date(now),
+    }).then((drawn) => ({ drawn, manager }));
+  };
+
+  it("hands the year of the draw to the statement and reports it for a release", async () => {
+    const { drawn, manager } = await draw(
+      [counterRow(1, { reset_every_year: true })],
+      "2027-01-01T00:30:00Z",
+    );
+    expect(drawn).toEqual({ number: "2027-000001", value: 1, year: 2027 });
+    expect(manager.query.mock.calls[0][1]).toEqual([
+      "u",
+      DocumentType.INVOICE,
+      2027,
+    ]);
+  });
+
+  it("takes the year from the document time zone at the border of the year", async () => {
+    const { drawn } = await draw(
+      [counterRow(1, { reset_every_year: true })],
+      "2026-12-31T22:30:00Z",
+      "Europe/Kyiv",
+    );
+    expect(drawn).toMatchObject({ number: "2027-000001", year: 2027 });
+  });
+
+  it("does not mark a number from the flat counter with a year", async () => {
+    const { drawn } = await draw([counterRow(5)], "2027-01-01T00:30:00Z");
+    expect(drawn.year).toBeUndefined();
+  });
+
+  it("releases a yearly number from its own year's counter", async () => {
+    const manager = { query: jest.fn().mockResolvedValue([{ value: 4 }]) };
+    expect(
+      await releaseDocumentNumber(
+        manager as never,
+        "u",
+        DocumentType.WAYBILL,
+        5,
+        2027,
+      ),
+    ).toBe(true);
+    const [sql, params] = manager.query.mock.calls[0];
+    expect(sql).toContain('"document_year_counters"');
+    expect(sql).not.toContain('"receipt_counter"');
+    expect(params).toEqual(["u", DocumentType.WAYBILL, 5, 2027]);
+  });
+
+  it("repairs the counter of the colliding year only", async () => {
+    const calls: Array<[string, unknown[]]> = [];
+    const manager = {
+      query: jest.fn(async (sql: string, params: unknown[]) => {
+        calls.push([sql, params]);
+        if (/FOR UPDATE/.test(sql))
+          return [{ reset_every_year: true, start_number: 100 }];
+        if (/RAISE|document_year_counters/.test(sql)) return [{ value: 120 }];
+        return [];
+      }),
+    };
+    expect(
+      await raiseCounterToIssued(
+        manager as never,
+        "u",
+        DocumentType.INVOICE,
+        2027,
+      ),
+    ).toBe(120);
+    const raise = calls.find(([sql]) => sql.includes("year_counters"));
+    expect(raise?.[1]).toEqual(["u", DocumentType.INVOICE, 2027, 100]);
+    expect(calls.some(([sql]) => /UPDATE "document_counters"/.test(sql))).toBe(
+      false,
+    );
   });
 });

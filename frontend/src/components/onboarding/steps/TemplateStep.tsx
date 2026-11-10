@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Lock, Crown } from "lucide-react";
 import { settingsApi } from "../../../lib/api";
 import { useTranslation } from "../../../hooks/useTranslation";
+import { templateDisplayName } from "../../../lib/template-name";
 import { TemplatePreviewIframe } from "../../settings/TemplatePreviewIframe";
 import { UpgradeModal } from "../../subscription/UpgradeModal";
 
@@ -172,7 +173,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               </div>
 
               <h3 className="font-medium text-content text-xs truncate">
-                {template.name}
+                {templateDisplayName(t, template)}
               </h3>
               {/* The card stays readable; the plan note sits under the name instead of covering it. */}
               {isLocked && (

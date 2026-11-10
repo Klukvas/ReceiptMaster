@@ -500,6 +500,9 @@
     "autoReceiptInstant": "This switch applies immediately; there is nothing to save.",
     "autoReceiptEnabled": "Waybills will be created on confirm",
     "autoReceiptDisabled": "Automatic waybills turned off",
+    "templateNames": {
+      "delivery": "Delivery note"
+    },
     "requisites": {
       "title": "Requisites for documents",
       "description": "Printed on invoices, acts of completed work, sales receipts and quotations. Saved separately from the document design.",
@@ -527,6 +530,7 @@
       "saved": "Requisites saved",
       "ibanNote": "This does not look like a Ukrainian IBAN (UA and 27 digits). It will not work for an invoice.",
       "taxIdNote": "Documents need an EDRPOU (8 digits) or an RNOKPP (10 digits).",
+      "taxIdChecksumNote": "The check digit does not match — please verify the code.",
       "errors": {
         "vatId": "The VAT number must have 10 or 12 digits",
         "paymentTermDays": "Enter a whole number from 1 to 365",
@@ -1169,6 +1173,11 @@
     "dueDate": "Pay by",
     "contractRef": "Contract",
     "contractRefPlaceholder": "E.g. Contract No. 15 of 01.03.2026",
+    "completionText": "Completion statement",
+    "completionTextStandardHint": "Left empty, the standard sentence shown above is printed.",
+    "completionTextCustomHint": "This text replaces the standard sentence in the act.",
+    "completionTextReset": "Use the standard text",
+    "actCompletionStandard": "The work has been completed in full; the parties have no claims against each other.",
     "period": "Work period",
     "periodFrom": "Period start",
     "periodTo": "Period end",
@@ -1190,6 +1199,7 @@
       "termDaysInvalid": "Enter a whole number from 1 to 365",
       "periodOrder": "The end date is earlier than the start date",
       "contractRefTooLong": "At most 200 characters",
+      "completionTextTooLong": "At most 300 characters",
       "validUntilInvalid": "Enter a valid date",
       "validUntilBeforeIssue": "The date cannot be before today",
       "validUntilTooFar": "At most 365 days from today",
@@ -1316,6 +1326,11 @@
     "startNumber": "Start from",
     "startHint": "Minimum: {{min}}. It can only be raised, so a number is never issued twice.",
     "includeYear": "Include the year",
+    "resetEveryYear": "Start the numbering anew every year",
+    "resetEveryYearHint": "Numbers restart from 1 on 1 January (the year in the document time zone). The start number and the example refer to the current year.",
+    "resetEveryYearOffHint": "The counter keeps going across years.",
+    "resetNeedsYear": "Turn on “Include the year” first.",
+    "startHintYearly": "Minimum for the current year: {{min}}. It can only be raised, so a number is never issued twice.",
     "preview": "Number example",
     "saved": "Numbering saved: {{type}}",
     "errors": {
@@ -1353,6 +1368,7 @@
     "deleteTitle": "Delete: {{kind}}?",
     "deleteMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
     "willBeAdded": "Your signature and stamp will be added to this document.",
+    "shareNote": "The PDF behind this link includes your signature and stamp if the document was issued with them. Anyone who has the link can see them.",
     "errors": {
       "type": "Only PNG and JPEG images are accepted",
       "tooLarge": "The image is larger than 2 MB",

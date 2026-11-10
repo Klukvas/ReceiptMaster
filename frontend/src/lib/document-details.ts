@@ -14,6 +14,8 @@ export const DEFAULT_PAYMENT_TERM_DAYS = 5;
 export const QUOTE_DEFAULT_VALIDITY_DAYS = 14;
 export const QUOTE_MAX_VALIDITY_DAYS = 365;
 export const MAX_QUOTE_TERMS_LENGTH = 300;
+/** Mirror of the backend's ACT_COMPLETION_TEXT_MAX_LENGTH. */
+export const MAX_ACT_COMPLETION_TEXT_LENGTH = 300;
 export const MAX_RETURN_REASON_LENGTH = 300;
 
 export type PaymentTermMode = "days" | "date";
@@ -24,7 +26,8 @@ export type InvoiceForm = {
   dueDate: string;
 };
 
-export type ActForm = { contractRef: string; from: string; to: string };
+/** An empty `completionText` means the language's standard sentence: the field is not sent. */
+export type ActForm = { contractRef: string; completionText: string; from: string; to: string };
 
 export type QuoteForm = {
   validUntil: string;
@@ -98,7 +101,11 @@ function periodErrors(form: ActForm): DetailsErrors {
 
 export function buildActDetails(form: ActForm): Built<ActDetails> {
   const contractRef = form.contractRef.trim();
+  const completionText = form.completionText.trim();
   const errors: DetailsErrors = {
+    ...(completionText.length > MAX_ACT_COMPLETION_TEXT_LENGTH && {
+      completionText: "documents.errors.completionTextTooLong",
+    }),
     ...(contractRef.length > MAX_CONTRACT_REF_LENGTH && {
       contractRef: "documents.errors.contractRefTooLong",
     }),
@@ -110,6 +117,7 @@ export function buildActDetails(form: ActForm): Built<ActDetails> {
     ok: true,
     value: {
       ...(contractRef !== "" && { contractRef }),
+      ...(completionText !== "" && { completionText }),
       ...(hasPeriod && { period: { from: form.from, to: form.to } }),
     },
   };

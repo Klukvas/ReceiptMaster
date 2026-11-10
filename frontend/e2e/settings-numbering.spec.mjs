@@ -224,6 +224,64 @@ const checkServerRefusals = async (results) => {
   );
 };
 
+const checkYearlyReset = async (results) => {
+  const resetBox = (page, type) => row(page, type).getByLabel("Start the numbering anew every year");
+  const yearBox = (page, type) => row(page, type).getByLabel("Include the year");
+  await withNumbering(VIEWPORTS[0].viewport, {}, async (page, state) => {
+    await row(page, "invoice").waitFor({ state: "visible" });
+    results.check("the yearly restart is off by default and available while the year is on", !(await resetBox(page, "invoice").isChecked()) && !(await resetBox(page, "invoice").isDisabled()), "wrong initial state");
+    await resetBox(page, "invoice").check();
+    results.check(
+      "the start hint then speaks about the current year",
+      (await row(page, "invoice").innerText()).includes("Minimum for the current year: 43"),
+      await row(page, "invoice").innerText(),
+    );
+    await saveButton(page, "invoice").click();
+    await settle(() => (state.numberingSaves ?? []).length === 1);
+    results.check(
+      "turning it on sends resetEveryYear: true and nothing else changed is lost",
+      JSON.stringify(state.numberingSaves[0].body) ===
+        JSON.stringify({ prefix: "", padding: 6, includeYear: true, resetEveryYear: true }),
+      JSON.stringify(state.numberingSaves),
+    );
+    await settle(async () => (await saveButton(page, "invoice").isDisabled()));
+    await yearBox(page, "invoice").uncheck();
+    results.check(
+      "switching the year off switches the restart off and disables it with a hint",
+      !(await resetBox(page, "invoice").isChecked()) &&
+        (await resetBox(page, "invoice").isDisabled()) &&
+        (await row(page, "invoice").innerText()).includes("Turn on “Include the year” first"),
+      await row(page, "invoice").innerText(),
+    );
+    await saveButton(page, "invoice").click();
+    await settle(() => (state.numberingSaves ?? []).length === 2);
+    results.check(
+      "saving without the year sends resetEveryYear: false so the server accepts it",
+      state.numberingSaves[1].body.includeYear === false && state.numberingSaves[1].body.resetEveryYear === false,
+      JSON.stringify(state.numberingSaves[1]),
+    );
+    results.check("other rows keep their own switch", !(await resetBox(page, "act").isChecked()), "act row changed");
+  });
+  await withNumbering(VIEWPORTS[1].viewport, { numbering: NUMBERING_TYPES.map((type) => numberingSetting(type, { resetEveryYear: true })) }, async (page) => {
+    await row(page, "act").waitFor({ state: "visible" });
+    results.check("375px: a saved yearly restart is shown checked", await resetBox(page, "act").isChecked(), "unchecked");
+    results.check("375px: no horizontal overflow", await hasNoHorizontalOverflow(page), "overflow");
+  });
+  await withNumbering(VIEWPORTS[0].viewport, {}, async (page) => {
+    await row(page, "quote").waitFor({ state: "visible" });
+    await row(page, "quote").getByLabel("Prefix").fill("КП");
+    results.check(
+      "the preview puts a dash after a prefix that ends in a letter",
+      (await previewOf(page, "quote")) === `КП-${YEAR}-000043`,
+      await previewOf(page, "quote"),
+    );
+    await row(page, "quote").getByLabel("Prefix").fill("A.");
+    results.check("a prefix that ends in a separator is used as typed", (await previewOf(page, "quote")) === `A.${YEAR}-000043`, await previewOf(page, "quote"));
+    await row(page, "quote").getByLabel("Prefix").fill("A ");
+    results.check("a trailing space is trimmed on save, so the dash is added after the letter", (await previewOf(page, "quote")) === `A-${YEAR}-000043`, await previewOf(page, "quote"));
+  });
+};
+
 export const run = async () => {
   const results = new Results("settings numbering");
   await checkRows(results);
@@ -232,5 +290,6 @@ export const run = async () => {
   await checkDraftSurvivesTabSwitch(results);
   await checkSave(results);
   await checkServerRefusals(results);
+  await checkYearlyReset(results);
   return results;
 };

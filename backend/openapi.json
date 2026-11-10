@@ -3240,7 +3240,7 @@
             }
           },
           "400": {
-            "description": "Invalid prefix, padding or startNumber (VALIDATION_ERROR names the field)",
+            "description": "Invalid prefix, padding, startNumber or resetEveryYear (VALIDATION_ERROR names the field; resetEveryYear needs includeYear)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3250,7 +3250,7 @@
             }
           },
           "409": {
-            "description": "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed",
+            "description": "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed (of the current year while the yearly reset is on)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7677,6 +7677,11 @@
               "details": {
                 "type": "object",
                 "properties": {
+                  "completionText": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
                   "contractRef": {
                     "type": "string",
                     "minLength": 1,
@@ -8549,6 +8554,9 @@
           "includeYear": {
             "type": "boolean"
           },
+          "resetEveryYear": {
+            "type": "boolean"
+          },
           "nextValue": {
             "type": "integer",
             "minimum": 1
@@ -8566,6 +8574,7 @@
           "prefix",
           "padding",
           "includeYear",
+          "resetEveryYear",
           "nextValue",
           "minStart",
           "nextNumber"
@@ -8598,6 +8607,9 @@
             "maximum": 9
           },
           "includeYear": {
+            "type": "boolean"
+          },
+          "resetEveryYear": {
             "type": "boolean"
           },
           "startNumber": {

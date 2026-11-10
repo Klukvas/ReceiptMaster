@@ -54,8 +54,8 @@ export class DocumentNumberingController {
   @ApiJsonBody("NumberingUpdateRequest")
   @ApiDataResponse(200, "NumberingSetting", "Saved setting")
   @ApiFailureResponses({
-    400: "Invalid prefix, padding or startNumber (VALIDATION_ERROR names the field)",
-    409: "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed",
+    400: "Invalid prefix, padding, startNumber or resetEveryYear (VALIDATION_ERROR names the field; resetEveryYear needs includeYear)",
+    409: "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed (of the current year while the yearly reset is on)",
   })
   update(
     @Param("type") type: string,
