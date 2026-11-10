@@ -49,5 +49,5 @@ lerna-debug.log*
 # User uploaded assets
 src/assets/logo.png
 src/assets/settings.json
-backend/src/coverage-temp/
+/src/coverage-temp/
 backend/.env.test
