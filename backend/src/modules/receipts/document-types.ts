@@ -76,6 +76,15 @@ export type DocumentLayoutSpec = {
   notice: NoticeLabelKey | null;
   /** Replaces the label of the grand total line when the default does not fit the document. */
   grandTotalLabel?: "offerTotal" | "saleTotal" | "returnTotal";
+  /**
+   * Said in the totals when the seller's VAT status is unknown (invoice, act); without it
+   * an unknown status prints nothing about VAT.
+   */
+  unknownVatNotice?: "vatNotSpecified";
+  /** Header of the items table's description column: works for the act, neutral otherwise. */
+  itemsHeading: "itemDescription" | "workDescription";
+  /** Unit printed in the unit-of-measure column of every line. */
+  itemUnit: "unitPiece" | "unitService";
   /** Which of the buyer's addresses leads: the legal one, or the delivery one. */
   buyerAddress: "legal" | "delivery";
   /** Signature columns; the buyer's is reserved only when `buyer` is set. */
@@ -157,6 +166,9 @@ export const DOCUMENT_TYPE_SPECS: Record<
       completionStatement: false,
       money: true,
       notice: null,
+      unknownVatNotice: "vatNotSpecified",
+      itemsHeading: "itemDescription",
+      itemUnit: "unitPiece",
       buyerAddress: "legal",
       signatures: { seller: "issuedBy", stamp: true },
       originalMark: true,
@@ -184,6 +196,9 @@ export const DOCUMENT_TYPE_SPECS: Record<
       completionStatement: true,
       money: true,
       notice: null,
+      unknownVatNotice: "vatNotSpecified",
+      itemsHeading: "workDescription",
+      itemUnit: "unitService",
       buyerAddress: "legal",
       signatures: {
         seller: "fromContractor",
@@ -216,6 +231,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       money: true,
       notice: "nonFiscalNotice",
       grandTotalLabel: "saleTotal",
+      itemsHeading: "itemDescription",
+      itemUnit: "unitPiece",
       buyerAddress: "legal",
       signatures: { seller: "sellerSignature", stamp: false },
       originalMark: false,
@@ -243,6 +260,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       completionStatement: false,
       money: false,
       notice: null,
+      itemsHeading: "itemDescription",
+      itemUnit: "unitPiece",
       buyerAddress: "delivery",
       signatures: {
         seller: "shippedBy",
@@ -275,6 +294,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       money: true,
       notice: "quoteNotice",
       grandTotalLabel: "offerTotal",
+      itemsHeading: "itemDescription",
+      itemUnit: "unitPiece",
       buyerAddress: "legal",
       signatures: { seller: "fromSupplier", stamp: true },
       originalMark: false,
@@ -304,6 +325,8 @@ export const DOCUMENT_TYPE_SPECS: Record<
       money: true,
       notice: "returnNotice",
       grandTotalLabel: "returnTotal",
+      itemsHeading: "itemDescription",
+      itemUnit: "unitPiece",
       buyerAddress: "legal",
       signatures: {
         seller: "receivedBy",

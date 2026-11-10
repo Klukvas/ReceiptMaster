@@ -99,12 +99,9 @@ describeIsolatedPostgres(
       );
       receipts = new ReceiptsService(
         app.getRepository(Receipt),
-        app.getRepository(Order),
-        undefined,
         storage as never,
         app,
         { get: () => "https://example.test" } as never,
-        undefined,
         { dispatch: async () => undefined } as never,
         snapshots,
         artifacts,

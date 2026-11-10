@@ -25,7 +25,7 @@ Creates a new user account.
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | email | string | yes | Must be unique. Trimmed and lowercased before validation, so `A@x.com` and `a@x.com` are one account; login accepts any casing (also for older accounts stored with capitals). The same applies to `POST /auth/login` and profile email updates |
-| password | string | yes | Min 8 characters (`MIN_PASSWORD_LENGTH`, `users/dto/password-policy.ts`). Login still accepts shorter input so accounts created under the old minimum of 6 can sign in; changing a password requires 8+ for the new one only |
+| password | string | yes | Min 8 characters (`MIN_PASSWORD_LENGTH`, `users/dto/password-policy.ts`), at most 72 bytes in UTF-8 (`MAX_PASSWORD_BYTES`, `@MaxPasswordBytes()`: bcrypt hashes only the first 72 bytes; a Cyrillic letter is 2 bytes, so 36 Cyrillic letters fit and 37 do not). Login still accepts shorter input so accounts created under the old minimum of 6 can sign in; changing a password requires 8+ for the new one only |
 
 **Response** (201):
 ```typescript
@@ -183,7 +183,7 @@ refresh tokens — including the successor of a refresh that is committing at th
 ```typescript
 {
   currentPassword: string,
-  newPassword: string,
+  newPassword: string,       // at least 8 characters, at most 72 bytes in UTF-8 (bcrypt hashes only the first 72 bytes)
   confirmPassword: string
 }
 ```
@@ -195,6 +195,7 @@ refresh tokens — including the successor of a refresh that is committing at th
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — with an English detail: "New password and confirmation do not match", "Current password is incorrect" (field `currentPassword`) or "New password must be different from the current one"
+- 400 (global validation pipe) — `newPassword` shorter than 8 characters, or longer than 72 bytes in UTF-8 ("Password must be at most 72 bytes in UTF-8 (…)"; the same rule and message apply to `password` at registration)
 - 401 `UNAUTHORIZED` — Invalid JWT
 
 ---
@@ -547,7 +548,7 @@ concurrent repeats create one recipient, only successful creates are stored; sto
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
-- 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user
+- 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user (case-insensitive), also with an `Idempotency-Key` (a replay of the key's own create still returns its stored 201) and when a concurrent create wins the race (unique index `IDX_recipients_user_email_unique`)
 - 400 validation errors — blank name, over-long values, malformed phone or email, invalid IBAN or tax ID
 - 400 `VALIDATION_ERROR` — `tax_id_kind` that disagrees with the `tax_id` length, or a kind without a `tax_id`
 
@@ -1163,7 +1164,7 @@ ReturnNoteDetails = { lines: { orderItemId: uuid, qty: int >= 1 }[] (1..200, eac
 
 `type` is read first: an unknown value is `400 VALIDATION_ERROR`. `sales_receipt` (товарний чек, **not a fiscal document**; shows the notice, items, totals, VAT, amount in words, seller signature) and `packing_list` (пакувальний лист; items and quantities only, **no prices, sums or VAT** in the PDF, the stored HTML or the public projection) take no `details` (a `details` key is `400 VALIDATION_ERROR`). The sales receipt's last total line is the neutral "Всього" / "Всего" / "Total" (not "Всього до сплати": the goods are paid at the sale). An invoice, act, sales receipt or packing list needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), on any plan.
 
-`quote` (комерційна пропозиція; an offer, **not an invoice**: it prints the notice "Пропозиція не є рахунком …", items, totals and VAT like an invoice but no payment details, the last total line is "Загальна вартість", then the validity and the optional payment/delivery terms, one supplier signature with М.П.) takes a **DRAFT or CONFIRMED** order (a CANCELLED one is `400 ORDER_CANNOT_BE_MODIFIED`) and **does not lock** the order. `validUntil` defaults to the issue date + 14 days and must lie within `[issueDate, issueDate + 365 days]`, the issue date being the generation day in the document's time zone; otherwise `400 VALIDATION_ERROR` (`Validation error for details.validUntil: must not be earlier than the issue date` / `…: must be within 365 days of the issue date`), before a number is drawn. A voided quotation can be issued again under a new number; a repeat of a failed one is `{type:"quote",details:{}}`. Cancelling the order voids a live quotation with the other documents. Each type has its own number series, one document per type and order, and its own 10-document retention.
+`quote` (комерційна пропозиція; an offer, **not an invoice**: it prints the notice "Комерційна пропозиція не є рахунком. Для оплати буде виставлено рахунок.", items, totals and VAT like an invoice but no payment details, the last total line is "Загальна вартість", then the validity and the optional payment/delivery terms, one supplier signature with М.П.) takes a **DRAFT or CONFIRMED** order (a CANCELLED one is `400 ORDER_CANNOT_BE_MODIFIED`) and **does not lock** the order. `validUntil` defaults to the issue date + 14 days and must lie within `[issueDate, issueDate + 365 days]`, the issue date being the generation day in the document's time zone; otherwise `400 VALIDATION_ERROR` (`Validation error for details.validUntil: must not be earlier than the issue date` / `…: must be within 365 days of the issue date`), before a number is drawn. A voided quotation can be issued again under a new number; a repeat of a failed one is `{type:"quote",details:{}}`. Cancelling the order voids a live quotation with the other documents. Each type has its own number series, one document per type and order, and its own 10-document retention.
 
 `return_note` (накладна на повернення товару; ru «накладная на возврат товара», en "Goods Return Note") records goods that come back under an order. It needs a CONFIRMED order (otherwise `400 ORDER_CANNOT_BE_MODIFIED`), is **informational**: it does **not** change stock, is **not a fiscal document** and **not a settlement/tax-invoice adjustment («розрахунок коригування»)**, and **does not lock** the order. `details.lines` is required (a missing `details` or an empty `lines` is `400 VALIDATION_ERROR`); every `orderItemId` must belong to the order. Unlike every other type, an order may carry **several live return notes** (partial returns): they are not limited by the one-document-per-type rule and do not conflict with each other (no `DOCUMENT_ALREADY_EXISTS`). The limit is the ledger: each `OrderItem` exposes `returned_qty` (units already taken back by earlier non-void return notes, `0 <= returned_qty <= qty`), so a request may return at most `qty - returned_qty` of a line. Asking for more is `422 RETURN_QUANTITY_EXCEEDED` with `items: [{ orderItemId, requested, remaining }]`, and no number is drawn. The ledger is read when the request arrives and checked again atomically at issue time, so two parallel notes cannot both take the last unit. A **voided** return note gives its quantities back (the ledger decreases). Return notes are never evicted by the retention cap. `details.lines` is mandatory (never defaulted), so there is no blind `{details:{}}` retry of a failed note; the UI offers no retry button for it and asks for a new note instead.
 
@@ -1185,6 +1186,7 @@ An invoice's due date is `issueDate` (the generation day in the document's time 
 - 402 `TEMPLATE_PLAN_RESTRICTED`
 - 404 `ORDER_NOT_FOUND`
 - 409 `DOCUMENT_ALREADY_EXISTS` (a live document of this type already exists, never for `return_note`; or a voided waybill/sales receipt/packing list: those types are not reissued; a voided invoice, act or quote is not a conflict and the next request issues a new one under a new number) — a waybill sent here keeps `RECEIPT_ALREADY_EXISTS`; also 409 when the order, defaults, preset or the buyer's requisites changed while preparing
+- 409 `DOCUMENT_NUMBERS_EXHAUSTED` — the type's number counter has reached the largest possible number (2147483647); nothing is issued
 - 422 `DOCUMENT_AMOUNT_INVALID` — the order total or currency cannot be printed (e.g. a lowercase or non-ISO currency code); checked in preflight, so no number is drawn.
 - 422 `RETURN_QUANTITY_EXCEEDED` — a `return_note` asks for more of a line than is left to return (`qty - returned_qty`); `items` lists each short line with `requested` and `remaining`.
 - 422 `DOCUMENT_REQUISITES_MISSING` — body `{ error, errorCode, fields: string[], warnings: string[] }`. `fields` blocks generation: invoice needs `seller.name`, `seller.taxId` (with a determinable ЄДРПОУ/РНОКПП kind), `seller.iban` (valid UA IBAN), and `seller.vatId` when `companyVatPayer` is true; act needs `seller.name`, `seller.taxId`, `seller.signatoryName`, `seller.signatoryPosition`, and `seller.vatId` when `companyVatPayer` is true (as an invoice does); sales receipt needs `seller.name` (and `seller.vatId` for a VAT payer); packing list needs `seller.name`; quote needs `seller.name` (and `seller.vatId` for a VAT payer). `warnings` lists absent soft fields (invoice: `seller.bankName`, `seller.legalForm`, `seller.vatPayer`, `buyer.taxId`; act: `buyer.legalName`, `buyer.taxId`, `details.contractRef`; sales receipt: `seller.taxId`, `seller.vatPayer`; packing list: none; quote: `seller.taxId`, `seller.legalForm`, `seller.vatPayer`); they are also stored in the snapshot. Required seller fields are checked on the stored values and ignore the visibility switches. The document PDF honours the switches `companyAddress`, `companyTaxId` (seller address / tax code) and `recipientAddress` (delivery address of a packing list), except that invoice and act always print the seller's address and tax code. Corporate prints its "Original" mark on invoice, act and packing list only (not on sales receipt, quotation, return note).
@@ -1351,6 +1353,7 @@ Voids a receipt and unlocks its order for editing.
 **Errors:**
 - 404 `RECEIPT_NOT_FOUND`
 - 400 `RECEIPT_IS_ALREADY_VOIDED`
+- 409 `DOCUMENT_NOT_VOIDABLE` — a waybill, sales receipt or packing list that is still `processing` or `failed`: its void would close the order's slot for that type for good (those types are not reissued), so retry the generation instead. Invoices, acts, quotations and return notes are voided in any live status
 - 400 (global validation pipe: `errorCode: "HTTP_EXCEPTION"`, `error` is a list of messages) — `reason` is not a string or is longer than 500 characters (`VoidReceiptDto`); it used to reach the database and answer 500
 
 ---
@@ -1588,7 +1591,7 @@ Updates user's template selection. Validates the known nonempty template ID befo
 
 **GET** `/settings/receipt-title`
 
-Returns current receipt title (e.g., "Invoice", "Receipt", "Proforma").
+Returns current receipt title (e.g., a saved custom title, or the language default for a waybill without one: "Видаткова накладна" / "Расходная накладная" / "Delivery note"; the `delivery` style's default is "Накладна на відвантаження" / "Отгрузочная накладная" / "Shipping note").
 
 **Response** (200):
 ```typescript
@@ -2416,7 +2419,7 @@ All routes require JWT auth. New read routes reject unknown query parameters; UU
 - `POST /settings/document-presets` → create with `name` and draft.
 - `PUT /settings/document-presets/:id` → update with `name`, draft and `expectedRevision`.
 - `DELETE /settings/document-presets/:id` → JSON `{ expectedRevision }`, returns `{ data: { deleted: true } }`.
-- `POST /receipts/preview` → actual PDF bytes, `private, no-store`; complete unsaved draft plus optional authorized `orderId` (sample data otherwise). No persistence. At most two expensive previews concurrently (429 while busy), and 30 previews a minute per user (`429 RATE_LIMITED`).
+- `POST /receipts/preview` → actual PDF bytes, `private, no-store`; complete unsaved draft plus optional authorized `orderId` (sample data otherwise). No persistence. At most two expensive previews concurrently per process and one per user (429 "Preview busy; retry shortly" while busy), and 30 previews a minute per user (`429 RATE_LIMITED`).
 
 Draft writes/preview accept multipart `payload` containing JSON plus optional `logo` file: one file ≤5 MiB, payload ≤64 KiB, bounded fields/parts/headers. `logoAction` is `keep` (default), `replace` (requires file) or `remove` (forbids file). Unknown fields/parts, MIME/byte mismatch, unsafe SVG and out-of-range values are rejected. JSON bodies work when no file is supplied.
 

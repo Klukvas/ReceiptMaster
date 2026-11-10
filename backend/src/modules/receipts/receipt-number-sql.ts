@@ -11,6 +11,13 @@ export const MAX_COUNTER_DIGITS = 10;
 export const MAX_COUNTER_VALUE = 2_147_483_647;
 
 /**
+ * The highest issued value a counter is raised to. One below the integer maximum, so the
+ * draw after a raise (value + 1) still fits the column; a hand-made number at the maximum
+ * is ignored rather than raising the counter to a value no draw can follow.
+ */
+export const MAX_ACCEPTED_ISSUED_VALUE = MAX_COUNTER_VALUE - 1;
+
+/**
  * The highest counter value among the numbers issued in one year. With the year in the
  * number (a yearly reset requires it) a number ends in "YYYY-<value>", the year being a
  * 4-digit run that does not continue a longer one.
@@ -22,7 +29,7 @@ export const issuedInYear = (user: string, type: string, year: string) => `
     FROM "receipts" WHERE "user_id" = ${user} AND "document_type" = ${type}
   ) AS "numbers"
   WHERE "m" IS NOT NULL AND ("m")[1]::int = ${year}
-    AND ("m")[2]::bigint <= ${MAX_COUNTER_VALUE}`;
+    AND ("m")[2]::bigint <= ${MAX_ACCEPTED_ISSUED_VALUE}`;
 
 export const HIGHEST_ISSUED_IN_YEAR = issuedInYear("$1", "$2", "$3::int");
 

@@ -234,7 +234,7 @@ export const ProductsPage = () => {
       {/* Notification toast */}
       {notification && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm transition-all duration-300 ${
+          className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm transition-all duration-300 ${
             notification.type === "success"
               ? "bg-[var(--color-success-light)] border border-[var(--color-success-light)] text-success-base"
               : "bg-[var(--color-danger-light)]/90 border border-[var(--color-danger-light)]/50 text-danger-base"

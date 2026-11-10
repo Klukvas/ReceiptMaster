@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { receiptsApi, type Receipt } from "../../lib/api";
-import { parseApiError } from "../../lib/api-errors";
+import { translatedApiError } from "../../lib/api-errors";
 import { documentLabelKey, isMultiplePerOrder, isReissuable } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
 import { ConfirmModal } from "../ui/ConfirmModal";
-import { isVoidReasonRefusal } from "./void-reason";
+import { isNotVoidableRefusal, isVoidReasonRefusal } from "./void-reason";
 
 const MAX_REASON_LENGTH = 500;
 
@@ -30,13 +30,23 @@ const voidMessageKey = (document: Receipt): string => {
  * with a new number; a repeatable type (return note) just frees its quantities for a new note.
  */
 export function VoidDocumentModal({ document, onClose, focusFallbackId }: VoidDocumentModalProps) {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  const [refusal, setRefusal] = useState("");
   const label = t(documentLabelKey(document.document_type));
+  // The type sits mid-sentence in the title ("Void invoice INV-7").
+  const labelInSentence = label.toLocaleLowerCase(currentLanguage);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const reasonErrorId = `void-reason-error-${document.id}`;
+  const refusalId = `void-refusal-${document.id}`;
+
+  const refreshLists = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["orders"] }),
+      queryClient.invalidateQueries({ queryKey: ["receipts"] }),
+    ]);
 
   const closeAndRestoreFocus = () => {
     onClose();
@@ -55,10 +65,7 @@ export function VoidDocumentModal({ document, onClose, focusFallbackId }: VoidDo
       return receiptsApi.void(document.id, reason.trim());
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["orders"] }),
-        queryClient.invalidateQueries({ queryKey: ["receipts"] }),
-      ]);
+      await refreshLists();
       toast.success(t("documents.voided", { type: label }));
       closeAndRestoreFocus();
     },
@@ -70,7 +77,15 @@ export function VoidDocumentModal({ document, onClose, focusFallbackId }: VoidDo
         reasonRef.current?.focus();
         return;
       }
-      toast.error(parseApiError(error).message);
+      // The row's status changed under us (it is generating or failed): say so here, keep the
+      // dialog open with Void inert, and refetch so the list shows the current status.
+      if (isNotVoidableRefusal(error)) {
+        setRefusal(t("errors.documentNotVoidable"));
+        void refreshLists();
+        return;
+      }
+      // Never the server's English sentence: a known code is translated, anything else is generic.
+      toast.error(translatedApiError(error) ?? t("documents.errors.voidFailed"));
     },
   });
 
@@ -86,8 +101,9 @@ export function VoidDocumentModal({ document, onClose, focusFallbackId }: VoidDo
       onClose={close}
       onConfirm={() => voidMutation.mutate()}
       isLoading={voidMutation.isPending}
+      confirmDisabled={refusal !== ""}
       variant="danger"
-      title={t("documents.voidTitle", { type: label, number: document.number })}
+      title={t("documents.voidTitle", { type: labelInSentence, number: document.number })}
       message={t(voidMessageKey(document), { type: label })}
       itemName={document.number}
       confirmLabel={t("documents.void")}
@@ -114,6 +130,11 @@ export function VoidDocumentModal({ document, onClose, focusFallbackId }: VoidDo
           </span>
         )}
       </label>
+      {refusal && (
+        <p id={refusalId} role="alert" data-testid="void-refusal" className="mt-3 text-sm text-danger-base">
+          {refusal}
+        </p>
+      )}
     </ConfirmModal>
   );
 }

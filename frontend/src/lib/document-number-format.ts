@@ -27,6 +27,14 @@ export function prefixProblem(prefix: string): PrefixProblem | null {
 const RUNS_INTO_NUMBER = /[\p{L}\p{N}]$/u;
 const PREFIX_SEPARATOR = "-";
 
+/**
+ * True when the typed prefix ends in spaces that will not be kept: the number then gets the "-"
+ * separator instead ("РН " prints "РН-0001"), which the form says out loud.
+ */
+export function trailingSpaceBecomesHyphen(prefix: string): boolean {
+  return /\s$/u.test(prefix) && RUNS_INTO_NUMBER.test(prefix.trim());
+}
+
 export type NumberFormatParts = {
   prefix: string;
   padding: number;

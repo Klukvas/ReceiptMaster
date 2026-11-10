@@ -42,6 +42,11 @@ type SignatoryView = {
   name: string;
   /** Seller only: the account's signature image as a data URI. */
   image?: string;
+  /**
+   * Buyer only: caption of the blank line where the buyer's signatory writes position and
+   * full name by hand ("посада, ПІБ"); `name` is the buyer's organisation above the line.
+   */
+  nameCaption?: string;
 };
 
 /** Signature and stamp as data URIs, built on the server and never from user input. */
@@ -69,6 +74,8 @@ export type DocumentView = {
   };
   /** Heading-level notice above the parties (sales receipt: not fiscal; quotation: not an invoice). */
   notice?: string;
+  /** Unit printed in the items table's unit-of-measure column ("шт.", the act "посл."). */
+  itemUnit: string;
   /** The items table drops its price and amount columns. */
   hidesItemPrices?: true;
   /** The style leaves out its "Original" mark (sales receipt, quotation, return note). */
@@ -76,7 +83,10 @@ export type DocumentView = {
   /** Absent for a document that prints no money. */
   totals?: {
     total: string;
+    /** VAT payer: the total less its VAT, printed before the VAT line. */
+    net?: { label: string; amount: string };
     vat?: { label: string; amount: string };
+    /** One line about VAT instead of the amounts: "Без ПДВ", or that the status is not given. */
     noVat?: string;
     grandTotal: string;
     amountInWords: string;
@@ -155,6 +165,20 @@ function returnSourceHeading(
     : `${source.title} ${sign}`;
 }
 
+/**
+ * Banks' payment forms take a short numeric date ("10.11.2026") in the purpose, whatever the
+ * document's own date style. A calendar date that is not ISO falls back to the given format.
+ */
+function numericDate(calendarDate: string, fallback: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(calendarDate);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : fallback;
+}
+
+/** IBAN printed in groups of four for reading; the stored value has no spaces. */
+export function groupIban(iban: string): string {
+  return iban.replace(/\s+/g, "").replace(/(.{4})(?=.)/g, "$1 ");
+}
+
 /** "грн" reads naturally in a Ukrainian or Russian purpose; any other currency keeps its ISO code. */
 const purposeCurrencyUnit = (currency: string, language: string): string =>
   currency === "UAH" && language !== "en" ? "грн" : currency;
@@ -185,11 +209,13 @@ export function buildDocumentRenderData(
   config: DocumentConfig,
   signoff: SignoffImages = {},
 ): DocumentRenderData {
-  assertTotalsAgree(order);
-  const language = languageOf(config);
-  const labels = DOCUMENT_LABELS[language];
   const layout = specFor(frozen.type).layout;
   if (!layout) throw new Error(`Document type ${frozen.type} has no layout`);
+  // A document without money (packing list) prints no amount, so a bad order total
+  // must not keep it from being issued.
+  if (layout.money) assertTotalsAgree(order);
+  const language = languageOf(config);
+  const labels = DOCUMENT_LABELS[language];
   const { seller, buyer, details } = frozen;
   const day = (value: string) =>
     formatDocumentDateOnly(value, language, config.formatting);
@@ -201,9 +227,15 @@ export function buildDocumentRenderData(
   const issueDate = day(frozen.issueDate);
   const rate = frozen.vatRatePercent;
   const vat =
-    seller.vatPayer === true
+    layout.money && seller.vatPayer === true
       ? calculateVatBreakdown(order.total_cents, { mode: "included", rate })
       : undefined;
+  const vatNote =
+    seller.vatPayer === false
+      ? labels.noVat
+      : seller.vatPayer === true || !layout.unknownVatNotice
+        ? undefined
+        : labels[layout.unknownVatNotice];
 
   const vatLine =
     seller.vatPayer === true
@@ -224,8 +256,12 @@ export function buildDocumentRenderData(
       ? labels.purposeNoVat
       : "";
   const purpose =
-    joined(labels.purposePrefix, number, labels.purposeFrom, issueDate) +
-    (purposeVat ? `, ${purposeVat}` : "");
+    joined(
+      labels.purposePrefix,
+      number,
+      labels.purposeFrom,
+      numericDate(frozen.issueDate, issueDate),
+    ) + (purposeVat ? `, ${purposeVat}` : "");
 
   const stampImage = layout.signatures.stamp ? signoff.stamp : undefined;
   // The same switches the waybill honours; the invoice and act keep the seller's address
@@ -270,13 +306,14 @@ export function buildDocumentRenderData(
       ? {
           payment: {
             recipient: sellerName,
-            iban: seller.iban,
+            iban: groupIban(seller.iban),
             bank: seller.bankName,
             purpose,
           },
         }
       : {}),
     ...(layout.notice ? { notice: labels[layout.notice] } : {}),
+    itemUnit: labels[layout.itemUnit],
     ...(layout.originalMark ? {} : { hidesOriginalMark: true as const }),
     ...(layout.money
       ? {
@@ -284,13 +321,14 @@ export function buildDocumentRenderData(
             total: money(order.total_cents),
             ...(vat
               ? {
+                  net: { label: labels.amountExclVat, amount: money(vat.net) },
                   vat: {
                     label: `${labels.vatIncluded} (${rate}%)`,
                     amount: money(vat.vat),
                   },
                 }
               : {}),
-            ...(seller.vatPayer === false ? { noVat: labels.noVat } : {}),
+            ...(vatNote ? { noVat: vatNote } : {}),
             grandTotal: money(order.total_cents),
             amountInWords: amountInWords(
               order.total_cents,
@@ -361,6 +399,7 @@ export function buildDocumentRenderData(
               heading: labels[layout.signatures.buyer],
               position: "",
               name: buyerName,
+              nameCaption: labels.positionAndName,
             },
           }
         : {}),
@@ -373,6 +412,13 @@ export function buildDocumentRenderData(
   };
 
   const overrides = styleLabelOverrides(frozen.type, language);
+  // Every style names its description column its own way ("Опис", Corporate "Назва
+  // товару"); a typed document gets one heading in all of them, the act's naming works.
+  const itemHeaders = {
+    description: labels[layout.itemsHeading],
+    productName: labels[layout.itemsHeading],
+    rate: labels.price,
+  };
   const vatHeaders =
     layout.money && seller.vatPayer === true
       ? {
@@ -385,7 +431,7 @@ export function buildDocumentRenderData(
 
   return {
     view,
-    translationOverrides: { ...overrides, ...vatHeaders },
+    translationOverrides: { ...overrides, ...itemHeaders, ...vatHeaders },
     headerCompany: { companyTaxId: "", companyIban: "", companySwift: "" },
     orderDate: issueDate,
   };

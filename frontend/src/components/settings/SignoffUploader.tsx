@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
-import { isAxiosError } from "axios";
 import { ImageUp, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ErrorCode, parseApiError } from "../../lib/api-errors";
+import { ErrorCode, httpStatusOf, parseApiError, translatedApiError } from "../../lib/api-errors";
 import type { SignoffImage, SignoffKind } from "../../lib/api";
 import {
   SIGNOFF_ACCEPTED_TYPES,
@@ -11,6 +10,7 @@ import {
 } from "../../lib/signoff-file";
 import {
   useDeleteSignoff,
+  useIsSignoffMutating,
   useSignoffPreviewUrl,
   useUploadSignoff,
 } from "../../hooks/useSignoff";
@@ -22,6 +22,8 @@ import { FieldError } from "../ui/FieldError";
 const HTTP_TOO_LARGE = 413;
 const HTTP_RATE_LIMITED = 429;
 const HTTP_SERVER_ERROR = 500;
+// The server refused the image itself (format, size in pixels, animation): its text is English.
+const REJECTED_STATUSES: ReadonlySet<number> = new Set([400, 415, 422]);
 
 const PROBLEM_MESSAGE_KEY = {
   empty: "signoff.errors.empty",
@@ -55,24 +57,29 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
   const remove = useDeleteSignoff(kind);
   const preview = useSignoffPreviewUrl(kind, image);
   const label = t(`signoff.${kind}`);
+  // Uploading while a delete runs (or the other way round) would race on the stored images; the
+  // other card's request counts too, so both cards go inert while anything runs.
+  const isAnySignoffBusy = useIsSignoffMutating();
+  const isBusy = upload.isPending || remove.isPending || isAnySignoffBusy;
   const inputId = `signoff-${kind}-file`;
   const errorId = `signoff-${kind}-error`;
 
   const uploadErrorMessage = (cause: unknown): string => {
-    const status = isAxiosError(cause) ? cause.response?.status : undefined;
+    const status = httpStatusOf(cause);
     if (status === HTTP_TOO_LARGE) return t("signoff.errors.tooLarge");
     if (status === HTTP_RATE_LIMITED) {
       // The server's wait time, when it sent one, rather than a guess.
       const parsed = parseApiError(cause);
       return parsed.code === ErrorCode.RATE_LIMITED ? parsed.message : t("errors.rateLimited");
     }
+    if (status !== undefined && REJECTED_STATUSES.has(status)) return t("signoff.errors.rejected");
     // A 5xx body is the server's English text; the user can only try again.
     if (status !== undefined && status >= HTTP_SERVER_ERROR) return t("signoff.errors.server");
-    return parseApiError(cause).message;
+    return translatedApiError(cause) ?? t("signoff.errors.failed");
   };
 
   const handleFile = (file: File | undefined) => {
-    if (!file) return;
+    if (!file || isBusy) return;
     const problem = signoffFileProblem(file);
     if (problem) {
       setError(t(PROBLEM_MESSAGE_KEY[problem]));
@@ -86,6 +93,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
   };
 
   const confirmDelete = () => {
+    if (isBusy) return;
     remove.mutate(undefined, {
       onSuccess: () => {
         setIsConfirmingDelete(false);
@@ -159,6 +167,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
           size="sm"
           variant="outline"
           loading={upload.isPending}
+          disabled={isBusy}
           softDisabled
           aria-describedby={error ? errorId : undefined}
           onClick={() => inputRef.current?.click()}
@@ -171,7 +180,8 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
             type="button"
             size="sm"
             variant="outline"
-            disabled={upload.isPending}
+            disabled={isBusy}
+            softDisabled
             onClick={() => setIsConfirmingDelete(true)}
           >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -189,8 +199,8 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
         onClose={() => setIsConfirmingDelete(false)}
         onConfirm={confirmDelete}
         isLoading={remove.isPending}
-        title={t("signoff.deleteTitle", { kind: label })}
-        message={t("signoff.deleteMessage")}
+        title={t(kind === "signature" ? "signoff.deleteSignatureTitle" : "signoff.deleteStampTitle")}
+        message={t(kind === "signature" ? "signoff.deleteSignatureMessage" : "signoff.deleteStampMessage")}
         confirmLabel={t("common.delete")}
       />
     </div>

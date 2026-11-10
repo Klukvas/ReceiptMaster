@@ -576,6 +576,33 @@ describeIsolatedPostgres(
         ).toBe(`${YEAR + 6}-000021`);
       });
 
+      it("never raises a counter to the integer maximum, and refuses the draw past it with 409", async () => {
+        await issue(`${YEAR}-2147483647`); // a hand-made number at the very top
+        await issue(`${YEAR}-2147483645`);
+
+        const raised = await asTenant(() =>
+          db.app.transaction((manager) =>
+            raiseCounterToIssued(manager, user.id, DocumentType.INVOICE),
+          ),
+        );
+        expect(raised).toBe(2147483645);
+        expect((await draw(DocumentType.INVOICE, inYear(YEAR))).number).toBe(
+          `${YEAR}-2147483646`,
+        );
+
+        await db.admin.query(
+          `UPDATE document_counters SET value = 2147483647
+           WHERE user_id = $1 AND document_type = 'invoice'`,
+          [user.id],
+        );
+        await expect(
+          draw(DocumentType.INVOICE, inYear(YEAR)),
+        ).rejects.toMatchObject({
+          statusCode: 409,
+          errorCode: "DOCUMENT_NUMBERS_EXHAUSTED",
+        });
+      });
+
       it("repairs only the colliding year's counter", async () => {
         await setFormat(DocumentType.INVOICE, { resetEveryYear: true });
         await draw(DocumentType.INVOICE, inYear(YEAR));

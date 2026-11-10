@@ -70,7 +70,23 @@ export const run = async () => {
     "programmatic disabled checkout/portal have no effects",
     calls === 0,
   );
-  for (const buildFlag of [false, true]) {
+  const { isPaddleAllowedOn } = load("../src/providers/paddle-route.ts", {});
+  results.check(
+    "Paddle is allowed on app pages but never on the public share page",
+    isPaddleAllowedOn("/") && isPaddleAllowedOn("/settings") && !isPaddleAllowedOn("/r/abc123"),
+  );
+  results.check(
+    "the public share check ignores case, like the router (/R/<token> is the same page)",
+    !isPaddleAllowedOn("/R/abc123") && isPaddleAllowedOn("/reports"),
+  );
+  for (const [buildFlag, pathname, expectedRequests, effectRuns = 1] of [
+    [false, "/", 0],
+    [true, "/", 1],
+    [true, "/r/abc123", 0],
+    [true, "/R/abc123", 0],
+    // Coming back from /r/ re-runs the effect; it must reuse the first initialization.
+    [true, "/", 1, 2],
+  ]) {
     const effects = [];
     let requests = 0;
     let sdk = 0;
@@ -78,6 +94,8 @@ export const run = async () => {
       createContext: () => ({ Provider: "provider" }),
       useContext: () => ({}),
       useState: (x) => [x, () => {}],
+      useRef: (x) => ({ current: x }),
+      useMemo: (fn) => fn(),
       useEffect: (fn) => effects.push(fn),
       createElement: () => ({}),
     };
@@ -98,6 +116,8 @@ export const run = async () => {
           resolvePaddleEnvironment: () => "production",
         },
         "./billing-enabled": { resolveBillingEnabled },
+        "./paddle-route": { isPaddleAllowedOn },
+        "react-router-dom": { useLocation: () => ({ pathname }) },
       },
       (source) =>
         source.replaceAll(
@@ -109,11 +129,12 @@ export const run = async () => {
         ),
     );
     PaddleProvider({ children: null });
-    effects.forEach((fn) => fn());
+    for (let run = 0; run < effectRuns; run += 1) effects.forEach((fn) => fn());
     await new Promise((resolve) => setTimeout(resolve, 0));
     results.check(
-      `build flag ${buildFlag}, backend OFF never initializes Paddle`,
-      sdk === 0 && requests === Number(buildFlag),
+      `build flag ${buildFlag} on ${pathname}${effectRuns > 1 ? " (effect re-run)" : ""}, backend OFF never initializes Paddle`,
+      sdk === 0 && requests === expectedRequests,
+      `sdk=${sdk} requests=${requests}`,
     );
   }
   await withPage({ viewport: { width: 1280, height: 900 } }, async (page) => {

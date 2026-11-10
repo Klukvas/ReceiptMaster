@@ -73,11 +73,16 @@ function displayDesign() {
   if (design.hasCustomReceiptTitle && design.receiptTitle.trim()) return design;
   const lang = design.templateLanguage;
   const titles = {
-    standard: { en: "Invoice", ru: "Инвойс", uk: "Інвойс" },
-    delivery: {
-      en: "Delivery Note",
-      ru: "Накладная",
+    // Mirrors resolveReceiptTitle (templates/translations/defaults.ts).
+    standard: {
+      en: "Delivery note",
+      ru: "Расходная накладная",
       uk: "Видаткова накладна",
+    },
+    delivery: {
+      en: "Shipping note",
+      ru: "Отгрузочная накладная",
+      uk: "Накладна на відвантаження",
     },
     proforma: {
       en: "Proforma Invoice",

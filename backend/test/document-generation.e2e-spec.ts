@@ -104,12 +104,9 @@ describeIsolatedPostgres(
       );
       receipts = new ReceiptsService(
         app.getRepository(Receipt),
-        app.getRepository(Order),
-        undefined,
         storage as never,
         app,
         { get: () => "https://example.test" } as never,
-        undefined,
         { dispatch: async () => undefined } as never,
         snapshots,
         artifacts,
@@ -475,6 +472,49 @@ describeIsolatedPostgres(
         expect(retried.id).toBe(receipt.id);
         expect(retried.number).toBe(receipt.number);
         expect(await counter(DocumentType.SALES_RECEIPT)).toBe(1);
+      });
+    });
+
+    describe("voiding a document that was never issued", () => {
+      it.each([DocumentType.WAYBILL, DocumentType.SALES_RECEIPT])(
+        "refuses a %s still processing or failed, so the order can still get one",
+        async (type) => {
+          const order = await confirmedOrder();
+          const pending = await generate(order, type);
+
+          await expect(
+            asTenant(() => receipts.voidReceipt(pending.id, user, "stuck")),
+          ).rejects.toMatchObject({
+            statusCode: 409,
+            errorCode: "DOCUMENT_NOT_VOIDABLE",
+          });
+          await db.admin
+            .getRepository(Receipt)
+            .update({ id: pending.id }, { status: ReceiptStatus.FAILED });
+          await expect(
+            asTenant(() => receipts.voidReceipt(pending.id, user, "stuck")),
+          ).rejects.toMatchObject({ errorCode: "DOCUMENT_NOT_VOIDABLE" });
+
+          const retried = await generate(order, type);
+          expect(retried.id).toBe(pending.id);
+          expect((await stored(pending.id)).status).toBe(
+            ReceiptStatus.PROCESSING,
+          );
+        },
+      );
+
+      it("still voids a failed invoice, whose slot a reissue reopens", async () => {
+        const order = await confirmedOrder();
+        const invoice = await generate(order, DocumentType.INVOICE);
+        await db.admin
+          .getRepository(Receipt)
+          .update({ id: invoice.id }, { status: ReceiptStatus.FAILED });
+
+        await expect(
+          asTenant(() => receipts.voidReceipt(invoice.id, user, "t")),
+        ).resolves.toMatchObject({ status: ReceiptStatus.VOID });
+        const reissued = await generate(order, DocumentType.INVOICE);
+        expect(reissued.id).not.toBe(invoice.id);
       });
     });
 
@@ -1011,6 +1051,33 @@ describeIsolatedPostgres(
     });
 
     describe("changes while a document is being prepared", () => {
+      it("accepts the commit when another document of the order was promoted meanwhile", async () => {
+        const order = await confirmedOrder();
+        const waybill = await generate(order, DocumentType.WAYBILL);
+        const prepared = await asTenant(() =>
+          snapshots.prepare(
+            user.id,
+            order.id,
+            "N-0",
+            KEEP,
+            undefined,
+            undefined,
+            { type: DocumentType.INVOICE, details: {} },
+          ),
+        );
+        // Promotion locks the order and moves its updated_at; nothing printed changes.
+        expect((await promote(waybill))?.status).toBe(ReceiptStatus.GENERATED);
+        expect(await isLocked(order)).toBe(true);
+
+        await expect(
+          asTenant(() =>
+            db.app.transaction((manager) =>
+              snapshots.validatePrepared(user.id, order.id, prepared, manager),
+            ),
+          ),
+        ).resolves.toMatchObject({ id: order.id });
+      });
+
       it("rejects the commit when the buyer's IBAN changed after prepare", async () => {
         const order = await confirmedOrder();
         const request = {

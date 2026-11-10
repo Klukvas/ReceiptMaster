@@ -26,6 +26,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { HealthController } from "./health.controller";
 import { MigrationService } from "./common/services/migration.service";
+import { DB_SESSION_OPTIONS } from "./config/database-session";
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { MigrationService } from "./common/services/migration.service";
             min: configService.get<number>("DB_POOL_MIN", 2),
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 5000,
+            options: DB_SESSION_OPTIONS,
           },
         };
       },

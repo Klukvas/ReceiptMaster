@@ -378,35 +378,35 @@ describe("signature and stamp in rendered documents", () => {
 // Filled from the first green run; see "digests with images".
 const SIGNED_SHA256: Record<string, string> = {
   "act.classic":
-    "e7060218fb2787ad1b4ac58d61a168d3bce37b4df523bbc30d875591f23bd203",
+    "63497a71e21ca9f8814bd9e94cc57f51086137a134fa6575d36fd59bd93a4dfe",
   "act.corporate":
-    "f9ba5950b6dcf04e2ce99511f845d75f3e489d640f3f6e5944bdbf7438bd42d2",
+    "78e898950fd9d0dc942756ce4467a2d43262c349c785da62bf42253dc806969b",
   "act.minimal":
-    "d0d306400b76047115dc1d2b14db90ea68d9c8493909de68cb29cea5202c2438",
+    "4c3de4687cc6d57975ff240d30bb2f0208f14296dc30cabc9132871c1a6eb7c5",
   "act.standard":
-    "8217999643e6436de73c52e9b2ca71d5c817e5e0dc5740c5302e3fb46b0f85d9",
+    "af50c8dc3e247ffdcd515ec859e91ed7bb5586a44057e5536fdba36b91bebe23",
   "invoice.classic":
-    "9b0fd1a4533aa453ae104e1494b318f8590fb427db94e7ae6d8c73704b3403ef",
+    "442f6ed1736c3f028391bc6a6c2f847a12cc68a92be63dab2ee1dd763e181c80",
   "invoice.corporate":
-    "e28abdcfd2c097fa8fb7ea23b40eb023aaabda48ff5eb2688130ccc1d13f4328",
+    "91e33efa7dccaa17c62792bdcfcb58128e97fed6bd7bc37fcacfc35992e349ba",
   "invoice.minimal":
-    "4bf7f5187a6656aeb7e83176d2710f134e950dd45eab8b7df42967c6f7cff3d6",
+    "f8109bffb8884c6a77d4518ec504e0341ec6ff317fcbce40c24f5073af2ee431",
   "invoice.standard":
-    "acd544367f8901d0a7b95f092a0f6f810fb2a1145cefe78eb67226a1e5c4ff8b",
+    "b1592b0ad5a6b3670a23038d7d01c0a128c3fdb96db0b2b2e261980e2c960c2e",
   "quote.classic":
-    "17e2b5d29efa01d78f404bbc3edcf665fd021abddf4dc0d4b2c8e2587f0b489b",
+    "d008d25ac5016e6f12c986c1b2f93d405b7ad2dfcd79b63b997ac1c77f6dea11",
   "quote.corporate":
-    "732cd19d9f8ee74a1ed59242b2ae75d4799f2e0fb69a381f0c39c84cf04f64dc",
+    "02f8d81edacbdd3389f8e9c781fafd4b71db2fea9782c76d15644be5a13f08b7",
   "quote.minimal":
-    "11a5625237893d4e2bad22ad468c6a79788bc3b27e3637394d3de67350bec760",
+    "3a44d2fa67e419f320243aaffec5127150a50acd1e0dc60b7e58e6e3554ea4cb",
   "quote.standard":
-    "7f9c873593283ca369b54e8661cc8c8ac4e5540464d35f461d8a148b06740a98",
+    "63475c6aeb291ac224073ba9d0b10fccc9b4cae4c415d525156ffd76ec2095ed",
   "waybill.classic":
-    "c0053839aa065e7ab9bba19fffaec6a4139da848434d3fe4b9e48c1b837c4c23",
+    "8fe0c061ffabd5d269ba18b4de41c899d37f649f2f39c45f9cae64ae77fc4e6c",
   "waybill.corporate":
-    "814a4a323d17624a99d3bbc312b617aee827a1b046e57cf16f09371f00d40b03",
+    "0789f407d70b4198297bd452ac5af650c2170b9641f104fe4a9b24b5e92645af",
   "waybill.minimal":
-    "e185ddc9dbe5e7e5a0ac3093db9c27885a27dc337c584073d3f97a3a62165560",
+    "17060b601461ee11b886d01533955b7c054def1d4745670f059ffef49554f5b8",
   "waybill.standard":
-    "a4573c9bedeb815e675538a4117910fe6f619377eb416789aa81ffd90861e5f0",
+    "c4160094ea91245cf8999bf188f9d024f95767fca42b049535f7403dacc50392",
 };

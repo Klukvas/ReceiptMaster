@@ -100,10 +100,10 @@ describeIsolatedPostgres(
         products.createWithIdempotencyKey(productBody(name), owner, key),
       );
 
-    const createRecipient = (key: string, owner = user) =>
+    const createRecipient = (key: string, owner = user, email?: string) =>
       runWithTenant(owner.id, () =>
         recipients.createWithIdempotencyKey(
-          { name: `recipient-${randomUUID()}` },
+          { name: `recipient-${randomUUID()}`, email },
           owner,
           key,
         ),
@@ -186,6 +186,26 @@ describeIsolatedPostgres(
 
       expect(first.replayed).toBe(false);
       expect(second).toEqual({ replayed: true, data: asJson(first.data) });
+      expect(await recipientCount()).toBe(1);
+      expect(await keyRows()).toHaveLength(1);
+    });
+
+    it("a new key with an email the account already uses is refused with 409, and a replay of the first is not", async () => {
+      const email = `${randomUUID()}@buyer.test`;
+      const firstKey = randomUUID();
+      const first = await createRecipient(firstKey, user, email);
+
+      await expect(
+        createRecipient(randomUUID(), user, email.toUpperCase()),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_ALREADY_EXISTS",
+      });
+      // The replay returns the stored response, not a duplicate error for its own row.
+      expect(await createRecipient(firstKey, user, email)).toEqual({
+        replayed: true,
+        data: asJson(first.data),
+      });
       expect(await recipientCount()).toBe(1);
       expect(await keyRows()).toHaveLength(1);
     });

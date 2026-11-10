@@ -32,6 +32,9 @@ function FieldList({ keys }: { keys: readonly string[] }) {
   );
 }
 
+// The links open in a new tab so the details typed into the dialog are still there afterwards.
+const NEW_TAB = { target: "_blank", rel: "noopener" } as const;
+
 function FixLinks({
   keys,
   recipientId,
@@ -46,13 +49,15 @@ function FixLinks({
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1">
       {hasSeller && (
-        <Link to={sellerSettingsLink(keys)} className={linkClass}>
+        <Link to={sellerSettingsLink(keys)} className={linkClass} {...NEW_TAB}>
           {t("documents.fillSellerRequisites")}
+          <span className="sr-only"> {t("common.opensInNewTab")}</span>
         </Link>
       )}
       {hasBuyer && (
-        <Link to={buyerRecipientLink(recipientId, keys)} className={linkClass}>
+        <Link to={buyerRecipientLink(recipientId, keys)} className={linkClass} {...NEW_TAB}>
           {t("documents.fillBuyerRequisites")}
+          <span className="sr-only"> {t("common.opensInNewTab")}</span>
         </Link>
       )}
     </div>

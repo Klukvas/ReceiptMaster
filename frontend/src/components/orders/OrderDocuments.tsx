@@ -10,6 +10,7 @@ import {
   voidedDocumentsOf,
   type CreatableType,
 } from "../../lib/document-types";
+import { useInFlightIds } from "../../hooks/useInFlightIds";
 import { useTranslation } from "../../hooks/useTranslation";
 import { receiptService } from "../../services/ReceiptService";
 import { Button } from "../ui/Button";
@@ -34,10 +35,15 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
   const [voiding, setVoiding] = useState<Receipt | null>(null);
   const queryClient = useQueryClient();
 
-  const retry = async (document: Receipt) => {
-    await receiptService.retryDocument(order.id, document.document_type);
-    await queryClient.invalidateQueries({ queryKey: ["orders"] });
-  };
+  const { inFlightIds: retryingIds, runOnce } = useInFlightIds();
+  const retry = (document: Receipt) =>
+    runOnce(document.id, async () => {
+      await receiptService.retryDocument(order.id, document.document_type);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["orders"] }),
+        queryClient.invalidateQueries({ queryKey: ["receipts"] }),
+      ]);
+    });
 
   const documents = currentDocumentsOf(order);
   const creatable = CREATABLE_TYPES.filter((type) => canCreate(order, type));
@@ -64,7 +70,8 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
             <DocumentCard
               key={document.id}
               document={document}
-              actions={{ onDownload, onPrint, onShare, onReplace: setReplacing, onVoid: setVoiding, onRetry: retry }}
+              isRetrying={retryingIds.has(document.id)}
+              actions={{ onDownload, onPrint, onShare, onReplace: setReplacing, onVoid: setVoiding, onRetry: (document) => void retry(document) }}
               footer={
                 <VoidedDocumentHistory
                   documents={voidedDocumentsOf(order, document.document_type)}

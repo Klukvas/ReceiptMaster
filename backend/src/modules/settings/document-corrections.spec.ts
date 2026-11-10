@@ -137,9 +137,9 @@ describe("durable document cleanup with synthetic storage only", () => {
       mode: "automatic",
     });
     for (const [language, titles] of [
-      ["en", ["Delivery Note", "Proforma Invoice"]],
-      ["ru", ["Накладная", "Проформа-инвойс"]],
-      ["uk", ["Видаткова накладна", "Проформа-інвойс"]],
+      ["en", ["Shipping note", "Proforma Invoice"]],
+      ["ru", ["Отгрузочная накладная", "Проформа-инвойс"]],
+      ["uk", ["Накладна на відвантаження", "Проформа-інвойс"]],
     ] as const)
       for (const [index, templateId] of ["delivery", "proforma"].entries()) {
         const config = {

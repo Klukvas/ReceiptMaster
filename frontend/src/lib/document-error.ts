@@ -6,5 +6,5 @@ export function localizedDocumentError(
   error: unknown,
   fieldLabel?: FieldLabel,
 ): Promise<string> {
-  return documentError(error, fieldLabel, (key) => i18n.t(key));
+  return documentError(error, fieldLabel, (key, options) => i18n.t(key, options));
 }

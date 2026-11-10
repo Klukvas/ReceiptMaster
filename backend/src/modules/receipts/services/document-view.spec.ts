@@ -10,6 +10,7 @@ import type { FrozenDocument } from "../frozen-document";
 import {
   buildDocumentRenderData,
   DocumentOrderInput,
+  groupIban,
   nameWithLegalForm,
 } from "./document-view";
 
@@ -176,10 +177,14 @@ describe("buildDocumentRenderData", () => {
       label: "У тому числі ПДВ (20%)",
       amount: money(20000),
     });
+    expect(view.totals.net).toEqual({
+      label: "Сума без ПДВ",
+      amount: money(100000),
+    });
     expect(view.totals.noVat).toBeUndefined();
     expect(view.totals.grandTotal).toBe(money(120000));
     expect(view.payment?.purpose).toBe(
-      "Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — 200,00 грн",
+      "Оплата згідно з рахунком № 2026-000007 від 15.10.2026, у т.ч. ПДВ 20% — 200,00 грн",
     );
     expect(view.seller.vatLine).toBe("ІПН 123456789012");
   });
@@ -234,7 +239,76 @@ describe("buildDocumentRenderData", () => {
     expect(view.seller.vatLine).toBe("Не є платником ПДВ");
   });
 
-  it("prints no VAT line at all when the VAT status is unknown", () => {
+  it("prints the payment purpose with a short numeric date in every language", () => {
+    const purpose = (language: "ru" | "en") =>
+      buildDocumentRenderData(
+        frozenFor(DocumentType.INVOICE, false),
+        order,
+        "2026-000007",
+        { ...config, documentLanguage: language },
+      ).view.payment?.purpose;
+    expect(purpose("ru")).toBe(
+      "Оплата по счёту № 2026-000007 от 15.10.2026, без НДС",
+    );
+    expect(purpose("en")).toBe(
+      "Payment for invoice No. 2026-000007 dated 15.10.2026, VAT not applicable",
+    );
+  });
+
+  it("net and VAT of every split add up to the printed total", () => {
+    for (const cents of [1, 99, 205050, 333333]) {
+      const { view } = buildDocumentRenderData(
+        frozenFor(DocumentType.INVOICE, true),
+        {
+          ...order,
+          total_cents: cents,
+          items: [{ qty: 1, line_total_cents: cents }],
+        },
+        "N-1",
+        config,
+      );
+      const { net, vat } = calculateVatBreakdown(cents, {
+        mode: "included",
+        rate: 20,
+      });
+      expect(net + vat).toBe(cents);
+      expect(view.totals?.net?.amount).toBe(money(net));
+      expect(view.totals?.vat?.amount).toBe(money(vat));
+    }
+  });
+
+  it.each([DocumentType.INVOICE, DocumentType.ACT] as const)(
+    "%s says the VAT information is not given when the status is unknown",
+    (type) => {
+      const { view, translationOverrides } = buildDocumentRenderData(
+        frozenFor(type, null),
+        order,
+        "N-1",
+        config,
+      );
+      expect(view.totals?.noVat).toBe("Інформація про ПДВ не зазначена");
+      expect(view.totals?.vat).toBeUndefined();
+      expect(view.totals?.net).toBeUndefined();
+      expect(view.seller.vatLine).toBe("");
+      expect(translationOverrides.amount).toBeUndefined();
+    },
+  );
+
+  it.each([DocumentType.SALES_RECEIPT, DocumentType.QUOTE] as const)(
+    "%s stays silent about an unknown VAT status",
+    (type) => {
+      const { view } = buildDocumentRenderData(
+        frozenFor(type, null),
+        order,
+        "N-1",
+        config,
+      );
+      expect(view.totals?.noVat).toBeUndefined();
+      expect(view.totals?.vat).toBeUndefined();
+    },
+  );
+
+  it("adds nothing about VAT to the purpose when the status is unknown", () => {
     const { view, translationOverrides } = buildDocumentRenderData(
       frozenFor(DocumentType.INVOICE, null),
       order,
@@ -242,7 +316,6 @@ describe("buildDocumentRenderData", () => {
       config,
     );
     expect(view.totals.vat).toBeUndefined();
-    expect(view.totals.noVat).toBeUndefined();
     expect(view.seller.vatLine).toBe("");
     expect(view.payment?.purpose).not.toMatch(/ПДВ/);
     expect(translationOverrides.amount).toBeUndefined();
@@ -318,7 +391,7 @@ describe("buildDocumentRenderData", () => {
       "N",
       config,
     ).view;
-    expect(invoice.payment?.iban).toBe("UA213223130000026007233566001");
+    expect(invoice.payment?.iban).toBe("UA21 3223 1300 0002 6007 2335 6600 1");
     expect(invoice.payment?.bank).toBe("АТ Банк");
     expect(invoice.act).toBeUndefined();
     expect(invoice.signatures.buyer).toBeUndefined();
@@ -399,7 +472,9 @@ describe("buildDocumentRenderData", () => {
       ).view;
 
     it("carries the non-fiscal notice, and no other type does", () => {
-      expect(view(true).notice).toBe("Не є фіскальним документом");
+      expect(view(true).notice).toBe(
+        "Не є фіскальним документом і не замінює розрахунковий документ РРО/ПРРО",
+      );
       for (const type of [
         DocumentType.INVOICE,
         DocumentType.ACT,
@@ -443,7 +518,7 @@ describe("buildDocumentRenderData", () => {
 
     it("carries the quotation notice and no other type does", () => {
       expect(view(true).notice).toBe(
-        "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
+        "Комерційна пропозиція не є рахунком. Для оплати буде виставлено рахунок.",
       );
       for (const type of [
         DocumentType.INVOICE,
@@ -529,6 +604,12 @@ describe("buildDocumentRenderData", () => {
 
     it("counts line items and total quantity", () => {
       expect(build().view.quantities).toEqual({ lines: "2", units: "4" });
+    });
+
+    it("is issued even when the order total disagrees with its lines", () => {
+      const { view } = build(true, { ...order, total_cents: 120001 });
+      expect(view.totals).toBeUndefined();
+      expect(view.quantities).toEqual({ lines: "2", units: "4" });
     });
 
     it("signs as shipper and consignee with a plain caption", () => {
@@ -675,5 +756,77 @@ describe("act completion text", () => {
     expect(act("Роботи прийнято без зауважень.")).toBe(
       "Роботи прийнято без зауважень.",
     );
+  });
+});
+
+describe("items table", () => {
+  const build = (type: DocumentType, language: "uk" | "ru" | "en" = "uk") =>
+    buildDocumentRenderData(frozenOfType(type), order, "N", {
+      ...config,
+      documentLanguage: language,
+    });
+
+  it.each([
+    [DocumentType.ACT, "посл.", "усл.", "service"],
+    [DocumentType.INVOICE, "шт.", "шт.", "pcs"],
+    [DocumentType.PACKING_LIST, "шт.", "шт.", "pcs"],
+    [DocumentType.RETURN_NOTE, "шт.", "шт.", "pcs"],
+  ])("%s prints the unit %s / %s / %s on its lines", (type, uk, ru, en) => {
+    expect(build(type, "uk").view.itemUnit).toBe(uk);
+    expect(build(type, "ru").view.itemUnit).toBe(ru);
+    expect(build(type, "en").view.itemUnit).toBe(en);
+  });
+
+  it("names the act's lines as works and the other types' neutrally, in every style", () => {
+    const act = build(DocumentType.ACT).translationOverrides;
+    expect(act.description).toBe("Найменування робіт (послуг)");
+    expect(act.productName).toBe("Найменування робіт (послуг)");
+    const invoice = build(DocumentType.INVOICE, "en").translationOverrides;
+    expect(invoice.description).toBe("Description");
+    expect(invoice.productName).toBe("Description");
+  });
+
+  it("calls the price column a price, unless VAT renames it", () => {
+    const unknownVat = buildDocumentRenderData(
+      frozenFor(DocumentType.INVOICE, null),
+      order,
+      "N",
+      { ...config, documentLanguage: "en" },
+    ).translationOverrides;
+    expect(unknownVat.rate).toBe("Price");
+    expect(build(DocumentType.INVOICE).translationOverrides.rate).toBe(
+      "Ціна з ПДВ",
+    );
+  });
+});
+
+describe("buyer signature", () => {
+  it.each([
+    DocumentType.ACT,
+    DocumentType.PACKING_LIST,
+    DocumentType.RETURN_NOTE,
+  ])("%s leaves a line for the signatory's position and name", (type) => {
+    const { buyer } = buildDocumentRenderData(
+      frozenOfType(type),
+      order,
+      "N",
+      config,
+    ).view.signatures;
+    expect(buyer?.name).toBe("ТОВ Покупець");
+    expect(buyer?.nameCaption).toBe("посада, ПІБ");
+  });
+});
+
+describe("groupIban", () => {
+  it.each([
+    ["UA213223130000026007233566001", "UA21 3223 1300 0002 6007 2335 6600 1"],
+    [
+      "UA21 3223 1300 0002 6007 2335 6600 1",
+      "UA21 3223 1300 0002 6007 2335 6600 1",
+    ],
+    ["UA2132231300000260072335660012", "UA21 3223 1300 0002 6007 2335 6600 12"],
+    ["", ""],
+  ])("%s prints as %s", (stored, printed) => {
+    expect(groupIban(stored)).toBe(printed);
   });
 });

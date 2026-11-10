@@ -92,6 +92,41 @@ const checkSettingsCard = async (results) => {
   }
 };
 
+const checkCompanyTaxIdField = async (results) => {
+  await withApp(VIEWPORTS[0].viewport, "/settings?tab=company", {}, async (page, state) => {
+    const configSaves = [];
+    state.handlers = [
+      async (route, { path, method, body }, json) => {
+        if (path !== "/settings/document-config" || method !== "PUT") return false;
+        configSaves.push(body);
+        const payload = JSON.parse(/name="payload"\r\n\r\n([\s\S]*?)\r\n--/.exec(body)[1]);
+        await json(route, { data: { revision: 2, config: payload.config } });
+        return true;
+      },
+      ...state.handlers,
+    ];
+    // The label names the codes the field holds; the VAT number (ІПН) has its own field.
+    const taxId = page.getByRole("textbox", { name: "EDRPOU / RNOKPP", exact: true });
+    await taxId.waitFor({ state: "visible" });
+    results.check("company tab: the tax id field is labelled EDRPOU / RNOKPP", (await taxId.count()) === 1, "label missing");
+    await taxId.fill("12345670");
+    const hint = page.getByTestId("tax-id-checksum-hint");
+    await hint.waitFor({ state: "visible" });
+    results.check(
+      "company tab: a code with a wrong check digit gets the same soft warning as the recipient form",
+      (await hint.innerText()).includes("check digit"),
+      await hint.innerText(),
+    );
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await settle(() => configSaves.length === 1);
+    results.check(
+      "company tab: saving still works with the doubtful code (the warning does not block)",
+      configSaves.length === 1 && configSaves[0].includes('"companyTaxId":"12345670"'),
+      configSaves[0]?.slice(0, 300) ?? "no save",
+    );
+  });
+};
+
 const checkRecipientForm = async (results) => {
   const path = `/recipients?edit=${RECIPIENT_ID}&highlight=buyer.taxId`;
   for (const { label, viewport } of VIEWPORTS) {
@@ -148,6 +183,7 @@ const checkRecipientForm = async (results) => {
 export const run = async () => {
   const results = new Results("requisites forms");
   await checkSettingsCard(results);
+  await checkCompanyTaxIdField(results);
   await checkRecipientForm(results);
   return results;
 };

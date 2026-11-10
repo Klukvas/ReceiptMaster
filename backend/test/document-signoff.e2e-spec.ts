@@ -16,6 +16,7 @@ import {
   DocumentType,
   Receipt,
 } from "../src/modules/receipts/entities/receipt.entity";
+import { SIGNOFF_RELEASE_GRACE_MS } from "../src/modules/settings/services/document-storage-sweep";
 import { buildDocumentServices } from "./helpers/document-services";
 import {
   AUDIT_CLUSTER,
@@ -25,7 +26,6 @@ import { openMigratedAppDatabase } from "./helpers/migrated-app-database";
 import type { RestrictedAppDatabase } from "./helpers/restricted-app-database";
 
 const KEEP = { logoAction: "keep" } as const;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const picture = (r: number, g: number, b: number, width = 300, height = 120) =>
   sharp({
@@ -294,12 +294,25 @@ describeIsolatedPostgres(
         const stamp = await replace("stamp", await picture(3, 2, 1));
         await remove("stamp");
 
-        // Within the grace period: still stored, lease about a day out.
+        // Within the short grace: still stored, lease ten minutes out (not a day: issued
+        // documents carry the bytes), and the tenant's sweep is due by then.
         expect(await collect()).toBe(0);
         const lease = new Date(
           (await assetRow(stamp.assetId)).lease_expires_at,
         );
-        expect(lease.getTime() - Date.now()).toBeGreaterThan(DAY_MS - 60_000);
+        expect(lease.getTime() - Date.now()).toBeGreaterThan(
+          SIGNOFF_RELEASE_GRACE_MS - 60_000,
+        );
+        expect(lease.getTime() - Date.now()).toBeLessThanOrEqual(
+          SIGNOFF_RELEASE_GRACE_MS,
+        );
+        const [{ next_sweep_at }] = await db.admin.query(
+          `SELECT next_sweep_at FROM document_storage_sweeps WHERE user_id = $1`,
+          [user.id],
+        );
+        expect(
+          new Date(next_sweep_at).getTime() - Date.now(),
+        ).toBeLessThanOrEqual(SIGNOFF_RELEASE_GRACE_MS);
         expect(services.storage.keysFor("signoffs", user.id)).toHaveLength(1);
 
         await expire(stamp.assetId);

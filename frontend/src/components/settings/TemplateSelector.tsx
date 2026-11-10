@@ -55,11 +55,12 @@ const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
 // Document titles match the receipt renderer's translations/defaults.ts;
 // interface-language labels are independent of the saved document language.
 const AUTOMATIC_TITLES: Record<string, Record<string, string>> = {
-  standard: { en: "Invoice", ru: "Инвойс", uk: "Інвойс" },
+  standard: { en: "Delivery note", ru: "Расходная накладная", uk: "Видаткова накладна" },
+  // The price-less style is a shipping note, not a видаткова накладна (which carries prices).
   delivery: {
-    en: "Delivery Note",
-    ru: "Накладная",
-    uk: "Видаткова накладна",
+    en: "Shipping note",
+    ru: "Отгрузочная накладная",
+    uk: "Накладна на відвантаження",
   },
   proforma: {
     en: "Proforma Invoice",

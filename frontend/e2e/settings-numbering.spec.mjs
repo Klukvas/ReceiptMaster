@@ -202,6 +202,30 @@ const checkServerRefusals = async (results) => {
     VIEWPORTS[0].viewport,
     {
       numberingFailure: {
+        status: 409,
+        body: { error: "The start number must be at least 50", errorCode: "NUMBERING_START_TOO_LOW", details: { minStart: 50 } },
+      },
+    },
+    async (page, state) => {
+      const invoice = row(page, "invoice");
+      await invoice.waitFor({ state: "visible" });
+      await invoice.getByLabel("Start from").fill("45");
+      await saveButton(page, "invoice").click();
+      await settle(() => (state.numberingSaves ?? []).length === 1);
+      await invoice.getByRole("alert").waitFor({ state: "visible" });
+      const text = await invoice.getByRole("alert").innerText();
+      const hint = await invoice.locator("#numbering-invoice-start-hint").innerText();
+      results.check(
+        "a 409 with details.minStart names that minimum and the start hint follows it",
+        text.includes("at least 50") && hint.includes("Minimum: 50"),
+        `${text} | ${hint}`,
+      );
+    },
+  );
+  await withNumbering(
+    VIEWPORTS[0].viewport,
+    {
+      numberingFailure: {
         status: 400,
         body: { error: "Validation error for prefix: must not end with a digit", errorCode: "VALIDATION_ERROR" },
       },
@@ -250,7 +274,8 @@ const checkYearlyReset = async (results) => {
       "switching the year off switches the restart off and disables it with a hint",
       !(await resetBox(page, "invoice").isChecked()) &&
         (await resetBox(page, "invoice").isDisabled()) &&
-        (await row(page, "invoice").innerText()).includes("Turn on “Include the year” first"),
+        (await row(page, "invoice").innerText()).includes("only the year tells them apart") &&
+        (await row(page, "invoice").innerText()).includes("Turn on “Include the year”"),
       await row(page, "invoice").innerText(),
     );
     await saveButton(page, "invoice").click();
@@ -262,6 +287,33 @@ const checkYearlyReset = async (results) => {
     );
     results.check("other rows keep their own switch", !(await resetBox(page, "act").isChecked()), "act row changed");
   });
+  await withNumbering(
+    VIEWPORTS[0].viewport,
+    {
+      numberingFailure: {
+        status: 400,
+        body: { error: "Validation error for resetEveryYear: requires includeYear", errorCode: "VALIDATION_ERROR" },
+      },
+    },
+    async (page, state) => {
+      await row(page, "invoice").waitFor({ state: "visible" });
+      await resetBox(page, "invoice").check();
+      await saveButton(page, "invoice").click();
+      await settle(() => (state.numberingSaves ?? []).length === 1);
+      const box = resetBox(page, "invoice");
+      await settle(async () => (await box.getAttribute("aria-invalid")) === "true");
+      const describedBy = (await box.getAttribute("aria-describedby")) ?? "";
+      const errorText = await page.evaluate(
+        (ids) => ids.split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" | "),
+        describedBy,
+      );
+      results.check(
+        "a 400 naming resetEveryYear is linked to the checkbox (aria-invalid + aria-describedby)",
+        describedBy.split(" ").length === 2 && errorText.includes("Include the year"),
+        `${describedBy}: ${errorText}`,
+      );
+    },
+  );
   await withNumbering(VIEWPORTS[1].viewport, { numbering: NUMBERING_TYPES.map((type) => numberingSetting(type, { resetEveryYear: true })) }, async (page) => {
     await row(page, "act").waitFor({ state: "visible" });
     results.check("375px: a saved yearly restart is shown checked", await resetBox(page, "act").isChecked(), "unchecked");
@@ -279,11 +331,33 @@ const checkYearlyReset = async (results) => {
     results.check("a prefix that ends in a separator is used as typed", (await previewOf(page, "quote")) === `A.${YEAR}-000043`, await previewOf(page, "quote"));
     await row(page, "quote").getByLabel("Prefix").fill("A ");
     results.check("a trailing space is trimmed on save, so the dash is added after the letter", (await previewOf(page, "quote")) === `A-${YEAR}-000043`, await previewOf(page, "quote"));
+    const prefixHint = await row(page, "quote").locator("#numbering-quote-prefix-hint").innerText();
+    results.check(
+      "the prefix hint says the trailing space becomes a hyphen",
+      prefixHint.includes("trailing space") && prefixHint.includes("A-000001"),
+      prefixHint,
+    );
+  });
+};
+
+const checkUkrainianExample = async (results) => {
+  await withPage({ viewport: VIEWPORTS[0].viewport }, async (page) => {
+    page.setDefaultTimeout(8000);
+    const state = createState([]);
+    state.numbering = NUMBERING_TYPES.map((type) => numberingSetting(type));
+    state.handlers = [...numberingHandlers(state), ...documentHandlers(state)];
+    await installApiMocks(page, state);
+    await page.addInitScript(() => localStorage.setItem("i18nextLng", "uk"));
+    await page.goto(`${BASE_URL}/settings?tab=documents`, { waitUntil: "domcontentloaded" });
+    const hint = row(page, "invoice").locator("#numbering-invoice-prefix-hint");
+    await hint.waitFor({ state: "visible" });
+    results.check("uk: the prefix hint uses a Ukrainian example (РН-)", (await hint.innerText()).includes("РН-0001"), await hint.innerText());
   });
 };
 
 export const run = async () => {
   const results = new Results("settings numbering");
+  await checkUkrainianExample(results);
   await checkRows(results);
   await checkPreview(results);
   await checkClientValidation(results);

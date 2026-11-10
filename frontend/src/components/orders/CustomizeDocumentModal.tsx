@@ -97,7 +97,11 @@ export function CustomizeDocumentModal({
     model.setBusy(true); model.setError("");
     try {
       await api.post(`/receipts/${active.id}/regenerate`, { mode: "reproduce", expectedActiveRevision: active.active_revision || 0 });
-      await cache.invalidateQueries({ queryKey: ["orders"] }); onClose();
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["orders"] }),
+        cache.invalidateQueries({ queryKey: ["receipts"] }),
+      ]);
+      onClose();
     } catch (error) { model.setError(await localizedDocumentError(error)); } finally { model.setBusy(false); }
   };
   const close = () => {

@@ -15,9 +15,13 @@ export type NumberingRefusal = {
 
 const FIELD_NAMES: readonly NumberingField[] = ["prefix", "padding", "startNumber", "resetEveryYear"];
 
+type StartTooLowBody = { minStart?: unknown; details?: { minStart?: unknown } };
+
+/** The lowest start the server accepts, at the body root or under `details`. */
 const minStartOf = (error: unknown): number | undefined => {
   if (!isAxiosError(error)) return undefined;
-  const value = (error.response?.data as { minStart?: unknown } | undefined)?.minStart;
+  const body = error.response?.data as StartTooLowBody | undefined;
+  const value = body?.minStart ?? body?.details?.minStart;
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 };
 

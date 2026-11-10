@@ -8,7 +8,7 @@ import {
 } from "./entities/receipt.entity";
 import {
   frozenReturnLines,
-  releaseReturnQuantities,
+  releaseReturnNoteQuantities,
 } from "./return-note-ledger";
 
 /**
@@ -46,23 +46,13 @@ export async function updateReceiptOnFailure(
         userId: where.user_id,
       })
       .getOne();
-    const lines = row ? frozenReturnLines(row) : [];
-    if (lines.length === 0) {
-      logger.warn(
-        `Return note ${receipt.id} (order ${receipt.order_id}) failed with no readable lines; its quantities were not released`,
-      );
-      return true;
-    }
-    const unreleased = await releaseReturnQuantities(
+    await releaseReturnNoteQuantities(
       manager,
-      where.user_id,
-      receipt.order_id,
-      lines,
+      logger,
+      { id: receipt.id, order_id: receipt.order_id, user_id: where.user_id },
+      row ? frozenReturnLines(row) : [],
+      "failed",
     );
-    if (unreleased.length > 0)
-      logger.warn(
-        `Return note ${receipt.id} (order ${receipt.order_id}): ${unreleased.length} line(s) had nothing left to release`,
-      );
     return true;
   });
 }

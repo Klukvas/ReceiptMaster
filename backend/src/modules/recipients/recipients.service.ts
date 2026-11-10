@@ -2,7 +2,7 @@ import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Raw, Repository } from "typeorm";
+import { EntityManager, Raw, Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
 import { Order } from "../orders/entities/order.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
@@ -17,6 +17,7 @@ import {
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
 import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
+import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
 import {
   inferTaxIdKind,
   TaxIdKind,
@@ -44,6 +45,27 @@ const CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
   "bank_name",
   "legal_address",
 ]);
+
+/** Partial unique index on (user_id, lower(email)), migration RecipientEmailUnique1793800000000. */
+export const RECIPIENT_EMAIL_UNIQUE_INDEX = "IDX_recipients_user_email_unique";
+
+/**
+ * The pre-check gives the friendly error in the common case; the unique index is the
+ * rule, so a concurrent write that slips past the check gets the same 409.
+ */
+async function rejectingDuplicateEmail<T>(
+  email: string | null | undefined,
+  write: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (email && isUniqueViolationOf(error, RECIPIENT_EMAIL_UNIQUE_INDEX)) {
+      throw ApiErrors.RECIPIENT_ALREADY_EXISTS(email);
+    }
+    throw error;
+  }
+}
 
 type TaxIdPair = { tax_id: string | null; tax_id_kind: TaxIdKind | null };
 
@@ -111,23 +133,30 @@ export class RecipientsService {
     createRecipientDto: CreateRecipientDto,
     user: User,
   ): Promise<Recipient> {
-    await this.assertEmailAvailable(createRecipientDto.email, user);
+    await this.assertEmailAvailable(
+      this.recipientsRepository.manager,
+      createRecipientDto.email,
+      user,
+    );
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
       ...resolveTaxId(createRecipientDto),
       user_id: user.id,
     });
-    return this.recipientsRepository.save(recipient);
+    return rejectingDuplicateEmail(createRecipientDto.email, () =>
+      this.recipientsRepository.save(recipient),
+    );
   }
 
   private async assertEmailAvailable(
-    email: string | undefined,
+    manager: EntityManager,
+    email: string | null | undefined,
     user: User,
     excludeRecipientId?: string,
   ): Promise<void> {
     if (!email) return;
 
-    const duplicate = await this.recipientsRepository.findOne({
+    const duplicate = await manager.findOne(Recipient, {
       where: {
         user_id: user.id,
         email: Raw((alias) => `LOWER(${alias}) = :email`, {
@@ -141,24 +170,36 @@ export class RecipientsService {
     }
   }
 
-  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  /**
+   * A repeated Idempotency-Key replays the first create instead of adding a duplicate.
+   * The email check runs after the key lookup, so a replay of a create that stored an
+   * email returns the stored response instead of a 409 for its own recipient.
+   */
   async createWithIdempotencyKey(
     createRecipientDto: CreateRecipientDto,
     user: User,
     idempotencyKey: string,
   ): Promise<IdempotentCreateResult<Recipient>> {
-    return this.recipientsRepository.manager.transaction((manager) =>
-      createIdempotently(
-        manager,
-        { scope: "recipient", key: idempotencyKey, userId: user.id },
-        () =>
-          manager.save(
-            manager.create(Recipient, {
-              ...createRecipientDto,
-              ...resolveTaxId(createRecipientDto),
-              user_id: user.id,
-            }),
-          ),
+    return rejectingDuplicateEmail(createRecipientDto.email, () =>
+      this.recipientsRepository.manager.transaction((manager) =>
+        createIdempotently(
+          manager,
+          { scope: "recipient", key: idempotencyKey, userId: user.id },
+          async () => {
+            await this.assertEmailAvailable(
+              manager,
+              createRecipientDto.email,
+              user,
+            );
+            return manager.save(
+              manager.create(Recipient, {
+                ...createRecipientDto,
+                ...resolveTaxId(createRecipientDto),
+                user_id: user.id,
+              }),
+            );
+          },
+        ),
       ),
     );
   }
@@ -241,13 +282,20 @@ export class RecipientsService {
   ): Promise<Recipient> {
     assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
-    await this.assertEmailAvailable(updateRecipientDto.email, user, id);
+    await this.assertEmailAvailable(
+      this.recipientsRepository.manager,
+      updateRecipientDto.email,
+      user,
+      id,
+    );
     Object.assign(
       recipient,
       updateRecipientDto,
       resolveTaxIdChange(updateRecipientDto, recipient),
     );
-    return this.recipientsRepository.save(recipient);
+    return rejectingDuplicateEmail(updateRecipientDto.email, () =>
+      this.recipientsRepository.save(recipient),
+    );
   }
 
   async remove(id: string, user: User): Promise<void> {

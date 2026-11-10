@@ -8,6 +8,7 @@ import {
   parseStartNumber,
   prefixProblem,
   PREFIX_MAX_LENGTH,
+  trailingSpaceBecomesHyphen,
 } from "../../lib/document-number-format";
 import { numberingRefusal, type NumberingField } from "../../lib/numbering-errors";
 import type { NumberingSetting } from "../../lib/api";
@@ -48,7 +49,6 @@ const formOf = (setting: NumberingSetting): RowForm => ({
 /** A pause long enough that typing in a field is announced once, not per keystroke. */
 const ANNOUNCE_DELAY_MS = 800;
 const PADDING_EXAMPLE_VALUE = 7;
-const PREFIX_EXAMPLE = "INV-";
 
 const focusField = (id: string) => {
   // The field is re-rendered with its error first; focusing after that keeps the caret there.
@@ -64,6 +64,10 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
   const update = useUpdateDocumentNumbering();
   const [form, setForm] = useState<RowForm>(() => formOf(setting));
   const [serverErrors, setServerErrors] = useState<ServerErrors>({});
+  // A refused start can reveal a higher minimum than the loaded setting (numbers issued meanwhile).
+  const [refusedMinStart, setRefusedMinStart] = useState<number | null>(null);
+  const minStart = Math.max(setting.minStart, refusedMinStart ?? 0);
+  const prefixExample = t("numbering.prefixExample");
   const type = setting.documentType;
   const idOf = (field: string) => `numbering-${type}-${field}`;
 
@@ -77,8 +81,8 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
     ...(startText !== "" && startNumber === null
       ? { startNumber: t("numbering.errors.startInvalid") }
       : {}),
-    ...(startNumber !== null && startNumber < setting.minStart
-      ? { startNumber: t("numbering.errors.startTooLow", { min: setting.minStart }) }
+    ...(startNumber !== null && startNumber < minStart
+      ? { startNumber: t("numbering.errors.startTooLow", { min: minStart }) }
       : {}),
   };
   const errorOf = (field: NumberingField) => clientErrors[field] ?? serverErrors[field];
@@ -131,6 +135,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
           const refusal = numberingRefusal(error, (min) =>
             t("numbering.errors.startTooLow", { min }),
           );
+          if (refusal.minStart !== undefined) setRefusedMinStart(refusal.minStart);
           if (refusal.field) {
             setServerErrors({ [refusal.field]: refusal.message });
             focusField(idOf(refusal.field === "startNumber" ? "start" : refusal.field));
@@ -164,7 +169,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
             type="text"
             value={form.prefix}
             maxLength={PREFIX_MAX_LENGTH + 8}
-            placeholder={PREFIX_EXAMPLE}
+            placeholder={prefixExample}
             autoComplete="off"
             aria-invalid={Boolean(errorOf("prefix"))}
             aria-describedby={`${idOf("prefix-hint")}${errorOf("prefix") ? ` ${idOf("prefix-error")}` : ""}`}
@@ -172,7 +177,9 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
             className={`${INPUT_CLASS} ${borderOf(Boolean(errorOf("prefix")))}`}
           />
           <p id={idOf("prefix-hint")} className={HINT_CLASS}>
-            {t("numbering.prefixHint", { example: PREFIX_EXAMPLE })}
+            {trailingSpaceBecomesHyphen(form.prefix)
+              ? t("numbering.prefixSpaceHint", { example: formatDocumentNumber({ ...form, includeYear: false }, 1) })
+              : t("numbering.prefixHint", { example: prefixExample })}
           </p>
           <FieldError id={idOf("prefix-error")} message={errorOf("prefix")} />
         </div>
@@ -208,7 +215,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
             type="text"
             inputMode="numeric"
             value={form.startText}
-            placeholder={String(setting.minStart)}
+            placeholder={String(minStart)}
             autoComplete="off"
             aria-invalid={Boolean(errorOf("startNumber"))}
             aria-describedby={`${idOf("start-hint")}${errorOf("startNumber") ? ` ${idOf("start-error")}` : ""}`}
@@ -217,7 +224,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
           />
           <p id={idOf("start-hint")} className={HINT_CLASS}>
             {t(form.resetEveryYear ? "numbering.startHintYearly" : "numbering.startHint", {
-              min: setting.minStart,
+              min: minStart,
             })}
           </p>
           <FieldError id={idOf("start-error")} message={errorOf("startNumber")} />
@@ -255,7 +262,8 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
               type="checkbox"
               checked={form.resetEveryYear}
               disabled={!form.includeYear}
-              aria-describedby={idOf("reset-hint")}
+              aria-invalid={Boolean(errorOf("resetEveryYear"))}
+              aria-describedby={`${idOf("reset-hint")}${errorOf("resetEveryYear") ? ` ${idOf("reset-error")}` : ""}`}
               onChange={(event) => change({ resetEveryYear: event.target.checked }, ["resetEveryYear"])}
               className={CHECKBOX_CLASS}
             />

@@ -1,5 +1,5 @@
 import { EMAIL_SHAPE } from "./field-patterns";
-import { MIN_PASSWORD_LENGTH } from "./password-policy";
+import { MIN_PASSWORD_LENGTH, exceedsPasswordBytes } from "./password-policy";
 
 export type AuthField = "email" | "password" | "confirmPassword";
 export type AuthFieldProblem =
@@ -7,6 +7,7 @@ export type AuthFieldProblem =
   | "invalidEmail"
   | "emailTaken"
   | "passwordTooShort"
+  | "passwordTooLong"
   | "passwordsDoNotMatch";
 export type AuthFieldErrors = Partial<Record<AuthField, AuthFieldProblem>>;
 
@@ -22,6 +23,7 @@ export const PROBLEM_MESSAGE_KEYS: Record<AuthFieldProblem, string> = {
   invalidEmail: "errors.invalidEmail",
   emailTaken: "errors.userAlreadyExists",
   passwordTooShort: "errors.passwordTooShort",
+  passwordTooLong: "errors.passwordTooLong",
   passwordsDoNotMatch: "errors.passwordsDoNotMatch",
 };
 
@@ -48,7 +50,9 @@ export const validateRegister = (values: {
     ? { password: "required" as const }
     : values.password.length < MIN_PASSWORD_LENGTH
       ? { password: "passwordTooShort" as const }
-      : {}),
+      : exceedsPasswordBytes(values.password)
+        ? { password: "passwordTooLong" as const }
+        : {}),
   ...(values.password !== values.confirmPassword && {
     confirmPassword: "passwordsDoNotMatch" as const,
   }),

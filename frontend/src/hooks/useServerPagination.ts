@@ -31,6 +31,12 @@ export interface UseServerPaginationOptions<T> {
   initialPage?: number;
   /** False holds the request back (e.g. while the filters cannot match anything). */
   enabled?: boolean;
+  /** A sort owned by the caller (e.g. kept in the URL) instead of internal state. */
+  sort?: {
+    sortBy: string;
+    sortOrder: SortOrder;
+    onChange: (sortBy: string, sortOrder: SortOrder) => void;
+  };
 }
 
 export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
@@ -47,6 +53,7 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     initialSearch = '',
     initialPage = 1,
     enabled = true,
+    sort: controlledSort,
   } = options;
 
   const [currentPage, setCurrentPage] = useState(initialPage);
@@ -59,8 +66,10 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   });
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
-  const [sortBy, setSortBy] = useState<string | null>(defaultSortBy);
-  const [sortOrder, setSortOrder] = useState<SortOrder>(defaultSortOrder);
+  const [ownSortBy, setOwnSortBy] = useState<string | null>(defaultSortBy);
+  const [ownSortOrder, setOwnSortOrder] = useState<SortOrder>(defaultSortOrder);
+  const sortBy = controlledSort ? controlledSort.sortBy : ownSortBy;
+  const sortOrder = controlledSort ? controlledSort.sortOrder : ownSortOrder;
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
     if (storageKeyPrefix) {
       const saved = localStorage.getItem(`${storageKeyPrefix}_columns`);
@@ -144,14 +153,16 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     if (!col?.sortable) return;
 
     const actualSortKey = col.sortKey || col.key;
-    if (sortBy === actualSortKey) {
-      setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'));
+    const nextOrder: SortOrder =
+      sortBy === actualSortKey ? (sortOrder === 'ASC' ? 'DESC' : 'ASC') : 'ASC';
+    if (controlledSort) {
+      controlledSort.onChange(actualSortKey, nextOrder);
     } else {
-      setSortBy(actualSortKey);
-      setSortOrder('ASC');
+      setOwnSortBy(actualSortKey);
+      setOwnSortOrder(nextOrder);
     }
     setCurrentPage(1);
-  }, [initialColumns, sortBy]);
+  }, [initialColumns, sortBy, sortOrder, controlledSort]);
 
   const toggleColumnVisibility = useCallback((columnKey: string) => {
     setColumnVisibility((prev) => ({

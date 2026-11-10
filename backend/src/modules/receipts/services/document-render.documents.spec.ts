@@ -87,7 +87,7 @@ describe("DocumentRenderService: invoice and act", () => {
     );
     expect(html).toContain("Рахунок на оплату");
     expect(html).not.toContain("МІЙ ЗАГОЛОВОК");
-    expect(html).toContain(SELLER_IBAN);
+    expect(html).toContain("UA21 3223 1300 0002 6007 2335 6600 1");
     expect(html).toContain("Сплатити до");
     expect(html).toContain("ТОВ Покупець");
     expect(snapshot.document?.type).toBe(DocumentType.INVOICE);

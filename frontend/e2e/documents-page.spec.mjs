@@ -5,7 +5,10 @@
 //  - filters (type, status, dates, search) are sent to the API and kept in the URL, and a reload restores them;
 //  - a document that is still generating is polled until it finishes;
 //  - voiding refreshes the list; empty, filtered-empty and error states are shown;
-//  - the retention hint is visible and the page never scrolls sideways.
+//  - the retention hint is visible (collapsed to its gist on a phone) and the page never scrolls sideways;
+//  - typing a date reports only the finished value (no request per intermediate year), and a filter
+//    change returns to page 1 without first asking for the old page;
+//  - once polling gives up on a generating document, a "still generating" hint offers a refresh.
 
 import {
   BASE_URL,
@@ -39,7 +42,7 @@ const documents = () => [
   listedDocument("a8", "return_note", "failed", order("o8", 23, "Gum Grocers"), { created_at: "2026-03-03T10:00:00.000Z", error_message: "Something internal exploded" }),
 ];
 
-const withDocuments = async (viewport, path, stateOverrides, run) =>
+const withDocuments = async (viewport, path, stateOverrides, run, { beforeGoto } = {}) =>
   withPage({ viewport }, async (page) => {
     page.setDefaultTimeout(8000);
     const state = createState([]);
@@ -47,11 +50,17 @@ const withDocuments = async (viewport, path, stateOverrides, run) =>
     Object.assign(state, stateOverrides);
     state.handlers = [...documentsListHandlers(state), ...documentHandlers(state)];
     await installApiMocks(page, state);
+    if (beforeGoto) await beforeGoto(page);
     await page.goto(`${BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
     return run(page, state);
   });
 
 const visible = (locator) => locator.locator("visible=true");
+/** On a phone the filter fields are folded behind the "Filters" button; open them first. */
+const showFilters = async (page) => {
+  const toggle = page.locator("#documents-filters-toggle");
+  if ((await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+};
 const urlOf = (page) => new URL(page.url());
 const lastQuery = (state) => new URLSearchParams((state.listQueries ?? []).at(-1) ?? "");
 const hasNoHorizontalOverflow = (page) =>
@@ -147,6 +156,7 @@ const checkFilters = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withDocuments(viewport, "/documents", {}, async (page, state) => {
       await visible(page.getByText("INV-a1")).first().waitFor({ state: "visible" });
+      await showFilters(page);
       await page.getByLabel("Type", { exact: true }).selectOption("invoice");
       await settle(() => lastQuery(state).get("type") === "invoice");
       results.check(
@@ -263,6 +273,26 @@ const checkVoidRefusal = async (results) => {
     await dialog.getByRole("button", { name: "Void", exact: true }).click();
     await settle(() => (state.voided ?? []).length === 1);
     results.check("after fixing it the void goes through", (state.voided ?? []).length === 1, JSON.stringify(state.voided));
+  });
+};
+
+const checkVoidNotVoidable = async (results) => {
+  const refusal = {
+    status: 409,
+    body: { error: "The waybill a1 is processing, not issued, and cannot be voided", errorCode: "DOCUMENT_NOT_VOIDABLE" },
+  };
+  await withDocuments(VIEWPORTS[0].viewport, "/documents", { voidError: refusal }, async (page) => {
+    await visible(page.getByText("INV-a1")).first().waitFor({ state: "visible" });
+    await visible(page.getByRole("button", { name: "Void: Invoice INV-a1" })).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("textarea").fill("because");
+    await dialog.getByRole("button", { name: "Void", exact: true }).click();
+    const shown = await settle(async () => (await page.getByText("is not issued yet, so it cannot be voided").count()) > 0);
+    results.check(
+      "a 409 DOCUMENT_NOT_VOIDABLE on void is a localized message, not the server's text",
+      shown && (await page.getByText("is processing, not issued").count()) === 0,
+      await page.locator("body").innerText(),
+    );
   });
 };
 
@@ -404,18 +434,29 @@ const checkTimeZone = async (results) => {
     const body = await page.locator("main").innerText();
     results.check(
       "table dates use the document time zone (UTC+14 moves 23:30Z to the next day)",
-      body.includes("11 Mar 2026, 13:30") && body.includes("Pacific/Kiritimati"),
+      body.includes("11 Mar 2026, 13:30") && body.includes("Kiritimati (GMT+14)") && !body.includes("Pacific/Kiritimati"),
       body.slice(0, 500),
     );
   });
   await withDocuments(VIEWPORTS[0].viewport, "/documents", { documents: [late] }, async (page) => {
     await visible(page.getByText("INV-z1")).first().waitFor({ state: "visible" });
+    const hint = await page.getByTestId("documents-timezone-hint").innerText();
     results.check(
-      "the filter bar says which time zone the days are counted in",
-      (await page.getByTestId("documents-timezone-hint").innerText()).includes("UTC"),
-      await page.getByTestId("documents-timezone-hint").innerText(),
+      "the filter bar names UTC in words, not as bare jargon",
+      hint.includes("Coordinated Universal Time (UTC)"),
+      hint,
     );
   });
+  const ukrainian = { beforeGoto: (page) => page.addInitScript(() => localStorage.setItem("i18nextLng", "uk")) };
+  await withDocuments(VIEWPORTS[0].viewport, "/documents", { documents: [late], timeZone: "Europe/Kyiv" }, async (page) => {
+    await visible(page.getByText("INV-z1")).first().waitFor({ state: "visible" });
+    const hint = await page.getByTestId("documents-timezone-hint").innerText();
+    results.check(
+      "uk: the account zone Europe/Kyiv reads as people say it (за київським часом)",
+      hint.includes("за київським часом") && !hint.includes("Europe/Kyiv"),
+      hint,
+    );
+  }, ukrainian);
 };
 
 const checkStates = async (results) => {
@@ -441,6 +482,119 @@ const checkStates = async (results) => {
   });
 };
 
+/** Sets a date input the way typing a year does, one intermediate value after another. */
+const typeDateSteps = (page, selector, values) =>
+  page.evaluate(
+    async ({ selector, values }) => {
+      const input = document.querySelector(selector);
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      for (const value of values) {
+        setValue.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    },
+    { selector, values },
+  );
+
+const checkDateDebounce = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents", {}, async (page, state) => {
+    await visible(page.getByText("INV-a1")).first().waitFor({ state: "visible" });
+    const before = (state.listQueries ?? []).length;
+    await typeDateSteps(page, "#documents-filter-from", ["0002-03-01", "0020-03-01", "0202-03-01", "2026-03-01"]);
+    await settle(() => lastQuery(state).get("startDate") === "2026-03-01");
+    const sent = (state.listQueries ?? []).slice(before).map((query) => new URLSearchParams(query).get("startDate"));
+    results.check(
+      "typing a year sends only the finished date, not each intermediate year",
+      sent.length > 0 && sent.every((date) => date === "2026-03-01"),
+      JSON.stringify(sent),
+    );
+  });
+};
+
+const manyInvoices = () =>
+  Array.from({ length: 25 }, (_, index) =>
+    listedDocument(`m${index}`, index % 2 === 0 ? "invoice" : "waybill", "generated", order(`om${index}`, 100 + index, "Many Foods"), {
+      created_at: new Date(Date.UTC(2026, 2, 1, 10, index)).toISOString(),
+    }),
+  );
+
+const checkFilterResetsPage = async (results) => {
+  await withDocuments(VIEWPORTS[0].viewport, "/documents?page=2", { documents: manyInvoices() }, async (page, state) => {
+    await settle(() => (state.listQueries ?? []).length > 0);
+    await visible(page.getByText("Many Foods")).first().waitFor({ state: "visible" });
+    const before = (state.listQueries ?? []).length;
+    await page.getByLabel("Type", { exact: true }).selectOption("invoice");
+    await settle(() => lastQuery(state).get("type") === "invoice");
+    await page.waitForTimeout(400);
+    const invoiceQueries = (state.listQueries ?? []).slice(before).map((query) => new URLSearchParams(query))
+      .filter((query) => query.get("type") === "invoice");
+    results.check(
+      "a filter change goes to page 1 at once, never asking for the old page with the new filter",
+      invoiceQueries.length > 0 && invoiceQueries.every((query) => Number(query.get("offset") ?? 0) === 0) &&
+        !urlOf(page).searchParams.has("page"),
+      `${invoiceQueries.map(String).join(" ; ")} | ${page.url()}`,
+    );
+  });
+};
+
+const checkRetentionOnPhone = async (results) => {
+  await withDocuments(VIEWPORTS[1].viewport, "/documents", {}, async (page) => {
+    const hint = page.getByTestId("documents-retention-hint");
+    await visible(page.getByText("INV-a1")).first().waitFor({ state: "visible" });
+    const collapsed = await hint.innerText();
+    results.check(
+      "375px: the retention rule is collapsed to its first sentence",
+      collapsed.includes("10 most recent") && !collapsed.includes("deleted for good"),
+      collapsed,
+    );
+    await hint.locator("summary").click();
+    results.check(
+      "375px: opening it shows the rest of the rule",
+      (await hint.innerText()).includes("deleted for good"),
+      await hint.innerText(),
+    );
+  });
+};
+
+const checkPollingStoppedHint = async (results) => {
+  await withDocuments(
+    VIEWPORTS[0].viewport,
+    "/documents",
+    {},
+    async (page, state) => {
+      await visible(page.getByText("SAL-a5")).first().waitFor({ state: "visible" });
+      const hint = page.getByTestId("documents-polling-stopped");
+      results.check("no hint while polling is still running", (await hint.count()) === 0, "hint shown early");
+      // 45 attempts of 4 s each, plus a margin.
+      await page.clock.runFor(50 * 4000);
+      await hint.waitFor({ state: "visible" });
+      results.check(
+        "after polling gives up, the page says documents are still generating and offers a refresh",
+        (await hint.innerText()).includes("still being generated") &&
+          (await hint.getByRole("button", { name: "Refresh" }).count()) === 1,
+        await hint.innerText(),
+      );
+      const before = (state.listQueries ?? []).length;
+      await hint.getByRole("button", { name: "Refresh" }).click();
+      const refetched = await settle(() => (state.listQueries ?? []).length > before);
+      results.check(
+        "Refresh refetches the list and polling starts over",
+        refetched && (await hint.count()) === 0,
+        `queries ${before} -> ${(state.listQueries ?? []).length}`,
+      );
+      await page.clock.runFor(100);
+      const focusedId = await page.evaluate(() => document.activeElement?.id ?? document.activeElement?.tagName);
+      results.check(
+        "after Refresh removes the hint, focus moves to the page heading instead of falling to <body>",
+        focusedId === "documents-page-heading",
+        String(focusedId),
+      );
+    },
+    { beforeGoto: (page) => page.clock.install() },
+  );
+};
+
 const checkNavigation = async (results) => {
   await withDocuments(VIEWPORTS[0].viewport, "/documents", {}, async (page) => {
     const link = page.getByRole("link", { name: "Documents", exact: true }).first();
@@ -462,10 +616,15 @@ export const run = async () => {
   await checkFilters(results);
   await checkPolling(results);
   await checkPollingDoesNotCoverRows(results);
+  await checkPollingStoppedHint(results);
+  await checkDateDebounce(results);
+  await checkFilterResetsPage(results);
+  await checkRetentionOnPhone(results);
   await checkReversedRange(results);
   await checkClearFocus(results);
   await checkRetryDoubleClick(results);
   await checkVoidRefusal(results);
+  await checkVoidNotVoidable(results);
   await checkFailedRows(results);
   await checkClearFilters(results);
   await checkDesktopFit(results);

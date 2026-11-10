@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { TFunction } from "i18next";
-import { MIN_PASSWORD_LENGTH } from "../lib/password-policy";
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../lib/password-policy";
 import {
   PROBLEM_MESSAGE_KEYS,
   firstInvalidField,
@@ -32,7 +32,7 @@ export const useFieldErrors = (t: TFunction) => {
   const messageFor = (field: AuthField): string | undefined => {
     const problem = errors[field];
     return problem
-      ? t(PROBLEM_MESSAGE_KEYS[problem], { min: MIN_PASSWORD_LENGTH })
+      ? t(PROBLEM_MESSAGE_KEYS[problem], { min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_BYTES })
       : undefined;
   };
 

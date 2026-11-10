@@ -9,6 +9,14 @@ export const voidReasonText = (t: TFunction, reason: string): string =>
   SYSTEM_VOID_REASONS.has(reason) ? t(`documents.voidReasons.${reason}`) : reason;
 
 const HTTP_BAD_REQUEST = 400;
+const HTTP_CONFLICT = 409;
+
+/** The document's state no longer allows voiding (still generating, failed); trying again cannot help. */
+export function isNotVoidableRefusal(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== HTTP_CONFLICT) return false;
+  const code = (error.response.data as { errorCode?: unknown } | undefined)?.errorCode;
+  return code === "DOCUMENT_NOT_VOIDABLE";
+}
 
 /**
  * True when a refused void blames the reason field: either by name ("Validation error for reason")

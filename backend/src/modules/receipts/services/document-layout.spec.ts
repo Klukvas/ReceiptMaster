@@ -47,106 +47,108 @@ const HTML_DIR = path.join(__dirname, "../templates/html");
 const NOW = new Date("2026-10-15T09:30:00Z");
 
 const SELLER_IBAN = "UA213223130000026007233566001";
+// The PDF prints the IBAN in groups of four; the stored value has no spaces.
+const SELLER_IBAN_PRINTED = "UA21 3223 1300 0002 6007 2335 6600 1";
 const XSS = '<script>alert("x")</script>';
 
 // Digests of the rendered HTML; a change here is a visible change to the document.
 const GOLDEN_SHA256: Record<string, string> = {
   "invoice.standard.uk":
-    "8bee904952723e5a31b34b18d722ee4c76585e9f468bd5784634c64b2023273f",
+    "72a48d5569d9df9103bd8e8c25176ae25339c41455c791e183f848b9db4c19a9",
   "invoice.standard.ru":
-    "0a44bd34889be1c461043d52bb26eab5e49579b65bd1290fdec22c5f24ea1ee7",
+    "8585aa5cd8043e89cb5b044137c843b847a2baec364fb790e682ed7add1fdf45",
   "invoice.standard.en":
-    "0a347da3e0de13a45935e61cd4dd14ae2e3855d1ea40366abdffe3fa72ed4518",
+    "5c8b8592203aa554e80e177a34dce6ed345b803b17e71f843067df55b7721a89",
   "invoice.classic.uk":
-    "a4be673f340030bf39a83ff1b85e6725f53a4744d54cace243a96b377ee7dbb0",
+    "006e7a8c17f2c6ff9c89d8b8ea9acad5fc1f933d6671cda0e927d6cb73fda118",
   "invoice.classic.ru":
-    "e6a6cd7879002b0dcadb63f6593e17f9d112da8dd7864d91a2aec4d5be93f148",
+    "45352f887156c7bbb0263cee0e5924db01adc3965b6477df4693e227483b5b24",
   "invoice.classic.en":
-    "dc80278f68604b1aaead2aff2b692b976c12efad16a393d7c910845ce0657450",
+    "900678a65ddebd5b73d200545d1af73d2844eb9538711927d65ba96daff551f3",
   "invoice.minimal.uk":
-    "4bdbac16563667ff7d485fc07f13945ce81e7980cbcf74c535f5848392ede051",
+    "c486f61aff8f9aeb461f030376f2cab73b7483457b4a57f8119e086af1627dd0",
   "invoice.minimal.ru":
-    "77a8eefc094279706d52d905081c82ace8e0aa20d018e3642abb33c5a31095b9",
+    "1f8664d7120e55d21fe3ea2e5a13a4575c977c68fe009427582e35aa99b151e4",
   "invoice.minimal.en":
-    "d95834f40e235e70a4c9c25e10cbe595ecb534504dd905b0224b74edf45d0910",
+    "c385c46d37126caa8492b028470ff724b8b9b93937908328aa4649689cb2254d",
   "invoice.corporate.uk":
-    "b3807e61c6f0d93fd47176403d0fde5dca52d9e006cc56fd863ab63de846f1cc",
+    "0a97701d9c4952ef8fbf85b65f3c47205c5e7d1103ee7bea4b79542a8b6c90cf",
   "invoice.corporate.ru":
-    "0a9ee14a6d6d631eaf7fda5374dbf67d11ff4ac6d7298b5dfd9afd2a65b2a20e",
+    "69f1fcdfeb36d8c0097452eebe05b918ecadf3224a385db54f6eeefde628cd2b",
   "invoice.corporate.en":
-    "30ccc085f77abd0c7600dca52a424585dd3f7fe236a5787df433510d898a3acf",
+    "073bc5887d1e4487bb2f303f41e4858f128e066f57545135d9f2a63db7ba75bd",
   "act.standard.uk":
-    "1f628564df59d65b87d72c7912a0324e7ed5c6fe15e67c080df98f5daeddda33",
+    "943404607324f0b4d7905e02474e1f697f177dbe108ca2d6ebd796a14e91d3fa",
   "act.standard.ru":
-    "913843b4d51dcc1d429003e8b836c2fdec152faa50711ca1dbf632e634ed8fff",
+    "b3e64fef5d3c666dda570ca1c50663ee1cc0ff96ca5c0886ab8fc1bef9907421",
   "act.standard.en":
-    "b4def70f0757c8dbefe7f248cfc394d721aaa359a7648f6a22955f5f20dc6946",
+    "ebcbaf3931a1b35febb71a5ed09d36648a9968b86c81e5f17f713fe1d95a49d7",
   "act.classic.uk":
-    "a1b715a554b6898916fcc4825a9606f3344740eac8517ac73169fb553c67f340",
+    "853047c213630e88ebc94253c57f8bc9a46c2e667dfb4dfff100c579e0f4ddcb",
   "act.classic.ru":
-    "33774b7d2d0c9b4024d8bb9cb3c70f5d93589edb44b2ef99aad87cf2b5e4298f",
+    "e8360ef6ba876a0b647fb533b0b1c39293e3b10a7c898d47465f7d88ebcce69c",
   "act.classic.en":
-    "605013b78380f1ff7007b96e81c36e9723dc0e050ba3bfb437009dd6ce460898",
+    "4df67dd9db717a929e4c6e12e845a632df7437a7bc30a0ad40f0c57843c11acd",
   "act.minimal.uk":
-    "64443491ff80201c1dff1e5d87c0fb371b95c66d4673a4d8c0f7f1d5fbe310df",
+    "0cedde9f9452f3ca0db26a2ecaa6619ce41d55b219dab3ed19fd679ea02ff70b",
   "act.minimal.ru":
-    "5e8f2b8cb844be8ec609737d3c35fdcef3a7baa55a07df6d1f7b8825f3b1da05",
+    "05eeffe27e023a07f5a6d258d9d9c74f8697db4a49b2971c62bdd5a0554bbc47",
   "act.minimal.en":
-    "52eaee5151745a27caf2dce902fcd9ff29d2aeca1ef44f68db8ca8f123a2231c",
+    "cc2e901f651412ec96b849944930c45577b9429737980618d1ccb5e2b34f64e7",
   "act.corporate.uk":
-    "0995c60e36ee7057e11157e62732c3a4b328b4a997a4e63ab7103211ccab4d4b",
+    "3ef89d1f592b5e84e215f88bd200dbce2342e6429df9e8bbf3ffde4bba5953af",
   "act.corporate.ru":
-    "f248654be84dd6e3bd5c34567be9c86c306c458a517992cc194aa3619d9cc938",
+    "e65677c3ed203347c2693693e823fcd769970d4218d256e1b7ded1e53cf00eda",
   "act.corporate.en":
-    "c5eebfea657a877709a4fb1b77e99d8df034cf696b3ccba7b3b52706625348dd",
+    "2cd30ef611646a70c3ef07312492508fc09892e1f81c30f684373f1000ff58ec",
   "sales_receipt.standard.uk":
-    "9d0be5b4f86b28c3c855ef4f6e231f113e5c04438d9b1e7febf5ec317b5711e1",
+    "73a58fabe7f85d45ca8f158b5a08c373c1fbdccd824421c09d38b09ee67fece6",
   "sales_receipt.standard.ru":
-    "63a0f48b8afc12df563656f645b74678fdb2f8291a348b4e934729d3e31367e6",
+    "43ebc1365486d943a23a3a099734491b7fe609018ff5e9a96e11f62640767e61",
   "sales_receipt.standard.en":
-    "8d2a26f7d674bef9236c2774f83aaf5d81e264fbdce801bf48f98b96438b9a26",
+    "500d470defab15e1461f36c0eca842f716c52c25f8a5821993a53150cfe1ceba",
   "sales_receipt.classic.uk":
-    "1a5590000c88bd2fa4094d9c75f8bb65fb18cf621cdc0430ce024066a33173cf",
+    "c32b532901072889c863f393e43144f752e45f4c4a765be3c5de5640e60c4608",
   "sales_receipt.classic.ru":
-    "553ef41b816587b13e48fb3ea6eeaf1ff34fa667ad3b7cbc7f19880952504ae4",
+    "762131de53f8db0d675e27654b18d788bc794c2f779eeabe40b1d1e84c5558ac",
   "sales_receipt.classic.en":
-    "57244e5dc1a117842efcc692376408b3844a66a0296f32004a7e4bf2ad1c6e1f",
+    "4e45a884bf41bd7b0c3558f944e9b141a5db6eeed773aab96873b6525b1983a1",
   "sales_receipt.minimal.uk":
-    "b6bc32dba6232f6e5abf65926344d8a78102553718ac1c4da45fe525d305261d",
+    "033b7b54ff83f1bdd2d496571cbeba70842c415c06a5250acdc2ebe4e88e083d",
   "sales_receipt.minimal.ru":
-    "3c41c9d9b3bf87019d055a5f31a72dc3f949b467a94767446aa72b77b6ddf1f5",
+    "56d8d0a0e25a4c2cfe7b621f4f8d3cbc0c69e7d5fbd7bf0ec46e4f7e223e6384",
   "sales_receipt.minimal.en":
-    "39610b8064dd1ef3c977274d051e43069f075c2105cf702d5edc63ae36c485dd",
+    "c228609e786f32c1502977795e9a4b4b2500b6af921351c9de216f4f08077e3f",
   "sales_receipt.corporate.uk":
-    "51a8911b723df00fe20a868ef7723db42889702521be7b89a2fa8c802b6aac6d",
+    "f19fbe99ed375565b7e16715892e9d827f2a33140634f36bb39ac6544ce0a306",
   "sales_receipt.corporate.ru":
-    "be191c3f2bcdbb6d5ddbbac31490dab8b27ec2f7d9469b79d4b74be57a1ba108",
+    "af263c5cfda0b0b5f99e1eeee2bcb51ed46e760f975c1dba8c4f217ed19c01b9",
   "sales_receipt.corporate.en":
-    "f3ad97ad49fb43417b33f35fd6520bfb348f4e6b0a5ec8e537448519f50cb30f",
+    "f1d02f72508ec5204cdb06ec6d636d4cbc3c1b34e5f0d7e79072b02d1655a916",
   "packing_list.standard.uk":
-    "1d1ed3dda0e0dac938bab901724552ee0c1baf093dcb8d72e397e153c1adf833",
+    "8fd42cd1286f9d5ed4f92314469cf3aba9afaece88e6ed99724b1b212c2e41ec",
   "packing_list.standard.ru":
-    "bf8fde39c308e224c98572b32e115df12314a416be1f6149578ac1e614937208",
+    "a06d648ef4b986cff20dd9287a8293f3ef5e81f99aa603dd6a326c258d2b5c6f",
   "packing_list.standard.en":
-    "9559061768bfc8c29e500eec793c3b63163299f78d128f2b85d52c81e5f7df42",
+    "36f84e87e43cb9e7cab9162e2acfcee2bcb81b9222bd00a00c2b007c1be68baa",
   "packing_list.classic.uk":
-    "e7992f643adc76d12f0880508be8dce23e115f5b62fe2564874609dc619b81e2",
+    "b9c4500fec91125830f901c1c666d7429a8d083674c9ae27c931ac2d08c82103",
   "packing_list.classic.ru":
-    "129673a0e39b787dff8856739fe29a35f5a2c4ecc222e43e2d3f2be59b0c0803",
+    "56caec70582b92a035c882498e8be3afa52fdbd8bb69a6c53d90b3250208961c",
   "packing_list.classic.en":
-    "dcc3e6c1b18d338236ad8f72a4e4718d3b0c627e8415248b30cc9fd9e090155a",
+    "9bcdd22bc8c2c3fcce69ed5986ebba5ae73f1b99a42e503c770cca30bda8076d",
   "packing_list.minimal.uk":
-    "7fee9ae7841724a3138301afbb9681b54547c2e19532ca9b5d27c3965b1f6039",
+    "b794859ea7973f9d639a490762e22e80ef01a93bde9a554198ca1e603a4eed81",
   "packing_list.minimal.ru":
-    "c35c4450539c50206cfc753a6f2114dabfd8c1fc3333de4c9e6413376dbf82fa",
+    "70903b4de744e087a11ed9c0b5d95a94220dffc17bc3a92938c022b529277ff1",
   "packing_list.minimal.en":
-    "04388c6120dead79826d60e6a6771e0bc7974328957fd9266d01b7335d22d3c4",
+    "e6afb662080e776b04f9e26f6e6cc125e2474cb436b7f9313166bc3320d691f0",
   "packing_list.corporate.uk":
-    "6a518fded11b6beaa38b07d79124b1748a1280317b8aab0cf9f669232227aa1d",
+    "a1d608a644a776a4c2789f50c2a260ca58cc9c4274204d3146f5a30e17e92450",
   "packing_list.corporate.ru":
-    "9a793c3ea4dddabab423708ec81e7f58af0f11765fe3d00f2366863a3b64d962",
+    "54b52eb6095a61e59bf45f2e92f5f059f14a7c11f3bd5d300548183731a43503",
   "packing_list.corporate.en":
-    "10286477140332a535ed50c7e5c92f59ad7fc5a4e51f05f0fde3e5b205d3182d",
+    "74f283ccd5cef7c39e8df264b9169520f2dc92872d9a45c941f2880f857703b3",
 };
 
 const order = (overrides: Partial<FrozenOrder> = {}): FrozenOrder => ({
@@ -397,7 +399,7 @@ describe("invoice and act layout", () => {
     const NOTICES = {
       uk: "Не є фіскальним документом",
       ru: "Не является фискальным документом",
-      en: "Not a fiscal document",
+      en: "Not a fiscal receipt; does not replace a settlement document issued by a cash register (RRO/PRRO).",
     };
     const cases = STYLES.flatMap((style) =>
       LANGUAGES.map((language) => [style, language] as const),
@@ -436,7 +438,9 @@ describe("invoice and act layout", () => {
           html.indexOf("<thead"),
           html.indexOf("</thead>"),
         );
-        expect(header.match(/<th\b/g)?.length).toBeLessThanOrEqual(3);
+        // Number (Corporate only), description, unit of measure, quantity.
+        expect(header.match(/<th\b/g)?.length).toBeLessThanOrEqual(4);
+        expect(header).toContain(DOCUMENT_LABELS.uk.unitOfMeasure);
         expect(header).not.toMatch(/Ціна|Сума|Price|Amount|Rate/i);
       },
     );
@@ -511,12 +515,11 @@ describe("invoice and act layout", () => {
       ] as const)
         for (const language of LANGUAGES) {
           const html = await render(type, "standard", language);
-          expect(
-            html.replace(
-              /Not a fiscal document|Не є фіскальним документом|Не является фискальным документом/g,
-              "",
-            ),
-          ).not.toMatch(
+          const withoutNotices = Object.values(NOTICES).reduce(
+            (rest, notice) => rest.split(notice).join(""),
+            html,
+          );
+          expect(withoutNotices).not.toMatch(
             /касов|кассов|\bcash\b|fiscal receipt|фіскальн|фискальн/i,
           );
         }
@@ -574,8 +577,8 @@ describe("invoice and act layout", () => {
       en: "Quotation",
     };
     const NOTICE_START = {
-      uk: "Пропозиція не є рахунком",
-      ru: "Предложение не является счётом",
+      uk: "Комерційна пропозиція не є рахунком",
+      ru: "Коммерческое предложение не является счётом",
       en: "This quotation is not an invoice",
     };
     const VALID_UNTIL = {
@@ -824,7 +827,8 @@ describe("invoice and act layout", () => {
     it.each(STYLES)("%s invoice: payment block, due date, words", async (s) => {
       const html = await render(DocumentType.INVOICE, s, "uk");
       expect(html).toContain("Реквізити для оплати");
-      expect(html).toContain(SELLER_IBAN);
+      expect(html).toContain(SELLER_IBAN_PRINTED);
+      expect(html).toContain("від 15.10.2026");
       expect(html).toContain("Сплатити до");
       expect(html).toContain("20 жовтня 2026 р.");
       expect(html).toContain("Сума прописом");
@@ -850,11 +854,66 @@ describe("invoice and act layout", () => {
       },
     );
 
+    it.each(STYLES)(
+      "%s prints a unit of measure on every line of every typed document",
+      async (style) => {
+        for (const type of ALL_TYPES) {
+          const html = await render(type, style, "uk");
+          const labels = DOCUMENT_LABELS.uk;
+          const unit =
+            type === DocumentType.ACT ? labels.unitService : labels.unitPiece;
+          expect(html).toContain(
+            `<th class="doc-unit">${labels.unitOfMeasure}</th>`,
+          );
+          const cells = html.match(/<td class="doc-unit">([^<]*)<\/td>/g);
+          expect(cells?.length).toBe(order().items.length);
+          for (const cell of cells ?? []) expect(cell).toContain(`>${unit}<`);
+        }
+      },
+    );
+
+    it.each(STYLES)(
+      "%s names the act's lines as works and every other type's neutrally",
+      async (style) => {
+        const labels = DOCUMENT_LABELS.uk;
+        const act = await render(DocumentType.ACT, style, "uk");
+        expect(act).toContain(`>${labels.workDescription}</th>`);
+        for (const type of [
+          DocumentType.INVOICE,
+          DocumentType.PACKING_LIST,
+        ] as const) {
+          const html = await render(type, style, "uk");
+          expect(html).toContain(`>${labels.itemDescription}</th>`);
+          expect(html).not.toContain("Назва товару");
+        }
+      },
+    );
+
+    it.each(STYLES)(
+      "%s leaves the buyer's signatory a captioned line for position and name",
+      async (style) => {
+        for (const type of [
+          DocumentType.ACT,
+          DocumentType.PACKING_LIST,
+          DocumentType.RETURN_NOTE,
+        ] as const) {
+          const html = await render(type, style, "uk");
+          expect(html).toContain('class="doc-sign-line doc-sign-line-name"');
+          expect(html).toContain(
+            `<div class="doc-sign-caption">${DOCUMENT_LABELS.uk.positionAndName}</div>`,
+          );
+        }
+        const invoice = await render(DocumentType.INVOICE, style, "uk");
+        expect(invoice).not.toContain(DOCUMENT_LABELS.uk.positionAndName);
+      },
+    );
+
     it("prints the seller's SWIFT nowhere, and the IBAN once", async () => {
       for (const style of STYLES) {
         const html = await render(DocumentType.INVOICE, style, "uk");
         expect(html).not.toContain("SWIFTUA2X");
-        expect(html.split(SELLER_IBAN).length - 1).toBe(1);
+        expect(html.split(SELLER_IBAN_PRINTED).length - 1).toBe(1);
+        expect(html).not.toContain(SELLER_IBAN);
       }
     });
 

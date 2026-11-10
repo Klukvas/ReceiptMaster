@@ -35,14 +35,20 @@ interface MenuItem {
   group?: string;
 }
 
-type MenuSection = { group?: string; items: { item: MenuItem; index: number }[] };
+type MenuSection = {
+  group?: string;
+  items: { item: MenuItem; index: number }[];
+};
 
 /** Consecutive items with the same group share one section; flat indices are kept for keyboard focus. */
 function sectionsOf(items: MenuItem[]): MenuSection[] {
   return items.reduce<MenuSection[]>((sections, item, index) => {
     const last = sections.at(-1);
     if (last && last.group !== undefined && last.group === item.group)
-      return [...sections.slice(0, -1), { ...last, items: [...last.items, { item, index }] }];
+      return [
+        ...sections.slice(0, -1),
+        { ...last, items: [...last.items, { item, index }] },
+      ];
     return [...sections, { group: item.group, items: [{ item, index }] }];
   }, []);
 }
@@ -195,7 +201,9 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       className: baseItem,
     });
 
-    const creatableTypes = CREATABLE_TYPES.filter((type) => canCreate(order, type));
+    const creatableTypes = CREATABLE_TYPES.filter((type) =>
+      canCreate(order, type),
+    );
     const createItems: MenuItem[] = creatableTypes.map((type, position) => {
       const meta = DOCUMENT_TYPE_META[type];
       return {
@@ -404,6 +412,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       )}
       <button
         ref={buttonRef}
+        data-order-actions={order.id}
         onClick={handleToggle}
         className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors"
         title={t("orders.moreActions")}

@@ -25,8 +25,12 @@ export type DocumentLabels = {
   purposeVat: string;
   purposeNoVat: string;
   total: string;
+  /** VAT payer: the total less the VAT it includes, printed before the VAT line. */
+  amountExclVat: string;
   vatIncluded: string;
   noVat: string;
+  /** Invoice and act of a seller whose VAT status is unknown: said instead of nothing. */
+  vatNotSpecified: string;
   grandTotal: string;
   amountInWords: string;
   dueDate: string;
@@ -69,6 +73,16 @@ export type DocumentLabels = {
   vatNonPayer: string;
   priceWithVat: string;
   amountWithVat: string;
+  /** Items table: the description header (works for the act, goods otherwise) and price. */
+  itemDescription: string;
+  workDescription: string;
+  price: string;
+  /** Items table: unit-of-measure header and the unit printed on every line. */
+  unitOfMeasure: string;
+  unitPiece: string;
+  unitService: string;
+  /** Caption under the blank line where the buyer's signatory writes position and name. */
+  positionAndName: string;
 };
 
 export const DOCUMENT_LABELS = {
@@ -86,13 +100,15 @@ export const DOCUMENT_LABELS = {
     bank: "Банк",
     iban: "IBAN",
     purpose: "Призначення платежу",
-    purposePrefix: "Оплата за рахунком №",
+    purposePrefix: "Оплата згідно з рахунком №",
     purposeFrom: "від",
     purposeVat: "у т.ч. ПДВ",
     purposeNoVat: "без ПДВ",
     total: "Разом",
+    amountExclVat: "Сума без ПДВ",
     vatIncluded: "У тому числі ПДВ",
     noVat: "Без ПДВ",
+    vatNotSpecified: "Інформація про ПДВ не зазначена",
     grandTotal: "Всього до сплати",
     amountInWords: "Сума прописом",
     dueDate: "Сплатити до",
@@ -109,9 +125,10 @@ export const DOCUMENT_LABELS = {
     stamp: "М.П.",
     actStatement:
       "Роботи виконано в повному обсязі, сторони претензій одна до одної не мають.",
-    nonFiscalNotice: "Не є фіскальним документом",
+    nonFiscalNotice:
+      "Не є фіскальним документом і не замінює розрахунковий документ РРО/ПРРО",
     quoteNotice:
-      "Пропозиція не є рахунком та не є підставою для оплати або бухгалтерського обліку",
+      "Комерційна пропозиція не є рахунком. Для оплати буде виставлено рахунок.",
     offerTotal: "Загальна вартість",
     saleTotal: "Всього",
     returnedBy: "Повернув",
@@ -132,6 +149,13 @@ export const DOCUMENT_LABELS = {
     vatNonPayer: "Не є платником ПДВ",
     priceWithVat: "Ціна з ПДВ",
     amountWithVat: "Сума з ПДВ",
+    itemDescription: "Опис",
+    workDescription: "Найменування робіт (послуг)",
+    price: "Ціна",
+    unitOfMeasure: "Од. вим.",
+    unitPiece: "шт.",
+    unitService: "посл.",
+    positionAndName: "посада, ПІБ",
   },
   ru: {
     supplier: "Поставщик",
@@ -152,8 +176,10 @@ export const DOCUMENT_LABELS = {
     purposeVat: "в т.ч. НДС",
     purposeNoVat: "без НДС",
     total: "Итого",
+    amountExclVat: "Сумма без НДС",
     vatIncluded: "В том числе НДС",
     noVat: "Без НДС",
+    vatNotSpecified: "Информация об НДС не указана",
     grandTotal: "Всего к оплате",
     amountInWords: "Сумма прописью",
     dueDate: "Оплатить до",
@@ -170,9 +196,10 @@ export const DOCUMENT_LABELS = {
     stamp: "М.П.",
     actStatement:
       "Работы выполнены в полном объёме, стороны претензий друг к другу не имеют.",
-    nonFiscalNotice: "Не является фискальным документом",
+    nonFiscalNotice:
+      "Не является фискальным документом и не заменяет расчётный документ РРО/ПРРО",
     quoteNotice:
-      "Предложение не является счётом и не является основанием для оплаты или бухгалтерского учёта",
+      "Коммерческое предложение не является счётом. Для оплаты будет выставлен счёт.",
     offerTotal: "Общая стоимость",
     saleTotal: "Всего",
     returnedBy: "Вернул",
@@ -193,6 +220,13 @@ export const DOCUMENT_LABELS = {
     vatNonPayer: "Не является плательщиком НДС",
     priceWithVat: "Цена с НДС",
     amountWithVat: "Сумма с НДС",
+    itemDescription: "Описание",
+    workDescription: "Наименование работ (услуг)",
+    price: "Цена",
+    unitOfMeasure: "Ед. изм.",
+    unitPiece: "шт.",
+    unitService: "усл.",
+    positionAndName: "должность, ФИО",
   },
   en: {
     supplier: "Supplier",
@@ -213,8 +247,10 @@ export const DOCUMENT_LABELS = {
     purposeVat: "incl. VAT",
     purposeNoVat: "VAT not applicable",
     total: "Subtotal",
+    amountExclVat: "Amount excl. VAT",
     vatIncluded: "VAT included",
     noVat: "No VAT",
+    vatNotSpecified: "VAT information not specified",
     grandTotal: "Total due",
     amountInWords: "Amount in words",
     dueDate: "Pay by",
@@ -231,9 +267,10 @@ export const DOCUMENT_LABELS = {
     stamp: "Seal",
     actStatement:
       "The work has been completed in full; the parties have no claims against each other.",
-    nonFiscalNotice: "Not a fiscal document",
+    nonFiscalNotice:
+      "Not a fiscal receipt; does not replace a settlement document issued by a cash register (RRO/PRRO).",
     quoteNotice:
-      "This quotation is not an invoice and is not a basis for payment or accounting",
+      "This quotation is not an invoice. An invoice will be issued for payment.",
     offerTotal: "Total",
     saleTotal: "Total",
     returnedBy: "Returned by",
@@ -242,7 +279,7 @@ export const DOCUMENT_LABELS = {
       "This document confirms that the buyer returned the goods. It is not a fiscal document and not an adjustment calculation to a tax invoice.",
     returnSource: "Basis",
     returnReason: "Reason for return",
-    returnSourceWaybill: "Waybill No.",
+    returnSourceWaybill: "Delivery note No.",
     returnSourceInvoice: "Invoice No.",
     returnSourceOrder: "Order No.",
     validUntil: "Valid until",
@@ -254,6 +291,13 @@ export const DOCUMENT_LABELS = {
     vatNonPayer: "Not a VAT payer",
     priceWithVat: "Price incl. VAT",
     amountWithVat: "Amount incl. VAT",
+    itemDescription: "Description",
+    workDescription: "Description of work (services)",
+    price: "Price",
+    unitOfMeasure: "Unit",
+    unitPiece: "pcs",
+    unitService: "service",
+    positionAndName: "position, full name",
   },
 } satisfies Record<DocumentLanguage, DocumentLabels>;
 

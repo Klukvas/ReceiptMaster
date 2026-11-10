@@ -113,12 +113,9 @@ export function buildDocumentServices(app: DataSource) {
   );
   const receipts = new ReceiptsService(
     app.getRepository(Receipt),
-    app.getRepository(Order),
-    undefined,
     pdfStorage as never,
     app,
     { get: () => "https://example.test" } as never,
-    undefined,
     { dispatch: async () => undefined } as never,
     snapshots,
     artifacts,

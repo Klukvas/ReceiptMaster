@@ -860,9 +860,34 @@ describe("OrdersService", () => {
   });
 
   describe("deleteBatch", () => {
+    it("takes the tenant document lock before locking any order", async () => {
+      const calls: string[] = [];
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          query: jest.fn(async (sql: string) => {
+            calls.push(sql);
+          }),
+          find: jest.fn(async () => {
+            calls.push("find orders");
+            return [{ id: "o1" }];
+          }),
+        }),
+      );
+
+      await expect(service.deleteBatch(["o1", "o2"], mockUser)).rejects.toThrow(
+        ApiErrorResponse,
+      );
+
+      expect(calls[0]).toMatch(
+        /pg_advisory_xact_lock\(hashtextextended\(\$1, 1\)\)/,
+      );
+      expect(calls[1]).toBe("find orders");
+    });
+
     it("should delete batch and restore quantities", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
+          query: jest.fn(),
           find: jest
             .fn()
             .mockResolvedValueOnce([{ id: "o1" }, { id: "o2" }]) // orders
@@ -893,6 +918,7 @@ describe("OrdersService", () => {
     it("should throw if some orders not found", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
+          query: jest.fn(),
           find: jest.fn().mockResolvedValue([{ id: "o1" }]),
         };
         return cb(manager);

@@ -27,6 +27,8 @@ export const ErrorCode = {
   RECEIPT_PRINT_FAILED: "RECEIPT_PRINT_FAILED",
   DOCUMENT_REQUISITES_MISSING: "DOCUMENT_REQUISITES_MISSING",
   DOCUMENT_ALREADY_EXISTS: "DOCUMENT_ALREADY_EXISTS",
+  DOCUMENT_NOT_VOIDABLE: "DOCUMENT_NOT_VOIDABLE",
+  DOCUMENT_NUMBERS_EXHAUSTED: "DOCUMENT_NUMBERS_EXHAUSTED",
   DOCUMENT_TEMPLATE_UNSUPPORTED: "DOCUMENT_TEMPLATE_UNSUPPORTED",
   DOCUMENT_TYPE_NOT_SUPPORTED: "DOCUMENT_TYPE_NOT_SUPPORTED",
   DOCUMENT_AMOUNT_INVALID: "DOCUMENT_AMOUNT_INVALID",
@@ -95,6 +97,10 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Some requisites required for this document are missing",
   [ErrorCode.DOCUMENT_ALREADY_EXISTS]:
     "A document of this type already exists for this order",
+  [ErrorCode.DOCUMENT_NOT_VOIDABLE]:
+    "This document is not issued yet and cannot be voided. Retry its generation instead",
+  [ErrorCode.DOCUMENT_NUMBERS_EXHAUSTED]:
+    "The numbering of this document type has run out of numbers. Change the number format in Settings > Documents",
   [ErrorCode.DOCUMENT_TEMPLATE_UNSUPPORTED]:
     "This design cannot be used for this document type",
   [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
@@ -189,12 +195,8 @@ export function parseApiError(error: unknown): {
     const data = error.response.data as Partial<ApiErrorResponse>;
 
     if (data.errorCode === ErrorCode.RATE_LIMITED) {
-      const seconds = (data as { retryAfterSeconds?: unknown }).retryAfterSeconds;
       return {
-        message:
-          typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
-            ? i18n.t("errors.rateLimitedIn", { seconds: Math.ceil(seconds) })
-            : i18n.t("errors.rateLimited"),
+        message: rateLimitedMessage((data as { retryAfterSeconds?: unknown }).retryAfterSeconds),
         code: ErrorCode.RATE_LIMITED,
       };
     }
@@ -254,6 +256,57 @@ export function parseApiError(error: unknown): {
     message: "Неизвестная ошибка",
     code: ErrorCode.UNKNOWN_ERROR,
   };
+}
+
+/** The HTTP status of an API refusal, or undefined for a network failure or a non-HTTP error. */
+export function httpStatusOf(error: unknown): number | undefined {
+  return isAxiosError(error) ? error.response?.status : undefined;
+}
+
+/** "Too many requests, try again in N s" with the server's wait when it sent one. */
+export function rateLimitedMessage(retryAfterSeconds: unknown): string {
+  return typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    ? i18n.t("errors.rateLimitedIn", { seconds: Math.ceil(retryAfterSeconds) })
+    : i18n.t("errors.rateLimited");
+}
+
+/** A response body as an object, also when it came back as a Blob (PDF endpoints). */
+async function bodyObjectOf(data: unknown): Promise<Record<string, unknown> | null> {
+  let body = data;
+  if (body instanceof Blob) {
+    try {
+      body = JSON.parse(await body.text());
+    } catch {
+      return null;
+    }
+  }
+  return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+}
+
+/**
+ * The text for a 429 from a preview endpoint. A RATE_LIMITED refusal keeps the server's wait
+ * ("try again in N s"); any other 429 there means another preview of the account is still
+ * rendering, which `errors.previewBusy` says. Null when the error is not a 429.
+ */
+export async function previewRateLimitText(error: unknown): Promise<string | null> {
+  if (!isAxiosError(error) || error.response?.status !== 429) return null;
+  const body = await bodyObjectOf(error.response.data);
+  return body?.errorCode === ErrorCode.RATE_LIMITED
+    ? rateLimitedMessage(body.retryAfterSeconds)
+    : i18n.t("errors.previewBusy");
+}
+
+/**
+ * The text of an API error in the interface language, or null when the only text available is the
+ * server's own (a generic code that carries the server's detail, an untranslated code, a legacy
+ * body). Callers show their own localized message for null instead of an English sentence.
+ */
+export function translatedApiError(error: unknown): string | null {
+  const { code, message } = parseApiError(error);
+  if (isAxiosError(error) && !error.response) return message;
+  if (code === ErrorCode.RATE_LIMITED) return message;
+  if (GENERIC_ERROR_CODES.has(code) || code === ErrorCode.UNKNOWN_ERROR) return null;
+  return i18n.exists(errorTranslationKey(code)) ? message : null;
 }
 
 /**

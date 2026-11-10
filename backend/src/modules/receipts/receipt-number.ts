@@ -1,12 +1,13 @@
-import { EntityManager } from "typeorm";
+import { EntityManager, QueryFailedError } from "typeorm";
+import { ApiErrors } from "../../common/errors/ApiError";
 import { DocumentType } from "./entities/receipt.entity";
 import { issueDateIn } from "./frozen-document";
 import {
   BUMP_COUNTER,
   BUMP_WAYBILL_COUNTER,
   HIGHEST_ISSUED_IN_YEAR,
+  MAX_ACCEPTED_ISSUED_VALUE,
   MAX_COUNTER_DIGITS,
-  MAX_COUNTER_VALUE,
   RAISE_YEAR_COUNTER,
   RELEASE_COUNTER,
   RELEASE_WAYBILL_COUNTER,
@@ -57,6 +58,15 @@ export function formatDocumentNumber(
   return `${format.prefix}${separator}${yearPart}${String(value).padStart(format.padding, "0")}`;
 }
 
+// PostgreSQL SQLSTATE numeric_value_out_of_range.
+const NUMERIC_OUT_OF_RANGE = "22003";
+
+function isNumericOverflow(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) return false;
+  const driverError: { code?: unknown } = error.driverError ?? {};
+  return driverError.code === NUMERIC_OUT_OF_RANGE;
+}
+
 export interface DrawnNumber {
   number: string;
   /** The counter value behind the number, for `releaseDocumentNumber`. */
@@ -71,6 +81,25 @@ interface CounterRow {
   padding: number;
   include_year: boolean;
   reset_every_year: boolean;
+}
+
+async function drawCounterRows(
+  manager: EntityManager,
+  userId: string,
+  type: DocumentType,
+  year: number,
+): Promise<CounterRow[]> {
+  try {
+    return await manager.query(
+      type === DocumentType.WAYBILL ? BUMP_WAYBILL_COUNTER : BUMP_COUNTER,
+      [userId, type, year],
+    );
+  } catch (error) {
+    // The counter already stands at the integer maximum: no further number exists.
+    if (isNumericOverflow(error))
+      throw ApiErrors.DOCUMENT_NUMBERS_EXHAUSTED(type);
+    throw error;
+  }
 }
 
 /**
@@ -100,10 +129,7 @@ export async function nextDocumentNumber(
   options: { timeZone: string; now?: Date },
 ): Promise<DrawnNumber> {
   const year = documentYear(options.now ?? new Date(), options.timeZone);
-  const rows: CounterRow[] = await manager.query(
-    type === DocumentType.WAYBILL ? BUMP_WAYBILL_COUNTER : BUMP_COUNTER,
-    [userId, type, year],
-  );
+  const rows = await drawCounterRows(manager, userId, type, year);
   if (rows.length === 0)
     throw new Error(`Could not bump the ${type} counter for user ${userId}`);
   const [row] = rows;
@@ -199,7 +225,7 @@ export async function raiseCounterToIssued(
      FROM (
        SELECT regexp_match("number", '([0-9]{1,${MAX_COUNTER_DIGITS}})$') AS "m" FROM "receipts"
        WHERE "user_id" = $1 AND "document_type" = $2
-     ) AS "numbers" WHERE "m" IS NOT NULL AND ("m")[1]::bigint <= ${MAX_COUNTER_VALUE}`,
+     ) AS "numbers" WHERE "m" IS NOT NULL AND ("m")[1]::bigint <= ${MAX_ACCEPTED_ISSUED_VALUE}`,
     [userId, type],
   );
   const issued = Number(highest ?? 0);

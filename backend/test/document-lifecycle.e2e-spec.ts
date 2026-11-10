@@ -16,7 +16,11 @@ import {
   ReceiptStatus,
 } from "../src/modules/receipts/entities/receipt.entity";
 import { issueDateIn } from "../src/modules/receipts/frozen-document";
-import { nextDocumentNumber } from "../src/modules/receipts/receipt-number";
+import {
+  documentYear,
+  nextDocumentNumber,
+} from "../src/modules/receipts/receipt-number";
+import { DEFAULT_DOCUMENT_TIME_ZONE } from "../src/modules/settings/document-config";
 import { buildDocumentServices } from "./helpers/document-services";
 import {
   AUDIT_CLUSTER,
@@ -177,8 +181,15 @@ describeIsolatedPostgres(
       )[0]?.value as number | undefined;
 
     describe("a counter behind the numbers already issued", () => {
+      // The year as the app prints it: the calendar year in the document's zone (the
+      // account has no zone of its own here), not the UTC year, which differs on New
+      // Year's Eve after 22:00 UTC.
+      let year: number;
+      beforeEach(() => {
+        year = documentYear(new Date(), DEFAULT_DOCUMENT_TIME_ZONE);
+      });
+
       it("is repaired on the collision, never released into, and the generation retries once", async () => {
-        const year = new Date().getUTCFullYear();
         const other = await confirmedOrder();
         const existing = await generate(other, DocumentType.INVOICE);
         expect(existing.number).toBe(`${year}-000001`);
@@ -210,7 +221,6 @@ describeIsolatedPostgres(
       });
 
       it("raises the waybill counter and users.receipt_counter together", async () => {
-        const year = new Date().getUTCFullYear();
         const first = await generate(
           await confirmedOrder(),
           DocumentType.WAYBILL,

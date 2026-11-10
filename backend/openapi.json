@@ -2263,7 +2263,7 @@
             }
           },
           "409": {
-            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing",
+            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing, and when the type's number counter has reached the largest possible number (DOCUMENT_NUMBERS_EXHAUSTED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2660,6 +2660,9 @@
           },
           "404": {
             "description": "Receipt not found"
+          },
+          "409": {
+            "description": "A waybill, sales receipt or packing list that is still processing or failed cannot be voided (DOCUMENT_NOT_VOIDABLE): its void would close the order's slot for that type for good; retry the generation instead"
           }
         },
         "tags": [
@@ -6534,7 +6537,7 @@
           },
           "newPassword": {
             "type": "string",
-            "description": "Новый пароль",
+            "description": "Новый пароль: не короче 8 символов и не длиннее 72 байт в UTF-8 (bcrypt хэширует только первые 72 байта)",
             "example": "newPassword123",
             "minLength": 8
           },

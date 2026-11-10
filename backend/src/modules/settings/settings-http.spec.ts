@@ -287,7 +287,10 @@ describe("settings real Nest HTTP / storage contract (isolated memory)", () => {
     expect(
       (await request(app.getHttpServer()).get("/settings/receipt-design")).body
         .data,
-    ).toMatchObject({ receiptTitle: "Инвойс", hasCustomReceiptTitle: false });
+    ).toMatchObject({
+      receiptTitle: "Расходная накладная",
+      hasCustomReceiptTitle: false,
+    });
   });
   it.each(["png", "jpeg", "gif", "svg"] as const)(
     "accepts %s multipart, stores and retrieves genuine PNG bytes",

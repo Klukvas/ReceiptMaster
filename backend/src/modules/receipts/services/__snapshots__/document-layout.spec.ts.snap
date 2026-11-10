@@ -21,6 +21,7 @@ exports[`invoice and act layout readable .doc-* fragments (standard, uk) act 1`]
 ---
 <div class="doc-totals">
           <div class="doc-total-row"><span>Разом</span><span>2 050,50 ₴</span></div>
+          <div class="doc-total-row"><span>Сума без ПДВ</span><span>1 708,75 ₴</span></div>
           <div class="doc-total-row"><span>У тому числі ПДВ (20%)</span><span>341,75 ₴</span></div>
           <div class="doc-total-row doc-grand"><span>Всього до сплати</span><span>2 050,50 ₴</span></div>
         </div>
@@ -41,10 +42,11 @@ exports[`invoice and act layout readable .doc-* fragments (standard, uk) act 1`]
             </div>
             <div class="doc-signature">
               <div class="doc-sign-heading">Від Замовника</div>
-              <div>&nbsp;</div>
+              <div>ТОВ Іван Покупець</div>
               <div class="doc-sign-line"></div>
               <div class="doc-sign-caption">Підпис / М.П.</div>
-              <div class="doc-sign-name">ТОВ Іван Покупець</div>
+              <div class="doc-sign-line doc-sign-line-name"></div>
+              <div class="doc-sign-caption">посада, ПІБ</div>
             </div>
           </div>
         </div>"
@@ -70,13 +72,14 @@ exports[`invoice and act layout readable .doc-* fragments (standard, uk) invoice
 <div class="doc-payment">
           <div class="doc-payment-title">Реквізити для оплати</div>
           <div><span class="doc-label">Одержувач:</span> ТОВ Продавець</div>
-          <div><span class="doc-label">IBAN:</span> UA213223130000026007233566001</div>
+          <div><span class="doc-label">IBAN:</span> UA21 3223 1300 0002 6007 2335 6600 1</div>
           <div><span class="doc-label">Банк:</span> АТ Банк</div>
-          <div><span class="doc-label">Призначення платежу:</span> Оплата за рахунком № 2026-000007 від 15 жовтня 2026 р., у т.ч. ПДВ 20% — 341,75 грн</div>
+          <div><span class="doc-label">Призначення платежу:</span> Оплата згідно з рахунком № 2026-000007 від 15.10.2026, у т.ч. ПДВ 20% — 341,75 грн</div>
         </div>
 ---
 <div class="doc-totals">
           <div class="doc-total-row"><span>Разом</span><span>2 050,50 ₴</span></div>
+          <div class="doc-total-row"><span>Сума без ПДВ</span><span>1 708,75 ₴</span></div>
           <div class="doc-total-row"><span>У тому числі ПДВ (20%)</span><span>341,75 ₴</span></div>
           <div class="doc-total-row doc-grand"><span>Всього до сплати</span><span>2 050,50 ₴</span></div>
         </div>

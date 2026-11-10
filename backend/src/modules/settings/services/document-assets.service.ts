@@ -14,7 +14,12 @@ import {
 } from "../../../common/services/signoff-image";
 import { DocumentAsset } from "../entities/document-asset.entity";
 import { UserSettings } from "../entities/user-settings.entity";
-import { STORAGE_GRACE_MS, STORAGE_BATCH } from "./document-storage-sweep";
+import {
+  SIGNOFF_RELEASE_GRACE_MS,
+  STORAGE_GRACE_MS,
+  STORAGE_BATCH,
+  scheduleStorageSweep,
+} from "./document-storage-sweep";
 import { DocumentDraft } from "../document-config";
 
 import {
@@ -193,17 +198,31 @@ export class DocumentAssetsService {
     }
   }
 
+  /**
+   * Starts the cleanup grace of an asset (the collector still skips it while anything
+   * references it). A logo keeps 24 hours: presets and documents may point at it. A
+   * signature or stamp gets a short grace and an early sweep, because issued documents
+   * carry its bytes and nothing else reads a released one.
+   */
   async release(
     userId: string,
     assetId: string | null,
     manager: EntityManager,
   ): Promise<void> {
-    if (assetId)
-      await manager.update(
-        DocumentAsset,
-        { id: assetId, user_id: userId, state: "ready" },
-        { lease_expires_at: new Date(Date.now() + 86400000) },
-      );
+    if (!assetId) return;
+    const asset = await manager.findOne(DocumentAsset, {
+      where: { id: assetId, user_id: userId },
+      select: ["id", "kind"],
+    });
+    if (!asset) return;
+    const isSignoff = asset.kind === "signature" || asset.kind === "stamp";
+    const graceMs = isSignoff ? SIGNOFF_RELEASE_GRACE_MS : STORAGE_GRACE_MS;
+    await manager.update(
+      DocumentAsset,
+      { id: assetId, user_id: userId, state: "ready" },
+      { lease_expires_at: new Date(Date.now() + graceMs) },
+    );
+    if (isSignoff) await scheduleStorageSweep(manager, userId, graceMs);
   }
 
   /** Called by scheduled tenant maintenance; no eager deletes after ambiguous commits. */

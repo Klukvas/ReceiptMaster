@@ -53,3 +53,28 @@ describe("buyer requisites stay out of frozen documents", () => {
     );
   });
 });
+
+describe("order fingerprint", () => {
+  const base = orderWith({ email: "buyer@example.com" });
+
+  it("ignores bookkeeping a concurrent promotion of another document changes", () => {
+    const promoted = {
+      ...base,
+      is_locked: true,
+      updated_at: new Date("2026-10-15T12:05:00Z"),
+    } as unknown as Order;
+
+    expect(orderFingerprint(promoted)).toBe(orderFingerprint(base));
+  });
+
+  it.each([
+    ["a line", { items: [{ ...base.items[0], qty: 2 }] }],
+    ["the total", { total_cents: 2000 }],
+    ["the recipient", { recipient: { ...base.recipient, phone: "+380" } }],
+    ["the status", { status: "draft" }],
+  ])("changes when %s changes", (_label, change) => {
+    const changed = { ...base, ...change } as unknown as Order;
+
+    expect(orderFingerprint(changed)).not.toBe(orderFingerprint(base));
+  });
+});

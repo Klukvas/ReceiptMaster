@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DOCUMENT_TYPE_META } from "../lib/document-types";
-import type { DocumentFilters } from "./useDocumentsList";
+import {
+  DEFAULT_DOCUMENT_SORT,
+  isSortField,
+  type DocumentFilters,
+  type DocumentSort,
+} from "./useDocumentsList";
 
 export const DOCUMENT_STATUSES = [
   "processing",
@@ -24,7 +29,16 @@ const pageOrFirst = (value: string | null): number => {
   return Number.isInteger(page) && page >= 1 ? page : 1;
 };
 
-/** The documents filters live in the URL (?type=&status=&from=&to=&search=&page=), so a reload or a link keeps them. */
+const sortOf = (params: URLSearchParams): DocumentSort => {
+  const field = params.get("sort");
+  if (!isSortField(field)) return DEFAULT_DOCUMENT_SORT;
+  return { sortBy: field, sortOrder: params.get("order") === "asc" ? "ASC" : "DESC" };
+};
+
+/**
+ * The documents filters live in the URL (?type=&status=&from=&to=&search=&page=), so a reload or a
+ * link keeps them; so does the sort (?sort=&order=, left out while it is the default).
+ */
 export function useDocumentsFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -76,6 +90,26 @@ export function useDocumentsFilters() {
     [commit],
   );
 
+  const setSort = useCallback(
+    ({ sortBy, sortOrder }: DocumentSort) =>
+      commit((params) => {
+        const isDefault =
+          sortBy === DEFAULT_DOCUMENT_SORT.sortBy && sortOrder === DEFAULT_DOCUMENT_SORT.sortOrder;
+        if (isDefault) {
+          params.delete("sort");
+          params.delete("order");
+        } else {
+          params.set("sort", sortBy);
+          params.set("order", sortOrder === "ASC" ? "asc" : "desc");
+        }
+        // A new order starts on the first page.
+        params.delete("page");
+      }),
+    [commit],
+  );
+
+  const sort = useMemo(() => sortOf(searchParams), [searchParams]);
+
   const clearFilters = useCallback(
     () =>
       commit((params) => {
@@ -88,7 +122,9 @@ export function useDocumentsFilters() {
     filters,
     urlSearch: searchParams.get("search") ?? "",
     urlPage: pageOrFirst(searchParams.get("page")),
+    sort,
     setParam,
+    setSort,
     clearFilters,
   };
 }

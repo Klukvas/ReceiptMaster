@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   settingsApi,
   type SignoffImage,
@@ -28,9 +28,17 @@ const withKind = (
   [kind]: image,
 });
 
+// Every signature/stamp upload and delete shares this key, so either card can tell that one runs.
+const SIGNOFF_MUTATION_KEY = ["settings", "signoff", "mutation"] as const;
+
+/** True while any signature or stamp upload/delete is in flight, on either card. */
+export const useIsSignoffMutating = (): boolean =>
+  useIsMutating({ mutationKey: SIGNOFF_MUTATION_KEY }) > 0;
+
 export const useUploadSignoff = (kind: SignoffKind) => {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [...SIGNOFF_MUTATION_KEY, "upload", kind],
     mutationFn: async (file: File) => (await settingsApi.uploadSignoff(kind, file)).data,
     onSuccess: (image) => {
       queryClient.setQueryData<SignoffState>(SIGNOFF_QUERY_KEY, (previous) =>
@@ -43,6 +51,7 @@ export const useUploadSignoff = (kind: SignoffKind) => {
 export const useDeleteSignoff = (kind: SignoffKind) => {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: [...SIGNOFF_MUTATION_KEY, "delete", kind],
     mutationFn: async () => {
       await settingsApi.deleteSignoff(kind);
     },

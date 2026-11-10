@@ -1,4 +1,6 @@
+import { QueryFailedError } from "typeorm";
 import { DocumentType } from "./entities/receipt.entity";
+import { MAX_COUNTER_VALUE } from "./receipt-number-sql";
 import {
   DEFAULT_NUMBER_FORMAT,
   formatDocumentNumber,
@@ -234,6 +236,54 @@ describe("releaseDocumentNumber", () => {
       ),
     ).toBe(false);
     expect(manager.query).not.toHaveBeenCalled();
+  });
+});
+
+describe("counter ceiling", () => {
+  it("refuses a draw past the integer maximum with 409 instead of a database error", async () => {
+    const overflow = new QueryFailedError("WITH base AS ...", [], {
+      code: "22003",
+    } as unknown as Error);
+    const manager = { query: jest.fn().mockRejectedValue(overflow) };
+
+    await expect(
+      nextDocumentNumber(manager as never, "u", DocumentType.INVOICE, {
+        timeZone: "UTC",
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      errorCode: "DOCUMENT_NUMBERS_EXHAUSTED",
+    });
+  });
+
+  it("passes any other draw failure through", async () => {
+    const manager = { query: jest.fn().mockRejectedValue(new Error("down")) };
+
+    await expect(
+      nextDocumentNumber(manager as never, "u", DocumentType.INVOICE, {
+        timeZone: "UTC",
+      }),
+    ).rejects.toThrow("down");
+  });
+
+  it("never raises a counter to the integer maximum, so the next draw still fits", async () => {
+    const calls: string[] = [];
+    const manager = {
+      query: jest.fn(async (sql: string) => {
+        calls.push(sql);
+        if (/FOR UPDATE/.test(sql))
+          return [{ reset_every_year: false, start_number: 1 }];
+        if (/MAX\(/.test(sql)) return [{ highest: null }];
+        if (/RETURNING "value"/.test(sql)) return [{ value: 0 }];
+        return [];
+      }),
+    };
+
+    await raiseCounterToIssued(manager as never, "u", DocumentType.INVOICE);
+
+    const highest = calls.find((sql) => /MAX\(/.test(sql));
+    expect(highest).toContain(`<= ${MAX_COUNTER_VALUE - 1}`);
+    expect(highest).not.toContain(`<= ${MAX_COUNTER_VALUE}`);
   });
 });
 

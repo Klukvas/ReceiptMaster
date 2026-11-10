@@ -133,6 +133,6 @@ describe("Stored title -> PDF generation provenance", () => {
       "user-1",
       ReceiptStyle.DELIVERY,
     );
-    expect(result.html).toContain(">Delivery Note</div>");
+    expect(result.html).toContain(">Shipping note</div>");
   });
 });

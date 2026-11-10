@@ -1,13 +1,23 @@
+/**
+ * Heading of a waybill whose account never set its own title. Only this default changed
+ * (it used to be "Інвойс" / "Инвойс" / "Invoice"); a saved custom title is printed as is,
+ * and an issued waybill keeps the heading frozen into its HTML.
+ */
 export const DEFAULT_RECEIPT_TITLE: Record<string, string> = {
-  en: "Invoice",
-  uk: "Інвойс",
-  ru: "Инвойс",
+  en: "Delivery note",
+  uk: "Видаткова накладна",
+  ru: "Расходная накладная",
 };
 
 export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
 
 const SPECIAL_TITLES: Record<string, Record<string, string>> = {
-  delivery: { en: "Delivery Note", ru: "Накладная", uk: "Видаткова накладна" },
+  // The price-less style is a shipping note, not a видаткова накладна (which carries prices).
+  delivery: {
+    en: "Shipping note",
+    ru: "Отгрузочная накладная",
+    uk: "Накладна на відвантаження",
+  },
   proforma: {
     en: "Proforma Invoice",
     ru: "Проформа-инвойс",

@@ -307,6 +307,9 @@
             <thead>
                 <tr>
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    {{#if document}}
+                    <th class="doc-unit">{{document.labels.unitOfMeasure}}</th>
+                    {{/if}}
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
                     {{#unless document.hidesItemPrices}}
                     <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
@@ -318,6 +321,9 @@
                 {{#each items}}
                 <tr>
                     <td class="col-description">{{productName}}</td>
+                    {{#if @root.document}}
+                    <td class="doc-unit">{{@root.document.itemUnit}}</td>
+                    {{/if}}
                     <td class="col-qty">{{qty}}</td>
                     {{#unless @root.document.hidesItemPrices}}
                     <td class="col-price">{{unitPrice}}</td>
@@ -390,7 +396,7 @@
                 {{/if}}
             </div>
             
-            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Receipt generated:{{/if}} {{generatedAt}}</div>
+            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Document generated:{{/if}} {{generatedAt}}</div>
         </div>
         {{#if document}}
         </div>

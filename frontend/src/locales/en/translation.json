@@ -45,8 +45,10 @@
     "saving": "Saving...",
     "retry": "Retry",
     "sortBy": "Sort by",
-    "sortAscending": "Ascending order. Tap to reverse.",
-    "sortDescending": "Descending order. Tap to reverse."
+    "opensInNewTab": "(opens in a new tab)",
+    "sortOrderAscending": "Ascending",
+    "sortOrderDescending": "Descending",
+    "sortReverseHint": "Press to reverse the order."
   },
   "auth": {
     "login": "Login",
@@ -57,7 +59,7 @@
     "confirmPassword": "Confirm Password",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
-    "passwordRule": "At least {{min}} characters",
+    "passwordRule": "At least {{min}} characters, at most {{max}} bytes (a Cyrillic letter takes 2)",
     "firstName": "First Name",
     "lastName": "Last Name",
     "loginTitle": "Sign in to your account",
@@ -70,7 +72,8 @@
     "signUpHere": "Sign up here",
     "sessionExpired": "Your session expired. Please sign in again.",
     "loginSuccess": "Successfully logged in!",
-    "registerSuccess": "Successfully registered!"
+    "registerSuccess": "Successfully registered!",
+    "passwordBytes": "{{used}}/{{max}} bytes"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -395,8 +398,8 @@
     "companyPhonePlaceholder": "e.g., +1 234 567 8900",
     "companyWebsite": "Company Website",
     "companyWebsitePlaceholder": "e.g., www.company.com",
-    "companyTaxId": "Tax ID / VAT ID",
-    "companyTaxIdPlaceholder": "e.g., UA1234567890",
+    "companyTaxId": "EDRPOU / RNOKPP",
+    "companyTaxIdPlaceholder": "e.g., 12345678",
     "companyIban": "IBAN",
     "companyIbanPlaceholder": "e.g., UA213996220000026007233566001",
     "companySwift": "SWIFT / BIC",
@@ -501,7 +504,7 @@
     "autoReceiptEnabled": "Waybills will be created on confirm",
     "autoReceiptDisabled": "Automatic waybills turned off",
     "templateNames": {
-      "delivery": "Delivery note"
+      "delivery": "Shipping note"
     },
     "requisites": {
       "title": "Requisites for documents",
@@ -567,7 +570,7 @@
     "downloadPdf": "Download PDF",
     "poweredBy": "Powered by ReceiptMaster",
     "downloaded": "Document downloaded",
-    "generateStarted": "Document is being created",
+    "generateStarted": "Generating the document",
     "printerPrompt": "Available printers: {{printers}}\nEnter printer name (or leave empty for default):"
   },
   "profile": {
@@ -595,8 +598,7 @@
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
     "passwordChanged": "Password changed successfully",
-    "passwordChangeFailed": "Failed to change password",
-    "passwordMinLength": "Password must be at least {{min}} characters long"
+    "passwordChangeFailed": "Failed to change password"
   },
   "landing": {
     "welcome": "Welcome",
@@ -1036,7 +1038,11 @@
     "numberingStartTooLow": "The starting number cannot be lower than the next number to be issued",
     "invoiceDueDateBeforeIssueDate": "The due date cannot be before the issue date",
     "rateLimited": "Too many requests. Try again in a moment.",
-    "rateLimitedIn": "Too many requests. Try again in {{seconds}} s."
+    "rateLimitedIn": "Too many requests. Try again in {{seconds}} s.",
+    "documentNotVoidable": "This document is not issued yet, so it cannot be voided. Retry its generation instead.",
+    "documentNumbersExhausted": "The numbers for this document type have run out. Change the number format in Settings → Documents or contact support.",
+    "previewBusy": "A preview is already being prepared. Try again in a moment.",
+    "passwordTooLong": "The password is too long: at most {{max}} bytes (a Latin letter or digit is 1 byte, a Cyrillic letter 2, an emoji 4)"
   },
   "document": {
     "interfaceLanguage": "Interface language",
@@ -1154,7 +1160,7 @@
     "menuItem": "{{type}}…",
     "createTitle": "Create document: {{type}}",
     "create": "Create",
-    "created": "Document is being created: {{type}}",
+    "created": "Generating the document: {{type}}",
     "design": "Document design",
     "notes": {
       "quote": "A quote is not an invoice and does not lock the order. To send an updated one, void the current quote and create a new one.",
@@ -1174,8 +1180,8 @@
     "contractRef": "Contract",
     "contractRefPlaceholder": "E.g. Contract No. 15 of 01.03.2026",
     "completionText": "Completion statement",
-    "completionTextStandardHint": "Left empty, the standard sentence shown above is printed.",
-    "completionTextCustomHint": "This text replaces the standard sentence in the act.",
+    "completionTextStandardHint": "Left empty, the act prints the standard sentence: “{{text}}”",
+    "completionTextCustomHint": "This text replaces the standard sentence “{{text}}”.",
     "completionTextReset": "Use the standard text",
     "actCompletionStandard": "The work has been completed in full; the parties have no claims against each other.",
     "period": "Work period",
@@ -1213,7 +1219,11 @@
       "dueDateServer": "This due date is not accepted. Choose today or a later date.",
       "voidReasonInvalid": "The reason is not accepted. Use up to {{max}} characters.",
       "periodFromRequired": "Enter the period start date",
-      "periodToRequired": "Enter the period end date"
+      "periodToRequired": "Enter the period end date",
+      "checkFields": "Some details were not accepted. Check the highlighted field and try again.",
+      "requestRejected": "The document could not be created with these details. Check the form and try again.",
+      "createFailed": "The document could not be created. Try again in a moment.",
+      "voidFailed": "The document could not be voided. Try again in a moment."
     },
     "status": {
       "generated": "Ready",
@@ -1237,9 +1247,7 @@
     "createAgain": "Create a new return note.",
     "returnNote": {
       "linesTitle": "Items to return",
-      "select": "Select",
       "selectLine": "Return: {{name}}",
-      "product": "Product",
       "ordered": "Ordered",
       "returned": "Already returned",
       "quantity": "Return",
@@ -1247,7 +1255,6 @@
       "fullyReturned": "Fully returned",
       "reason": "Reason for the return",
       "reasonPlaceholder": "Optional. E.g. damaged packaging",
-      "hint": "This document does not refund money and does not change stock.",
       "maxHint": "Up to {{max}}"
     },
     "voidReasons": {
@@ -1264,7 +1271,9 @@
     "voidedNoReason": "No reason was given.",
     "voidedReissuable": "A new {{type}} can be created from the order, with a new number.",
     "voidedFinal": "A new {{type}} cannot be created for this order.",
-    "voidedRepeatable": "Its quantities are available for a new return note."
+    "voidedRepeatable": "Its quantities are available for a new return note.",
+    "replaceOldestUnknownMessage": "We could not check how many documents of this type ({{type}}) are kept. Creating this one may permanently delete your oldest document of this type, and its public link would stop working. Download it first if you need a copy.",
+    "replaceOldestUnknownTitle": "The oldest document may be replaced"
   },
   "documentFields": {
     "seller": {
@@ -1313,9 +1322,18 @@
     "replacing": "Replacing",
     "replacementFailed": "Replacement failed",
     "createAgain": "Create again",
-    "timeZoneHint": "Dates are counted by calendar day in the {{zone}} time zone.",
+    "timeZoneHint": "Dates are counted by calendar day {{zone}}.",
     "rangeReversed": "The “From” date is later than the “To” date, so nothing can match. Swap them or clear one.",
-    "failedReturnNote": "Open the order and create a new return note."
+    "failedReturnNote": "Open the order and create a new return note.",
+    "retentionShort": "Only the {{limit}} most recent waybills, quotes, sales receipts and packing lists of each type are kept.",
+    "retentionShortGeneric": "Only the most recent waybills, quotes, sales receipts and packing lists of each type are kept.",
+    "retentionMore": "When you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
+    "stillGenerating": "Some documents are still being generated. Refresh to see whether they are ready.",
+    "refresh": "Refresh",
+    "filtersToggle": "Filters",
+    "timeZoneKyiv": "in Kyiv time",
+    "timeZoneUniversal": "in Coordinated Universal Time (UTC)",
+    "timeZoneCity": "in the {{city}} time zone"
   },
   "numbering": {
     "title": "Document numbering",
@@ -1329,7 +1347,7 @@
     "resetEveryYear": "Start the numbering anew every year",
     "resetEveryYearHint": "Numbers restart from 1 on 1 January (the year in the document time zone). The start number and the example refer to the current year.",
     "resetEveryYearOffHint": "The counter keeps going across years.",
-    "resetNeedsYear": "Turn on “Include the year” first.",
+    "resetNeedsYear": "Not available without the year in the number: after a yearly restart numbers repeat, and only the year tells them apart. Turn on “Include the year”.",
     "startHintYearly": "Minimum for the current year: {{min}}. It can only be raised, so a number is never issued twice.",
     "preview": "Number example",
     "saved": "Numbering saved: {{type}}",
@@ -1344,13 +1362,15 @@
     },
     "prefixHint": "Optional. Include the separator in it: “{{example}}” gives {{example}}0001.",
     "paddingHint": "Zero-padded: {{value}} becomes {{example}}.",
-    "yearHint": "The counter does not restart each year; only the year inside the number changes."
+    "yearHint": "The counter does not restart each year; only the year inside the number changes.",
+    "prefixExample": "INV-",
+    "prefixSpaceHint": "A trailing space is not kept: a hyphen goes between the prefix and the number, e.g. {{example}}."
   },
   "signoff": {
     "title": "Signature and stamp",
     "description": "Upload a signature and a company stamp to add them to your documents.",
-    "note": "Documents that were already issued do not change. The signature and stamp are added in the “Standard”, “Classic”, “Minimal” and “Corporate” designs. A scanned signature or stamp image is not a qualified electronic signature.",
-    "styleUnsupported": "Your current design ({{style}}) does not add the signature and stamp. Switch to “Standard”, “Classic”, “Minimal” or “Corporate” to use them.",
+    "note": "Documents that were already issued do not change. The signature and stamp are added in these designs: {{styles}}. A scanned signature or stamp image is not a qualified electronic signature.",
+    "styleUnsupported": "Your current design ({{style}}) does not add the signature and stamp. Switch to {{styles}} to use them.",
     "signature": "Signature",
     "stamp": "Stamp",
     "signatureHint": "PNG with a transparent background, about 800×300 px.",
@@ -1365,20 +1385,27 @@
     "limits": "PNG or JPEG, up to {{max}} MB.",
     "uploaded": "Uploaded: {{kind}}",
     "deleted": "Deleted: {{kind}}",
-    "deleteTitle": "Delete: {{kind}}?",
-    "deleteMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
     "willBeAdded": "Your signature and stamp will be added to this document.",
     "shareNote": "The PDF behind this link includes your signature and stamp if the document was issued with them. Anyone who has the link can see them.",
     "errors": {
       "type": "Only PNG and JPEG images are accepted",
       "tooLarge": "The image is larger than 2 MB",
       "empty": "The file is empty. Choose another image.",
-      "server": "The image could not be saved or loaded because of a server problem. Try again in a moment."
+      "server": "The image could not be saved or loaded because of a server problem. Try again in a moment.",
+      "rejected": "The image was not accepted. Use a PNG or JPEG from 32 to 4096 px on each side that is not animated.",
+      "failed": "The change could not be saved. Try again."
     },
     "unavailable": {
       "signature": "The document was issued without your signature: the image file is unavailable. Upload it again in Settings → Documents.",
       "stamp": "The document was issued without your company stamp: the image file is unavailable. Upload it again in Settings → Documents.",
       "both": "The document was issued without your signature and company stamp: the image files are unavailable. Upload them again in Settings → Documents."
-    }
+    },
+    "noteGeneric": "Documents that were already issued do not change. The signature and stamp are added only in the designs that support them. A scanned signature or stamp image is not a qualified electronic signature.",
+    "styleUnsupportedGeneric": "Your current design ({{style}}) does not add the signature and stamp. Switch to a design that supports them to use them.",
+    "styleQuoted": "“{{name}}”",
+    "deleteSignatureTitle": "Delete the signature?",
+    "deleteStampTitle": "Delete the stamp?",
+    "deleteSignatureMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
+    "deleteStampMessage": "New documents will no longer carry it. Documents already issued keep their copy."
   }
 }

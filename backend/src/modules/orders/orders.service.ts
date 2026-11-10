@@ -54,6 +54,20 @@ export interface IdempotencyResponse {
   isFromCache: boolean;
 }
 
+/**
+ * The tenant advisory lock of receipts and document configuration (generation, promotion,
+ * retention). Taken first in the transaction, before any row lock (lock-order rule in
+ * docs/context/backend-patterns.md).
+ */
+async function lockTenantDocuments(
+  manager: EntityManager,
+  userId: string,
+): Promise<void> {
+  await manager.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))", [
+    userId,
+  ]);
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -499,10 +513,7 @@ export class OrdersService {
    */
   async cancel(id: string, user: User): Promise<Order> {
     await this.dataSource.transaction(async (manager) => {
-      await manager.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
-        [user.id],
-      );
+      await lockTenantDocuments(manager, user.id);
       const order = await this.lockOrder(manager, id, user.id);
       if (order.status === OrderStatus.CANCELLED) {
         throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
@@ -793,6 +804,9 @@ export class OrdersService {
     const uniqueIds = [...new Set(orderIds)].sort();
 
     const result = await this.dataSource.transaction(async (manager) => {
+      // Tenant lock first, as cancel and document retention take it: retention evicts
+      // receipts under it, and this batch locks several orders, then their receipts.
+      await lockTenantDocuments(manager, user.id);
       const orders = await manager.find(Order, {
         where: { id: In(uniqueIds), user_id: user.id },
         order: { id: "ASC" },

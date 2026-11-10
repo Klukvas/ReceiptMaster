@@ -1,6 +1,9 @@
 # Legal drafts, November 2026
 
-**Status: drafts for a lawyer. None of this text is live.** The public Terms and Privacy pages were
+**Status: drafts for a lawyer. None of this text is live.** (Revised 2026-11-10: clause 11.1 in all
+three languages now excludes lost profits and other indirect losses instead of the
+punitive/incidental/special list, and question 9 states which documents are primary. Still drafts:
+nothing here has been reviewed by a lawyer.) The public Terms and Privacy pages were
 deliberately not changed. Everything below needs review by a Ukrainian lawyer (and, for the
 Paddle-related parts, a check against Paddle's merchant terms) before it replaces anything.
 
@@ -29,9 +32,9 @@ should be realistic for a service priced at the current plans.
 
 > **11. Limitation of Liability**
 >
-> 11.1. To the maximum extent permitted by applicable law, we are not liable for any indirect,
-> incidental, special, consequential or punitive damages, including loss of profits, data or business
-> opportunities, arising from your use of, or inability to use, the Service.
+> 11.1. To the maximum extent permitted by applicable law, we are not liable for lost profits and
+> other indirect losses, including loss of data or business opportunities, arising from your use of,
+> or inability to use, the Service.
 >
 > 11.2. Our total liability for all claims arising from or related to the Service in any period of
 > twelve (12) months is limited to the greater of: (a) the total fees you paid for the Service in the
@@ -53,11 +56,10 @@ should be realistic for a service priced at the current plans.
 > **11. Обмеження відповідальності**
 >
 > 11.1. У максимальному обсязі, дозволеному чинним законодавством, ми не несемо відповідальності
-> за будь-які непрямі, випадкові, особливі, побічні чи штрафні збитки, зокрема за втрачений прибуток,
-> втрату даних або ділових можливостей, що виникли внаслідок використання вами Сервісу або
-> неможливості його використання.
+> за упущену вигоду та інші непрямі збитки, зокрема втрату даних або ділових можливостей, що виникли
+> внаслідок використання вами Сервісу або неможливості його використання.
 >
-> 11.2. Наша загальна відповідальність за всіма вимогами, що виникають із Сервісу або пов'язані з ним,
+> 11.2. Наша загальна відповідальність за всіма вимогами, що виникають із Сервісу або пов’язані з ним,
 > за будь-який період у дванадцять (12) місяців обмежується більшою з двох сум: (а) загальної суми
 > плати за Сервіс, яку ви сплатили за дванадцять (12) місяців до події, що стала підставою для вимоги,
 > незалежно від того, чи сплачено її нам безпосередньо, чи через нашого платіжного провайдера; та
@@ -69,7 +71,7 @@ should be realistic for a service priced at the current plans.
 >
 > 11.4. Документи, які ви створюєте за допомогою Сервісу (рахунки, акти, накладні, чеки, пакувальні
 > листи), формуються з даних, які вводите ви. Ви самостійно перевіряєте їх правильність і відповідність
-> правилам обліку та оподаткування, що застосовуються до вас, а також зберігаєте копії, які зобов'язані
+> правилам обліку та оподаткування, що застосовуються до вас, а також зберігаєте копії, які зобов’язані
 > зберігати. Ми не відповідаємо за наслідки неправильних даних або використання документа в спосіб,
 > не передбачений законом, наприклад як фіскального.
 
@@ -78,9 +80,8 @@ should be realistic for a service priced at the current plans.
 > **11. Ограничение ответственности**
 >
 > 11.1. В максимальной степени, разрешенной применимым законодательством, мы не несем
-> ответственности за любой косвенный, случайный, особый, сопутствующий или штрафной ущерб, включая
-> упущенную выгоду, потерю данных или деловых возможностей, возникший в связи с использованием вами
-> Сервиса или невозможностью его использования.
+> ответственности за упущенную выгоду и иные косвенные убытки, в том числе потерю данных или деловых
+> возможностей, возникшие в связи с использованием вами Сервиса или невозможностью его использования.
 >
 > 11.2. Наша совокупная ответственность по всем требованиям, возникающим из Сервиса или в связи с ним,
 > за любой период в двенадцать (12) месяцев ограничивается большей из двух сумм: (а) общей суммы
@@ -180,16 +181,16 @@ Roles:
 > інформування відповідних осіб.
 >
 > 5. **Конфіденційність і безпека.** Доступ до Даних клієнтів мають лише ті, кому він потрібен для
-> роботи Сервісу і хто зобов'язаний зберігати конфіденційність. Ми застосовуємо технічні й
+> роботи Сервісу і хто зобов’язаний зберігати конфіденційність. Ми застосовуємо технічні й
 > організаційні заходи, співмірні ризику, зокрема ізоляцію користувачів у базі даних, шифровані
-> з'єднання та контроль доступу.
+> з’єднання та контроль доступу.
 >
 > 6. **Суброзпорядники.** Ви дозволяєте нам залучати суброзпорядників, зазначених у Політиці
-> конфіденційності. Ми зобов'язуємо їх до вимог захисту даних, не менш суворих за ці. Про зміни в
+> конфіденційності. Ми зобов’язуємо їх до вимог захисту даних, не менш суворих за ці. Про зміни в
 > переліку ми повідомлятимемо, а ви можете заперечити, закривши обліковий запис.
 >
 > 7. **Допомога.** Ми в розумних межах допомагаємо вам відповідати на запити відповідних осіб і
-> виконувати ваші власні обов'язки щодо Даних клієнтів. Значну частину даних ви можете експортувати
+> виконувати ваші власні обов’язки щодо Даних клієнтів. Значну частину даних ви можете експортувати
 > або видалити самостійно в Сервісі; щодо решти — пишіть нам.
 >
 > 8. **Порушення безпеки даних.** Якщо ми дізнаємося про порушення, яке стосується Даних клієнтів,
@@ -285,7 +286,10 @@ Roles:
 8. The public document link shows seller IBAN and buyer requisites by design. Is that acceptable as is,
    or do we need an explicit warning when a link is created?
 9. Terms clause 11.4 puts responsibility for the correctness and legal use of documents on the user.
-   Is the wording sufficient for the invoice and act (not primary documents), the non-fiscal sales
-   receipt and the packing list, or should each document type carry a one-line notice on the PDF?
+   The invoice (рахунок на оплату) is not a primary document. The act (акт виконаних робіт), the
+   waybill (видаткова накладна) and the return note (накладна на повернення товару) are primary
+   documents, but the Service only issues them from the data the user enters and does not check that
+   the business operation took place. Is the wording sufficient for these, for the non-fiscal sales
+   receipt and for the packing list, or should each document type carry a one-line notice on the PDF?
 10. VAT: the documents print 20% for VAT payers as a fixed assumption. Should this be reviewed by an
     accountant before it is offered to VAT payers?

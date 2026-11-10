@@ -2,8 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { templateDisplayName } from "../../lib/template-name";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { receiptsApi, type DocumentRequestBody, type Order } from "../../lib/api";
-import { ErrorCode, parseApiError, parseRequisitesError, validationField, type RequisitesError } from "../../lib/api-errors";
+import type { DocumentRequestBody, Order } from "../../lib/api";
+import { retentionFindingFor, type RetentionFinding } from "../../lib/document-retention";
+import {
+  ErrorCode,
+  httpStatusOf,
+  parseApiError,
+  parseRequisitesError,
+  translatedApiError,
+  validationField,
+  type RequisitesError,
+} from "../../lib/api-errors";
 import type { DocumentConfig } from "../../lib/document-config";
 import {
   buildDocumentRequest,
@@ -17,20 +26,28 @@ import {
   type InvoiceForm,
   type QuoteForm,
   type ReturnNoteForm,
+  withResolvedPeriodErrors,
 } from "../../lib/document-details";
 import { focusDetailsField } from "../../lib/document-field-focus";
 import { forecastRequisites } from "../../lib/document-requisites";
-import { DOCUMENT_TYPE_META, documentOf, isMultiplePerOrder, type CreatableType, type DocumentTypeMeta } from "../../lib/document-types";
+import {
+  DOCUMENT_TYPE_META,
+  documentOf,
+  isMultiplePerOrder,
+  type CreatableType,
+  type DocumentTypeMeta,
+} from "../../lib/document-types";
 import { useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { useCreateDocument } from "../../hooks/useCreateDocument";
 import { documentConfigQuery } from "../../hooks/useDocumentDraft";
 import { useDocumentNow } from "../../hooks/useDocumentNow";
+import { useOnReturnToTab } from "../../hooks/useOnReturnToTab";
 import { useSignoff } from "../../hooks/useSignoff";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
 import { useTranslation } from "../../hooks/useTranslation";
 import { selectClass } from "../settings/DocumentFormatting";
 import { Button } from "../ui/Button";
-import { ConfirmModal } from "../ui/ConfirmModal";
+import { RetentionConfirmModal } from "../documents/RetentionConfirmModal";
 import { Modal } from "../ui/Modal";
 import { ActDetailsFields, InvoiceDetailsFields, QuoteDetailsFields } from "./DocumentDetailsFields";
 import { RequisitesNotice } from "./RequisitesNotice";
@@ -42,7 +59,8 @@ type CreateDocumentModalProps = {
   onClose: () => void;
 };
 
-type Replacement = { number: string; limit: number; body: DocumentRequestBody };
+/** A request held back until the user confirms that the retention cap may delete the oldest document. */
+type Replacement = { finding: RetentionFinding; body: DocumentRequestBody };
 
 const EMPTY_ACT: ActForm = { contractRef: "", completionText: "", from: "", to: "" };
 const EMPTY_QUOTE_TERMS = { paymentTerms: "", deliveryTerms: "" };
@@ -50,6 +68,17 @@ const EMPTY_QUOTE_TERMS = { paymentTerms: "", deliveryTerms: "" };
 /** Server refusals of a details field that have a translated text of their own. */
 const SERVER_FIELD_ERRORS: Readonly<Record<string, string>> = {
   dueDate: "documents.errors.dueDateServer",
+};
+
+/** Refusals of the request as a whole (the details do not fit, an unsupported upload). */
+const REJECTED_STATUSES: ReadonlySet<number> = new Set([400, 415, 422]);
+
+/** A localized text for a refusal whose only text is the server's (English) one. */
+const fallbackErrorKey = (error: unknown): string => {
+  const status = httpStatusOf(error);
+  return status !== undefined && REJECTED_STATUSES.has(status)
+    ? "documents.errors.requestRejected"
+    : "documents.errors.createFailed";
 };
 
 export function CreateDocumentModal({
@@ -146,6 +175,15 @@ export function CreateDocumentModal({
     ? { fields: refusal.fields, warnings: refusal.warnings }
     : forecast;
 
+  // The notice links open the company settings or the recipient in a new tab; coming back must
+  // show what is stored now, not what was missing when the dialog opened.
+  const hasRequisiteGaps = Boolean(gaps && (gaps.fields.length > 0 || gaps.warnings.length > 0));
+  useOnReturnToTab(hasRequisiteGaps, () => {
+    setRefusal(null);
+    void company.refetch();
+    void queryClient.invalidateQueries({ queryKey: ["orders"] });
+  });
+
   const isSendingRef = useRef(false);
   const isSubmittingRef = useRef(false);
   const send = async (body: DocumentRequestBody) => {
@@ -171,12 +209,15 @@ export function CreateDocumentModal({
     }
     const path = validationField(error);
     const field = path?.startsWith("details.") ? formFieldOf(path) : null;
+    const { code } = parseApiError(error);
     if (field) {
       setFieldErrors({ [field]: SERVER_FIELD_ERRORS[field] ?? "documents.errors.invalidField" });
+      // The server's sentence is English; the field says what is wrong. A generic banner covers
+      // a field this dialog does not show (say, one line of a return note).
+      if (!SERVER_FIELD_ERRORS[field]) setSubmitError(t("documents.errors.checkFields"));
+    } else {
+      setSubmitError(translatedApiError(error) ?? t(fallbackErrorKey(error)));
     }
-    const { code, message } = parseApiError(error);
-    // A field with its own translated text must not repeat the server's English sentence.
-    if (!(field && SERVER_FIELD_ERRORS[field])) setSubmitError(message);
     // Someone else (or another tab) already issued it, or returned the units first: show the
     // order as it is now.
     if (
@@ -227,18 +268,10 @@ export function CreateDocumentModal({
       return;
     }
     setIsCheckingRetention(true);
-    // A failed lookup must not block the document itself.
-    const retention = await receiptsApi
-      .getRetention(type)
-      .then((response) => response.data)
-      .catch(() => null);
+    const finding = await retentionFindingFor(type);
     setIsCheckingRetention(false);
-    if (retention?.replaces) {
-      setReplacement({
-        number: retention.replaces.number,
-        limit: retention.limit,
-        body: built.value,
-      });
+    if (finding) {
+      setReplacement({ finding, body: built.value });
       return;
     }
     await send(built.value);
@@ -268,7 +301,14 @@ export function CreateDocumentModal({
           />
         )}
         {details === "act" && (
-          <ActDetailsFields form={actForm} errors={fieldErrors} onChange={setActForm} />
+          <ActDetailsFields
+            form={actForm}
+            errors={fieldErrors}
+            onChange={(next) => {
+              setActForm(next);
+              setFieldErrors((errors) => withResolvedPeriodErrors(errors, next));
+            }}
+          />
         )}
         {details === "quote" && (
           <QuoteDetailsFields
@@ -350,18 +390,11 @@ export function CreateDocumentModal({
         </div>
       </form>
 
-      <ConfirmModal
-        isOpen={replacement !== null}
+      <RetentionConfirmModal
+        finding={replacement?.finding ?? null}
+        typeLabel={label}
         onClose={() => setReplacement(null)}
         onConfirm={confirmReplacement}
-        variant="warning"
-        title={t("documents.replaceOldestTitle")}
-        message={t("documents.replaceOldestMessage", {
-          limit: replacement?.limit,
-          number: replacement?.number,
-          type: label,
-        })}
-        confirmLabel={t("documents.create")}
       />
     </Modal>
   );

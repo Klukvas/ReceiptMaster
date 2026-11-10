@@ -146,6 +146,20 @@ export const REISSUABLE_DOCUMENT_TYPES: readonly GeneratableType[] = [
   "quote",
 ];
 
+/**
+ * Mirror of RETENTION_EXEMPT_TYPES in backend/src/modules/receipts/document-retention.ts: types
+ * whose documents are never deleted by the per-type retention cap.
+ */
+export const RETENTION_EXEMPT_DOCUMENT_TYPES: readonly GeneratableType[] = [
+  "invoice",
+  "act",
+  "return_note",
+];
+
+export function isRetentionExempt(type: DocumentType): boolean {
+  return (RETENTION_EXEMPT_DOCUMENT_TYPES as readonly DocumentType[]).includes(type);
+}
+
 export function isReissuable(type: DocumentType): boolean {
   return (REISSUABLE_DOCUMENT_TYPES as readonly DocumentType[]).includes(type);
 }

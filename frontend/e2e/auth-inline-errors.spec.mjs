@@ -82,6 +82,23 @@ const registerErrors = async (results) => {
       ]),
     );
 
+    // 40 Cyrillic letters are 80 UTF-8 bytes: over the 72-byte bcrypt limit, though only 40 characters.
+    const cyrillic = "пароль".repeat(6) + "абвг";
+    await dialog.locator("#password").fill(cyrillic);
+    results.check(
+      "register: the field keeps every typed character (no silent maxLength cut) and counts bytes",
+      (await dialog.locator("#password").inputValue()) === cyrillic &&
+        (await textOf(dialog.getByTestId("password-bytes"))) === "80/72 bytes",
+      `${(await dialog.locator("#password").inputValue()).length} | ${await textOf(dialog.getByTestId("password-bytes"))}`,
+    );
+    await dialog.locator("#confirmPassword").fill(cyrillic);
+    await dialog.locator("button[type=submit]").click();
+    results.check(
+      "register: a password over 72 UTF-8 bytes is refused with a message about bytes",
+      (await textOf(fieldAlert(dialog, "password"))).includes("72 bytes") && (await isInvalid(dialog, "password")),
+      await textOf(fieldAlert(dialog, "password")),
+    );
+
     await dialog.locator("#password").fill("Longenough1!");
     await dialog.locator("#confirmPassword").fill("Longenough1!");
     await dialog.locator("button[type=submit]").click();
@@ -157,6 +174,77 @@ const PUBLIC_RECEIPT = {
     },
   },
   companyInfo: { companyName: "Walk Test Co" },
+};
+
+// A legacy snapshot: no formatting, a prefixed number and a non-waybill type.
+const PUBLIC_RECEIPT_NO_FORMATTING = {
+  ...PUBLIC_RECEIPT,
+  documentLanguage: "uk",
+  formatting: undefined,
+  receipt: { ...PUBLIC_RECEIPT.receipt, number: "РАХ-2026-000007", document_type: "invoice" },
+  companyInfo: { companyName: "Walk Test Co", receiptTitle: "Видаткова накладна" },
+};
+
+const publicReceiptDefaults = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    page.setDefaultTimeout(6000);
+    await installApiMocks(page, createState());
+    await page.route("**/api/v1/public/receipts/tok", (route) => json(route, 200, PUBLIC_RECEIPT_NO_FORMATTING));
+    await page.goto(`${BASE_URL}/r/tok`);
+    await page.getByRole("button", { name: /PDF/ }).waitFor();
+    const text = await page.locator("body").innerText();
+    results.check(
+      "public receipt without formatting: the date is formatted, never raw ISO",
+      !text.includes("2026-10-28T") && /28 жовт\.? 2026/.test(text),
+      text.slice(0, 400),
+    );
+    results.check(
+      "public receipt without formatting: amounts carry the currency",
+      /150,00\s?(грн|₴|UAH)/.test(text),
+      text.slice(0, 600),
+    );
+    results.check(
+      "public receipt: a prefixed number has no '#' in front",
+      text.includes("РАХ-2026-000007") && !text.includes("#РАХ"),
+      text.slice(0, 400),
+    );
+    results.check(
+      "public receipt: an invoice is titled as an invoice, not with the waybill's custom title",
+      text.includes("Рахунок на оплату") && !text.includes("Видаткова накладна"),
+      text.slice(0, 400),
+    );
+  });
+  await withPage(VIEWPORT, async (page) => {
+    page.setDefaultTimeout(6000);
+    await installApiMocks(page, createState());
+    await page.route("**/api/v1/public/receipts/tok", (route) =>
+      json(route, 200, { ...PUBLIC_RECEIPT_NO_FORMATTING, title: "Рахунок-фактура" }),
+    );
+    await page.goto(`${BASE_URL}/r/tok`);
+    await page.getByRole("button", { name: /PDF/ }).waitFor();
+    results.check(
+      "public receipt: the document's own title wins when the server sends one",
+      (await page.locator("body").innerText()).includes("Рахунок-фактура"),
+    );
+  });
+};
+
+const profilePasswordBytes = async (results) => {
+  await withPage(VIEWPORT, async (page) => {
+    page.setDefaultTimeout(6000);
+    await installApiMocks(page, createState());
+    await page.goto(`${BASE_URL}/profile`);
+    await page.getByRole("button", { name: "Change Password" }).first().click();
+    const cyrillic = "пароль".repeat(6) + "абвг";
+    await page.locator("#newPassword").fill(cyrillic);
+    results.check(
+      "profile: the new password is not cut at 72 characters and its UTF-8 size is shown",
+      (await page.locator("#newPassword").inputValue()) === cyrillic &&
+        (await textOf(page.getByTestId("password-bytes"))) === "80/72 bytes" &&
+        (await page.locator("#newPassword").getAttribute("maxlength")) === null,
+      await textOf(page.getByTestId("password-bytes")),
+    );
+  });
 };
 
 const publicReceiptLanguage = async (results) => {
@@ -407,6 +495,8 @@ const recipientSorting = async (results) => {
 export const run = async () => {
   const results = new Results("auth inline errors and public receipt language");
   await registerErrors(results);
+  await publicReceiptDefaults(results);
+  await profilePasswordBytes(results);
   await loginErrors(results);
   await publicReceiptLanguage(results);
   await productFormErrors(results);

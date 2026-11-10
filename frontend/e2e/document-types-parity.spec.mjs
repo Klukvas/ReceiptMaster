@@ -10,6 +10,7 @@ import { loadTsModule } from "./support/transpile.mjs";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const BACKEND = resolve(ROOT, "backend/src/modules/receipts/document-types.ts");
 const FRONTEND = resolve(ROOT, "frontend/src/lib/document-types.ts");
+const BACKEND_RETENTION = resolve(ROOT, "backend/src/modules/receipts/document-retention.ts");
 
 // The backend file imports two enums at runtime; their values are all it needs.
 const BACKEND_STUBS = {
@@ -52,6 +53,16 @@ export const run = async () => {
     sorted(backendReissuable) === sorted(frontend.REISSUABLE_DOCUMENT_TYPES) &&
       backendReissuable.every((type) => type in specs),
     `${backendReissuable} vs ${frontend.REISSUABLE_DOCUMENT_TYPES}`,
+  );
+
+  // The create dialog falls back to a generic "may replace the oldest" warning when the retention
+  // lookup fails; it must not warn for a type the backend never deletes.
+  const { isRetentionExempt } = loadTsModule(BACKEND_RETENTION, BACKEND_STUBS);
+  const backendExempt = Object.keys(specs).filter((type) => isRetentionExempt(type));
+  results.check(
+    "same set of retention-exempt types (never deleted by the per-type cap)",
+    sorted(backendExempt) === sorted(frontend.RETENTION_EXEMPT_DOCUMENT_TYPES),
+    `${backendExempt} vs ${frontend.RETENTION_EXEMPT_DOCUMENT_TYPES}`,
   );
 
   results.check(

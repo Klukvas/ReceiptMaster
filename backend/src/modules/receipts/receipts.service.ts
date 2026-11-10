@@ -4,7 +4,7 @@ import {
   DocumentRenderService,
   sampleOrder,
 } from "./services/document-render.service";
-import { ConflictException, Optional } from "@nestjs/common";
+import { ConflictException } from "@nestjs/common";
 import {
   ConfigSelection,
   DEFAULT_DOCUMENT_TIME_ZONE,
@@ -43,6 +43,7 @@ import {
   GeneratableDocumentType,
   hasDocumentBlock,
   isGeneratableType,
+  isMultiplePerOrder,
   isReissuableType,
   specFor,
 } from "./document-types";
@@ -51,10 +52,6 @@ import {
   signoffUnavailableWarning,
 } from "./document-warnings";
 import type { DocumentDetailsInput, DocumentRequest } from "./frozen-document";
-import {
-  PdfGeneratorService,
-  ReceiptStyle,
-} from "./services/pdf-generator.service";
 import { KeyedMutex } from "../../common/utils/keyed-mutex.util";
 import {
   DrawnNumber,
@@ -69,7 +66,7 @@ import {
 import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import {
   frozenReturnLines,
-  releaseReturnQuantities,
+  releaseReturnNoteQuantities,
   findRecentIdenticalReturnNote,
   reserveReturnQuantities,
 } from "./return-note-ledger";
@@ -81,7 +78,6 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
-import { SettingsService } from "../settings/services/settings.service";
 
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { ReceiptOutboxService } from "./receipt-outbox.service";
@@ -163,6 +159,27 @@ const NUMBER_UNIQUE_INDEX = "IDX_receipts_user_type_number";
 const isNumberCollision = (error: unknown): boolean =>
   isUniqueViolationOf(error, NUMBER_UNIQUE_INDEX);
 
+/**
+ * A void of a type whose voided row keeps the slot closed (waybill, sales receipt, packing
+ * list) is final for the order, so only an issued one may be voided: voiding one still
+ * PROCESSING or FAILED would leave the order without that document forever. Reissuable
+ * types and return notes (several per order) do not close a slot.
+ */
+function assertVoidable(receipt: Receipt): void {
+  const type = receipt.document_type ?? DocumentType.WAYBILL;
+  if (receipt.status === ReceiptStatus.GENERATED) return;
+  if (isReissuableType(type) || isMultiplePerOrder(type)) return;
+  throw ApiErrors.DOCUMENT_NOT_VOIDABLE(receipt.id, type, receipt.status);
+}
+
+/** A copy whose snapshot records that it was rebuilt from live data, not a frozen candidate. */
+function markReconstructed<T extends { snapshot: object }>(prepared: T): T {
+  return {
+    ...prepared,
+    snapshot: { ...prepared.snapshot, reconstructed: true },
+  };
+}
+
 /** Thrown after the counter was repaired; the generation is run once more. */
 class NumberCollisionRepaired extends Error {}
 
@@ -194,60 +211,16 @@ export class ReceiptsService {
   constructor(
     @InjectRepository(Receipt)
     private receiptsRepository: Repository<Receipt>,
-    @InjectRepository(Order)
-    private ordersRepository: Repository<Order>,
-    private pdfGeneratorService: PdfGeneratorService,
     private pdfStorageService: PdfStorageService,
     @InjectDataSource()
     private dataSource: DataSource,
     private configService: ConfigService,
-    private settingsService: SettingsService,
     private receiptOutbox: ReceiptOutboxService,
-    @Optional() private readonly snapshots?: ReceiptSnapshotService,
-    @Optional() private readonly artifacts?: ReceiptArtifactService,
-    @Optional() private readonly documents?: DocumentConfigService,
-    @Optional() private readonly renders?: DocumentRenderService,
+    private readonly snapshots: ReceiptSnapshotService,
+    private readonly artifacts: ReceiptArtifactService,
+    private readonly documents: DocumentConfigService,
+    private readonly renders: DocumentRenderService,
   ) {}
-
-  private getReceiptStyleFromTemplateId(templateId: string): ReceiptStyle {
-    switch (templateId) {
-      case "standard":
-        return ReceiptStyle.STANDARD;
-      case "compact":
-        return ReceiptStyle.COMPACT;
-      case "classic":
-        return ReceiptStyle.CLASSIC;
-      case "modern":
-        return ReceiptStyle.MODERN;
-      case "elegant":
-        return ReceiptStyle.ELEGANT;
-      case "vintage":
-        return ReceiptStyle.VINTAGE;
-      case "tech":
-        return ReceiptStyle.TECH;
-      case "wave":
-        return ReceiptStyle.WAVE;
-      case "minimal":
-        return ReceiptStyle.MINIMAL;
-      case "corporate":
-        return ReceiptStyle.CORPORATE;
-      case "thermal":
-        return ReceiptStyle.THERMAL;
-      case "dark":
-        return ReceiptStyle.DARK;
-      case "branded":
-        return ReceiptStyle.BRANDED;
-      case "delivery":
-        return ReceiptStyle.DELIVERY;
-      case "proforma":
-        return ReceiptStyle.PROFORMA;
-      default:
-        this.logger.warn(
-          `Unknown template ID: ${templateId}, falling back to COMPACT`,
-        );
-        return ReceiptStyle.COMPACT;
-    }
-  }
 
   async generateReceipt(
     orderId: string,
@@ -370,28 +343,7 @@ export class ReceiptsService {
     }
   }
 
-  /**
-   * Requests for the same order and document type run one after another in this process.
-   * A double click otherwise lets every copy draw its own number before the duplicate is
-   * noticed; only the highest one can be handed back, so the sequence is left with gaps.
-   * Serialized, the late copies meet the first one's row before they draw anything.
-   */
-  private readonly issueLocks = new KeyedMutex();
-
-  private runGeneration(
-    orderId: string,
-    user: User,
-    type: GeneratableDocumentType,
-    selection: ConfigSelection,
-    details?: DocumentDetailsInput,
-    file?: Express.Multer.File,
-  ): Promise<Receipt> {
-    return this.issueLocks.runExclusive(`${user.id}:${orderId}:${type}`, () =>
-      this.runGenerationUnlocked(orderId, user, type, selection, details, file),
-    );
-  }
-
-  private async runGenerationUnlocked(
+  private async runGeneration(
     orderId: string,
     user: User,
     type: GeneratableDocumentType,
@@ -503,7 +455,7 @@ export class ReceiptsService {
     try {
       // The number is drawn only after the logo is staged (bad file, quota, upload failure),
       // so those refusals never burn one.
-      const prepared = retryFrozen
+      const freshlyPrepared = retryFrozen
         ? undefined
         : await this.snapshots.prepare(
             user.id,
@@ -514,12 +466,14 @@ export class ReceiptsService {
             previous?.pending_snapshot?.order,
             request,
           );
+      const prepared =
+        freshlyPrepared && previous && !previous.pending_snapshot?.order
+          ? markReconstructed(freshlyPrepared)
+          : freshlyPrepared;
       issueWarnings = signoffUnavailableWarning(
         prepared?.signoffUnavailable ?? [],
       );
       const number = prepared?.number ?? (await allocateNumber());
-      if (prepared && previous && !previous.pending_snapshot?.order)
-        prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
       const generationBody = async (
         manager: EntityManager,
       ): Promise<Receipt> => {
@@ -691,16 +645,6 @@ export class ReceiptsService {
     return isReturnedAsIs ? receipt : withWarnings(receipt, issueWarnings);
   }
 
-  async generateCompactReceipt(orderId: string, user: User): Promise<Receipt> {
-    // Delegates to generateReceipt — template style is determined by user settings
-    return this.generateReceipt(orderId, user);
-  }
-
-  async generateStandardReceipt(orderId: string, user: User): Promise<Receipt> {
-    // Delegates to generateReceipt — template style is determined by user settings
-    return this.generateReceipt(orderId, user);
-  }
-
   async generateTestReceipt(user: User): Promise<Buffer> {
     const { config } = await this.documents.read(user.id);
     await this.documents.assertTemplate(user.id, config.templateId);
@@ -734,13 +678,17 @@ export class ReceiptsService {
       if (receipt.status === ReceiptStatus.VOID) {
         throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
       }
+      assertVoidable(receipt);
 
       // The snapshot is read before the void clears the candidate that may hold it.
       // A failed note already gave its quantities back.
       const returnLines =
-        receipt.status === ReceiptStatus.FAILED
-          ? []
-          : await this.returnLinesToRelease(receipt, user.id, manager);
+        receipt.document_type === DocumentType.RETURN_NOTE &&
+        receipt.status !== ReceiptStatus.FAILED
+          ? frozenReturnLines(
+              await this.snapshots.internal(receipt.id, user.id, manager),
+            )
+          : undefined;
 
       // Void the receipt and revoke any public share link (immutable update)
       await manager.update(
@@ -748,7 +696,15 @@ export class ReceiptsService {
         { id: receipt.id, user_id: user.id },
         voidedReceiptFields(reason, new Date()),
       );
-      await this.releaseReturn(manager, receipt, user.id, returnLines);
+      // A voided return note gives its quantities back so the goods can be returned again.
+      if (returnLines)
+        await releaseReturnNoteQuantities(
+          manager,
+          this.logger,
+          { id: receipt.id, order_id: receipt.order_id, user_id: user.id },
+          returnLines,
+          "voided",
+        );
       const savedReceipt = await manager.findOneOrFail(Receipt, {
         where: { id: receipt.id, user_id: user.id },
         relations: ["order"],
@@ -769,43 +725,6 @@ export class ReceiptsService {
 
       return savedReceipt;
     });
-  }
-
-  private async returnLinesToRelease(
-    receipt: Receipt,
-    userId: string,
-    manager: EntityManager,
-  ) {
-    if (receipt.document_type !== DocumentType.RETURN_NOTE) return [];
-    const lines = frozenReturnLines(
-      await this.snapshots.internal(receipt.id, userId, manager),
-    );
-    // Voiding goes ahead, but quantities that cannot be found cannot be given back.
-    if (lines.length === 0)
-      this.logger.warn(
-        `Return note ${receipt.id} (order ${receipt.order_id}) has no readable lines; its quantities were not released`,
-      );
-    return lines;
-  }
-
-  /** A voided return note gives its quantities back so the goods can be returned again. */
-  private async releaseReturn(
-    manager: EntityManager,
-    receipt: Receipt,
-    userId: string,
-    lines: Parameters<typeof releaseReturnQuantities>[3],
-  ): Promise<void> {
-    if (lines.length === 0) return;
-    const unreleased = await releaseReturnQuantities(
-      manager,
-      userId,
-      receipt.order_id,
-      lines,
-    );
-    if (unreleased.length > 0)
-      this.logger.warn(
-        `Return note ${receipt.number}: ${unreleased.length} line(s) had no returned quantity left to release`,
-      );
   }
 
   /**
@@ -1118,7 +1037,7 @@ export class ReceiptsService {
         message:
           "Confirm reconstruction with current transaction data; historical fidelity is unavailable.",
       });
-    const prepared =
+    const freshlyPrepared =
       mode === "replace"
         ? await this.snapshots.prepare(
             user.id,
@@ -1130,12 +1049,12 @@ export class ReceiptsService {
             this.replacementRequest(original),
           )
         : undefined;
-    if (
-      prepared &&
+    const prepared =
+      freshlyPrepared &&
       !original.active_snapshot?.order &&
       !original.pending_snapshot?.order
-    )
-      prepared.snapshot = { ...prepared.snapshot, reconstructed: true };
+        ? markReconstructed(freshlyPrepared)
+        : freshlyPrepared;
     const frozen =
       prepared ||
       (original.pending_snapshot &&

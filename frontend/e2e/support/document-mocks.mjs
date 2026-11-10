@@ -102,7 +102,9 @@ const requisitesRefusal = {
 /**
  * @param state mutable spec state; reads `company`, `retention`, `refusal` (true, or a 422 body),
  *   `createError` ({ status, body } for any other refusal of the create request, e.g. a 422 RETURN_QUANTITY_EXCEEDED), `designId`,
- *   `timeZone` (document time zone, default UTC) and records `created` (parsed payloads), `voided` (request bodies) and `retentionQueries`.
+ *   `timeZone` (document time zone, default UTC), `retentionError` (true: the retention lookup fails
+ *   with a 500), `createDelayMs` (holds the create answer back) and records `created` (parsed payloads),
+ *   `voided` (request bodies) and `retentionQueries`.
  */
 export const documentHandlers = (state) => [
   async (route, { path, method, body, search }, json) => {
@@ -117,6 +119,7 @@ export const documentHandlers = (state) => [
       return answer(json, route, { data: { revision: 1, config: designConfig(state.designId ?? "thermal", state.company ?? COMPLETE_COMPANY, state.timeZone) } });
     if (path === "/receipts/retention") {
       state.retentionQueries = [...(state.retentionQueries ?? []), search];
+      if (state.retentionError) return answer(json, route, { error: "Boom", errorCode: "INTERNAL_SERVER_ERROR" }, 500);
       return answer(json, route, state.retention ?? { limit: 10, count: 2, replaces: null });
     }
     return false;
@@ -124,6 +127,7 @@ export const documentHandlers = (state) => [
   async (route, { path, method, body }, json) => {
     const created = /^\/receipts\/orders\/([^/]+)\/documents$/.exec(path);
     if (created && method === "POST") {
+      if (state.createDelayMs) await new Promise((resolve) => setTimeout(resolve, state.createDelayMs));
       if (state.refusal)
         return answer(json, route, state.refusal === true ? requisitesRefusal : state.refusal, 422);
       if (state.createError) {
@@ -336,7 +340,8 @@ export const signoffImage = (assetId, extra = {}) => ({
 /**
  * GET/PUT/DELETE /settings/signoff[/:kind[/image]].
  * @param state `signoff` ({ signature, stamp }); records `signoffUploads` ({ kind, fileName, contentType }),
- *   `signoffDeletes`; `signoffFailure` ({ status, body }) answers the next upload with that error.
+ *   `signoffDeletes`; `signoffFailure` ({ status, body }) answers the next upload with that error;
+ *   `signoffUploadDelayMs` holds every upload answer back that long.
  */
 export const signoffHandlers = (state) => [
   async (route, { path, method, body }, json) => {
@@ -351,6 +356,7 @@ export const signoffHandlers = (state) => [
     if (method === "PUT") {
       const file = /name="file"; filename="([^"]*)"\r\nContent-Type: ([^\r]*)/.exec(body);
       state.signoffUploads = [...(state.signoffUploads ?? []), { kind, fileName: file?.[1], contentType: file?.[2] }];
+      if (state.signoffUploadDelayMs) await new Promise((resolve) => setTimeout(resolve, state.signoffUploadDelayMs));
       if (state.signoffFailure) {
         const { status, body: failure } = state.signoffFailure;
         state.signoffFailure = null;

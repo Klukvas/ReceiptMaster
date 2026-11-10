@@ -7,6 +7,13 @@ import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
+import { QueryFailedError } from "typeorm";
+
+const uniqueEmailViolation = () =>
+  new QueryFailedError("INSERT", [], {
+    code: "23505",
+    constraint: "IDX_recipients_user_email_unique",
+  } as unknown as Error);
 
 describe("RecipientsService", () => {
   let service: RecipientsService;
@@ -46,6 +53,10 @@ describe("RecipientsService", () => {
       remove: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
+    // The email pre-check reads through the manager; route it to the same mock.
+    recipientsRepo.manager = {
+      findOne: jest.fn((_entity, options) => recipientsRepo.findOne(options)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,10 +82,15 @@ describe("RecipientsService", () => {
   });
 
   describe("createWithIdempotencyKey", () => {
-    const transactionManager = (stored: unknown) => ({
+    const transactionManager = (
+      stored: unknown,
+      duplicate: unknown = null,
+    ) => ({
       queryRunner: { isTransactionActive: true },
       query: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(stored),
+      findOne: jest.fn((entity) =>
+        Promise.resolve(entity === Recipient ? duplicate : stored),
+      ),
       delete: jest.fn(),
       insert: jest.fn().mockResolvedValue({}),
       create: jest.fn((_entity, data) => ({ ...data })),
@@ -122,6 +138,62 @@ describe("RecipientsService", () => {
         data: { id: "rec-1", name: "Jane" },
       });
       expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses an email another recipient of the user already has", async () => {
+      const manager = transactionManager(null, { id: "rec-other" });
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+          "key-2",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_ALREADY_EXISTS",
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it("replays a stored create with an email instead of reporting its own recipient as a duplicate", async () => {
+      const manager = transactionManager(
+        {
+          id: "row-1",
+          response: { id: "rec-1", email: "john@test.com" },
+          expires_at: new Date(Date.now() + 60_000),
+        },
+        { id: "rec-1" },
+      );
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane", email: "john@test.com" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result.replayed).toBe(true);
+    });
+
+    it("maps a concurrent duplicate caught by the unique index to 409", async () => {
+      recipientsRepo.manager = {
+        transaction: jest.fn().mockRejectedValue(uniqueEmailViolation()),
+      };
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+          "key-3",
+        ),
+      ).rejects.toMatchObject({ errorCode: "RECIPIENT_ALREADY_EXISTS" });
     });
   });
 
@@ -233,6 +305,32 @@ describe("RecipientsService", () => {
       );
 
       expect(recipientsRepo.save).toHaveBeenCalled();
+    });
+
+    it("maps a unique-index violation on create to 409", async () => {
+      recipientsRepo.findOne.mockResolvedValue(null);
+      recipientsRepo.save.mockRejectedValue(uniqueEmailViolation());
+
+      await expect(
+        service.create(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_ALREADY_EXISTS",
+      });
+    });
+
+    it("maps a unique-index violation on update to 409", async () => {
+      recipientsRepo.findOne
+        .mockResolvedValueOnce({ ...mockRecipient })
+        .mockResolvedValueOnce(null);
+      recipientsRepo.save.mockRejectedValue(uniqueEmailViolation());
+
+      await expect(
+        service.update("rec-1", { email: "new@test.com" } as any, mockUser),
+      ).rejects.toMatchObject({ errorCode: "RECIPIENT_ALREADY_EXISTS" });
     });
   });
 
@@ -381,7 +479,7 @@ describe("RecipientsService", () => {
   describe("remove", () => {
     beforeEach(() => {
       recipientsRepo.findOne.mockResolvedValue(mockRecipient);
-      recipientsRepo.manager = { exists: jest.fn() };
+      recipientsRepo.manager = { ...recipientsRepo.manager, exists: jest.fn() };
     });
 
     it("should delete recipient without orders", async () => {

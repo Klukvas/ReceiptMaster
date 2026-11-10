@@ -8,7 +8,6 @@ import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { legacyConfig } from "../settings/document-config";
 import { DocumentConfigService } from "../settings/services/document-config.service";
-import { SettingsService } from "../settings/services/settings.service";
 import type { User } from "../users/entities/user.entity";
 import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
 import {
@@ -20,7 +19,6 @@ import { RECEIPT_GENERATION_QUEUE } from "./receipt-generation.processor";
 import { ReceiptOutboxService } from "./receipt-outbox.service";
 import { ReceiptsService } from "./receipts.service";
 import { DocumentRenderService } from "./services/document-render.service";
-import { PdfGeneratorService } from "./services/pdf-generator.service";
 import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { ReceiptSnapshotService } from "./services/receipt-snapshot.service";
 
@@ -212,12 +210,9 @@ describe("ReceiptsService goods return notes", () => {
         { provide: DocumentRenderService, useValue: {} },
         { provide: ReceiptOutboxService, useValue: outbox },
         { provide: getRepositoryToken(Receipt), useValue: receiptsRepo },
-        { provide: getRepositoryToken(Order), useValue: {} },
-        { provide: PdfGeneratorService, useValue: {} },
         { provide: PdfStorageService, useValue: {} },
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: SettingsService, useValue: {} },
         { provide: getQueueToken(RECEIPT_GENERATION_QUEUE), useValue: outbox },
       ],
     }).compile();

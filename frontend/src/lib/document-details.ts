@@ -91,12 +91,28 @@ export function buildInvoiceDetails(
 }
 
 /** Which of the two period dates is wrong, so each input carries its own message. */
-function periodErrors(form: ActForm): DetailsErrors {
+export function periodErrors(form: ActForm): DetailsErrors {
   const { from, to } = form;
   if (from === "" && to === "") return {};
   if (!isCalendarDate(from)) return { periodFrom: "documents.errors.periodFromRequired" };
   if (!isCalendarDate(to)) return { periodTo: "documents.errors.periodToRequired" };
   return from > to ? { periodTo: "documents.errors.periodOrder" } : {};
+}
+
+const PERIOD_FIELDS = ["periodFrom", "periodTo"] as const;
+
+/**
+ * The errors to keep after the act period changed: a period message disappears once the dates no
+ * longer have that problem, instead of staying until the next submit. Other fields are untouched.
+ */
+export function withResolvedPeriodErrors(errors: DetailsErrors, form: ActForm): DetailsErrors {
+  const current = periodErrors(form);
+  return Object.fromEntries(
+    Object.entries(errors).filter(
+      ([field, message]) =>
+        !(PERIOD_FIELDS as readonly string[]).includes(field) || current[field] === message,
+    ),
+  );
 }
 
 export function buildActDetails(form: ActForm): Built<ActDetails> {
@@ -193,12 +209,16 @@ function returnQtyError(text: string, remaining: number): string | undefined {
   return qty > remaining ? "documents.errors.returnQtyExceeded" : undefined;
 }
 
-/** At least one ticked line, each 1..remaining units, and an optional reason of up to 300 characters. */
+/** At least one ticked returnable line, each 1..remaining units, and an optional reason of up to 300 characters. */
 export function buildReturnNoteDetails(
   form: ReturnNoteForm,
   items: readonly ReturnableItem[],
 ): Built<ReturnNoteDetails> {
-  const ticked = items.filter((item) => form.selectedItemIds.includes(item.id));
+  // A line that came back in full since it was ticked (say, after RETURN_QUANTITY_EXCEEDED and the
+  // refetch) has a disabled checkbox the user cannot untick, so it must not keep blocking Create.
+  const ticked = items.filter(
+    (item) => form.selectedItemIds.includes(item.id) && remainingReturnQty(item) > 0,
+  );
   const reason = form.reason.trim();
   const qtyErrors = ticked.flatMap((item) => {
     const key = returnQtyError(returnQtyText(form, item), remainingReturnQty(item));

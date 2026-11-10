@@ -127,17 +127,20 @@ export function captureOrder(order: Order): FrozenOrder {
     })),
   };
 }
+/**
+ * What a prepared document printed from the order: lines, totals, recipient (all through
+ * `captureOrder`) and the status that allows the type. Bookkeeping columns stay out:
+ * `updated_at` and `is_locked` move when another document of the order is promoted (it
+ * locks the order), which changes nothing printed and must not fail this generation.
+ */
 export function orderFingerprint(order: Order): string {
+  const captured = captureOrder(order);
   return createHash("sha256")
     .update(
       JSON.stringify({
-        ...captureOrder(order),
-        items: captureOrder(order)
-          .items.map((item) => JSON.stringify(item))
-          .sort(),
+        ...captured,
+        items: captured.items.map((item) => JSON.stringify(item)).sort(),
         status: order.status,
-        is_locked: order.is_locked,
-        updated_at: order.updated_at,
       }),
     )
     .digest("hex");
@@ -181,9 +184,18 @@ export function sampleOrder(userId: string): Order {
     ],
   } as Order;
 }
+/** Previews rendering at once in this process; each holds a Chrome page. */
+export const PREVIEW_GLOBAL_LIMIT = 2;
+/**
+ * One preview in flight per account, so a single tenant clicking fast cannot hold every
+ * global slot and starve the others.
+ */
+export const PREVIEW_PER_USER_LIMIT = 1;
+
 @Injectable()
 export class DocumentRenderService {
   private previewCount = 0;
+  private readonly previewsByUser = new Map<string, number>();
   constructor(
     private readonly templates: TemplateService,
     private readonly renderer: PlaywrightPdfGenerator,
@@ -398,9 +410,14 @@ export class DocumentRenderService {
     order: Order,
     file?: Express.Multer.File,
   ): Promise<Buffer> {
-    if (this.previewCount >= 2)
+    const userPreviews = this.previewsByUser.get(userId) ?? 0;
+    if (
+      this.previewCount >= PREVIEW_GLOBAL_LIMIT ||
+      userPreviews >= PREVIEW_PER_USER_LIMIT
+    )
       throw new HttpException("Preview busy; retry shortly", 429);
     this.previewCount++;
+    this.previewsByUser.set(userId, userPreviews + 1);
     try {
       const logo = await this.assets.preview(userId, draft, file);
       const { html, snapshot } = await this.prepare(
@@ -418,6 +435,9 @@ export class DocumentRenderService {
       return await this.renderer.generatePdf(html, snapshot.options);
     } finally {
       this.previewCount--;
+      const remaining = (this.previewsByUser.get(userId) ?? 1) - 1;
+      if (remaining > 0) this.previewsByUser.set(userId, remaining);
+      else this.previewsByUser.delete(userId);
     }
   }
   async render(html: string, snapshot: RenderSnapshot): Promise<Buffer> {

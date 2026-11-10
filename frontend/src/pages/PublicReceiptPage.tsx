@@ -8,6 +8,7 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import { Download, FileText, AlertCircle } from "lucide-react";
 import { downloadPdf } from "../lib/pdf-utils";
+import { defaultFormattingFor, displayDocumentNumber } from "../lib/public-receipt-format";
 import i18n from "../lib/i18n";
 import { useTranslation } from "../hooks/useTranslation";
 import { SEO } from "../components/seo/SEO";
@@ -30,9 +31,13 @@ interface PublicReceiptData {
   metadataUnavailable?: boolean;
   formatting?: DocumentConfig["formatting"];
   documentLanguage?: string;
+  /** The printed title of the document, when the server sends it. */
+  title?: string;
   receipt: {
     id: string;
     number: string;
+    title?: string;
+    document_type?: string;
     created_at: string;
     order: {
       id: string;
@@ -142,18 +147,27 @@ const PublicReceiptContent = () => {
   const t = i18n.getFixedT(language);
   const { receipt, companyInfo } = data;
   const { order } = receipt;
+  const formatting = data.formatting ?? defaultFormattingFor(language);
   const formatCurrency = (cents: number, currency: string) =>
-    data.formatting
-      ? documentMoney(cents, currency, data.formatting)
-      : String(cents / 100);
-  const formatDate = (date: string) =>
-    data.formatting
-      ? documentDate(date, data.documentLanguage || "en", data.formatting)
-      : date;
+    documentMoney(cents, currency, formatting);
+  const formatDate = (date: string) => documentDate(date, language, formatting);
+  const typeTitle =
+    receipt.document_type && i18n.exists(`documentTypes.${receipt.document_type}`, { lng: language })
+      ? t(`documentTypes.${receipt.document_type}`)
+      : undefined;
+  // The account's custom title belongs to the waybill; another type is named by its own title.
+  const isWaybill = !receipt.document_type || receipt.document_type === "waybill";
+  const documentTitle =
+    data.title ||
+    receipt.title ||
+    (isWaybill ? companyInfo.receiptTitle : undefined) ||
+    typeTitle ||
+    t("publicReceipt.defaultTitle");
+  const documentNumber = displayDocumentNumber(receipt.number);
   if (!order)
     return (
       <div className="mx-auto max-w-2xl p-8 text-content">
-        <h1>#{receipt.number}</h1>
+        <h1>{documentNumber}</h1>
         <p>{t("publicReceipt.legacyUnavailable")}</p>
         <button onClick={handleDownload} disabled={downloading}>
           {t("publicReceipt.downloadPdf")}
@@ -189,7 +203,7 @@ const PublicReceiptContent = () => {
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-content-tertiary" />
                 <h2 className="text-lg font-semibold text-content">
-                  {companyInfo.receiptTitle || t("publicReceipt.defaultTitle")}
+                  {documentTitle}
                 </h2>
               </div>
               <button
@@ -207,7 +221,7 @@ const PublicReceiptContent = () => {
               </p>
             )}
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-content-tertiary">
-              <span>#{receipt.number}</span>
+              <span>{documentNumber}</span>
               <span>{formatDate(order.created_at || receipt.created_at)}</span>
             </div>
           </div>

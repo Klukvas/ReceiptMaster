@@ -94,7 +94,7 @@ describe("Real receipt templates", () => {
       "uk",
     );
     const html = await fresh.renderTemplate(ReceiptTemplate.DELIVERY, data);
-    expect(html).toContain("Видаткова накладна");
+    expect(html).toContain("Накладна на відвантаження");
     expect(html).toContain("Отримав");
     expect(html).toMatch(/data:font\/ttf;base64,[A-Za-z0-9+/=]{100}/);
   });

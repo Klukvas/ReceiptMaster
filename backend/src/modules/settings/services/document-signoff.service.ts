@@ -178,8 +178,8 @@ export class DocumentSignoffService {
   }
 
   /**
-   * Detaches the image. The stored object is deleted by the scheduled cleanup after its
-   * 24 hour grace, like a replaced logo; documents already issued embed their own copy.
+   * Detaches the image. The stored object is deleted by the scheduled cleanup after a
+   * short grace (`SIGNOFF_RELEASE_GRACE_MS`); documents already issued embed their own copy.
    */
   async remove(userId: string, kind: SignoffKind): Promise<void> {
     await this.db.transaction(async (manager) => {

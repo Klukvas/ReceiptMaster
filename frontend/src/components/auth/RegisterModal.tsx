@@ -9,7 +9,7 @@ import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 import { Modal } from "../ui/Modal";
 import toast from "react-hot-toast";
-import { MIN_PASSWORD_LENGTH } from "../../lib/password-policy";
+import { PasswordBytesHint } from "./PasswordBytesHint";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -157,9 +157,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </button>
           </div>
           <FieldError id="password-error" message={messageFor("password")} />
-          <p id="password-rule" className="mt-1 text-xs text-content-secondary">
-            {t("auth.passwordRule", { min: MIN_PASSWORD_LENGTH })}
-          </p>
+          <PasswordBytesHint id="password-rule" password={formData.password} className="text-content-secondary" />
         </div>
 
         {/* Confirm Password */}

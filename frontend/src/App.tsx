@@ -12,6 +12,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { PageSpinner } from "./components/common/PageSpinner";
 import { HomePage } from "./pages/HomePage";
+import { useMediaQuery } from "./hooks/useMediaQuery";
 
 // Lazy-loaded page components for code splitting
 const DashboardHomePage = React.lazy(() =>
@@ -195,20 +196,26 @@ const AppRoutes: React.FC = () => {
   );
 };
 
+// Below Tailwind's `sm`: a phone, where a toast at the top would sit on an open dialog's header and Close.
+const PHONE_QUERY = "(max-width: 639px)";
+
 function App() {
+  const isPhone = useMediaQuery(PHONE_QUERY);
   return (
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <PaddleProvider>
-              <Router>
+            <Router>
+              {/* Inside the router: Paddle must not load on the public share page. */}
+              <PaddleProvider>
                 <ScrollToTop />
                 <AppRoutes />
-              </Router>
-            </PaddleProvider>
+              </PaddleProvider>
+            </Router>
             <Toaster
-              position="top-right"
+              position={isPhone ? "bottom-center" : "top-right"}
+              containerStyle={isPhone ? { bottom: "calc(16px + env(safe-area-inset-bottom))" } : undefined}
               toastOptions={{
                 duration: 4000,
                 style: {

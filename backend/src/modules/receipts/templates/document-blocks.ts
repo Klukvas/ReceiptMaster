@@ -37,6 +37,7 @@ const documentStyles = `
   .doc-totals { break-after: avoid; page-break-after: avoid; }
   .doc-closing { break-before: avoid; page-break-before: avoid; }
   .doc-tail { break-inside: avoid; page-break-inside: avoid; }
+  .items-table .doc-unit { width: 9%; white-space: nowrap; text-align: center; }
   {{#if document.notice}}
   .doc-notice { margin: 12px 0 0; padding: 6px 10px; border: 1px solid #111827; font-size: 12px; font-weight: 700; text-align: center; break-inside: avoid; page-break-inside: avoid; }
   {{/if}}
@@ -46,6 +47,9 @@ const documentStyles = `
   .doc-sign-line-image { display: flex; align-items: flex-end; height: 58px; }
   .doc-sign-image { max-height: 56px; max-width: 200px; object-fit: contain; }
   .doc-stamp { position: absolute; width: 110px; height: 110px; object-fit: contain; right: 0; top: -10px; }
+  {{/if}}
+  {{#if document.signatures.buyer}}
+  .doc-sign-line-name { height: 22px; }
   {{/if}}
   {{#if document.quantities}}
   .doc-quantities { width: 55%; margin: 12px 0 8px auto; font-size: 12px; line-height: 1.6; break-inside: avoid; page-break-inside: avoid; }
@@ -98,6 +102,9 @@ const documentPayment = `{{#if document.payment}}
 const documentTotals = `{{#if document.totals}}
 <div class="doc-totals">
   <div class="doc-total-row"><span>{{document.labels.total}}</span><span>{{document.totals.total}}</span></div>
+  {{#if document.totals.net}}
+  <div class="doc-total-row"><span>{{document.totals.net.label}}</span><span>{{document.totals.net.amount}}</span></div>
+  {{/if}}
   {{#if document.totals.vat}}
   <div class="doc-total-row"><span>{{document.totals.vat.label}}</span><span>{{document.totals.vat.amount}}</span></div>
   {{/if}}
@@ -166,12 +173,15 @@ const documentClosing = `<div class="doc-closing">
     {{#if document.signatures.buyer}}
     <div class="doc-signature">
       <div class="doc-sign-heading">{{document.signatures.buyer.heading}}</div>
+      {{#if document.signatures.buyer.name}}
+      <div>{{document.signatures.buyer.name}}</div>
+      {{else}}
       <div>&nbsp;</div>
+      {{/if}}
       <div class="doc-sign-line"></div>
       <div class="doc-sign-caption">{{document.signatures.caption}}</div>
-      {{#if document.signatures.buyer.name}}
-      <div class="doc-sign-name">{{document.signatures.buyer.name}}</div>
-      {{/if}}
+      <div class="doc-sign-line doc-sign-line-name"></div>
+      <div class="doc-sign-caption">{{document.signatures.buyer.nameCaption}}</div>
     </div>
     {{/if}}
   </div>

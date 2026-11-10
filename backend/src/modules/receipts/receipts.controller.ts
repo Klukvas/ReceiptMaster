@@ -198,7 +198,7 @@ export class ReceiptsController {
     400: "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one; a goods return note needs `details.lines`), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
     402: "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
     404: "Order not found",
-    409: "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing",
+    409: "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing, and when the type's number counter has reached the largest possible number (DOCUMENT_NUMBERS_EXHAUSTED)",
     413: "Request above 6 MiB or logo above 5 MiB",
     429: RATE_LIMITED,
     422: "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them. A goods return note asking for more than is left to return is refused with RETURN_QUANTITY_EXCEEDED; `items` lists each line with the requested and remaining quantity",
@@ -355,6 +355,11 @@ export class ReceiptsController {
       "Receipt is already voided, or `reason` is not a string of at most 500 characters",
   })
   @ApiResponse({ status: 404, description: "Receipt not found" })
+  @ApiResponse({
+    status: 409,
+    description:
+      "A waybill, sales receipt or packing list that is still processing or failed cannot be voided (DOCUMENT_NOT_VOIDABLE): its void would close the order's slot for that type for good; retry the generation instead",
+  })
   async voidReceipt(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: VoidReceiptDto,

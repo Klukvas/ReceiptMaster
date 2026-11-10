@@ -37,12 +37,7 @@ import {
   ReceiptStatus,
 } from "./entities/receipt.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
-import {
-  PdfGeneratorService,
-  ReceiptStyle,
-} from "./services/pdf-generator.service";
 import { PdfStorageService } from "../../common/services/pdf-storage.service";
-import { SettingsService } from "../settings/services/settings.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { ReceiptOutboxService } from "./receipt-outbox.service";
@@ -54,11 +49,8 @@ import { Not, QueryFailedError } from "typeorm";
 describe("ReceiptsService", () => {
   let service: ReceiptsService;
   let receiptsRepo: any;
-  let ordersRepo: any;
   let dataSource: any;
-  let pdfGeneratorService: any;
   let pdfStorageService: any;
-  let settingsService: any;
   let receiptQueue: any;
   let artifacts: {
     repair: jest.Mock;
@@ -137,10 +129,6 @@ describe("ReceiptsService", () => {
       delete: jest.fn(),
     };
 
-    ordersRepo = {
-      findOne: jest.fn(),
-    };
-
     artifacts = {
       lockRetirements: jest.fn(async (rows) => rows),
       retire: jest.fn().mockResolvedValue(undefined),
@@ -174,30 +162,11 @@ describe("ReceiptsService", () => {
       query: jest.fn(),
     };
 
-    pdfGeneratorService = {
-      generateReceiptPdf: jest.fn().mockResolvedValue({
-        filePath: "/path/to/new-receipt.pdf",
-        url: "https://s3/receipt.pdf",
-      }),
-    };
-
     pdfStorageService = {
       parseObjectStoragePath: jest.fn(),
       downloadFile: jest.fn(),
       deleteFile: jest.fn(),
       fileExists: jest.fn(),
-    };
-
-    settingsService = {
-      getAllPdfSettings: jest.fn().mockResolvedValue({
-        companyInfo: { companyName: "Test Corp" },
-        templateId: "standard",
-        receiptTitle: "Invoice",
-        hasCustomReceiptTitle: true,
-        templateLanguage: "en",
-        footerTitle: "Thanks",
-        footerSubtitle: undefined,
-      }),
     };
 
     receiptQueue = {
@@ -214,12 +183,9 @@ describe("ReceiptsService", () => {
         { provide: DocumentRenderService, useValue: renders },
         { provide: ReceiptOutboxService, useValue: receiptQueue },
         { provide: getRepositoryToken(Receipt), useValue: receiptsRepo },
-        { provide: getRepositoryToken(Order), useValue: ordersRepo },
-        { provide: PdfGeneratorService, useValue: pdfGeneratorService },
         { provide: PdfStorageService, useValue: pdfStorageService },
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: SettingsService, useValue: settingsService },
         {
           provide: getQueueToken(RECEIPT_GENERATION_QUEUE),
           useValue: receiptQueue,
@@ -757,6 +723,69 @@ describe("ReceiptsService", () => {
       expect(dataSource.manager.query).not.toHaveBeenCalled();
     });
 
+    it("retries a failed invoice with an explicit configuration under its first issue date, buyer and number", async () => {
+      const buyer = { name: "Покупець", legalName: "ТОВ Покупець" };
+      const failed = {
+        ...mockReceipt,
+        id: "live-invoice",
+        number: "2025-000007",
+        document_type: DocumentType.INVOICE,
+        status: ReceiptStatus.FAILED,
+        generation_id: "old",
+      };
+      const manager = transaction(failed);
+      receiptsRepo.findOne.mockResolvedValue(failed);
+      snapshots.internal.mockResolvedValue({
+        ...failed,
+        pending_html: "frozen",
+        pending_snapshot: {
+          order: { id: "order-1" },
+          document: { issueDate: "2025-12-31", buyer },
+        },
+      });
+
+      await service.generateDocument(
+        "order-1",
+        mockUser,
+        DocumentType.INVOICE,
+        { logoAction: "keep" },
+        { paymentTermDays: 10 },
+      );
+
+      const request = expect.objectContaining({
+        type: DocumentType.INVOICE,
+        details: { paymentTermDays: 10 },
+        carryOver: { buyer, issueDate: "2025-12-31" },
+      });
+      expect(snapshots.preflight).toHaveBeenCalledWith(
+        "user-1",
+        "order-1",
+        expect.anything(),
+        request,
+      );
+      expect(snapshots.prepare).toHaveBeenCalledWith(
+        "user-1",
+        "order-1",
+        expect.any(Function),
+        expect.anything(),
+        undefined,
+        { id: "order-1" },
+        request,
+      );
+      // The candidate is built around the first attempt's number; nothing is drawn.
+      const allocate = snapshots.prepare.mock
+        .calls[0][2] as () => Promise<string>;
+      await expect(allocate()).resolves.toBe("2025-000007");
+      expect(dataSource.manager.query).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalledWith(Receipt, expect.anything());
+      expect(manager.update).toHaveBeenCalledWith(
+        Receipt,
+        { id: "live-invoice", user_id: "user-1" },
+        expect.objectContaining({ status: ReceiptStatus.PROCESSING }),
+      );
+      expect(manager.update.mock.calls[0][2]).not.toHaveProperty("number");
+    });
+
     it("returns the live pending row for a concurrent reissue", async () => {
       const pending = {
         ...mockReceipt,
@@ -789,16 +818,29 @@ describe("ReceiptsService", () => {
       receiptsRepo.findOne.mockImplementation(async () =>
         firstFinished ? pending : null,
       );
+      let signalEntered: () => void = () => undefined;
+      const firstEnteredPrepare = new Promise<void>((resolve) => {
+        signalEntered = resolve;
+      });
+      let releaseFirst: () => void = () => undefined;
+      const firstMayFinish = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
       snapshots.prepare.mockImplementationOnce(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        signalEntered();
+        await firstMayFinish;
         firstFinished = true;
         throw new Error("stop after the first draw");
       });
 
-      const results = await Promise.allSettled([
+      const requests = [
         service.generateDocument("order-1", mockUser, DocumentType.WAYBILL),
         service.generateDocument("order-1", mockUser, DocumentType.WAYBILL),
-      ]);
+      ];
+      // Both requests are issued while the first one is still preparing.
+      await firstEnteredPrepare;
+      releaseFirst();
+      const results = await Promise.allSettled(requests);
 
       expect(snapshots.prepare).toHaveBeenCalledTimes(1);
       expect(results[0].status).toBe("rejected");
@@ -854,30 +896,6 @@ describe("ReceiptsService", () => {
     });
   });
 
-  describe("generateCompactReceipt", () => {
-    it("should delegate to generateReceipt", async () => {
-      const spy = jest
-        .spyOn(service, "generateReceipt")
-        .mockResolvedValue(mockReceipt as Receipt);
-
-      await service.generateCompactReceipt("order-1", mockUser);
-
-      expect(spy).toHaveBeenCalledWith("order-1", mockUser);
-    });
-  });
-
-  describe("generateStandardReceipt", () => {
-    it("should delegate to generateReceipt", async () => {
-      const spy = jest
-        .spyOn(service, "generateReceipt")
-        .mockResolvedValue(mockReceipt as Receipt);
-
-      await service.generateStandardReceipt("order-1", mockUser);
-
-      expect(spy).toHaveBeenCalledWith("order-1", mockUser);
-    });
-  });
-
   describe("voidReceipt", () => {
     let manager$: any;
     it("should void a receipt and unlock order", async () => {
@@ -916,6 +934,63 @@ describe("ReceiptsService", () => {
         Order,
         { id: mockReceipt.order_id, user_id: mockUser.id },
         { is_locked: false },
+      );
+    });
+
+    const voidingManager = (receipt: Partial<Receipt>) => ({
+      findOne: jest.fn(async (entity) =>
+        entity === Order ? mockOrder : receipt,
+      ),
+      findOneOrFail: jest.fn(async () => ({
+        ...receipt,
+        status: ReceiptStatus.VOID,
+      })),
+      update: jest.fn(),
+      exists: jest.fn().mockResolvedValue(false),
+    });
+
+    it.each([
+      [DocumentType.WAYBILL, ReceiptStatus.PROCESSING],
+      [DocumentType.WAYBILL, ReceiptStatus.FAILED],
+      [DocumentType.SALES_RECEIPT, ReceiptStatus.FAILED],
+      [DocumentType.PACKING_LIST, ReceiptStatus.PROCESSING],
+    ])(
+      "refuses to void a %s that is %s, which would close its slot for good",
+      async (document_type, status) => {
+        const manager = voidingManager({
+          ...mockReceipt,
+          document_type,
+          status,
+        });
+        dataSource.transaction.mockImplementation(async (cb: any) =>
+          cb(manager),
+        );
+
+        await expect(
+          service.voidReceipt("receipt-1", mockUser, "stuck"),
+        ).rejects.toMatchObject({
+          statusCode: 409,
+          errorCode: "DOCUMENT_NOT_VOIDABLE",
+        });
+        expect(manager.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      [DocumentType.INVOICE, ReceiptStatus.FAILED],
+      [DocumentType.QUOTE, ReceiptStatus.PROCESSING],
+      [DocumentType.WAYBILL, ReceiptStatus.GENERATED],
+    ])("still voids a %s that is %s", async (document_type, status) => {
+      const manager = voidingManager({ ...mockReceipt, document_type, status });
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await expect(
+        service.voidReceipt("receipt-1", mockUser, "x"),
+      ).resolves.toMatchObject({ status: ReceiptStatus.VOID });
+      expect(manager.update).toHaveBeenCalledWith(
+        Receipt,
+        { id: "receipt-1", user_id: "user-1" },
+        expect.objectContaining({ status: ReceiptStatus.VOID }),
       );
     });
 
@@ -1076,8 +1151,6 @@ describe("ReceiptsService", () => {
       const result = await service.getReceiptPdf("receipt-1", mockUser);
       expect(result.buffer.toString()).toBe("%PDF frozen");
       expect(artifacts.repair).toHaveBeenCalledWith("receipt-1", mockUser.id);
-      expect(settingsService.getAllPdfSettings).not.toHaveBeenCalled();
-      expect(pdfGeneratorService.generateReceiptPdf).not.toHaveBeenCalled();
     });
     it("repairs a missing stored PDF without deleting the old reference first", async () => {
       receiptsRepo.findOne.mockResolvedValue({
@@ -1113,7 +1186,6 @@ describe("ReceiptsService", () => {
         { config: legacyConfig(null), logoAction: "keep" },
         expect.any(Object),
       );
-      expect(pdfGeneratorService.generateReceiptPdf).not.toHaveBeenCalled();
       expect(receiptsRepo.save).not.toHaveBeenCalled();
     });
   });
@@ -1150,7 +1222,6 @@ describe("ReceiptsService", () => {
         "public_token",
       );
       expect(pdfStorageService.deleteFile).not.toHaveBeenCalled();
-      expect(settingsService.getAllPdfSettings).not.toHaveBeenCalled();
     });
     it("requires a revision and reconstruction confirmation for legacy replacement", async () => {
       snapshots.internal.mockResolvedValue({
@@ -1180,31 +1251,6 @@ describe("ReceiptsService", () => {
         }),
       ).rejects.toThrow("Document changed");
       expect(snapshots.prepare).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("getReceiptStyleFromTemplateId", () => {
-    it("should map known template IDs", () => {
-      const getStyle = (service as any).getReceiptStyleFromTemplateId.bind(
-        service,
-      );
-      expect(getStyle("standard")).toBe(ReceiptStyle.STANDARD);
-      expect(getStyle("compact")).toBe(ReceiptStyle.COMPACT);
-      expect(getStyle("classic")).toBe(ReceiptStyle.CLASSIC);
-      expect(getStyle("modern")).toBe(ReceiptStyle.MODERN);
-      expect(getStyle("elegant")).toBe(ReceiptStyle.ELEGANT);
-      expect(getStyle("vintage")).toBe(ReceiptStyle.VINTAGE);
-      expect(getStyle("tech")).toBe(ReceiptStyle.TECH);
-      expect(getStyle("wave")).toBe(ReceiptStyle.WAVE);
-      expect(getStyle("minimal")).toBe(ReceiptStyle.MINIMAL);
-      expect(getStyle("corporate")).toBe(ReceiptStyle.CORPORATE);
-    });
-
-    it("should fall back to COMPACT for unknown IDs", () => {
-      const getStyle = (service as any).getReceiptStyleFromTemplateId.bind(
-        service,
-      );
-      expect(getStyle("unknown")).toBe(ReceiptStyle.COMPACT);
     });
   });
 
@@ -1387,7 +1433,6 @@ describe("ReceiptsService", () => {
       receiptsRepo.createQueryBuilder = jest.fn().mockReturnValue(query);
       const result = await service.getPublicReceipt("a".repeat(64));
       expect(result.companyInfo.companyName).toBe("Frozen Corp");
-      expect(settingsService.getAllPdfSettings).not.toHaveBeenCalled();
     });
     it("rejects malformed public tokens", async () => {
       await expect(service.getPublicReceipt("bad-token")).rejects.toThrow(

@@ -1,4 +1,4 @@
-import { Ban, Download, Loader2, Printer, RefreshCw, Share2, TriangleAlert } from "lucide-react";
+import { Ban, Download, Printer, RefreshCw, Share2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Receipt } from "../../lib/api";
 import { formatDocumentDateTime } from "../../lib/document-date-format";
@@ -7,6 +7,7 @@ import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { DocumentFailureReason } from "../documents/DocumentFailureReason";
+import { DocumentStatusBadge } from "../documents/DocumentStatusBadge";
 import { VoidedDocumentNote } from "../documents/VoidedDocumentNote";
 
 export type DocumentCardActions = {
@@ -17,27 +18,6 @@ export type DocumentCardActions = {
   onVoid: (document: Receipt) => void;
   onRetry: (document: Receipt) => void;
 };
-
-const STATUS_STYLE: Record<Receipt["status"], string> = {
-  generated: "bg-[var(--color-success-light)] text-success-base",
-  processing: "bg-[var(--color-accent-light)] text-accent-base",
-  void: "bg-[var(--color-danger-light)] text-danger-base",
-  failed: "bg-[var(--color-danger-light)] text-danger-base",
-};
-
-function StatusBadge({ status }: { status: Receipt["status"] }) {
-  const { t } = useTranslation();
-  return (
-    <span
-      aria-live="polite"
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}
-    >
-      {status === "processing" && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
-      {status === "failed" && <TriangleAlert className="h-3 w-3" aria-hidden />}
-      {t(`documents.status.${status}`)}
-    </span>
-  );
-}
 
 function GeneratedActions({ document, actions }: { document: Receipt; actions: DocumentCardActions }) {
   const { t } = useTranslation();
@@ -58,7 +38,8 @@ function GeneratedActions({ document, actions }: { document: Receipt; actions: D
       </Button>
       <Button size="sm" variant="outline" disabled={isReplacing} onClick={() => actions.onReplace(document)}>
         <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        {isReplacing ? t("document.replacing") : t("documents.replace")}
+        {/* The status badge already says "Replacing"; the button only goes inert, so it is not announced twice. */}
+        {t("documents.replace")}
       </Button>
       <Button
         size="sm"
@@ -79,9 +60,11 @@ type DocumentCardProps = {
   actions: DocumentCardActions;
   /** Rendered at the bottom of the card, e.g. the voided history of the same type. */
   footer?: ReactNode;
+  /** A retry request for this document is in flight. */
+  isRetrying?: boolean;
 };
 
-export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
+export function DocumentCard({ document, actions, footer, isRetrying = false }: DocumentCardProps) {
   const { t } = useTranslation();
   const timeZone = useDocumentTimeZone();
   return (
@@ -97,7 +80,7 @@ export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
             {document.number} · {formatDocumentDateTime(document.created_at, timeZone)}
           </p>
         </div>
-        <StatusBadge status={document.status} />
+        <DocumentStatusBadge status={document.status} replacementStatus={document.replacement_status} />
       </div>
       {document.status === "generated" && <GeneratedActions document={document} actions={actions} />}
       {document.status === "void" && (
@@ -109,7 +92,14 @@ export function DocumentCard({ document, actions, footer }: DocumentCardProps) {
           {isMultiplePerOrder(document.document_type) ? (
             <p className="text-xs text-content-tertiary">{t("documents.createAgain")}</p>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => actions.onRetry(document)}>
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="document-card-retry"
+              disabled={isRetrying}
+              softDisabled
+              onClick={() => actions.onRetry(document)}
+            >
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               {t("receipts.retryGeneration")}
             </Button>

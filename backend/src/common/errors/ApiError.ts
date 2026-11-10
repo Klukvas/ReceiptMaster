@@ -109,6 +109,18 @@ export const ApiErrors = {
       "DOCUMENT_ALREADY_EXISTS",
       409,
     ),
+  DOCUMENT_NOT_VOIDABLE: (id: string, type: string, status: string) =>
+    new ApiErrorResponse(
+      `The ${type} ${id} is ${status}, not issued, and cannot be voided: a voided ${type} closes the order's ${type} slot for good. Retry the generation instead.`,
+      "DOCUMENT_NOT_VOIDABLE",
+      409,
+    ),
+  DOCUMENT_NUMBERS_EXHAUSTED: (type: string) =>
+    new ApiErrorResponse(
+      `The ${type} counter has reached the largest possible number; no further ${type} number can be issued. Change the number format or contact support.`,
+      "DOCUMENT_NUMBERS_EXHAUSTED",
+      409,
+    ),
   DOCUMENT_TYPE_NOT_SUPPORTED: (type: string) =>
     new ApiErrorResponse(
       `Document type "${type}" cannot be generated yet`,

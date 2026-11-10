@@ -1,5 +1,4 @@
-import { useState, useEffect } from"react";
-import { useBackClosesDialog } from "../../hooks/useBackClosesDialog";
+import { useState } from"react";
 import {
  X,
  Copy,
@@ -18,6 +17,7 @@ import {
 } from"lucide-react";
 import { formatCurrency, formatDate, type Order } from"../../lib/api";
 import { Button } from"../ui/Button";
+import { Dialog, DialogTitle } from"../ui/primitives/dialog";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
 import { formatOrderNumber } from"../../lib/order-number";
@@ -36,6 +36,12 @@ interface OrderDetailsProps {
  onShareReceipt?: (receiptId: string) => void;
 }
 
+/** The order's visible "More actions" button: where focus returns after a row click or the menu's View. */
+const orderActionsButton = (orderId: string) =>
+ Array.from(
+ document.querySelectorAll<HTMLElement>(`[data-order-actions="${CSS.escape(orderId)}"]`),
+ ).find((element) => element.offsetParent !== null);
+
 export const OrderDetails = ({
  order,
  onClose,
@@ -49,20 +55,6 @@ export const OrderDetails = ({
 }: OrderDetailsProps) => {
  const { t } = useTranslation();
  const [idCopied, setIdCopied] = useState(false);
- useBackClosesDialog(true, onClose);
-
- // Close on Escape
- useEffect(() => {
- const handleKeyDown = (e: KeyboardEvent) => {
- if (e.key !=="Escape") return;
- // A dialog opened on top (e.g. Share Receipt) owns this Escape; closing both
- // would throw away the order the user was looking at.
- if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
- onClose();
- };
- document.addEventListener("keydown", handleKeyDown);
- return () => document.removeEventListener("keydown", handleKeyDown);
- }, [onClose]);
 
  const copyOrderId = async () => {
  await navigator.clipboard.writeText(order.id);
@@ -79,7 +71,8 @@ export const OrderDetails = ({
  // Initials for avatar
  const initials = order.recipient?.name
  ? order.recipient.name
- .split("")
+ .split(/\s+/)
+ .filter(Boolean)
  .map((w) => w[0])
  .slice(0, 2)
  .join("")
@@ -87,24 +80,24 @@ export const OrderDetails = ({
  :"?";
 
  return (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-modal-backdrop"
- onClick={(e) => {
- if (e.target === e.currentTarget) onClose();
+ <Dialog
+ open
+ onOpenChange={(open) => {
+ if (!open) onClose();
  }}
+ className="max-w-3xl"
+ returnFocus={() => orderActionsButton(order.id)}
  >
- {/* Backdrop */}
- <div className="absolute inset-0 bg-[var(--color-overlay)] backdrop-blur-sm" />
-
- {/* Modal */}
- <div className="relative w-full max-w-3xl bg-elevated rounded-2xl shadow-2xl border border-[var(--color-border)] max-h-[90vh] flex flex-col animate-modal-content">
+ <div
+ className="relative m-4 bg-elevated rounded-2xl shadow-2xl border border-[var(--color-border)] max-h-[90vh] flex flex-col animate-modal-content"
+ >
  {/* ─── Header ─── */}
  <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-[var(--color-border-light)]">
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-3 mb-2">
- <h2 className="text-lg font-semibold text-content">
+ <DialogTitle className="text-lg font-semibold text-content leading-normal tracking-normal">
  {t("orders.orderDetails")} {formatOrderNumber(order)}
- </h2>
+ </DialogTitle>
  <OrderStatusBadge order={order} />
  </div>
  <div className="flex items-center gap-2">
@@ -112,7 +105,9 @@ export const OrderDetails = ({
  {order.id}
  </span>
  <button
+ type="button"
  onClick={copyOrderId}
+ aria-label={t("orders.copyId")}
  className="p-0.5 rounded hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
  title={t("orders.copyId")}
  >
@@ -130,10 +125,14 @@ export const OrderDetails = ({
  </div>
  </div>
  <button
+ type="button"
  onClick={onClose}
- className="p-2 -m-2 rounded-lg hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
+ data-dialog-close
+ aria-label={t("common.close")}
+ title={t("common.close")}
+ className="p-2 -m-2 rounded-lg pointer-coarse:min-h-11 pointer-coarse:min-w-11 inline-flex items-center justify-center hover:bg-surface-alt transition-colors text-content-tertiary hover:text-content-secondary"
  >
- <X className="w-5 h-5" />
+ <X className="w-5 h-5" aria-hidden />
  </button>
  </div>
 
@@ -399,6 +398,6 @@ export const OrderDetails = ({
  </div>
  </div>
  </div>
- </div>
+ </Dialog>
  );
 };

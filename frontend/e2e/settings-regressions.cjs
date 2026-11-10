@@ -364,7 +364,7 @@ async function scenario(name, fn, tab = "receipt", design = {}) {
       await wait(p);
       assert.equal(
         await section(p, "Receipt Title").locator("input").inputValue(),
-        "Инвойс",
+        "Расходная накладная",
       );
       const previews = (await state()).requests.filter((r) =>
         r.path.includes("preview-template"),
@@ -384,7 +384,7 @@ async function scenario(name, fn, tab = "receipt", design = {}) {
     async (p) => {
       assert.equal(
         await section(p, "Receipt Title").locator("input").inputValue(),
-        "Накладная",
+        "Отгрузочная накладная",
       );
       const s = section(p, "Receipt Title");
       await s.getByRole("button", { name: "Edit", exact: true }).click();
@@ -646,9 +646,9 @@ async function scenario(name, fn, tab = "receipt", design = {}) {
     },
   );
   for (const [language, titles] of Object.entries({
-    en: ["Proforma Invoice", "Delivery Note", "Invoice"],
-    ru: ["Проформа-инвойс", "Накладная", "Инвойс"],
-    uk: ["Проформа-інвойс", "Видаткова накладна", "Інвойс"],
+    en: ["Proforma Invoice", "Shipping note", "Delivery note"],
+    ru: ["Проформа-инвойс", "Отгрузочная накладная", "Расходная накладная"],
+    uk: ["Проформа-інвойс", "Накладна на відвантаження", "Видаткова накладна"],
   })) {
     await scenario(
       `template POST survives failed GET with automatic ${language} titles and reload`,

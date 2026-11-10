@@ -1,7 +1,9 @@
 // Accessibility and wording of the documents list:
 //  - sortable columns carry aria-sort and the cards offer a sort control on phones;
 //  - voided and failed rows say why and what to do next;
-//  - a reversed date range is called out.
+//  - a reversed date range is called out;
+//  - on a phone the sort direction button names the current order and describes what a press does,
+//    the two dates sit side by side, and a dialog's Close button is a 44px touch target.
 
 import { BASE_URL, createState, installApiMocks, withPage } from "./support/harness.mjs";
 import { Results } from "./support/runner.mjs";
@@ -43,7 +45,56 @@ export const run = async () => {
   });
   await open({ width: 375, height: 812 }, "/documents", async (page) => {
     await page.getByText("ACT-h1").locator("visible=true").first().waitFor({ state: "visible" });
-    results.check("cards get a sort control on phones", await page.locator("#data-table-sort").isVisible(), "no select");
+    results.check("cards get a sort control on phones", await page.getByTestId("data-table-sort").isVisible(), "no select");
+    const direction = page.getByTestId("data-table-sort-direction");
+    const description = await direction.evaluate((button) =>
+      document.getElementById(button.getAttribute("aria-describedby"))?.textContent ?? "",
+    );
+    results.check(
+      "the sort direction button shows the current order as text and describes the action",
+      (await direction.innerText()).trim() === "Descending" &&
+        (await direction.getAttribute("aria-label")) === null &&
+        description.includes("reverse"),
+      `${await direction.innerText()} | ${description}`,
+    );
+    await direction.click();
+    const switched = await page
+      .waitForFunction(() => document.querySelector('[data-testid="data-table-sort-direction"]')?.textContent?.includes("Ascending"))
+      .then(() => true)
+      .catch(() => false);
+    results.check("pressing it switches the visible order to Ascending", switched, await direction.innerText());
+    await page.locator("#documents-filters-toggle").click();
+    const [from, to] = await Promise.all([
+      page.locator("#documents-filter-from").boundingBox(),
+      page.locator("#documents-filter-to").boundingBox(),
+    ]);
+    results.check(
+      "the two dates sit side by side on a phone",
+      from && to && Math.abs(from.y - to.y) < 2 && to.x > from.x && to.x + to.width <= 375,
+      JSON.stringify({ from, to }),
+    );
+  });
+  await withPage({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true }, async (page) => {
+    page.setDefaultTimeout(8000);
+    const state = createState([]);
+    state.documents = [
+      ...documents(),
+      listedDocument("h4", "invoice", "generated", order("o4", 8, "Delta Deli"), { created_at: "2026-03-09T10:00:00.000Z" }),
+    ];
+    state.handlers = [...documentsListHandlers(state), ...documentHandlers(state)];
+    await installApiMocks(page, state);
+    await page.goto(`${BASE_URL}/documents`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /^Void: / }).locator("visible=true").first().click();
+    const close = page.locator("[data-dialog-close]").locator("visible=true").first();
+    const isOpen = await close.waitFor({ state: "visible", timeout: 4000 }).then(() => true).catch(() => false);
+    // The dialog zooms in; measure once the animation has finished.
+    await page.waitForTimeout(500);
+    const box = isOpen ? await close.boundingBox() : null;
+    results.check(
+      "on a touch screen a dialog's Close button is at least 44px",
+      box !== null && box.width >= 44 && box.height >= 44,
+      JSON.stringify(box),
+    );
   });
   return results;
 };

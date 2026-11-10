@@ -128,9 +128,10 @@ export function ActDetailsFields({
         />
         <div className="flex items-start justify-between gap-3 text-xs text-content-tertiary">
           <p id="document-completion-hint">
+            {/* The standard sentence is spelled out here, because a placeholder vanishes on the first keystroke. */}
             {form.completionText.trim() === ""
-              ? t("documents.completionTextStandardHint")
-              : t("documents.completionTextCustomHint")}
+              ? t("documents.completionTextStandardHint", { text: standardText })
+              : t("documents.completionTextCustomHint", { text: standardText })}
           </p>
           <span data-testid="completion-text-counter" className="shrink-0 tabular-nums">
             {length}/{MAX_ACT_COMPLETION_TEXT_LENGTH}
@@ -159,7 +160,7 @@ export function ActDetailsFields({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             id="document-period-from"
-            aria-label={t("documents.periodFrom")}
+            label={t("documents.periodFrom")}
             error={translated(t, errors, "periodFrom")}
             type="date"
             value={form.from}
@@ -168,7 +169,7 @@ export function ActDetailsFields({
           />
           <Input
             id="document-period-to"
-            aria-label={t("documents.periodTo")}
+            label={t("documents.periodTo")}
             error={translated(t, errors, "periodTo")}
             type="date"
             value={form.to}

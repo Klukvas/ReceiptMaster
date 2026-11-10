@@ -39,13 +39,11 @@ export function ReturnNoteFields({ items, form, errors, onChange }: ReturnNoteFi
         <legend className="mb-1 text-sm font-medium text-content-secondary">
           {t("documents.returnNote.linesTitle")}
         </legend>
-        <p className="text-xs text-content-tertiary" data-testid="return-note-hint">
-          {t("documents.returnNote.hint")}
-        </p>
         <ul data-testid="return-lines" className="space-y-2">
           {items.map((item) => {
             const remaining = remainingReturnQty(item);
-            const isSelected = form.selectedItemIds.includes(item.id);
+            // A line returned in full meanwhile stays unticked, whatever the form still holds.
+            const isSelected = remaining > 0 && form.selectedItemIds.includes(item.id);
             const qtyError = errors[returnQtyField(item.id)];
             const qtyId = `return-qty-${item.id}`;
             const qtyHintId = `${qtyId}-hint`;

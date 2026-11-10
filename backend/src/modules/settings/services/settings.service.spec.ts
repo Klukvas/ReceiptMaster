@@ -139,40 +139,44 @@ describe("SettingsService", () => {
       expect(await service.getReceiptTitle("user-1")).toBe("Custom Title");
     });
 
-    it('should default to "Invoice" when no settings exist', async () => {
+    it('should default to "Delivery note" when no settings exist', async () => {
       settingsRepo.findOne.mockResolvedValue(null);
 
-      expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
+      expect(await service.getReceiptTitle("user-1")).toBe("Delivery note");
     });
 
-    it('should default to "Invoice" when receiptTitle is null and language is en', async () => {
+    it('should default to "Delivery note" when receiptTitle is null and language is en', async () => {
       settingsRepo.findOne.mockResolvedValue({
         ...mockSettings,
         receiptTitle: null,
         templateLanguage: "en",
       });
 
-      expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
+      expect(await service.getReceiptTitle("user-1")).toBe("Delivery note");
     });
 
-    it('should default to "Інвойс" when receiptTitle is null and language is uk', async () => {
+    it('should default to "Видаткова накладна" when receiptTitle is null and language is uk', async () => {
       settingsRepo.findOne.mockResolvedValue({
         ...mockSettings,
         receiptTitle: null,
         templateLanguage: "uk",
       });
 
-      expect(await service.getReceiptTitle("user-1")).toBe("Інвойс");
+      expect(await service.getReceiptTitle("user-1")).toBe(
+        "Видаткова накладна",
+      );
     });
 
-    it('should default to "Инвойс" when receiptTitle is null and language is ru', async () => {
+    it('should default to "Расходная накладная" when receiptTitle is null and language is ru', async () => {
       settingsRepo.findOne.mockResolvedValue({
         ...mockSettings,
         receiptTitle: null,
         templateLanguage: "ru",
       });
 
-      expect(await service.getReceiptTitle("user-1")).toBe("Инвойс");
+      expect(await service.getReceiptTitle("user-1")).toBe(
+        "Расходная накладная",
+      );
     });
 
     it("should fallback to English default for unknown language", async () => {
@@ -182,7 +186,7 @@ describe("SettingsService", () => {
         templateLanguage: "fr",
       });
 
-      expect(await service.getReceiptTitle("user-1")).toBe("Invoice");
+      expect(await service.getReceiptTitle("user-1")).toBe("Delivery note");
     });
 
     it("should set receipt title", async () => {
@@ -531,9 +535,9 @@ describe("SettingsService", () => {
 
   describe("getAllPdfSettings", () => {
     it.each([
-      ["en", "Invoice"],
-      ["ru", "Инвойс"],
-      ["uk", "Інвойс"],
+      ["en", "Delivery note"],
+      ["ru", "Расходная накладная"],
+      ["uk", "Видаткова накладна"],
     ])(
       "preserves stored title provenance for %s even when it equals the default",
       async (language, title) => {
@@ -571,7 +575,7 @@ describe("SettingsService", () => {
       const result = await service.getAllPdfSettings("user-1");
 
       expect(result.templateId).toBe("standard");
-      expect(result.receiptTitle).toBe("Invoice");
+      expect(result.receiptTitle).toBe("Delivery note");
       expect(result.templateLanguage).toBe("en");
       expect(result.companyInfo.companyName).toBe("");
     });
@@ -585,7 +589,7 @@ describe("SettingsService", () => {
 
       const result = await service.getAllPdfSettings("user-1");
 
-      expect(result.receiptTitle).toBe("Інвойс");
+      expect(result.receiptTitle).toBe("Видаткова накладна");
       expect(result.templateLanguage).toBe("uk");
     });
 
@@ -598,7 +602,7 @@ describe("SettingsService", () => {
 
       const result = await service.getAllPdfSettings("user-1");
 
-      expect(result.receiptTitle).toBe("Инвойс");
+      expect(result.receiptTitle).toBe("Расходная накладная");
       expect(result.templateLanguage).toBe("ru");
     });
   });

@@ -1,4 +1,5 @@
 import { DataSource } from "typeorm";
+import { DB_SESSION_OPTIONS } from "./database-session";
 import { ConfigService } from "@nestjs/config";
 import { EnvConfig } from "./env.schema";
 
@@ -14,6 +15,7 @@ export const createDataSource = (configService: ConfigService<EnvConfig>) => {
     migrations: [__dirname + "/migrations/*{.ts,.js}"],
     synchronize: false,
     logging: process.env.NODE_ENV === "development",
+    extra: { options: DB_SESSION_OPTIONS },
   });
 };
 

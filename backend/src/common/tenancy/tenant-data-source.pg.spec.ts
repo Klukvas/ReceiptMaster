@@ -419,10 +419,11 @@ describeIsolatedPostgres(
       ).toEqual([]);
       const service = new ReceiptsService(
         source.getRepository(Receipt),
-        source.getRepository(Order),
-        undefined,
         undefined,
         source,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -581,15 +582,14 @@ describeIsolatedPostgres(
         );
         const receipts = new ReceiptsService(
           runtime.getRepository(Receipt),
-          runtime.getRepository(Order),
-          undefined,
           storage as never,
           runtime,
-          undefined,
           undefined,
           { dispatch: jest.fn() } as never,
           snapshots,
           artifacts,
+          undefined,
+          undefined,
         );
         return { receipts, artifacts, started, release: () => release() };
       }
@@ -695,11 +695,12 @@ describeIsolatedPostgres(
       });
       const service = new ReceiptsService(
         source.getRepository(Receipt),
-        source.getRepository(Order),
-        undefined,
         undefined,
         source,
         { get: () => "https://example.test" } as never,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
       );
@@ -746,11 +747,12 @@ describeIsolatedPostgres(
       try {
         const service = new ReceiptsService(
           repository,
-          source.getRepository(Order),
-          undefined,
           undefined,
           source,
           { get: () => "https://example.test" } as never,
+          undefined,
+          undefined,
+          undefined,
           undefined,
           undefined,
         );

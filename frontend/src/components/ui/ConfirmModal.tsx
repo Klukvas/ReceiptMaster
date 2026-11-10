@@ -16,6 +16,8 @@ interface ConfirmModalProps {
   dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
   isLoading?: boolean;
+  /** The action can no longer succeed (e.g. the server refused it for good); Cancel stays active. */
+  confirmDisabled?: boolean;
   /** Extra content under the message, e.g. a field the confirmation collects. */
   children?: ReactNode;
 }
@@ -31,6 +33,7 @@ export const ConfirmModal = ({
   dismissLabel,
   variant = "danger",
   isLoading = false,
+  confirmDisabled = false,
   children,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
@@ -70,7 +73,7 @@ export const ConfirmModal = ({
         <Button
           variant={buttonVariant}
           onClick={onConfirm}
-          disabled={isLoading}
+          disabled={isLoading || confirmDisabled}
           softDisabled
           className={
             buttonVariant === "danger"

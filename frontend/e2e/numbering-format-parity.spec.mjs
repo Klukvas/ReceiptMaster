@@ -34,6 +34,7 @@ export const run = async () => {
     "./entities/receipt.entity": { DocumentType: { WAYBILL: "waybill" } },
     "./frozen-document": { issueDateIn: () => "" },
     "./receipt-number-sql": {},
+    "../../common/errors/ApiError": { ApiErrors: {} },
   });
   const frontend = loadTsModule(FRONTEND);
 

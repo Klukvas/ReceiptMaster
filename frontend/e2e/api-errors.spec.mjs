@@ -96,7 +96,34 @@ const unitChecks = async (results) => {
         unknown === BACKEND_TEXT,
         `got "${unknown}"`,
       );
+      const strict = await page.evaluate(async (backendText) => {
+        const { translatedApiError } = await import("/src/lib/api-errors.ts");
+        const refusal = (errorCode) => ({ isAxiosError: true, response: { status: 400, data: { error: backendText, errorCode } } });
+        return {
+          known: translatedApiError(refusal("PRODUCT_ALREADY_EXISTS")),
+          generic: translatedApiError(refusal("VALIDATION_ERROR")),
+          unknown: translatedApiError(refusal("SOME_FUTURE_CODE")),
+          network: translatedApiError({ isAxiosError: true }),
+        };
+      }, BACKEND_TEXT);
+      results.check(
+        `${locale}: translatedApiError keeps translated texts and answers null instead of the server's own`,
+        strict.known === errors.productAlreadyExists &&
+          strict.generic === null &&
+          strict.unknown === null &&
+          strict.network === errors.networkError,
+        JSON.stringify(strict),
+      );
     }
+    const protectedPaths = await page.evaluate(async () => {
+      const { isProtectedPath } = await import("/src/lib/session-expiry.ts");
+      return ["/documents", "/documents/x", "/orders", "/r/abc", "/"].map(isProtectedPath);
+    });
+    results.check(
+      "an expired session on /documents reloads in place like the other private pages; /r/ and / do not",
+      JSON.stringify(protectedPaths) === JSON.stringify([true, true, true, false, false]),
+      JSON.stringify(protectedPaths),
+    );
   } finally {
     await browser.close();
   }

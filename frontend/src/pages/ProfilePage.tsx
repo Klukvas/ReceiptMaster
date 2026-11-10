@@ -19,7 +19,8 @@ import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
 import { parseApiError } from "../lib/api-errors";
-import { MIN_PASSWORD_LENGTH } from "../lib/password-policy";
+import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, exceedsPasswordBytes } from "../lib/password-policy";
+import { PasswordBytesHint } from "../components/auth/PasswordBytesHint";
 
 const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
@@ -98,6 +99,12 @@ export const ProfilePage: React.FC = () => {
 
     if (passwordData.newPassword.length < MIN_PASSWORD_LENGTH) {
       toast.error(t("errors.passwordTooShort", { min: MIN_PASSWORD_LENGTH }));
+      return;
+    }
+
+    if (exceedsPasswordBytes(passwordData.newPassword)) {
+      toast.error(t("errors.passwordTooLong", { max: MAX_PASSWORD_BYTES }));
+      document.getElementById("newPassword")?.focus();
       return;
     }
 
@@ -404,6 +411,8 @@ export const ProfilePage: React.FC = () => {
                           autoComplete="new-password"
                           id="newPassword"
                           name="newPassword"
+                          aria-describedby="new-password-rule"
+                          aria-invalid={exceedsPasswordBytes(passwordData.newPassword) || undefined}
                           value={passwordData.newPassword}
                           onChange={handlePasswordChange}
                           className="w-full pl-10 pr-10 py-2 border border-[var(--color-border)] rounded-md shadow-sm bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-accent-base"
@@ -430,9 +439,11 @@ export const ProfilePage: React.FC = () => {
                           )}
                         </button>
                       </div>
-                      <p className="mt-1 text-xs text-content-tertiary">
-                        {t("profile.passwordMinLength", { min: MIN_PASSWORD_LENGTH })}
-                      </p>
+                      <PasswordBytesHint
+                        id="new-password-rule"
+                        password={passwordData.newPassword}
+                        className="text-content-tertiary"
+                      />
                     </div>
 
                     {/* Confirm Password */}

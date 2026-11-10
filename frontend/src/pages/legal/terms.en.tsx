@@ -57,6 +57,11 @@ export const termsEn: LegalContent = {
           carries such an image does not become electronically signed.
         </li>
         <li>
+          A facsimile reproduction of a signature has legal effect only where
+          the law provides for it or where the parties have agreed to it in
+          writing (Article 207 of the Civil Code of Ukraine).
+        </li>
+        <li>
           The documents are not fiscal receipts or settlement documents issued
           through a registrar of settlement operations (RRO/PRRO) and do not
           replace them where the law requires one.

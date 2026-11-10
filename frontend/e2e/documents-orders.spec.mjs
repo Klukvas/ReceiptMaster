@@ -19,7 +19,12 @@
 //  - a return note is offered for a confirmed order while any line has units left, however many notes
 //    exist; its dialog lists the lines (ordered / already returned / quantity), validates on the client,
 //    sends only ticked lines, maps RETURN_QUANTITY_EXCEEDED, ignores a double click, and every note is listed;
-//  - replacing an invoice never offers (or starts from) a design that cannot carry it.
+//  - replacing an invoice never offers (or starts from) a design that cannot carry it;
+//  - review fixes: a failed retention lookup still asks (in general terms) for a type the cap can
+//    delete; server refusals never show the server's English text; a line returned in full after
+//    RETURN_QUANTITY_EXCEEDED stops blocking Create; a failed replacement shows on the order card;
+//    the card's Retry is inert while its request runs; requisite links open a new tab; the act
+//    period has visible labels.
 
 import {
   BASE_URL,
@@ -412,6 +417,12 @@ const checkInvoiceCreation = async (results) => {
 const checkActCreation = async (results) => {
   await withDocumentPage(DESKTOP, {}, async (page, state) => {
     const dialog = await openCreateDialog(page, "Act of Completed Work…");
+    const periodLabels = await dialog.locator('label[for="document-period-from"], label[for="document-period-to"]').allInnerTexts();
+    results.check(
+      "the act period inputs have visible labels",
+      periodLabels.map((text) => text.trim()).join("|") === "Period start|Period end",
+      periodLabels.join("|"),
+    );
     await dialog.getByLabel("Contract", { exact: true }).fill("Contract 7");
     await dialog.getByLabel("Period start").fill("2026-03-31");
     await dialog.getByLabel("Period end").fill("2026-03-01");
@@ -600,9 +611,11 @@ const checkQuoteDialog = async (results) => {
     const field = dialog.locator("#document-valid-until");
     await settle(async () => (await field.getAttribute("aria-invalid")) === "true");
     results.check(
-      "a server 400 on details.validUntil is shown under the date field",
+      "a server 400 on details.validUntil is shown under the date field, without the server's English text",
       (await field.getAttribute("aria-invalid")) === "true" &&
         (await dialog.getByText("Check this field").count()) === 1 &&
+        !(await dialog.innerText()).includes("must not be before the issue date") &&
+        (await dialog.getByText("Some details were not accepted").count()) === 1 &&
         (await page.getByRole("dialog").count()) === 1,
       await dialog.innerText(),
     );
@@ -816,7 +829,7 @@ const checkQuoteVoidReissue = async (results) => {
       "no quote card",
     );
     await page.locator('[data-document-type="quote"]').getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: /Void Quote/ });
+    const confirm = page.getByRole("dialog", { name: /Void quote QUOTE-1/ });
     await confirm.waitFor({ state: "visible" });
     await confirm.getByRole("button", { name: "Void", exact: true }).click();
     await settle(() => (state.voided ?? []).length === 1);
@@ -854,6 +867,14 @@ const checkRequisitesBanner = async (results) => {
         (await warnings.innerText()).includes("Recipient tax ID") &&
           buyerLink === "/recipients?edit=recipient-1&highlight=buyer.taxId",
         buyerLink ?? "no link",
+      );
+      const links = await dialog.locator('[data-testid="requisites-missing"] a, [data-testid="requisites-warnings"] a').evaluateAll(
+        (anchors) => anchors.map((anchor) => `${anchor.getAttribute("target")}|${anchor.getAttribute("rel")}`),
+      );
+      results.check(
+        `${label}: requisite links open in a new tab, so the dialog and what was typed stay`,
+        links.length >= 2 && links.every((link) => link === "_blank|noopener"),
+        links.join(", "),
       );
       results.check(
         `${label}: the refusal is a banner, not a toast, and the dialog stays open`,
@@ -1019,7 +1040,8 @@ const checkReturnNoteSeveral = async (results) => {
     await openDetails(page);
     for (const [name, qty] of [[DRIPPER, "1"], [BEANS, "2"]]) {
       await page.getByRole("button", { name: "Create: Return note" }).click();
-      const dialog = page.getByRole("dialog");
+      // The order details are a dialog too; once this one closes they are the only one left.
+      const dialog = page.getByRole("dialog").filter({ has: page.getByTestId("return-line") });
       await tick(dialog, name).check();
       await quantityOf(dialog, name).fill(qty);
       await submitCreate(dialog);
@@ -1051,7 +1073,7 @@ const checkReturnNoteSeveral = async (results) => {
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     await page.locator('[data-document-type="return_note"]').first().getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: /Void Return note/ });
+    const confirm = page.getByRole("dialog", { name: /Void return note/ });
     await confirm.waitFor({ state: "visible" });
     results.check(
       "voiding a return note says its quantities become available again",
@@ -1121,6 +1143,157 @@ const checkRetentionConfirm = async (results) => {
   });
 };
 
+const checkRetentionLookupFailure = async (results) => {
+  await withDocumentPage(DESKTOP, { retentionError: true }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Quote…");
+    await submitCreate(dialog);
+    // Nothing is known for sure, so the title hedges instead of announcing a replacement.
+    const confirm = page.getByRole("dialog", { name: "The oldest document may be replaced" });
+    await confirm.waitFor({ state: "visible" });
+    results.check(
+      "a failed retention lookup still asks before a quote, in general terms, under a hedged title",
+      (await confirm.innerText()).includes("may permanently delete your oldest document") && (state.created ?? []).length === 0,
+      await confirm.innerText(),
+    );
+    await confirm.getByRole("button", { name: "Create", exact: true }).click();
+    results.check(
+      "confirming the general warning creates the quote",
+      await settle(() => (state.created ?? []).length === 1),
+      JSON.stringify(state.created),
+    );
+  });
+  await withDocumentPage(DESKTOP, { retentionError: true }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Invoice…");
+    await submitCreate(dialog);
+    const created = await settle(() => (state.created ?? []).length === 1);
+    results.check(
+      "an invoice (never deleted by the cap) is created without a warning when the lookup fails",
+      created && (await page.getByRole("dialog", { name: /oldest document/ }).count()) === 0,
+      JSON.stringify(state.created),
+    );
+  });
+};
+
+const checkLocalizedRefusals = async (results) => {
+  const cases = [
+    { status: 415, body: { error: "Unsupported Media Type", errorCode: "HTTP_EXCEPTION" }, text: "could not be created with these details", raw: "Unsupported" },
+    { status: 422, body: { error: "Unprocessable Entity", errorCode: "HTTP_EXCEPTION" }, text: "could not be created with these details", raw: "Unprocessable" },
+    { status: 400, body: { error: ["overrides.templateId must be a string"], errorCode: "VALIDATION_ERROR" }, text: "could not be created with these details", raw: "must be a string" },
+    { status: 409, body: { error: "Some new English conflict", errorCode: "SOMETHING_NEW" }, text: "could not be created. Try again", raw: "English conflict" },
+    {
+      status: 409,
+      body: { error: "The invoice counter has reached the largest possible number", errorCode: "DOCUMENT_NUMBERS_EXHAUSTED" },
+      text: "The numbers for this document type have run out",
+      raw: "largest possible number",
+    },
+  ];
+  for (const failure of cases) {
+    await withDocumentPage(DESKTOP, { createError: failure }, async (page, state) => {
+      const dialog = await openCreateDialog(page, "Invoice…");
+      await submitCreate(dialog);
+      await settle(() => (state.createAttempts ?? []).length === 1);
+      await dialog.getByRole("alert").first().waitFor({ state: "visible" });
+      const text = await dialog.innerText();
+      results.check(
+        `a ${failure.status} ${failure.body.errorCode} is a localized message, not the server's text`,
+        text.includes(failure.text) && !text.includes(failure.raw),
+        text,
+      );
+    });
+  }
+};
+
+const checkReturnNoteStaleTick = async (results) => {
+  const exceeded = {
+    status: 422,
+    body: { error: "Cannot return more than was ordered", errorCode: "RETURN_QUANTITY_EXCEEDED" },
+  };
+  await withDocumentPage(DESKTOP, { order: returnOrder(), createError: exceeded }, async (page, state) => {
+    const dialog = await openCreateDialog(page, "Return note…");
+    await tick(dialog, BEANS).check();
+    // Another tab returned every bean meanwhile; the refetch after the refusal brings that in.
+    state.orders = state.orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => (item.product_name === BEANS ? { ...item, returned_qty: item.qty } : item)),
+    }));
+    await submitCreate(dialog);
+    await settle(() => (state.createAttempts ?? []).length === 1);
+    await settle(async () => await tick(dialog, BEANS).isDisabled());
+    results.check(
+      "a line returned in full after RETURN_QUANTITY_EXCEEDED is disabled and no longer ticked",
+      (await tick(dialog, BEANS).isDisabled()) && !(await tick(dialog, BEANS).isChecked()),
+      await dialog.innerText(),
+    );
+    state.createError = null;
+    await tick(dialog, DRIPPER).check();
+    await submitCreate(dialog);
+    await settle(() => (state.created ?? []).length === 1);
+    const lines = (state.created ?? [])[0]?.details?.lines ?? [];
+    results.check(
+      "Create is not stuck: the note goes out with the returnable line only",
+      lines.length === 1 && lines[0].orderItemId === "item-dripper",
+      JSON.stringify(state.created),
+    );
+  });
+};
+
+const checkOrderCardReplacementAndRetry = async (results) => {
+  const failedReplacement = plainOrder({
+    receipts: [{ ...document("inv-1", "invoice", "generated", "2026-02-01T10:05:00.000Z"), replacement_status: "failed" }],
+  });
+  await withDocumentPage(DESKTOP, { order: failedReplacement }, async (page) => {
+    await openDetails(page);
+    const card = page.locator('[data-testid="document-card"][data-document-type="invoice"]');
+    await card.waitFor({ state: "visible" });
+    results.check(
+      "a failed replacement is visible on the order's document card",
+      (await card.getByText("Replacement failed", { exact: true }).count()) === 1,
+      await card.innerText(),
+    );
+  });
+
+  const failedInvoice = plainOrder({ receipts: [document("inv-1", "invoice", "failed", "2026-02-01T10:05:00.000Z")] });
+  await withDocumentPage(DESKTOP, { order: failedInvoice, createDelayMs: 1500 }, async (page, state) => {
+    await openDetails(page);
+    const retry = page.getByTestId("document-card-retry");
+    await retry.click();
+    await settle(async () => (await retry.getAttribute("aria-disabled")) === "true", { timeoutMs: 1000 });
+    const inert = (await retry.getAttribute("aria-disabled")) === "true";
+    await retry.click({ force: true });
+    await retry.click({ force: true });
+    await settle(() => (state.created ?? []).length >= 1, { timeoutMs: 4000 });
+    await page.waitForTimeout(300);
+    results.check(
+      "the card's Retry is inert while its request runs, so repeated clicks send one request",
+      inert && (state.created ?? []).length === 1,
+      `inert=${inert} created=${JSON.stringify(state.created)}`,
+    );
+  });
+};
+
+const checkPreviewBusy = async (results) => {
+  const withWaybill = plainOrder({ receipts: [document("wb-1", "waybill", "generated", "2026-02-01T10:00:00.000Z")] });
+  await withDocumentPage(DESKTOP, { order: withWaybill, designId: "standard" }, async (page) => {
+    await page.route("**/api/v1/receipts/preview", (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Preview busy; retry shortly", errorCode: "HTTP_EXCEPTION" }),
+      }),
+    );
+    await openDetails(page);
+    await page.locator('[data-document-type="waybill"]').getByRole("button", { name: "Replace" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    const shown = await settle(async () => (await dialog.getByText("A preview is already being prepared").count()) > 0);
+    results.check(
+      "a 429 from the live preview says a preview is already being prepared, not the server's text",
+      shown && !(await dialog.innerText()).includes("Preview busy"),
+      await dialog.innerText(),
+    );
+  });
+};
+
 const checkVoid = async (results) => {
   const withInvoice = plainOrder({
     receipts: [document("inv-1", "invoice", "generated", "2026-02-01T10:05:00.000Z")],
@@ -1128,7 +1301,7 @@ const checkVoid = async (results) => {
   await withDocumentPage(DESKTOP, { order: withInvoice }, async (page, state) => {
     await openDetails(page);
     await page.locator('[data-document-type="invoice"]').getByRole("button", { name: "Void" }).click();
-    const confirm = page.getByRole("dialog", { name: /Void Invoice/ });
+    const confirm = page.getByRole("dialog", { name: /Void invoice/ });
     await confirm.waitFor({ state: "visible" });
     results.check(
       "voiding an invoice says a new one can be issued under a new number",
@@ -1302,6 +1475,11 @@ export const run = async () => {
     await checkReturnNoteSeveral(results);
     await checkReturnNoteErrors(results);
     await checkRetentionConfirm(results);
+    await checkRetentionLookupFailure(results);
+    await checkLocalizedRefusals(results);
+    await checkReturnNoteStaleTick(results);
+    await checkOrderCardReplacementAndRetry(results);
+    await checkPreviewBusy(results);
     await checkVoid(results);
     await checkReissueAfterVoid(results);
     await checkReplaceDesign(results);

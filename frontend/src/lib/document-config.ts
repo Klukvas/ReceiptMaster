@@ -150,14 +150,17 @@ export function readableValidationMessage(
   return label ? `${label}: ${match[2]}` : match[2];
 }
 
+const HTTP_TOO_MANY_REQUESTS = 429;
+
 /** Looks up a localized message; injected so this module stays free of the i18n runtime. */
-export type Translate = (key: string) => string;
+export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /** Domain refusals that have a localized message (`errors.<camelCase code>`). */
 const LOCALIZED_ERROR_CODES: ReadonlySet<string> = new Set([
   "DOCUMENT_TEMPLATE_UNSUPPORTED",
   "DOCUMENT_TYPE_NOT_SUPPORTED",
   "DOCUMENT_ALREADY_EXISTS",
+  "DOCUMENT_NUMBERS_EXHAUSTED",
   "DOCUMENT_AMOUNT_INVALID",
   "RECONSTRUCTION_REQUIRED",
   "RECEIPT_ALREADY_EXISTS",
@@ -191,6 +194,14 @@ export async function documentError(
       } catch {
         body = undefined;
       }
+    }
+    // A 429 says "try again shortly", with the server's wait when it is a RATE_LIMITED refusal.
+    if (error.response?.status === HTTP_TOO_MANY_REQUESTS && translate) {
+      const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+      const seconds = record.retryAfterSeconds;
+      return record.errorCode === "RATE_LIMITED" && typeof seconds === "number" && seconds > 0
+        ? translate("errors.rateLimitedIn", { seconds: Math.ceil(seconds) })
+        : translate("errors.rateLimited");
     }
     if (body && typeof body === "object") {
       const refusal = localizedRefusal(body, translate);

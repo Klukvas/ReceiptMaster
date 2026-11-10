@@ -1,22 +1,47 @@
 import React from 'react';
-import { FileText, Loader2, Lock } from 'lucide-react';
+import { FileText, Loader2, Lock, TriangleAlert } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
-import type { Order } from '../../lib/api';
+import type { Order, Receipt } from '../../lib/api';
 import { currentDocumentsOf, documentLabelKey, isNewestOfType } from '../../lib/document-types';
 
 interface OrderStatusBadgeProps {
  order: Order;
 }
 
+type Indicator = { doc: Receipt; kind: 'processing' | 'failed' | 'replacementFailed' | 'void' };
+
+const INDICATOR_STYLE: Record<Indicator['kind'], string> = {
+ processing: 'bg-[var(--color-accent-light)] border-[var(--color-accent-light)] text-accent-base receipt-processing',
+ failed: 'bg-[var(--color-danger-light)] border-[var(--color-danger-light)] text-danger-base',
+ replacementFailed: 'bg-[var(--color-danger-light)] border-[var(--color-danger-light)] text-danger-base',
+ // A voided document is a settled state, not a problem: neutral, like the order card's history.
+ void: 'bg-surface-alt border-[var(--color-border)] text-content-secondary',
+};
+
+const INDICATOR_TEXT_KEY: Record<Indicator['kind'], string> = {
+ processing: 'orders.receiptProcessing',
+ failed: 'documents.status.failed',
+ replacementFailed: 'documentsPage.replacementFailed',
+ void: 'orders.receiptVoided',
+};
+
+/** What the list should flag about the order's documents, the same states the order card shows. */
+const indicatorsOf = (order: Order, documents: Receipt[]): Indicator[] =>
+ documents.flatMap((doc): Indicator[] => {
+ if (doc.status === 'processing') return [{ doc, kind: 'processing' }];
+ if (doc.status === 'failed') return [{ doc, kind: 'failed' }];
+ if (doc.status === 'generated' && doc.replacement_status === 'failed') return [{ doc, kind: 'replacementFailed' }];
+ // A void chip describes where the order stands, so it only shows while nothing newer of the type exists.
+ if (doc.status === 'void' && isNewestOfType(order, doc)) return [{ doc, kind: 'void' }];
+ return [];
+ });
+
 export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ order }) => {
  const { t } = useTranslation();
 
  const documents = currentDocumentsOf(order);
  const hasReceipt = documents.some((doc) => doc.status === 'generated');
- // A void chip describes where the order stands, so it only shows while nothing newer of the type exists.
- const indicators = documents.filter(
- (doc) => doc.status === 'processing' || (doc.status === 'void' && isNewestOfType(order, doc)),
- );
+ const indicators = indicatorsOf(order, documents);
  const labelOf = (doc: (typeof documents)[number]) =>
  t(documentLabelKey(doc.document_type));
 
@@ -64,28 +89,19 @@ export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ order }) => 
  )}
  </div>
 
- {indicators.map((doc) => {
- const statusText = t(
- doc.status === 'processing' ? 'orders.receiptProcessing' : 'orders.receiptVoided',
- );
- const text = documents.length > 1 ? `${labelOf(doc)} · ${statusText}` : statusText;
- return doc.status === 'processing' ? (
+ {indicators.map((indicator) => {
+ const prefix = documents.length > 1 ? `${labelOf(indicator.doc)} · ` : '';
+ const style = INDICATOR_STYLE[indicator.kind];
+ const Icon = indicator.kind === 'processing' ? Loader2 : indicator.kind === 'void' ? FileText : TriangleAlert;
+ return (
  <span
- key={doc.id}
- title={labelOf(doc)}
- className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-accent-light)] border border-[var(--color-accent-light)] text-accent-base receipt-processing"
+ key={`${indicator.doc.id}-${indicator.kind}`}
+ title={labelOf(indicator.doc)}
+ data-indicator={indicator.kind}
+ className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border ${style}`}
  >
- <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
- <span>{text}</span>
- </span>
- ) : (
- <span
- key={doc.id}
- title={labelOf(doc)}
- className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] text-danger-base"
- >
- <FileText className="w-3 h-3" aria-hidden />
- <span>{text}</span>
+ <Icon className={`w-3 h-3 ${indicator.kind === 'processing' ? 'animate-spin' : ''}`} aria-hidden />
+ <span>{prefix}{t(INDICATOR_TEXT_KEY[indicator.kind])}</span>
  </span>
  );
  })}

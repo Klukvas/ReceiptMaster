@@ -2,7 +2,7 @@
 //  - the check digit of a tax code (EDRPOU / RNOKPP) is verified by a pure util, and a mismatch is
 //    only a hint in the recipient form: it never blocks saving;
 //  - the share dialog warns that the PDF carries the signature and stamp, but only when one is stored;
-//  - the delivery style is called "Delivery note" in the interface (identifier untouched).
+//  - the delivery style is called "Shipping note" in the en interface, like its PDF title (identifier untouched).
 
 import {
   BASE_URL,

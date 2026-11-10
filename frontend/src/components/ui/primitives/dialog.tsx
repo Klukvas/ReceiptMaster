@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "./cn";
 import { useBackClosesDialog } from "../../../hooks/useBackClosesDialog";
 
@@ -17,7 +18,27 @@ const DialogContext = React.createContext<DialogContextValue | null>(null);
 
 // Dialogs can stack (Order Details with Share Receipt on top). Only the topmost one
 // may react to Escape and Tab, otherwise one keypress closes or traps them all.
-const openDialogStack: symbol[] = [];
+// The ones underneath are made inert and hidden from assistive technology, so a
+// screen reader (and a pointer) only reaches the dialog that is actually in front.
+interface OpenDialog {
+  element: () => HTMLElement | null;
+}
+const openDialogStack: OpenDialog[] = [];
+
+const setBackground = (
+  entry: OpenDialog | undefined,
+  isBackground: boolean,
+) => {
+  const element = entry?.element();
+  if (!element) return;
+  if (isBackground) {
+    element.setAttribute("aria-hidden", "true");
+    element.setAttribute("inert", "");
+  } else {
+    element.removeAttribute("aria-hidden");
+    element.removeAttribute("inert");
+  }
+};
 
 function useDialogContext() {
   return React.useContext(DialogContext);
@@ -32,10 +53,23 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
   className?: string;
+  /**
+   * Where focus goes on close when the element that opened the dialog is gone
+   * (e.g. a menu item that unmounted with its menu) or was never focusable (a row click).
+   */
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
-function Dialog({ open, onOpenChange, children, className }: DialogProps) {
+function Dialog({
+  open,
+  onOpenChange,
+  children,
+  className,
+  returnFocus,
+}: DialogProps) {
+  const rootRef = React.useRef<HTMLDivElement>(null);
   const dialogRef = React.useRef<HTMLDivElement>(null);
+  const returnFocusRef = React.useRef(returnFocus);
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
   const onOpenChangeRef = React.useRef(onOpenChange);
   const [titleId, setTitleId] = React.useState<string | undefined>(undefined);
@@ -45,7 +79,8 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
 
   React.useLayoutEffect(() => {
     onOpenChangeRef.current = onOpenChange;
-  }, [onOpenChange]);
+    returnFocusRef.current = returnFocus;
+  }, [onOpenChange, returnFocus]);
 
   useBackClosesDialog(open, () => onOpenChangeRef.current(false));
 
@@ -53,12 +88,15 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
     if (!open) return;
     if (typeof document === "undefined") return;
 
-    const dialogId = Symbol("dialog");
-    openDialogStack.push(dialogId);
-    const isTopmost = () =>
-      openDialogStack[openDialogStack.length - 1] === dialogId;
-
+    // Capture the opener before the dialog below turns inert: a browser may blur its focused
+    // control at that moment, and focus could then not be returned to it.
     previousFocusRef.current = document.activeElement as HTMLElement;
+    const entry: OpenDialog = { element: () => rootRef.current };
+    setBackground(openDialogStack[openDialogStack.length - 1], true);
+    openDialogStack.push(entry);
+    const isTopmost = () =>
+      openDialogStack[openDialogStack.length - 1] === entry;
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -66,9 +104,12 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
       if (!dialogRef.current) return;
       // A field marked data-autofocus wins; otherwise the first control that is not the header's
       // Close button, so a form opens on its first field and a screen reader does not start on "Close".
-      const preferred = dialogRef.current.querySelector<HTMLElement>("[data-autofocus]");
+      const preferred =
+        dialogRef.current.querySelector<HTMLElement>("[data-autofocus]");
       const focusable = getFocusableElements(dialogRef.current);
-      const first = focusable.find((el) => !el.hasAttribute("data-dialog-close")) ?? focusable[0];
+      const first =
+        focusable.find((el) => !el.hasAttribute("data-dialog-close")) ??
+        focusable[0];
       (preferred ?? first ?? dialogRef.current).focus();
     });
 
@@ -112,24 +153,41 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      const position = openDialogStack.indexOf(dialogId);
+      const wasTopmost = isTopmost();
+      const position = openDialogStack.indexOf(entry);
       if (position !== -1) openDialogStack.splice(position, 1);
+      // The dialog underneath must stop being inert before focus can go back into it.
+      if (wasTopmost)
+        setBackground(openDialogStack[openDialogStack.length - 1], false);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus();
+      const previous = previousFocusRef.current;
+      const canRestore =
+        previous && previous.isConnected && previous !== document.body;
+      (canRestore ? previous : returnFocusRef.current?.())?.focus();
     };
   }, [open]);
 
   if (!open) return null;
 
-  return (
+  // Portalled to <body>: inside an animated ancestor (transform/filter) "fixed" would be
+  // positioned against that ancestor, and stacked dialogs become siblings that can be made inert.
+  return createPortal(
     <DialogContext.Provider
       value={{ titleId, descriptionId, setTitleId, setDescriptionId }}
     >
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        ref={rootRef}
+        className="fixed inset-0 z-50 flex items-center justify-center"
+      >
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={() => onOpenChangeRef.current(false)}
+          onClick={(e) => {
+            // A portal still bubbles through the React tree: without this a backdrop click on a
+            // dialog opened from a table row would also trigger that row's onClick.
+            e.stopPropagation();
+            onOpenChangeRef.current(false);
+          }}
           aria-hidden="true"
         />
         <div
@@ -148,7 +206,8 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
           {children}
         </div>
       </div>
-    </DialogContext.Provider>
+    </DialogContext.Provider>,
+    document.body,
   );
 }
 

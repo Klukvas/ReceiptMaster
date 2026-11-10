@@ -112,6 +112,46 @@ export async function releaseReturnQuantities(
   return unreleased;
 }
 
+type LedgerLogger = {
+  warn(message: string): void;
+  error(message: string): void;
+};
+
+/**
+ * The one release path for a return note whose quantities come back to the order lines:
+ * a voided note and a note whose generation failed. No readable lines is a warning (the
+ * note still moves on, nothing can be given back); a line whose release guard refused
+ * (less returned than the note says) means the ledger disagrees with an issued document,
+ * so it is logged as an error with every id needed to repair it by hand.
+ */
+export async function releaseReturnNoteQuantities(
+  manager: EntityManager,
+  logger: LedgerLogger,
+  note: { id: string; order_id: string; user_id: string },
+  lines: readonly ReturnLine[],
+  occasion: "voided" | "failed",
+): Promise<void> {
+  if (lines.length === 0) {
+    logger.warn(
+      `Return note ${note.id} (order ${note.order_id}) ${occasion} with no readable lines; its quantities were not released`,
+    );
+    return;
+  }
+  const unreleased = await releaseReturnQuantities(
+    manager,
+    note.user_id,
+    note.order_id,
+    lines,
+  );
+  if (unreleased.length === 0) return;
+  const refused = unreleased
+    .map((line) => `${line.orderItemId} qty ${line.qty}`)
+    .join(", ");
+  logger.error(
+    `Return note ${note.id} (order ${note.order_id}, user ${note.user_id}) ${occasion}: ${unreleased.length} line(s) had less returned than the note holds and were not released: ${refused}`,
+  );
+}
+
 type FrozenSnapshot = {
   document?: {
     details: { returnLines?: ReturnLine[]; returnReason?: string };

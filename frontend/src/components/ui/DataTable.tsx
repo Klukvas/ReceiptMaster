@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from"react";
+import React, { useState, useRef, useEffect, useId } from"react";
 import {
  Search,
  X,
@@ -111,6 +111,9 @@ export function DataTable<T>({
  const { t } = useTranslation();
  const [showColumnMenu, setShowColumnMenu] = useState(false);
  const columnMenuRef = useRef<HTMLDivElement>(null);
+ // Two tables on one page must not share the ids their controls point at.
+ const sortSelectId = useId();
+ const sortHintId = useId();
 
  // Close column menu on click outside
  useEffect(() => {
@@ -216,7 +219,8 @@ export function DataTable<T>({
  {toolbarExtra}
 
  {showColumnToggle && (
- <div className="relative" ref={columnMenuRef}>
+ // Columns only exist in the table; the phone card layout has nothing to show or hide.
+ <div className={`relative ${renderCard ?"hidden lg:block" :""}`} ref={columnMenuRef}>
  <Button
  variant="outline"
  size="sm"
@@ -404,11 +408,12 @@ export function DataTable<T>({
  <div className="lg:hidden" aria-busy={isLoading || isFetching || undefined}>
  {renderCard && sortableColumns.length > 0 && items.length > 0 && (
  <div className="mb-3 flex items-center gap-2">
- <label htmlFor="data-table-sort" className="text-xs font-medium text-content-tertiary">
+ <label htmlFor={sortSelectId} className="text-xs font-medium text-content-tertiary">
  {t("common.sortBy")}
  </label>
  <select
- id="data-table-sort"
+ id={sortSelectId}
+ data-testid="data-table-sort"
  value={activeSortColumn?.key ?? ""}
  onChange={(e) => onSort(e.target.value)}
  className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content pointer-coarse:min-h-11"
@@ -420,14 +425,18 @@ export function DataTable<T>({
  </option>
  ))}
  </select>
+ {/* The visible text names the current order; the description says what a press does. */}
  <Button
  variant="outline"
  size="sm"
+ data-testid="data-table-sort-direction"
  onClick={() => activeSortColumn && onSort(activeSortColumn.key)}
- aria-label={sortOrder ==="ASC" ? t("common.sortAscending") : t("common.sortDescending")}
+ aria-describedby={sortHintId}
  >
- {sortOrder ==="ASC" ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+ {sortOrder ==="ASC" ? <ChevronUp className="mr-1 h-4 w-4" aria-hidden /> : <ChevronDown className="mr-1 h-4 w-4" aria-hidden />}
+ {sortOrder ==="ASC" ? t("common.sortOrderAscending") : t("common.sortOrderDescending")}
  </Button>
+ <span id={sortHintId} className="sr-only">{t("common.sortReverseHint")}</span>
  </div>
  )}
  {(isLoading || isFetching) && items.length === 0 ? (

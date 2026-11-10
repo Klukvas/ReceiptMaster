@@ -11,6 +11,7 @@ import {
   type DocumentDraft,
 } from "../lib/document-config";
 import { localizedDocumentError } from "../lib/document-error";
+import { previewRateLimitText } from "../lib/api-errors";
 export const DOCUMENT_CONFIG_KEY = ["settings", "document-config"] as const;
 /** The account's saved document design; shared by the editor and the create-document form. */
 export const documentConfigQuery = queryOptions({
@@ -247,7 +248,10 @@ export function useDocumentDraft(orderId?: string) {
       }
     } catch (value) {
       if (!abort.signal.aborted && request === sequence.current)
-        setError(await localizedDocumentError(value, fieldLabel));
+        // A 429 is the rate limit (with its wait) or another preview of this account still rendering.
+        setError(
+          (await previewRateLimitText(value)) ?? (await localizedDocumentError(value, fieldLabel)),
+        );
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }

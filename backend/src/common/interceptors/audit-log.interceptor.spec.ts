@@ -13,11 +13,13 @@ describe("AuditLogInterceptor", () => {
     user?: any,
     params?: any,
     body?: any,
+    path = "/api/v1/resource",
   ) =>
     ({
       switchToHttp: () => ({
         getRequest: () => ({
           method,
+          path,
           user,
           params: params || {},
           body: body || {},
@@ -244,7 +246,7 @@ describe("AuditLogInterceptor", () => {
           legal_address: "***",
           details: { contractRef: "***" },
           config: { company: { companyVatId: "***", companyName: "Acme" } },
-          recipients: [{ legalName: "***", name: "Bob" }],
+          recipients: [{ legalName: "***", name: "***" }],
         });
         done();
       },
@@ -291,6 +293,177 @@ describe("AuditLogInterceptor", () => {
           payload: "***",
         },
       );
+    });
+  });
+
+  describe("personal data", () => {
+    const logged = (
+      controllerName: string,
+      body: Record<string, unknown>,
+      path?: string,
+      handlerName = "create",
+    ) => {
+      const context = createMockContext(
+        "POST",
+        controllerName,
+        handlerName,
+        { id: "u1" },
+        {},
+        body,
+        path,
+      );
+      interceptor.intercept(context, createMockNext()).subscribe();
+      return auditLogService.log.mock.calls[0][0];
+    };
+
+    it.each([
+      ["TelegramController", "/tg/webhook"],
+      ["TelegramController", "/tg/order"],
+      ["PaddleController", "/paddle/webhook"],
+      // Express matches routes case-insensitively, so these reach the same handlers.
+      ["TelegramController", "/TG/Webhook"],
+      ["PaddleController", "/PADDLE/webhook"],
+    ])("records %s %s without its body", (controllerName, path) => {
+      const entry = logged(
+        controllerName,
+        { message: { chat: { id: 1 }, text: "my address" } },
+        path,
+      );
+
+      expect(entry.newValues).toBeUndefined();
+      expect(entry.action).toBe("CREATE");
+    });
+
+    it("masks a recipient's contact fields and keeps the rest", () => {
+      expect(
+        logged("RecipientsController", {
+          name: "Іван Петренко",
+          email: "ivan@example.com",
+          phone: "+380501234567",
+          address: "Kyiv",
+          notes: "VIP",
+        }).newValues,
+      ).toEqual({
+        name: "***",
+        email: "***",
+        phone: "***",
+        address: "***",
+        notes: "VIP",
+      });
+    });
+
+    it("masks a recipient's contact fields whatever their JSON type", () => {
+      expect(
+        logged("RecipientsController", {
+          name: "Іван",
+          phone: 380501234567,
+          address: { city: "Kyiv", street: "Khreshchatyk 1" },
+          email: null,
+        }).newValues,
+      ).toEqual({ name: "***", phone: "***", address: "***", email: null });
+    });
+
+    it("masks a supplier's contact fields and notes and keeps the rest", () => {
+      expect(
+        logged("SuppliersController", {
+          name: "ФОП Петренко",
+          email: "supplier@example.com",
+          phone: "+380501234567",
+          address: "Kyiv",
+          contactPerson: "Іван Іванов",
+          notes: "calls after 18:00",
+          isActive: true,
+        }).newValues,
+      ).toEqual({
+        name: "***",
+        email: "***",
+        phone: "***",
+        address: "***",
+        contactPerson: "***",
+        notes: "***",
+        isActive: true,
+      });
+    });
+
+    it("masks the reason of a void", () => {
+      expect(
+        logged(
+          "ReceiptsController",
+          { reason: "Ivan returned the goods" },
+          undefined,
+          "voidReceipt",
+        ).newValues,
+      ).toEqual({ reason: "***" });
+    });
+
+    it("keeps a product name, which is not personal data", () => {
+      expect(
+        logged("ProductsController", { name: "Widget", price: 5 }).newValues,
+      ).toEqual({ name: "Widget", price: 5 });
+    });
+
+    it("masks company contacts and SWIFT but keeps visibility switches", () => {
+      expect(
+        logged("SettingsController", {
+          config: {
+            company: {
+              companyEmail: "a@b.c",
+              companyPhone: "+380",
+              companySwift: "PBANUA2X",
+              companyName: "Acme",
+            },
+            contacts: { recipientPhone: 380501234567 },
+            visibility: {
+              companyEmail: true,
+              recipientPhone: false,
+              companyAddress: true,
+              companyTaxId: false,
+              companyIban: true,
+            },
+          },
+        }).newValues,
+      ).toEqual({
+        config: {
+          company: {
+            companyEmail: "***",
+            companyPhone: "***",
+            companySwift: "***",
+            companyName: "Acme",
+          },
+          contacts: { recipientPhone: "***" },
+          visibility: {
+            companyEmail: true,
+            recipientPhone: false,
+            companyAddress: true,
+            companyTaxId: false,
+            companyIban: true,
+          },
+        },
+      });
+    });
+
+    it("masks the free text of document details", () => {
+      expect(
+        logged("ReceiptsController", {
+          details: {
+            reason: "customer refused, see note",
+            completionText: "Work done for Ivan",
+            paymentTerms: "Ivan pays after delivery",
+            deliveryTerms: "to Ivan's home, Kyiv",
+            paymentTermDays: 3,
+          },
+          reason: "kept outside details",
+        }).newValues,
+      ).toEqual({
+        details: {
+          reason: "***",
+          completionText: "***",
+          paymentTerms: "***",
+          deliveryTerms: "***",
+          paymentTermDays: 3,
+        },
+        reason: "kept outside details",
+      });
     });
   });
 });

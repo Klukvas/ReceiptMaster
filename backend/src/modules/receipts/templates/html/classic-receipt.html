@@ -382,6 +382,9 @@
             <thead>
                 <tr>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#if document}}
+                    <th class="doc-unit">{{document.labels.unitOfMeasure}}</th>
+                    {{/if}}
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
                     {{#unless document.hidesItemPrices}}
                     <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
@@ -393,6 +396,9 @@
                 {{#each items}}
                 <tr>
                     <td class="col-qty">{{qty}}</td>
+                    {{#if @root.document}}
+                    <td class="doc-unit">{{@root.document.itemUnit}}</td>
+                    {{/if}}
                     <td class="col-description">
                         {{productName}}
                         {{#if description}}

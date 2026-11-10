@@ -96,8 +96,9 @@ const checkReturnNoteLayout = async (results) => {
       );
       const text = await dialog.innerText();
       results.check(
-        `${label}: the dialog says the note refunds no money and changes no stock`,
-        text.includes("does not refund money and does not change stock"),
+        `${label}: the dialog says once (in its note) that the note refunds no money and changes no stock`,
+        text.includes("does not refund money, does not change stock") &&
+          text.split("does not change stock").length === 2,
         text,
       );
       await qty.fill("9");
@@ -114,8 +115,8 @@ const checkReturnNoteLayout = async (results) => {
 
 const checkReturnNoteLanguages = async (results) => {
   const cases = [
-    { language: "uk", name: "Накладна на повернення товару…", hint: "не повертає гроші й не змінює залишки", exceeded: "Можна повернути не більше 3 шт.", invalid: "Введіть ціле число від 1 до 3" },
-    { language: "ru", name: "Накладная на возврат товара…", hint: "не возвращает деньги и не меняет остатки", exceeded: "Можно вернуть не более 3 шт.", invalid: "Введите целое число от 1 до 3" },
+    { language: "uk", name: "Накладна на повернення товару…", hint: "не повертає гроші, не змінює залишки", exceeded: "Можна повернути не більше 3 шт.", invalid: "Введіть ціле число від 1 до 3" },
+    { language: "ru", name: "Накладная на возврат товара…", hint: "не возвращает деньги, не меняет остатки", exceeded: "Можно вернуть не более 3 шт.", invalid: "Введите целое число от 1 до 3" },
   ];
   for (const { language, name, hint, exceeded, invalid } of cases) {
     await withOrdersPage({ viewport: VIEWPORTS[0].viewport, language }, async (page) => {
@@ -130,7 +131,7 @@ const checkReturnNoteLanguages = async (results) => {
       await dialog.locator('button[type="submit"]').click();
       const seenInvalid = await settle(async () => (await dialog.getByText(invalid).count()) === 1);
       results.check(
-        `${language}: the hint and both quantity errors are translated and name the maximum`,
+        `${language}: the note and both quantity errors are translated and name the maximum`,
         text.includes(hint) && seenExceeded && seenInvalid,
         `${text.includes(hint)} ${seenExceeded} ${seenInvalid}`,
       );

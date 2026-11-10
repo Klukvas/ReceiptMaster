@@ -28,7 +28,6 @@ import { TemplateService } from "../src/modules/receipts/services/template.servi
 import { PlaywrightPdfGenerator } from "../src/modules/receipts/services/playwright-pdf-generator.service";
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
 import { ReceiptOutboxService } from "../src/modules/receipts/receipt-outbox.service";
-import { PdfGeneratorService } from "../src/modules/receipts/services/pdf-generator.service";
 import { LogoStorageService } from "../src/common/services/logo-storage.service";
 import { PdfStorageService } from "../src/common/services/pdf-storage.service";
 import { CacheService } from "../src/common/services/cache.service";
@@ -491,12 +490,9 @@ export async function createTemplateFixture(
   } as unknown as ReceiptOutboxService;
   const receipts = new ReceiptsService(
     db.getRepository(Receipt),
-    db.getRepository(Order),
-    {} as PdfGeneratorService,
     pdfs,
     db,
     config,
-    settings,
     outbox,
     snapshots,
     artifacts,

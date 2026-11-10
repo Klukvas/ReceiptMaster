@@ -8,6 +8,7 @@ import { ApiErrors } from "../../../common/errors/ApiError";
 import { TemplateService, ReceiptTemplate } from "./template.service";
 import { PlaywrightPdfGenerator } from "./playwright-pdf-generator.service";
 import { getTemplateMetadata } from "../templates/metadata";
+import { DEFAULT_RECEIPT_TITLE } from "../templates/translations/defaults";
 
 export enum ReceiptStyle {
   STANDARD = "standard",
@@ -92,7 +93,7 @@ export class PdfGeneratorService {
     },
     userId: string,
     style: ReceiptStyle = ReceiptStyle.STANDARD,
-    receiptTitle: string = "Invoice",
+    receiptTitle: string = DEFAULT_RECEIPT_TITLE.en,
     language: string = "en",
     footerTitle?: string,
     footerSubtitle?: string,

@@ -2,8 +2,11 @@
 //  - the stored images are previewed through a blob URL that is revoked when it is replaced;
 //  - a file of the wrong type or over 2 MiB is refused on the client and never uploaded;
 //  - a valid upload is sent as the multipart field "file" to the right kind;
-//  - 413 and 429 have their own messages;
+//  - 413 and 429 have their own messages; 400/415/422 and other refusals are localized, never the
+//    server's English text;
+//  - upload and delete are inert while either request runs;
 //  - deleting asks for confirmation first;
+//  - the styles named in the note come from the templates list (capabilities.signoff);
 //  - a style that cannot print them (thermal) gets a warning, one that can does not.
 
 import {
@@ -72,9 +75,10 @@ const checkPreview = async (results) => {
         hint,
       );
       const note = await page.getByRole("note").filter({ hasText: "qualified" }).innerText();
+      // The mock list is Standard, Thermal (no signoff), Minimal and Classic, in that order.
       results.check(
-        `${label}: the note says issued documents do not change and names the styles`,
-        note.includes("already issued") && note.includes("\u201cStandard\u201d, \u201cClassic\u201d, \u201cMinimal\u201d and \u201cCorporate\u201d") && note.includes("not a qualified electronic signature"),
+        `${label}: the note says issued documents do not change and names the styles from the templates list`,
+        note.includes("already issued") && note.includes("\u201cStandard\u201d, \u201cMinimal\u201d and \u201cClassic\u201d") && !note.includes("Thermal") && !note.includes("Corporate") && note.includes("not a qualified electronic signature"),
         note,
       );
       results.check(`${label}: no horizontal overflow`, await hasNoHorizontalOverflow(page), "page scrolls sideways");
@@ -137,7 +141,10 @@ const checkServerErrors = async (results) => {
     { status: 413, body: { error: "Payload Too Large", errorCode: "HTTP_EXCEPTION" }, text: "2 MB" },
     { status: 429, body: { error: "Too Many Requests", errorCode: "HTTP_EXCEPTION" }, text: "Too many requests. Try again in a moment." },
     { status: 429, body: { error: "Too Many Requests", errorCode: "RATE_LIMITED", retryAfterSeconds: 12 }, text: "Try again in 12 s" },
-    { status: 400, body: { error: "Validation error for stamp: not an image", errorCode: "VALIDATION_ERROR" }, text: "not an image" },
+    { status: 400, body: { error: "Validation error for stamp: not an image", errorCode: "VALIDATION_ERROR" }, text: "The image was not accepted", raw: "not an image" },
+    { status: 415, body: { error: "Unsupported Media Type", errorCode: "HTTP_EXCEPTION" }, text: "The image was not accepted", raw: "Unsupported" },
+    { status: 422, body: { error: "Unprocessable image", errorCode: "HTTP_EXCEPTION" }, text: "The image was not accepted", raw: "Unprocessable" },
+    { status: 404, body: { error: "Cannot PUT /x", errorCode: "HTTP_EXCEPTION" }, text: "The change could not be saved", raw: "Cannot PUT" },
   ];
   for (const failure of cases) {
     await withSignoff(VIEWPORTS[0].viewport, { signoffFailure: failure }, async (page, state) => {
@@ -146,9 +153,59 @@ const checkServerErrors = async (results) => {
       await settle(() => (state.signoffUploads ?? []).length === 1);
       await errorOf(page, "stamp").waitFor({ state: "visible" });
       const text = await errorOf(page, "stamp").innerText();
-      results.check(`a ${failure.status} on upload is shown under the image`, text.includes(failure.text), text);
+      results.check(
+        `a ${failure.status} on upload is shown under the image${failure.raw ? ", localized" : ""}`,
+        text.includes(failure.text) && !(failure.raw && text.includes(failure.raw)),
+        text,
+      );
     });
   }
+};
+
+const checkBusyControls = async (results) => {
+  await withSignoff(VIEWPORTS[0].viewport, { signoffUploadDelayMs: 1500 }, async (page, state) => {
+    const signature = card(page, "signature");
+    await signature.getByRole("img").waitFor({ state: "visible" });
+    await fileInput(page, "signature").setInputFiles(png("slow.png"));
+    await settle(() => (state.signoffUploads ?? []).length === 1);
+    const deleteButton = signature.getByRole("button", { name: "Delete" });
+    results.check(
+      "Delete is inert while the upload of the same image runs",
+      (await deleteButton.getAttribute("aria-disabled")) === "true",
+      String(await deleteButton.getAttribute("aria-disabled")),
+    );
+    await deleteButton.click({ force: true });
+    results.check("a click on it opens no confirmation", (await page.getByRole("dialog").count()) === 0, "dialog opened");
+    const isBack = await settle(async () => (await deleteButton.getAttribute("aria-disabled")) === null, { timeoutMs: 5000 });
+    results.check("Delete comes back once the upload is done", isBack, "still inert");
+  });
+  // The two cards share the stored images, so a request on one makes the other inert too.
+  await withSignoff(VIEWPORTS[0].viewport, { signoffUploadDelayMs: 1500 }, async (page, state) => {
+    await card(page, "signature").getByRole("img").waitFor({ state: "visible" });
+    await fileInput(page, "stamp").setInputFiles(png("stamp.png"));
+    await settle(() => (state.signoffUploads ?? []).length === 1);
+    const signatureButtons = card(page, "signature").getByRole("button");
+    const states = await signatureButtons.evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("aria-disabled") === "true" || button.disabled),
+    );
+    results.check(
+      "while the stamp uploads, the signature card's Replace and Delete are inert",
+      states.length >= 2 && states.every(Boolean),
+      JSON.stringify(states),
+    );
+    await fileInput(page, "signature").setInputFiles(png("second.png"));
+    await page.waitForTimeout(200);
+    results.check(
+      "a file picked on the other card meanwhile is not uploaded",
+      (state.signoffUploads ?? []).length === 1,
+      JSON.stringify(state.signoffUploads),
+    );
+    const isBack = await settle(
+      async () => (await card(page, "signature").getByRole("button", { name: "Delete" }).getAttribute("aria-disabled")) === null,
+      { timeoutMs: 5000 },
+    );
+    results.check("the other card comes back once the upload is done", isBack, "still inert");
+  });
 };
 
 const checkDelete = async (results) => {
@@ -174,12 +231,39 @@ const checkDelete = async (results) => {
   });
 };
 
+const checkUkrainianDeleteWording = async (results) => {
+  await withPage({ viewport: VIEWPORTS[0].viewport }, async (page) => {
+    page.setDefaultTimeout(8000);
+    const state = createState([]);
+    state.signoff = { signature: signoffImage("asset-0"), stamp: signoffImage("asset-1") };
+    state.designId = "standard";
+    state.handlers = [...signoffHandlers(state), ...documentHandlers(state)];
+    await installApiMocks(page, state);
+    await page.addInitScript(() => localStorage.setItem("i18nextLng", "uk"));
+    await page.goto(`${BASE_URL}/settings?tab=documents`, { waitUntil: "domcontentloaded" });
+    for (const [kind, title, pronoun] of [["signature", "Видалити підпис?", "його"], ["stamp", "Видалити печатку?", "її"]]) {
+      await card(page, kind).getByRole("img").waitFor({ state: "visible" });
+      await card(page, kind).getByRole("button", { name: "Видалити" }).click();
+      const dialog = page.getByRole("dialog", { name: title });
+      await dialog.waitFor({ state: "visible" });
+      results.check(
+        `uk: deleting the ${kind} asks "${title}" with the right gender in the body`,
+        (await dialog.innerText()).includes(`міститимуть ${pronoun}.`),
+        await dialog.innerText(),
+      );
+      await dialog.getByRole("button", { name: "Скасувати" }).click();
+      await dialog.waitFor({ state: "hidden" });
+    }
+  });
+};
+
 const checkStyleWarning = async (results) => {
   await withSignoff(VIEWPORTS[0].viewport, { designId: "thermal" }, async (page) => {
     await page.getByTestId("signoff-style-warning").waitFor({ state: "visible" });
     results.check(
       "a style that cannot print them (thermal) is called out",
-      (await page.getByTestId("signoff-style-warning").innerText()).includes("Thermal"),
+      (await page.getByTestId("signoff-style-warning").innerText()).includes("Thermal") &&
+        (await page.getByTestId("signoff-style-warning").innerText()).includes("\u201cStandard\u201d, \u201cMinimal\u201d or \u201cClassic\u201d"),
       await page.getByTestId("signoff-style-warning").innerText(),
     );
   });
@@ -200,7 +284,9 @@ export const run = async () => {
   await checkClientChecks(results);
   await checkUpload(results);
   await checkServerErrors(results);
+  await checkBusyControls(results);
   await checkDelete(results);
+  await checkUkrainianDeleteWording(results);
   await checkStyleWarning(results);
   return results;
 };
