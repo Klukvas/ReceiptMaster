@@ -79,7 +79,10 @@ const capabilities = (terms) => ({
   accent: true,
   terms,
   generatedAt: true,
+  signoff: true,
   paper: "A4",
+  // What GET /settings/templates returns since the document types: every style here carries them all.
+  documentTypes: ["waybill", "invoice", "act", "sales_receipt", "packing_list", "quote", "return_note"],
   logo: {
     minWidth: 24,
     maxWidth: 200,

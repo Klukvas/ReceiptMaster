@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
+import { DocumentNumberingSettings } from "../components/settings/DocumentNumberingSettings";
+import { SignoffSettings } from "../components/settings/SignoffSettings";
+import { CompanyRequisitesCard } from "../components/settings/CompanyRequisitesCard";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { formatDateOnly } from "../lib/api";
 import { Button } from "../components/ui/Button";
@@ -340,6 +343,9 @@ export const SettingsPage = () => {
   const setActiveTab = (tab: SettingsTab) =>
     setSearchParams({ tab }, { replace: true });
 
+  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(activeTab === "documents");
+  if (activeTab === "documents" && !hasOpenedDocuments) setHasOpenedDocuments(true);
+
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
 
@@ -481,6 +487,15 @@ export const SettingsPage = () => {
         <div hidden={activeTab !== "documents"}>
           <DocumentEditor model={documentDraft} />
         </div>
+
+        {/* Mounted on first visit and then only hidden, so a numbering draft survives a trip to another tab. */}
+        {hasOpenedDocuments && (
+          <div hidden={activeTab !== "documents"} className="space-y-5">
+            <CompanyRequisitesCard />
+            <DocumentNumberingSettings />
+            <SignoffSettings />
+          </div>
+        )}
 
         {activeTab === "subscription" && <SubscriptionTab />}
 

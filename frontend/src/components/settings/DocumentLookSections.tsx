@@ -7,6 +7,7 @@ import {
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 import { Button } from "../ui/Button";
 import { Disclosure } from "../ui/Disclosure";
 import { Input } from "../ui/Input";
@@ -28,6 +29,7 @@ export function DocumentTemplateSection({
   templates,
   onBrowseTemplates,
   defaultOpen,
+  fitsType = () => true,
 }: {
   model: DocumentDraftModel;
   config: DocumentConfig;
@@ -38,6 +40,8 @@ export function DocumentTemplateSection({
   };
   onBrowseTemplates: () => void;
   defaultOpen?: boolean;
+  /** False for a design that cannot carry the document type being customized. */
+  fitsType?: (template: DocumentTemplate) => boolean;
 }) {
   const { t } = useTranslation();
   const patch = (value: Partial<DocumentConfig>) =>
@@ -70,8 +74,12 @@ export function DocumentTemplateSection({
               }
             >
               {templates.data?.map((value) => (
-                <option key={value.id} value={value.id} disabled={value.locked}>
-                  {value.name}
+                <option
+                  key={value.id}
+                  value={value.id}
+                  disabled={value.locked || !fitsType(value)}
+                >
+                  {templateDisplayName(t, value)}
                   {value.locked ? ` 🔒 ${t("document.templateLocked")}` : ""}
                 </option>
               ))}

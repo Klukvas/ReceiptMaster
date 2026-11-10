@@ -9,7 +9,6 @@ Disallow: /suppliers
 Disallow: /analytics
 Disallow: /settings
 Disallow: /profile
-Disallow: /r/
 Disallow: /api/
 
 Sitemap: https://receiptmaster.org/sitemap.xml

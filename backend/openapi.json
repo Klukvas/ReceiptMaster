@@ -121,6 +121,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -604,6 +605,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -873,6 +875,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -977,6 +980,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID"
           }
         },
         "tags": [
@@ -1080,6 +1086,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -1180,6 +1187,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID"
           }
         },
         "tags": [
@@ -1841,7 +1851,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -1888,6 +1898,16 @@
           },
           "413": {
             "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1963,7 +1983,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2010,6 +2030,16 @@
           },
           "413": {
             "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2085,7 +2115,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2139,6 +2169,158 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "receipts"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/receipts/orders/{orderId}/documents": {
+      "post": {
+        "operationId": "ReceiptsController_createDocument",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentGenerationRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "description": "JSON-encoded DocumentGenerationRequest (at most 64 KiB)"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo file, at most 5 MiB; required when logoAction is replace and forbidden otherwise"
+                  }
+                },
+                "required": [
+                  "payload"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "logo": {
+                  "contentType": "image/png, image/jpeg, image/gif, image/svg+xml"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Generate a document of the given type (waybill, invoice, act, sales receipt, packing list, quotation or goods return note) for an order",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Document generation started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body or details, unsupported document type (DOCUMENT_TYPE_NOT_SUPPORTED), order status not allowed for the type (ORDER_CANNOT_BE_MODIFIED: a quotation takes a draft or confirmed order, every other type a confirmed one; a goods return note needs `details.lines`), or a style that cannot carry the document (DOCUMENT_TEMPLATE_UNSUPPORTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Template not available on the current plan (TEMPLATE_PLAN_RESTRICTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A live document of this type already exists, or a voided one of a type that cannot be reissued (DOCUMENT_ALREADY_EXISTS, or RECEIPT_ALREADY_EXISTS for a waybill); a voided invoice, act or quotation can be issued again under a new number. Also returned when the order/defaults changed while preparing, and when the type's number counter has reached the largest possible number (DOCUMENT_NUMBERS_EXHAUSTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request above 6 MiB or logo above 5 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Required requisites are missing (DOCUMENT_REQUISITES_MISSING); `fields` lists them. A goods return note asking for more than is left to return is refused with RETURN_QUANTITY_EXCEEDED; `items` lists each line with the requested and remaining quantity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2154,34 +2336,134 @@
     "/receipts": {
       "get": {
         "operationId": "ReceiptsController_findAll",
-        "summary": "Получить список всех чеков",
+        "summary": "List documents with filters, search and sorting, each with its order and recipient name",
         "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Количество элементов на странице",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
           {
             "name": "offset",
             "required": false,
             "in": "query",
-            "description": "Offset",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Matches the document number, the recipient's name or legal name, and, for digits (optionally with #), the order number",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "created_at (default), number, document_type or status; anything else is ignored",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "limit",
+            "name": "sortOrder",
             "required": false,
             "in": "query",
-            "description": "Limit (max 100)",
+            "description": "Направление сортировки: ASC или DESC",
             "schema": {
+              "default": "DESC",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "A calendar day in the account's document time zone (Europe/Kyiv unless configured); the whole day is included",
+            "schema": {
+              "example": "2026-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "Same as startDate; the whole day is included",
+            "schema": {
+              "example": "2026-12-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "waybill",
+                "invoice",
+                "quote",
+                "act",
+                "sales_receipt",
+                "packing_list",
+                "return_note"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "processing",
+                "generated",
+                "void",
+                "failed"
+              ],
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Список чеков получен",
+            "description": "Page of documents",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReceiptListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -2201,10 +2483,36 @@
       "get": {
         "operationId": "ReceiptsController_retention",
         "summary": "Receipt retention cap and the receipt the next one would replace",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Document type to count (default: waybill)",
+            "schema": {
+              "enum": [
+                "waybill",
+                "invoice",
+                "quote",
+                "act",
+                "sales_receipt",
+                "packing_list",
+                "return_note"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": {
-            "description": ""
+          "400": {
+            "description": "type is not a document type (VALIDATION_ERROR)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2336,11 +2644,11 @@
       "post": {
         "operationId": "ReceiptsController_voidReceipt",
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReceiptVoidRequest"
+                "$ref": "#/components/schemas/VoidReceiptDto"
               }
             }
           }
@@ -2368,10 +2676,13 @@
             }
           },
           "400": {
-            "description": "Receipt is already voided"
+            "description": "Receipt is already voided, or `reason` is not a string of at most 500 characters"
           },
           "404": {
             "description": "Receipt not found"
+          },
+          "409": {
+            "description": "A waybill, sales receipt or packing list that is still processing or failed cannot be voided (DOCUMENT_NOT_VOIDABLE): its void would close the order's slot for that type for good; retry the generation instead"
           }
         },
         "tags": [
@@ -2392,6 +2703,12 @@
         "responses": {
           "201": {
             "description": "Test PDF generated"
+          },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)"
+          },
+          "500": {
+            "description": "Could not generate the preview"
           }
         },
         "tags": [
@@ -2460,7 +2777,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReceiptProjection"
+                  "$ref": "#/components/schemas/ReceiptIssueResult"
                 }
               }
             }
@@ -2515,6 +2832,16 @@
               }
             }
           },
+          "429": {
+            "description": "More requests than allowed per minute (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Ошибка при регенерации PDF"
           }
@@ -2554,8 +2881,25 @@
               }
             }
           },
+          "400": {
+            "description": "Only a generated document can be shared (not one still processing, failed or voided)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Receipt not found"
+            "description": "Document not found, or its order was deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2701,7 +3045,7 @@
             }
           },
           "429": {
-            "description": "Two previews are already rendering; retry shortly",
+            "description": "More than 30 previews a minute (RATE_LIMITED), or two previews are already rendering; retry shortly",
             "content": {
               "application/json": {
                 "schema": {
@@ -2854,6 +3198,99 @@
             "description": ""
           }
         }
+      }
+    },
+    "/settings/document-numbering": {
+      "get": {
+        "operationId": "DocumentNumberingController_list",
+        "summary": "Number format and next number for every document type",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All seven types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingSettingsResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/document-numbering/{type}": {
+      "put": {
+        "operationId": "DocumentNumberingController_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NumberingUpdateRequest"
+              }
+            }
+          }
+        },
+        "summary": "Set the number format of one document type, optionally raising the counter",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved setting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingSetting"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid prefix, padding, startNumber or resetEveryYear (VALIDATION_ERROR names the field; resetEveryYear needs includeYear)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed (of the current year while the yearly reset is on)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/settings/logo/upload": {
@@ -4057,6 +4494,219 @@
         ]
       }
     },
+    "/settings/signoff": {
+      "get": {
+        "operationId": "DocumentSignoffController_get",
+        "summary": "The account's current signature and stamp images",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Image metadata, null where unset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignoffState"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/signoff/{kind}/image": {
+      "get": {
+        "operationId": "DocumentSignoffController_image",
+        "summary": "The stored signature or stamp as a PNG",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG image",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown kind (not signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No image of this kind is set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/settings/signoff/{kind}": {
+      "put": {
+        "operationId": "DocumentSignoffController_replace",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PNG or JPEG, 32 to 4096 px a side, at most 2 MiB"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false
+              },
+              "encoding": {
+                "file": {
+                  "contentType": "image/png, image/jpeg"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace the signature or stamp image",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignoffImage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown kind, not a PNG or JPEG, signature bytes do not match, size outside 32 to 4096 px, or animated (VALIDATION_ERROR, field signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File above 2 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "More than 10 uploads a minute (RATE_LIMITED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DocumentSignoffController_remove",
+        "summary": "Remove the signature or stamp image (idempotent)",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed or already absent"
+          },
+          "400": {
+            "description": "Unknown kind (not signature or stamp)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/auth/register": {
       "post": {
         "operationId": "UsersController_register",
@@ -4435,6 +5085,7 @@
             "description": "Смещение для пагинации",
             "schema": {
               "minimum": 0,
+              "maximum": 1000000,
               "default": 0,
               "type": "number"
             }
@@ -4859,6 +5510,40 @@
             "type": "string",
             "description": "Адрес получателя",
             "example": "г. Москва, ул. Тверская, д. 1"
+          },
+          "legal_name": {
+            "type": "string",
+            "description": "Юридическое название (для документов)",
+            "example": "ТОВ \"Ромашка\"",
+            "maxLength": 255
+          },
+          "tax_id": {
+            "type": "string",
+            "description": "ЄДРПОУ (8 цифр) или РНОКПП (10 цифр); вид определяется по длине",
+            "example": "12345678"
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "description": "Вид налогового номера; должен совпадать с длиной tax_id",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ]
+          },
+          "iban": {
+            "type": "string",
+            "description": "IBAN украинского счёта; пробелы и регистр нормализуются, хранится компактно",
+            "example": "UA213223130000026007233566001"
+          },
+          "bank_name": {
+            "type": "string",
+            "description": "Название банка",
+            "maxLength": 200
+          },
+          "legal_address": {
+            "type": "string",
+            "description": "Юридический адрес",
+            "maxLength": 1000
           }
         },
         "required": [
@@ -4894,6 +5579,34 @@
           },
           "last_name": {
             "type": "string"
+          },
+          "legal_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tax_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ]
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "bank_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "legal_address": {
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
             "format": "date-time",
@@ -4961,6 +5674,46 @@
             "type": "string",
             "description": "Адрес получателя; null очищает",
             "example": "г. Москва, ул. Тверская, д. 1",
+            "nullable": true
+          },
+          "legal_name": {
+            "type": "string",
+            "description": "Юридическое название; null очищает",
+            "example": "ТОВ \"Ромашка\"",
+            "maxLength": 255,
+            "nullable": true
+          },
+          "tax_id": {
+            "type": "string",
+            "description": "ЄДРПОУ (8) или РНОКПП (10); вид пересчитывается; null очищает и вид",
+            "example": "12345678",
+            "nullable": true
+          },
+          "tax_id_kind": {
+            "type": "string",
+            "description": "Вид налогового номера; сам по себе очистить нельзя",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ],
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "description": "IBAN (UA...); null очищает",
+            "example": "UA213223130000026007233566001",
+            "nullable": true
+          },
+          "bank_name": {
+            "type": "string",
+            "description": "Название банка; null очищает",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "legal_address": {
+            "type": "string",
+            "description": "Юридический адрес; null очищает",
+            "maxLength": 1000,
             "nullable": true
           }
         }
@@ -5041,6 +5794,10 @@
           "line_total_cents": {
             "type": "number"
           },
+          "returned_qty": {
+            "type": "number",
+            "description": "Quantity already taken back by issued goods return notes (never above qty); a voided return note gives its quantity back"
+          },
           "unit_cost_cents": {
             "type": "number",
             "nullable": true,
@@ -5055,6 +5812,7 @@
           "unit_price_cents",
           "qty",
           "line_total_cents",
+          "returned_qty",
           "unit_cost_cents"
         ]
       },
@@ -5148,6 +5906,18 @@
           "order_id": {
             "type": "string"
           },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
           "number": {
             "type": "string"
           },
@@ -5205,6 +5975,7 @@
         "required": [
           "id",
           "order_id",
+          "document_type",
           "number",
           "status",
           "progress",
@@ -5576,6 +6347,15 @@
           "currency"
         ]
       },
+      "VoidReceiptDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
       "ReceiptDesignResponseDto": {
         "type": "object",
         "properties": {
@@ -5705,6 +6485,44 @@
           },
           "companyTagline": {
             "type": "string"
+          },
+          "companyTaxIdKind": {
+            "type": "string",
+            "enum": [
+              "edrpou",
+              "rnokpp"
+            ],
+            "nullable": true
+          },
+          "companyLegalForm": {
+            "type": "string",
+            "nullable": true
+          },
+          "companyBankName": {
+            "type": "string",
+            "nullable": true
+          },
+          "companyVatPayer": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "companyVatId": {
+            "type": "string",
+            "nullable": true
+          },
+          "companySignatoryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "companySignatoryPosition": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultPaymentTermDays": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 365
           }
         },
         "required": [
@@ -5716,7 +6534,15 @@
           "companyIban",
           "companySwift",
           "companyWebsite",
-          "companyTagline"
+          "companyTagline",
+          "companyTaxIdKind",
+          "companyLegalForm",
+          "companyBankName",
+          "companyVatPayer",
+          "companyVatId",
+          "companySignatoryName",
+          "companySignatoryPosition",
+          "defaultPaymentTermDays"
         ]
       },
       "RegisterDto": {
@@ -5761,7 +6587,7 @@
           },
           "newPassword": {
             "type": "string",
-            "description": "Новый пароль",
+            "description": "Новый пароль: не короче 8 символов и не длиннее 72 байт в UTF-8 (bcrypt хэширует только первые 72 байта)",
             "example": "newPassword123",
             "minLength": 8
           },
@@ -5941,6 +6767,30 @@
             ]
           },
           "errorCode": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "minStart": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "issueDate": {
             "type": "string"
           }
         },
@@ -6749,6 +7599,390 @@
         },
         "additionalProperties": false
       },
+      "DocumentGenerationRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "waybill"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invoice"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "dueDate": {
+                    "type": "string"
+                  },
+                  "paymentTermDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "act"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "completionText": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "contractRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "period": {
+                    "type": "object",
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "sales_receipt"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "packing_list"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "quote"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "validUntil": {
+                    "type": "string"
+                  },
+                  "paymentTerms": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "deliveryTerms": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "return_note"
+                ]
+              },
+              "config": {
+                "$ref": "#/components/schemas/DocumentConfig"
+              },
+              "presetId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "presetRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "overrides": {
+                "$ref": "#/components/schemas/DocumentConfigOverrides"
+              },
+              "logoAction": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "replace",
+                  "remove"
+                ],
+                "default": "keep"
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "qty"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "type",
+              "details"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "ReceiptRegenerationRequest": {
         "type": "object",
         "properties": {
@@ -6956,6 +8190,18 @@
             "type": "string",
             "format": "uuid"
           },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
           "number": {
             "type": "string"
           },
@@ -7027,6 +8273,7 @@
         "required": [
           "id",
           "order_id",
+          "document_type",
           "number",
           "pdf_url",
           "hash",
@@ -7044,13 +8291,453 @@
           "replacement_error"
         ]
       },
+      "ReceiptIssueResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "void_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "active_revision": {
+            "type": "integer"
+          },
+          "replacement_status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "replacement_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "SIGNOFF_UNAVAILABLE"
+                  ]
+                },
+                "kinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "signature",
+                      "stamp"
+                    ]
+                  },
+                  "minItems": 1
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "kinds",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "document_type",
+          "number",
+          "pdf_url",
+          "hash",
+          "status",
+          "template_id",
+          "template_version",
+          "progress",
+          "error_message",
+          "created_at",
+          "voided_at",
+          "void_reason",
+          "public_token",
+          "active_revision",
+          "replacement_status",
+          "replacement_error"
+        ]
+      },
+      "DocumentListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "pdf_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "generated",
+              "void",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "void_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "active_revision": {
+            "type": "integer"
+          },
+          "replacement_status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "replacement_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "order": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "order_number": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "confirmed",
+                  "cancelled"
+                ]
+              },
+              "recipient_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "order_number",
+              "status",
+              "recipient_name"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "document_type",
+          "number",
+          "pdf_url",
+          "hash",
+          "status",
+          "template_id",
+          "template_version",
+          "progress",
+          "error_message",
+          "created_at",
+          "voided_at",
+          "void_reason",
+          "public_token",
+          "active_revision",
+          "replacement_status",
+          "replacement_error",
+          "order"
+        ]
+      },
+      "NumberingSetting": {
+        "type": "object",
+        "properties": {
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "waybill",
+              "invoice",
+              "quote",
+              "act",
+              "sales_receipt",
+              "packing_list",
+              "return_note"
+            ]
+          },
+          "prefix": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "padding": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "includeYear": {
+            "type": "boolean"
+          },
+          "resetEveryYear": {
+            "type": "boolean"
+          },
+          "nextValue": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minStart": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "nextNumber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentType",
+          "prefix",
+          "padding",
+          "includeYear",
+          "resetEveryYear",
+          "nextValue",
+          "minStart",
+          "nextNumber"
+        ]
+      },
+      "NumberingSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingSetting"
+            }
+          }
+        },
+        "required": [
+          "types"
+        ]
+      },
+      "NumberingUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "padding": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "includeYear": {
+            "type": "boolean"
+          },
+          "resetEveryYear": {
+            "type": "boolean"
+          },
+          "startNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          }
+        },
+        "required": [
+          "prefix",
+          "padding",
+          "includeYear"
+        ]
+      },
+      "SignoffImage": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "assetId",
+          "width",
+          "height",
+          "bytes",
+          "updatedAt"
+        ]
+      },
+      "SignoffState": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignoffImage"
+              }
+            ],
+            "nullable": true
+          },
+          "stamp": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignoffImage"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "signature",
+          "stamp"
+        ]
+      },
       "ReceiptListResponse": {
         "type": "object",
         "properties": {
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ReceiptProjection"
+              "$ref": "#/components/schemas/DocumentListItem"
             }
           },
           "total": {

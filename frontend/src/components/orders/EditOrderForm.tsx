@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { ordersApi, formatCurrency, type Order } from "../../lib/api";
@@ -9,6 +10,7 @@ import { OrderRecipientSelect, OrderProductSelect } from "./OrderEntitySelect";
 import { useOrderProducts } from "../../hooks/useOrderOptions";
 import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
+import { issuedQuoteOf } from "../../lib/document-types";
 
 interface EditOrderFormProps {
   order: Order;
@@ -34,6 +36,8 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
   const queryClient = useQueryClient();
   const [backendError, setBackendError] = useState("");
+  // The quote is a frozen copy: nothing here reaches it, so say so before and after saving.
+  const issuedQuote = issuedQuoteOf(order);
 
   const productOptions = useOrderProducts(items.map((item) => item.productId));
   const products = productOptions.records;
@@ -60,6 +64,10 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
     }) => ordersApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      if (issuedQuote)
+        toast(t("orders.staleQuoteSaved", { number: issuedQuote.number }), {
+          duration: 8000,
+        });
       onClose();
     },
     onError: (error: unknown) => setBackendError(parseApiError(error).message),
@@ -131,6 +139,15 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
   return (
     <Modal isOpen onClose={onClose} title={t("orders.editOrder")} size="lg">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {issuedQuote && (
+            <p
+              role="alert"
+              data-testid="stale-quote-warning"
+              className="p-3 rounded-lg border border-[var(--color-warning)] bg-[var(--color-warning-light)] text-sm font-medium text-content"
+            >
+              {t("orders.staleQuoteWarning", { number: issuedQuote.number })}
+            </p>
+          )}
           {backendError && (
             <p
               role="alert"

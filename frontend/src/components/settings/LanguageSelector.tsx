@@ -62,7 +62,7 @@ export const LanguageSelector = () => {
     }
   };
 
-  if (error) return <SettingsLoadError error={error} retry={refetch} />;
+  if (error) return <SettingsLoadError retry={refetch} />;
   if (isLoadingCurrent) {
     return (
       <SettingsSection

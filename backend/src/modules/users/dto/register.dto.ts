@@ -1,6 +1,6 @@
-import { IsEmail, IsString, MinLength, MaxLength } from "class-validator";
+import { IsEmail, IsString, MinLength } from "class-validator";
 import { NormalizedEmail } from "../../../common/dto/normalized-email";
-import { MIN_PASSWORD_LENGTH } from "./password-policy";
+import { MaxPasswordBytes, MIN_PASSWORD_LENGTH } from "./password-policy";
 
 export class RegisterDto {
   @NormalizedEmail()
@@ -9,6 +9,6 @@ export class RegisterDto {
 
   @IsString()
   @MinLength(MIN_PASSWORD_LENGTH)
-  @MaxLength(50)
+  @MaxPasswordBytes()
   password: string;
 }

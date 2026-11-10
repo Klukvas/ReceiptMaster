@@ -1,18 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { isAxiosError } from "axios";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
 import { api } from "../lib/api";
 import {
-  documentError,
   documentEnvelope,
   isDocumentRevisionConflict,
   type ConfigVersion,
   type DocumentConfig,
   type DocumentDraft,
 } from "../lib/document-config";
+import { localizedDocumentError } from "../lib/document-error";
+import { previewRateLimitText } from "../lib/api-errors";
 export const DOCUMENT_CONFIG_KEY = ["settings", "document-config"] as const;
+/** The account's saved document design; shared by the editor and the create-document form. */
+export const documentConfigQuery = queryOptions({
+  queryKey: DOCUMENT_CONFIG_KEY,
+  queryFn: async () =>
+    (await api.get<{ data: ConfigVersion }>("/settings/document-config")).data
+      .data,
+  retry: false,
+  refetchOnWindowFocus: false,
+  staleTime: Infinity,
+});
 export function useDocumentDraft(orderId?: string) {
   const cache = useQueryClient();
   const { t } = useTranslation();
@@ -21,15 +32,7 @@ export function useDocumentDraft(orderId?: string) {
     const label = t(key);
     return label === key ? undefined : label;
   };
-  const query = useQuery({
-    queryKey: DOCUMENT_CONFIG_KEY,
-    queryFn: async () =>
-      (await api.get<{ data: ConfigVersion }>("/settings/document-config")).data
-        .data,
-    retry: false,
-    refetchOnWindowFocus: false,
-    staleTime: Infinity,
-  });
+  const query = useQuery(documentConfigQuery);
   const [base, setBase] = useState<ConfigVersion>();
   const [draft, setDraft] = useState<DocumentConfig>();
   const [logoAction, setLogoAction] =
@@ -45,6 +48,8 @@ export function useDocumentDraft(orderId?: string) {
   // auto-updating preview, half-typed input must not flash a red banner over the form.
   const [previewError, setPreviewError] = useState("");
   const [previewPaused, setPreviewPaused] = useState(false);
+  // Why the last render was refused (rate limit with its wait, or another preview still rendering).
+  const [previewPauseReason, setPreviewPauseReason] = useState("");
   const version = useRef(0),
     sequence = useRef(0),
     controller = useRef<AbortController | null>(null);
@@ -192,14 +197,16 @@ export function useDocumentDraft(orderId?: string) {
       setDraft(undefined);
       setLogoAction("keep");
       setFile(undefined);
-      await cache.invalidateQueries({
-        queryKey: ["settings", "receipt-design"],
-      });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["settings", "receipt-design"] }),
+        // The seller requisites of the company tab read the same stored values.
+        cache.invalidateQueries({ queryKey: ["companyInfo"] }),
+      ]);
       // The save bar disappears once nothing is pending, so confirm the save here.
       toast.success(t("document.saved"));
     } catch (value) {
       setIsConflict(isDocumentRevisionConflict(value));
-      setError(await documentError(value, fieldLabel));
+      setError(await localizedDocumentError(value, fieldLabel));
     } finally {
       setBusy(false);
     }
@@ -214,7 +221,7 @@ export function useDocumentDraft(orderId?: string) {
         setIsConflict(false);
       }
     } catch (value) {
-      setError(await documentError(value, fieldLabel));
+      setError(await localizedDocumentError(value, fieldLabel));
     }
   };
   const refreshPreview = async () => {
@@ -247,13 +254,16 @@ export function useDocumentDraft(orderId?: string) {
         );
         setPreviewVersion(captured);
         setPreviewPaused(false);
+        setPreviewPauseReason("");
       }
     } catch (value) {
       if (!abort.signal.aborted && request === sequence.current) {
-        // Too many previews in a minute: stop updating on its own until asked again.
-        if (isAxiosError(value) && value.response?.status === 429)
+        // A 429 is the rate limit or another preview of this account still rendering: stop
+        // updating on its own until asked again. The paused status says so; it is not an error.
+        if (isAxiosError(value) && value.response?.status === 429) {
           setPreviewPaused(true);
-        else setPreviewError(await documentError(value, fieldLabel));
+          setPreviewPauseReason((await previewRateLimitText(value)) ?? "");
+        } else setPreviewError(await localizedDocumentError(value, fieldLabel));
       }
     } finally {
       if (request === sequence.current) setRefreshing(false);
@@ -282,6 +292,7 @@ export function useDocumentDraft(orderId?: string) {
     previewUrl,
     previewError,
     previewPaused,
+    previewPauseReason,
     refreshing,
     stale: previewVersion !== version.current,
   };

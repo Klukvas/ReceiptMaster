@@ -20,6 +20,8 @@ import { Modal } from"../ui/Modal";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
 import { formatOrderNumber } from"../../lib/order-number";
+import { canCreate, waybillOf } from"../../lib/document-types";
+import { OrderDocuments } from"./OrderDocuments";
 
 interface OrderDetailsProps {
  order: Order;
@@ -32,6 +34,12 @@ interface OrderDetailsProps {
  onPrintReceipt?: (receiptId: string) => void;
  onShareReceipt?: (receiptId: string) => void;
 }
+
+/** The order's visible "More actions" button: where focus returns after a row click or the menu's View. */
+const orderActionsButton = (orderId: string) =>
+ Array.from(
+ document.querySelectorAll<HTMLElement>(`[data-order-actions="${CSS.escape(orderId)}"]`),
+ ).find((element) => element.offsetParent !== null);
 
 export const OrderDetails = ({
  order,
@@ -53,17 +61,17 @@ export const OrderDetails = ({
  setTimeout(() => setIdCopied(false), 2000);
  };
 
- const receipt = order.receipts?.[0];
+ // The buttons below act on the waybill; invoices and acts have their own entry points.
+ const receipt = waybillOf(order);
  const hasGeneratedReceipt = receipt?.status ==="generated";
- const hasNoReceipt =
- !order.receipts ||
- order.receipts.length === 0 ||
- receipt?.status ==="void";
+ // A voided waybill is final in the backend, so only "none" or "failed" may be generated.
+ const canGenerateWaybill = canCreate(order,"waybill");
 
  // Initials for avatar
  const initials = order.recipient?.name
  ? order.recipient.name
- .split("")
+ .split(/\s+/)
+ .filter(Boolean)
  .map((w) => w[0])
  .slice(0, 2)
  .join("")
@@ -76,6 +84,7 @@ export const OrderDetails = ({
  onClose={onClose}
  title={`${t("orders.orderDetails")} ${formatOrderNumber(order)}`}
  size="xl"
+ returnFocus={() => orderActionsButton(order.id)}
  >
  {/* ─── Header ─── */}
  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 mb-5 border-b border-[var(--color-border-light)]">
@@ -209,8 +218,9 @@ export const OrderDetails = ({
  {formatCurrency(
  item.unit_price_cents,
  order.currency,
- )}{""}
- x {item.qty}
+ )}
+ {" × "}
+ {item.qty}
  </div>
  </div>
  <span className="text-sm font-semibold tabular-nums text-content whitespace-nowrap">
@@ -248,6 +258,14 @@ export const OrderDetails = ({
  </section>
  </div>
  </div>
+ {onDownloadReceipt && onPrintReceipt && onShareReceipt && (
+ <OrderDocuments
+ order={order}
+ onDownload={onDownloadReceipt}
+ onPrint={onPrintReceipt}
+ onShare={onShareReceipt}
+ />
+ )}
  </div>
 
  {/* ─── Action Footer ─── */}
@@ -287,7 +305,7 @@ export const OrderDetails = ({
 
  {/* Confirmed — no receipt */}
  {order.status ==="confirmed" &&
- hasNoReceipt &&
+ canGenerateWaybill &&
  onGenerateReceipt && (
  <Button
  size="sm"

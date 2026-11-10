@@ -11,6 +11,8 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Response } from "express";
+import { Throttle } from "@nestjs/throttler";
+import { UserThrottlerGuard } from "../../common/guards/user-throttler.guard";
 import { Order } from "../orders/entities/order.entity";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { DocumentConfigService } from "../settings/services/document-config.service";
@@ -41,6 +43,9 @@ export class DocumentPreviewController {
     @InjectRepository(Order) private readonly orders: Repository<Order>,
   ) {}
   @Post("preview")
+  @UseGuards(UserThrottlerGuard)
+  // A live preview re-renders as the form is edited, so this is looser than issuing (20).
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UseInterceptors(DocumentMultipart())
   @ApiOperation({ summary: "Render an unsaved document draft as a PDF" })
   @ApiDocumentDraftBody("DocumentPreviewRequest")
@@ -50,7 +55,7 @@ export class DocumentPreviewController {
     402: "Template not available on the current plan",
     404: "Order not found",
     413: "Request above 6 MiB or logo above 5 MiB",
-    429: "Two previews are already rendering; retry shortly",
+    429: "More than 30 previews a minute (RATE_LIMITED), or two previews are already rendering; retry shortly",
   })
   async preview(
     @Request() req: { user: { id: string } },

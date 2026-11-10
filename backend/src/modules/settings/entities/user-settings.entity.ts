@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 
 import type { DocumentConfig } from "../document-config";
+import type { TaxIdKind } from "../../../common/utils/ua-requisites.util";
 
 @Entity("user_settings")
 export class UserSettings {
@@ -46,6 +47,32 @@ export class UserSettings {
   @Column({ nullable: true })
   companyTagline: string;
 
+  // Counterparty requisites. They live in columns only, never in document_config, so
+  // frozen snapshots and their hashes do not depend on them.
+  @Column({ type: "varchar", length: 10, nullable: true })
+  companyTaxIdKind: TaxIdKind | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  companyLegalForm: string | null;
+
+  @Column({ type: "varchar", length: 200, nullable: true })
+  companyBankName: string | null;
+
+  @Column({ type: "boolean", nullable: true })
+  companyVatPayer: boolean | null;
+
+  @Column({ type: "varchar", length: 12, nullable: true })
+  companyVatId: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  companySignatoryName: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  companySignatoryPosition: string | null;
+
+  @Column({ type: "integer", nullable: true })
+  defaultPaymentTermDays: number | null;
+
   @Column({ nullable: true })
   receiptTitle: string | null;
 
@@ -84,6 +111,13 @@ export class UserSettings {
 
   @Column({ type: "uuid", nullable: true })
   logo_asset_id: string | null;
+
+  /** Account-level signature and stamp images (document_assets of that kind). */
+  @Column({ type: "uuid", nullable: true, select: false })
+  signature_asset_id: string | null;
+
+  @Column({ type: "uuid", nullable: true, select: false })
+  stamp_asset_id: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

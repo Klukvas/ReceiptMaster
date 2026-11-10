@@ -7,7 +7,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Response } from "express";
-import { ApiErrorResponse } from "../errors/ApiError";
+import { ApiError, ApiErrorResponse } from "../errors/ApiError";
 
 // The text of an unexpected error (SQL, driver detail, file paths) stays in the
 // log; the client only ever gets this.
@@ -22,7 +22,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let errorResponse: { error: string; errorCode: string };
+    let errorResponse: ApiError;
 
     if (exception instanceof ApiErrorResponse) {
       // Наши кастомные ошибки

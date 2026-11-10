@@ -1,734 +1,809 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from"react";
-import toast from"react-hot-toast";
-import { parseApiError } from"../lib/api-errors";
-import { ShoppingCart, Lock } from"lucide-react";
-import { ordersApi, formatCurrency, formatDate, type Order } from"../lib/api";
-import { DataTable } from"../components/ui/DataTable";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
+import { parseApiError } from "../lib/api-errors";
+import { ShoppingCart, Lock } from "lucide-react";
+import { ordersApi, formatCurrency, formatDate, type Order } from "../lib/api";
+import { DataTable } from "../components/ui/DataTable";
 import {
- CreateOrderModal,
- EditOrderForm,
- OrderDetails,
- OrdersPageHeader,
- OrderRowActions,
- OrderBulkToolbar,
- OrderStatusBadge,
- OrdersFilterBar,
- OrderActionsMenu,
-} from"../components/orders";
-import { ConfirmModal } from"../components/ui/ConfirmModal";
-import { ShareReceiptModal } from"../components/receipts/ShareReceiptModal";
-import { useOrders, useReceiptGenerationPolling } from"../hooks/useOrders";
+  CreateOrderModal,
+  EditOrderForm,
+  OrderDetails,
+  OrdersPageHeader,
+  OrderRowActions,
+  OrderBulkToolbar,
+  OrderStatusBadge,
+  OrdersFilterBar,
+  OrderActionsMenu,
+} from "../components/orders";
+import { ConfirmModal } from "../components/ui/ConfirmModal";
+import { ShareReceiptModal } from "../components/receipts/ShareReceiptModal";
+import { useOrders, useReceiptGenerationPolling } from "../hooks/useOrders";
 import {
- useServerPagination,
- type ColumnDef,
-} from"../hooks/useServerPagination";
-import { useTranslation } from"../hooks/useTranslation";
-import { useSubscription } from"../hooks/useSubscription";
-import { isOrderLimitReached } from"../lib/subscriptionApi";
-import { UsageBar } from"../components/subscription/UsageBar";
-import { Button } from"../components/ui/Button";
-import { Link, useSearchParams } from"react-router-dom";
-import { useCreateIntent } from"../hooks/useCreateIntent";
-import { formatOrderNumber } from"../lib/order-number";
-import { UpgradeModal } from"../components/subscription/UpgradeModal";
+  useServerPagination,
+  type ColumnDef,
+} from "../hooks/useServerPagination";
+import { useTranslation } from "../hooks/useTranslation";
+import { useSubscription } from "../hooks/useSubscription";
+import { isOrderLimitReached } from "../lib/subscriptionApi";
+import { UsageBar } from "../components/subscription/UsageBar";
+import { Button } from "../components/ui/Button";
+import { Link, useSearchParams } from "react-router-dom";
+import { useCreateIntent } from "../hooks/useCreateIntent";
+import { formatOrderNumber } from "../lib/order-number";
+import { UpgradeModal } from "../components/subscription/UpgradeModal";
 
 const ORDER_STATUSES = ["draft", "confirmed", "cancelled"] as const;
 
 export const OrdersPage = () => {
- const { t } = useTranslation();
- const { status: subscriptionStatus } = useSubscription();
- const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
- const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
- const [searchParams, setSearchParams] = useSearchParams();
- // A deep link (e.g. from a recipient) can open the list already searched; the param is
- // dropped right away so a later reload does not bring the old search back.
- const [initialSearch] = useState(() => searchParams.get("search") ?? "");
- useEffect(() => {
- if (!searchParams.has("search")) return;
- setSearchParams(
- (previous) => {
- const next = new URLSearchParams(previous);
- next.delete("search");
- return next;
- },
- { replace: true },
- );
- // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first render's param matters
- }, []);
- // The status filter lives in the URL so a reload or a shared link keeps it.
- const [statusFilter, setStatusFilterState] = useState(() => {
- const fromUrl = searchParams.get("status") ?? "";
- return (ORDER_STATUSES as readonly string[]).includes(fromUrl) ? fromUrl : "";
- });
- const setStatusFilter = useCallback(
- (value: string) => {
- setStatusFilterState(value);
- setSearchParams(
- (previous) => {
- const next = new URLSearchParams(previous);
- if (value) next.set("status", value);
- else next.delete("status");
- return next;
- },
- { replace: true },
- );
- },
- [setSearchParams],
- );
- const [startDate, setStartDate] = useState("");
- const [endDate, setEndDate] = useState("");
- const [minAmount, setMinAmount] = useState("");
- const [maxAmount, setMaxAmount] = useState("");
+  const { t } = useTranslation();
+  const { status: subscriptionStatus } = useSubscription();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // A deep link (e.g. from a recipient) can open the list already searched; the param is
+  // dropped right away so a later reload does not bring the old search back.
+  const [initialSearch] = useState(() => searchParams.get("search") ?? "");
+  useEffect(() => {
+    if (!searchParams.has("search")) return;
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("search");
+        return next;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first render's param matters
+  }, []);
+  // The status filter lives in the URL so a reload or a shared link keeps it.
+  const [statusFilter, setStatusFilterState] = useState(() => {
+    const fromUrl = searchParams.get("status") ?? "";
+    return (ORDER_STATUSES as readonly string[]).includes(fromUrl)
+      ? fromUrl
+      : "";
+  });
+  const setStatusFilter = useCallback(
+    (value: string) => {
+      setStatusFilterState(value);
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (value) next.set("status", value);
+          else next.delete("status");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
 
- const {
- showForm,
- setShowForm,
- editingOrder,
- setEditingOrder,
- selectedOrder,
- setSelectedOrder,
- confirmAction,
- actionError,
- handleConfirmAction,
- handleCloseConfirm,
- handleConfirm,
- handleCancel,
- handleDeleteOrder,
- handleGenerateReceipt,
- receiptReplacement,
- confirmReceiptReplacement,
- cancelReceiptReplacement,
- handleDownloadReceipt,
- handlePrintReceipt,
- isDeleting,
- isCancelling,
- selectedKeys,
- setSelectedKeys,
- handleBatchApprove,
- handleBulkDeleteConfirm,
- clearSelection,
- isBatchApproving,
- isBatchDeleting,
- } = useOrders();
+  const {
+    showForm,
+    setShowForm,
+    editingOrder,
+    setEditingOrder,
+    selectedOrder: viewedOrder,
+    setSelectedOrder,
+    confirmAction,
+    actionError,
+    handleConfirmAction,
+    handleCloseConfirm,
+    handleConfirm,
+    handleCancel,
+    handleDeleteOrder,
+    handleGenerateReceipt,
+    receiptReplacement,
+    confirmReceiptReplacement,
+    cancelReceiptReplacement,
+    handleDownloadReceipt,
+    handlePrintReceipt,
+    isDeleting,
+    isCancelling,
+    selectedKeys,
+    setSelectedKeys,
+    handleBatchApprove,
+    handleBulkDeleteConfirm,
+    clearSelection,
+    isBatchApproving,
+    isBatchDeleting,
+  } = useOrders();
 
- const [prefillRecipientId, setPrefillRecipientId] = useState<string>();
- const openCreateOrder = (recipientId?: string) => {
- if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
- setUpgradeModalOpen(true);
- return;
- }
- setPrefillRecipientId(recipientId);
- setShowForm(true);
- };
- // Wait for the plan status so a deep link cannot skip the monthly order limit.
- useCreateIntent(
- ({ recipientId }) => openCreateOrder(recipientId),
- subscriptionStatus !== undefined,
- );
+  const [prefillRecipientId, setPrefillRecipientId] = useState<string>();
+  const openCreateOrder = (recipientId?: string) => {
+    if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
+      setUpgradeModalOpen(true);
+      return;
+    }
+    setPrefillRecipientId(recipientId);
+    setShowForm(true);
+  };
+  // Wait for the plan status so a deep link cannot skip the monthly order limit.
+  useCreateIntent(
+    ({ recipientId }) => openCreateOrder(recipientId),
+    subscriptionStatus !== undefined,
+  );
 
- const extraParams = useMemo(() => {
- const params: Record<string, string> = {};
- if (statusFilter) params.status = statusFilter;
- if (startDate) params.startDate = startDate;
- if (endDate) params.endDate = endDate;
- if (minAmount)
- params.minAmount = String(Math.round(parseFloat(minAmount) * 100));
- if (maxAmount)
- params.maxAmount = String(Math.round(parseFloat(maxAmount) * 100));
- return params;
- }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
+  const extraParams = useMemo(() => {
+    const params: Record<string, string> = {};
+    if (statusFilter) params.status = statusFilter;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    if (minAmount)
+      params.minAmount = String(Math.round(parseFloat(minAmount) * 100));
+    if (maxAmount)
+      params.maxAmount = String(Math.round(parseFloat(maxAmount) * 100));
+    return params;
+  }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
 
- const hasActiveFilters = Boolean(
- statusFilter || startDate || endDate || minAmount || maxAmount,
- );
+  const hasActiveFilters = Boolean(
+    statusFilter || startDate || endDate || minAmount || maxAmount,
+  );
 
- const clearAllFilters = useCallback(() => {
- setStatusFilter("");
- setStartDate("");
- setEndDate("");
- setMinAmount("");
- setMaxAmount("");
- }, [setStatusFilter]);
+  const clearAllFilters = useCallback(() => {
+    setStatusFilter("");
+    setStartDate("");
+    setEndDate("");
+    setMinAmount("");
+    setMaxAmount("");
+  }, [setStatusFilter]);
 
- const columns: ColumnDef<Order>[] = useMemo(
- () => [
- {
- key:"order_number",
- header: t("orders.numberColumn"),
- sortable: true,
- sortKey:"order_number",
- render: (o) => (
- <span className="text-sm font-medium tabular-nums text-content-secondary">
- {formatOrderNumber(o)}
- </span>
- ),
- },
- {
- key:"recipient_name",
- header: t("orders.recipient"),
- sortable: true,
- sortKey:"recipient_name",
- render: (o) => (
- <div className="flex items-center gap-2">
- {o.is_locked && (
- <span title={t("orders.locked")}>
- <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
- </span>
- )}
- <span
- className="text-sm font-medium text-content truncate max-w-[180px] block"
- title={o.recipient?.name ||"-"}
- >
- {o.recipient?.name ||"-"}
- </span>
- </div>
- ),
- },
- {
- key:"status",
- header: t("orders.status"),
- sortable: true,
- render: (o) => <OrderStatusBadge order={o} />,
- },
- {
- key:"total_cents",
- header: t("orders.total"),
- sortable: true,
- render: (o) => (
- <div className="text-right">
- <span className="text-base font-bold tabular-nums text-content">
- {formatCurrency(o.total_cents, o.currency)}
- </span>
- </div>
- ),
- },
- {
- key:"created_at",
- header: t("orders.date"),
- sortable: true,
- render: (o) => (
- <span className="text-sm text-content-tertiary">
- {formatDate(o.created_at)}
- </span>
- ),
- },
- ],
- [t],
- );
+  const columns: ColumnDef<Order>[] = useMemo(
+    () => [
+      {
+        key: "order_number",
+        header: t("orders.numberColumn"),
+        sortable: true,
+        sortKey: "order_number",
+        render: (o) => (
+          <span className="text-sm font-medium tabular-nums text-content-secondary">
+            {formatOrderNumber(o)}
+          </span>
+        ),
+      },
+      {
+        key: "recipient_name",
+        header: t("orders.recipient"),
+        sortable: true,
+        sortKey: "recipient_name",
+        render: (o) => (
+          <div className="flex items-center gap-2">
+            {o.is_locked && (
+              <span title={t("orders.locked")}>
+                <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
+              </span>
+            )}
+            <span
+              className="text-sm font-medium text-content truncate max-w-[180px] block"
+              title={o.recipient?.name || "-"}
+            >
+              {o.recipient?.name || "-"}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        header: t("orders.status"),
+        sortable: true,
+        render: (o) => <OrderStatusBadge order={o} />,
+      },
+      {
+        key: "total_cents",
+        header: t("orders.total"),
+        sortable: true,
+        render: (o) => (
+          <div className="text-right">
+            <span className="text-base font-bold tabular-nums text-content">
+              {formatCurrency(o.total_cents, o.currency)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "created_at",
+        header: t("orders.date"),
+        sortable: true,
+        render: (o) => (
+          <span className="text-sm text-content-tertiary">
+            {formatDate(o.created_at)}
+          </span>
+        ),
+      },
+    ],
+    [t],
+  );
 
- // The filters the list is narrowed by, shared by the page query and "select all".
- const listFilterParams = () => ({
- ...(statusFilter ? { status: statusFilter } : {}),
- ...(startDate ? { startDate } : {}),
- ...(endDate ? { endDate } : {}),
- ...(minAmount
- ? { minAmount: Math.round(parseFloat(minAmount) * 100) }
- : {}),
- ...(maxAmount
- ? { maxAmount: Math.round(parseFloat(maxAmount) * 100) }
- : {}),
- });
+  // The filters the list is narrowed by, shared by the page query and "select all".
+  const listFilterParams = () => ({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+    ...(minAmount
+      ? { minAmount: Math.round(parseFloat(minAmount) * 100) }
+      : {}),
+    ...(maxAmount
+      ? { maxAmount: Math.round(parseFloat(maxAmount) * 100) }
+      : {}),
+  });
 
- const pagination = useServerPagination<Order>({
- queryKey:"orders",
- initialSearch,
- queryFn: (params) =>
- ordersApi.getAll({
- ...params,
- ...listFilterParams(),
- }),
- columns,
- defaultSortBy:"created_at",
- defaultSortOrder:"DESC",
- extraParams,
- storageKeyPrefix:"orders",
- });
+  const pagination = useServerPagination<Order>({
+    queryKey: "orders",
+    initialSearch,
+    queryFn: (params) =>
+      ordersApi.getAll({
+        ...params,
+        ...listFilterParams(),
+      }),
+    columns,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "DESC",
+    extraParams,
+    storageKeyPrefix: "orders",
+  });
 
- // Keep the "generating" chips honest even when no socket event lands
- useReceiptGenerationPolling(pagination.items);
+  // The details show the order as the list last loaded it, so a document created
+  // from there appears without reopening; the clicked snapshot only covers an order
+  // that left the loaded page (filter, paging).
+  const selectedOrder = viewedOrder
+    ? (pagination.items.find((order) => order.id === viewedOrder.id) ??
+      viewedOrder)
+    : null;
 
- // Invalidate immediately on view changes, including the search debounce window.
- const selectionScope = JSON.stringify([
-   pagination.currentPage, pagination.itemsPerPage, pagination.searchQuery,
-   pagination.sortBy, pagination.sortOrder, statusFilter, startDate, endDate, minAmount, maxAmount,
- ]);
- const [selectedScope, setSelectedScope] = useState(selectionScope);
- // "Select all N": every order matching the filters, not only this page. It lives only as
- // long as the view it was chosen in (any filter, sort or page change drops it).
- const [allMatching, setAllMatching] = useState<{ ids: string[]; total: number } | null>(null);
- const [isSelectingAll, setIsSelectingAll] = useState(false);
- const currentScopeRef = useRef(selectionScope);
- currentScopeRef.current = selectionScope;
- const selectionReady = selectedScope === selectionScope && !pagination.isFetching && !pagination.isSearchPending && !pagination.error;
- const validSelectedKeys = useMemo(() => new Set(
-   selectionReady ? pagination.items.filter(order => selectedKeys.has(order.id)).map(order => order.id) : [],
- ), [selectionReady, pagination.items, selectedKeys]);
- useEffect(() => {
-   setSelectedKeys(new Set());
-   setAllMatching(null);
-   setSelectedScope(selectionScope);
-   handleCloseConfirm();
- // handleCloseConfirm is an inline hook callback; only scope changes should close the modal.
- // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [selectionScope, setSelectedKeys]);
- useEffect(() => {
-   if (pagination.isFetching) {
-     setSelectedKeys(new Set());
-     setAllMatching(null);
-   }
- }, [pagination.isFetching, setSelectedKeys]);
- const bulkIds = allMatching ? allMatching.ids : [...validSelectedKeys];
- const bulkCount = bulkIds.length;
- const selectAllMatching = async () => {
-   const scopeAtClick = selectionScope;
-   setIsSelectingAll(true);
-   try {
-     const { data } = await ordersApi.getMatchingIds({
-       ...listFilterParams(),
-       ...(pagination.searchQuery.trim() ? { search: pagination.searchQuery.trim() } : {}),
-     });
-     // The view changed while the ids were loading: they no longer match what is on screen.
-     if (currentScopeRef.current === scopeAtClick) setAllMatching(data);
-   } catch (error) {
-     toast.error(parseApiError(error).message);
-   } finally {
-     setIsSelectingAll(false);
-   }
- };
- const changeSelection = (keys: Set<string>) => {
-   if (!selectionReady) return;
-   setSelectedKeys(new Set(pagination.items.filter(order => keys.has(order.id)).map(order => order.id)));
- };
- // The cancel dialog only has the id; a confirmed order (or one not on this
- // page) gets the warning that its document is voided and stock stays out.
- const cancelTargetIsDraft = confirmAction.type === 'cancel' && pagination.items
-   .some(order => order.id === confirmAction.order?.id && order.status === 'draft');
- // Ids chosen through "select all" carry no status, so only a drafts-only filter proves they can be approved.
- const allSelectedAreDraft = allMatching
-   ? statusFilter === 'draft'
-   : validSelectedKeys.size > 0 && pagination.items
-       .filter(order => validSelectedKeys.has(order.id)).every(order => order.status === 'draft');
- const showSelectAllBanner = selectionReady && !allMatching && validSelectedKeys.size > 0
-   && validSelectedKeys.size === pagination.items.length && pagination.total > pagination.items.length;
+  // Keep the "generating" chips honest even when no socket event lands
+  useReceiptGenerationPolling(pagination.items);
 
- const renderOrderActions = useCallback(
- (order: Order) => (
- <OrderRowActions
- order={order}
- onView={setSelectedOrder}
- onEdit={setEditingOrder}
- onConfirm={handleConfirm}
- onCancel={handleCancel}
- onDelete={handleDeleteOrder}
- onDownloadReceipt={handleDownloadReceipt}
- onPrintReceipt={handlePrintReceipt}
- onGenerateReceipt={handleGenerateReceipt}
- isDeleting={isDeleting}
- />
- ),
- [
- handleConfirm,
- handleCancel,
- handleDownloadReceipt,
- handlePrintReceipt,
- handleGenerateReceipt,
- handleDeleteOrder,
- isDeleting,
- setSelectedOrder,
- setEditingOrder,
- ],
- );
+  // Invalidate immediately on view changes, including the search debounce window.
+  const selectionScope = JSON.stringify([
+    pagination.currentPage,
+    pagination.itemsPerPage,
+    pagination.searchQuery,
+    pagination.sortBy,
+    pagination.sortOrder,
+    statusFilter,
+    startDate,
+    endDate,
+    minAmount,
+    maxAmount,
+  ]);
+  const [selectedScope, setSelectedScope] = useState(selectionScope);
+  // "Select all N": every order matching the filters, not only this page. It lives only as
+  // long as the view it was chosen in (any filter, sort or page change drops it).
+  const [allMatching, setAllMatching] = useState<{
+    ids: string[];
+    total: number;
+  } | null>(null);
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const currentScopeRef = useRef(selectionScope);
+  currentScopeRef.current = selectionScope;
+  const selectionReady =
+    selectedScope === selectionScope &&
+    !pagination.isFetching &&
+    !pagination.isSearchPending &&
+    !pagination.error;
+  const validSelectedKeys = useMemo(
+    () =>
+      new Set(
+        selectionReady
+          ? pagination.items
+              .filter((order) => selectedKeys.has(order.id))
+              .map((order) => order.id)
+          : [],
+      ),
+    [selectionReady, pagination.items, selectedKeys],
+  );
+  useEffect(() => {
+    setSelectedKeys(new Set());
+    setAllMatching(null);
+    setSelectedScope(selectionScope);
+    handleCloseConfirm();
+    // handleCloseConfirm is an inline hook callback; only scope changes should close the modal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionScope, setSelectedKeys]);
+  useEffect(() => {
+    if (pagination.isFetching) {
+      setSelectedKeys(new Set());
+      setAllMatching(null);
+    }
+  }, [pagination.isFetching, setSelectedKeys]);
+  const bulkIds = allMatching ? allMatching.ids : [...validSelectedKeys];
+  const bulkCount = bulkIds.length;
+  const selectAllMatching = async () => {
+    const scopeAtClick = selectionScope;
+    setIsSelectingAll(true);
+    try {
+      const { data } = await ordersApi.getMatchingIds({
+        ...listFilterParams(),
+        ...(pagination.searchQuery.trim()
+          ? { search: pagination.searchQuery.trim() }
+          : {}),
+      });
+      // The view changed while the ids were loading: they no longer match what is on screen.
+      if (currentScopeRef.current === scopeAtClick) setAllMatching(data);
+    } catch (error) {
+      toast.error(parseApiError(error).message);
+    } finally {
+      setIsSelectingAll(false);
+    }
+  };
+  const changeSelection = (keys: Set<string>) => {
+    if (!selectionReady) return;
+    setSelectedKeys(
+      new Set(
+        pagination.items
+          .filter((order) => keys.has(order.id))
+          .map((order) => order.id),
+      ),
+    );
+  };
+  // The cancel dialog only has the id; a confirmed order (or one not on this
+  // page) gets the warning that its document is voided and stock stays out.
+  const cancelTargetIsDraft =
+    confirmAction.type === "cancel" &&
+    pagination.items.some(
+      (order) =>
+        order.id === confirmAction.order?.id && order.status === "draft",
+    );
+  // Ids chosen through "select all" carry no status, so only a drafts-only filter proves they can be approved.
+  const allSelectedAreDraft = allMatching
+    ? statusFilter === "draft"
+    : validSelectedKeys.size > 0 &&
+      pagination.items
+        .filter((order) => validSelectedKeys.has(order.id))
+        .every((order) => order.status === "draft");
+  const showSelectAllBanner =
+    selectionReady &&
+    !allMatching &&
+    validSelectedKeys.size > 0 &&
+    validSelectedKeys.size === pagination.items.length &&
+    pagination.total > pagination.items.length;
 
- const renderOrderCard = useCallback(
- (order: Order) => (
- <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4 hover:shadow-md transition-shadow">
- <div className="space-y-3">
- {/* Top row: Recipient + Status */}
- <div className="flex items-start justify-between gap-3">
- <div className="flex-1 min-w-0">
- <div className="flex items-center gap-2">
- {order.is_locked && (
- <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
- )}
- <h3 className="text-base font-semibold text-content truncate">
- <span className="tabular-nums text-content-tertiary">{formatOrderNumber(order)}</span>{""}
- {order.recipient?.name ||"-"}
- </h3>
- </div>
- <p className="text-xs text-content-tertiary mt-0.5">
- {formatDate(order.created_at)}
- </p>
- </div>
- <OrderActionsMenu
- order={order}
- onView={setSelectedOrder}
- onEdit={setEditingOrder}
- onConfirm={handleConfirm}
- onCancel={handleCancel}
- onDelete={handleDeleteOrder}
- onDownloadReceipt={handleDownloadReceipt}
- onPrintReceipt={handlePrintReceipt}
- onGenerateReceipt={handleGenerateReceipt}
- isDeleting={isDeleting}
- />
- </div>
+  const renderOrderActions = useCallback(
+    (order: Order) => (
+      <OrderRowActions
+        order={order}
+        onView={setSelectedOrder}
+        onEdit={setEditingOrder}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+        onDelete={handleDeleteOrder}
+        onDownloadReceipt={handleDownloadReceipt}
+        onPrintReceipt={handlePrintReceipt}
+        onGenerateReceipt={handleGenerateReceipt}
+        isDeleting={isDeleting}
+      />
+    ),
+    [
+      handleConfirm,
+      handleCancel,
+      handleDownloadReceipt,
+      handlePrintReceipt,
+      handleGenerateReceipt,
+      handleDeleteOrder,
+      isDeleting,
+      setSelectedOrder,
+      setEditingOrder,
+    ],
+  );
 
- {/* Status row */}
- <div className="flex items-center gap-2 flex-wrap">
- <OrderStatusBadge order={order} />
- </div>
+  const renderOrderCard = useCallback(
+    (order: Order) => (
+      <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4 hover:shadow-md transition-shadow">
+        <div className="space-y-3">
+          {/* Top row: Recipient + Status */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {order.is_locked && (
+                  <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
+                )}
+                <h3 className="text-base font-semibold text-content truncate">
+                  <span className="tabular-nums text-content-tertiary">
+                    {formatOrderNumber(order)}
+                  </span>
+                  <span className="text-content-tertiary">{" · "}</span>
+                  {order.recipient?.name || "-"}
+                </h3>
+              </div>
+              <p className="text-xs text-content-tertiary mt-0.5">
+                {formatDate(order.created_at)}
+              </p>
+            </div>
+            <OrderActionsMenu
+              order={order}
+              onView={setSelectedOrder}
+              onEdit={setEditingOrder}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+              onDelete={handleDeleteOrder}
+              onDownloadReceipt={handleDownloadReceipt}
+              onPrintReceipt={handlePrintReceipt}
+              onGenerateReceipt={handleGenerateReceipt}
+              isDeleting={isDeleting}
+            />
+          </div>
 
- {/* Total - prominently displayed */}
- <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border-light)]">
- <span className="text-xl font-bold tabular-nums text-content">
- {formatCurrency(order.total_cents, order.currency)}
- </span>
- <button
- onClick={() => setSelectedOrder(order)}
- className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors pointer-coarse:py-3 pointer-coarse:px-2"
- >
- {t("orders.view")}
- </button>
- </div>
- </div>
- </div>
- ),
- [
- t,
- handleConfirm,
- handleCancel,
- handleDownloadReceipt,
- handlePrintReceipt,
- handleGenerateReceipt,
- handleDeleteOrder,
- isDeleting,
- setSelectedOrder,
- setEditingOrder,
- ],
- );
+          {/* Status row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <OrderStatusBadge order={order} />
+          </div>
 
- // DataTable hides its empty-state action while a search is active, so the way out of a
- // zero-result search is offered right under it.
- const isSearchWithoutResults =
- pagination.searchQuery.trim() !== "" &&
- !pagination.isLoading &&
- !pagination.error &&
- pagination.items.length === 0;
+          {/* Total - prominently displayed */}
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border-light)]">
+            <span className="text-xl font-bold tabular-nums text-content">
+              {formatCurrency(order.total_cents, order.currency)}
+            </span>
+            <button
+              onClick={() => setSelectedOrder(order)}
+              className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors pointer-coarse:py-3 pointer-coarse:px-2"
+            >
+              {t("orders.view")}
+            </button>
+          </div>
+        </div>
+      </div>
+    ),
+    [
+      t,
+      handleConfirm,
+      handleCancel,
+      handleDownloadReceipt,
+      handlePrintReceipt,
+      handleGenerateReceipt,
+      handleDeleteOrder,
+      isDeleting,
+      setSelectedOrder,
+      setEditingOrder,
+    ],
+  );
 
- // Filter bar rendered above the DataTable
- const filterBar = (
- <OrdersFilterBar
- statusFilter={statusFilter}
- onStatusFilterChange={(v) => {
- setStatusFilter(v);
- pagination.setCurrentPage(1);
- }}
- startDate={startDate}
- onStartDateChange={(v) => {
- setStartDate(v);
- pagination.setCurrentPage(1);
- }}
- endDate={endDate}
- onEndDateChange={(v) => {
- setEndDate(v);
- pagination.setCurrentPage(1);
- }}
- minAmount={minAmount}
- onMinAmountChange={(v) => {
- setMinAmount(v);
- pagination.setCurrentPage(1);
- }}
- maxAmount={maxAmount}
- onMaxAmountChange={(v) => {
- setMaxAmount(v);
- pagination.setCurrentPage(1);
- }}
- onClearAll={() => {
- clearAllFilters();
- pagination.setCurrentPage(1);
- }}
- />
- );
+  // DataTable hides its empty-state action while a search is active, so the way out of a
+  // zero-result search is offered right under it.
+  const isSearchWithoutResults =
+    pagination.searchQuery.trim() !== "" &&
+    !pagination.isLoading &&
+    !pagination.error &&
+    pagination.items.length === 0;
 
- return (
- <div className="space-y-5">
- <OrdersPageHeader onCreateOrder={() => openCreateOrder()} />
- {subscriptionStatus && (
- <UsageBar
- current={subscriptionStatus.usage.ordersThisMonth}
- max={subscriptionStatus.limits.maxOrdersPerMonth}
- label={t("subscription.ordersUsage","Orders this month")}
- />
- )}
+  // Filter bar rendered above the DataTable
+  const filterBar = (
+    <OrdersFilterBar
+      statusFilter={statusFilter}
+      onStatusFilterChange={(v) => {
+        setStatusFilter(v);
+        pagination.setCurrentPage(1);
+      }}
+      startDate={startDate}
+      onStartDateChange={(v) => {
+        setStartDate(v);
+        pagination.setCurrentPage(1);
+      }}
+      endDate={endDate}
+      onEndDateChange={(v) => {
+        setEndDate(v);
+        pagination.setCurrentPage(1);
+      }}
+      minAmount={minAmount}
+      onMinAmountChange={(v) => {
+        setMinAmount(v);
+        pagination.setCurrentPage(1);
+      }}
+      maxAmount={maxAmount}
+      onMaxAmountChange={(v) => {
+        setMaxAmount(v);
+        pagination.setCurrentPage(1);
+      }}
+      onClearAll={() => {
+        clearAllFilters();
+        pagination.setCurrentPage(1);
+      }}
+    />
+  );
 
- {filterBar}
+  return (
+    <div className="space-y-5">
+      <OrdersPageHeader onCreateOrder={() => openCreateOrder()} />
+      {subscriptionStatus && (
+        <UsageBar
+          current={subscriptionStatus.usage.ordersThisMonth}
+          max={subscriptionStatus.limits.maxOrdersPerMonth}
+          label={t("subscription.ordersUsage", "Orders this month")}
+        />
+      )}
 
- {(showSelectAllBanner || allMatching) && (
- <div
- role="status"
- className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg bg-[var(--color-accent-light)] px-4 py-2 text-sm text-accent-base"
- >
- {allMatching ? (
- <span>
- {allMatching.total > allMatching.ids.length
- ? t("orders.allMatchingCapped", { count: allMatching.ids.length, total: allMatching.total })
- : t("orders.allMatchingSelected", { count: allMatching.total })}
- </span>
- ) : (
- <>
- <span>{t("orders.selectAllOnPage", { count: validSelectedKeys.size })}</span>
- <button
- type="button"
- onClick={() => void selectAllMatching()}
- disabled={isSelectingAll}
- className="font-semibold underline underline-offset-2 disabled:opacity-60"
- >
- {isSelectingAll ? t("common.loading") : t("orders.selectAllMatching", { total: pagination.total })}
- </button>
- </>
- )}
- </div>
- )}
- <DataTable<Order>
- items={pagination.items}
- total={pagination.total}
- isLoading={pagination.isLoading}
- isFetching={pagination.isFetching}
- error={pagination.error}
- onRetry={() => pagination.queryResult.refetch()}
- currentPage={pagination.currentPage}
- totalPages={pagination.totalPages}
- itemsPerPage={pagination.itemsPerPage}
- onPageChange={pagination.setCurrentPage}
- onItemsPerPageChange={pagination.setItemsPerPage}
- searchQuery={pagination.searchQuery}
- onSearchChange={pagination.setSearchQuery}
- sortBy={pagination.sortBy}
- sortOrder={pagination.sortOrder}
- onSort={pagination.handleSort}
- columns={pagination.columns}
- visibleColumns={pagination.visibleColumns}
- onToggleColumn={pagination.toggleColumnVisibility}
- rowKey={(o) => o.id}
- showSearch
- showColumnToggle
- selectable
- selectedKeys={validSelectedKeys}
- onSelectionChange={changeSelection}
- searchPlaceholder={t("orders.searchPlaceholder")}
- emptyIcon={
- <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-2" />
- }
- emptyMessage={
- hasActiveFilters ? t("orders.noOrdersMatchFilters") : t("orders.noOrders")
- }
- emptyAction={
- hasActiveFilters ? (
- <Button
- variant="secondary"
- onClick={() => {
- clearAllFilters();
- pagination.setCurrentPage(1);
- }}
- >
- {t("orders.clearAll")}
- </Button>
- ) : (
- <div className="flex flex-col items-center gap-3">
- <p className="max-w-xs text-xs text-content-tertiary">
- {t("orders.emptyPrerequisites")}
- </p>
- <div className="flex gap-3 text-sm">
- <Link className="text-accent-base hover:underline" to="/products?create=1">
- {t("home.addProduct")}
- </Link>
- <Link className="text-accent-base hover:underline" to="/recipients?create=1">
- {t("home.addRecipient")}
- </Link>
- </div>
- <Button onClick={() => openCreateOrder()}>
- {t("orders.createFirstOrder")}
- </Button>
- </div>
- )
- }
- emptySearchMessage={
- hasActiveFilters
- ? t("orders.noOrdersMatchFilters")
- : t("orders.noOrdersFound")
- }
- renderActions={renderOrderActions}
- renderCard={renderOrderCard}
- onRowClick={setSelectedOrder}
- />
+      {filterBar}
 
- {isSearchWithoutResults && (
- <div className="flex flex-wrap justify-center gap-3">
- <Button
- variant="secondary"
- onClick={() => pagination.setSearchQuery("")}
- >
- {t("orders.clearSearch")}
- </Button>
- {hasActiveFilters && (
- <Button
- variant="secondary"
- onClick={() => {
- pagination.setSearchQuery("");
- clearAllFilters();
- pagination.setCurrentPage(1);
- }}
- >
- {t("orders.clearAll")}
- </Button>
- )}
- </div>
- )}
+      {(showSelectAllBanner || allMatching) && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg bg-[var(--color-accent-light)] px-4 py-2 text-sm text-accent-base"
+        >
+          {allMatching ? (
+            <span>
+              {allMatching.total > allMatching.ids.length
+                ? t("orders.allMatchingCapped", {
+                    count: allMatching.ids.length,
+                    total: allMatching.total,
+                  })
+                : t("orders.allMatchingSelected", { count: allMatching.total })}
+            </span>
+          ) : (
+            <>
+              <span>
+                {t("orders.selectAllOnPage", { count: validSelectedKeys.size })}
+              </span>
+              <button
+                type="button"
+                onClick={() => void selectAllMatching()}
+                disabled={isSelectingAll}
+                className="font-semibold underline underline-offset-2 disabled:opacity-60"
+              >
+                {isSelectingAll
+                  ? t("common.loading")
+                  : t("orders.selectAllMatching", { total: pagination.total })}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      <DataTable<Order>
+        items={pagination.items}
+        total={pagination.total}
+        isLoading={pagination.isLoading}
+        isFetching={pagination.isFetching}
+        error={pagination.error}
+        onRetry={() => pagination.queryResult.refetch()}
+        currentPage={pagination.currentPage}
+        totalPages={pagination.totalPages}
+        itemsPerPage={pagination.itemsPerPage}
+        onPageChange={pagination.setCurrentPage}
+        onItemsPerPageChange={pagination.setItemsPerPage}
+        searchQuery={pagination.searchQuery}
+        onSearchChange={pagination.setSearchQuery}
+        sortBy={pagination.sortBy}
+        sortOrder={pagination.sortOrder}
+        onSort={pagination.handleSort}
+        columns={pagination.columns}
+        visibleColumns={pagination.visibleColumns}
+        onToggleColumn={pagination.toggleColumnVisibility}
+        rowKey={(o) => o.id}
+        showSearch
+        showColumnToggle
+        selectable
+        selectedKeys={validSelectedKeys}
+        onSelectionChange={changeSelection}
+        searchPlaceholder={t("orders.searchPlaceholder")}
+        emptyIcon={
+          <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-2" />
+        }
+        emptyMessage={
+          hasActiveFilters
+            ? t("orders.noOrdersMatchFilters")
+            : t("orders.noOrders")
+        }
+        emptyAction={
+          hasActiveFilters ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                clearAllFilters();
+                pagination.setCurrentPage(1);
+              }}
+            >
+              {t("orders.clearAll")}
+            </Button>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <p className="max-w-xs text-xs text-content-tertiary">
+                {t("orders.emptyPrerequisites")}
+              </p>
+              <div className="flex gap-3 text-sm">
+                <Link
+                  className="text-accent-base hover:underline"
+                  to="/products?create=1"
+                >
+                  {t("home.addProduct")}
+                </Link>
+                <Link
+                  className="text-accent-base hover:underline"
+                  to="/recipients?create=1"
+                >
+                  {t("home.addRecipient")}
+                </Link>
+              </div>
+              <Button onClick={() => openCreateOrder()}>
+                {t("orders.createFirstOrder")}
+              </Button>
+            </div>
+          )
+        }
+        emptySearchMessage={
+          hasActiveFilters
+            ? t("orders.noOrdersMatchFilters")
+            : t("orders.noOrdersFound")
+        }
+        renderActions={renderOrderActions}
+        renderCard={renderOrderCard}
+        onRowClick={setSelectedOrder}
+      />
 
- {/* Floating bulk toolbar */}
- {bulkCount > 0 && (
- <OrderBulkToolbar
- selectedCount={bulkCount}
- allSelectedAreDraft={allSelectedAreDraft}
- onBatchApprove={() => { if (allSelectedAreDraft) handleBatchApprove(bulkIds); }}
- onBatchDelete={() => { if (bulkCount > 0) handleBulkDeleteConfirm(); }}
- onClearSelection={() => {
- clearSelection();
- setAllMatching(null);
- }}
- isApproving={isBatchApproving}
- isDeleting={isBatchDeleting}
- />
- )}
+      {isSearchWithoutResults && (
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => pagination.setSearchQuery("")}
+          >
+            {t("orders.clearSearch")}
+          </Button>
+          {hasActiveFilters && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                pagination.setSearchQuery("");
+                clearAllFilters();
+                pagination.setCurrentPage(1);
+              }}
+            >
+              {t("orders.clearAll")}
+            </Button>
+          )}
+        </div>
+      )}
 
- <ConfirmModal
- isOpen={receiptReplacement !== null}
- onClose={cancelReceiptReplacement}
- onConfirm={confirmReceiptReplacement}
- title={t("orders.replaceReceiptTitle")}
- message={t("orders.replaceReceiptMessage", {
- limit: receiptReplacement?.limit,
- number: receiptReplacement?.number,
- })}
- confirmLabel={t("orders.generateReceipt")}
- variant="warning"
- />
+      {/* Floating bulk toolbar */}
+      {bulkCount > 0 && (
+        <OrderBulkToolbar
+          selectedCount={bulkCount}
+          allSelectedAreDraft={allSelectedAreDraft}
+          onBatchApprove={() => {
+            if (allSelectedAreDraft) handleBatchApprove(bulkIds);
+          }}
+          onBatchDelete={() => {
+            if (bulkCount > 0) handleBulkDeleteConfirm();
+          }}
+          onClearSelection={() => {
+            clearSelection();
+            setAllMatching(null);
+          }}
+          isApproving={isBatchApproving}
+          isDeleting={isBatchDeleting}
+        />
+      )}
 
- {showForm && (
- <CreateOrderModal
- initialRecipientId={prefillRecipientId}
- onClose={() => setShowForm(false)}
- />
- )}
+      <ConfirmModal
+        isOpen={receiptReplacement !== null}
+        onClose={cancelReceiptReplacement}
+        onConfirm={confirmReceiptReplacement}
+        title={t("orders.replaceReceiptTitle")}
+        message={t("orders.replaceReceiptMessage", {
+          limit: receiptReplacement?.limit,
+          number: receiptReplacement?.number,
+        })}
+        confirmLabel={t("orders.generateReceipt")}
+        variant="warning"
+      />
 
- {editingOrder && (
- <EditOrderForm
- order={editingOrder}
- onClose={() => setEditingOrder(null)}
- />
- )}
+      {showForm && (
+        <CreateOrderModal
+          initialRecipientId={prefillRecipientId}
+          onClose={() => setShowForm(false)}
+        />
+      )}
 
- {selectedOrder && (
- <OrderDetails
- order={selectedOrder}
- onClose={() => setSelectedOrder(null)}
- onEdit={setEditingOrder}
- onConfirm={handleConfirm}
- onCancel={handleCancel}
- onGenerateReceipt={handleGenerateReceipt}
- onDownloadReceipt={handleDownloadReceipt}
- onPrintReceipt={handlePrintReceipt}
- onShareReceipt={setShareReceiptId}
- />
- )}
+      {editingOrder && (
+        <EditOrderForm
+          order={editingOrder}
+          onClose={() => setEditingOrder(null)}
+        />
+      )}
 
- {/* Confirm action modal (cancel / delete / bulk delete) */}
- <ConfirmModal
- isOpen={
- confirmAction.isOpen &&
- ((confirmAction.type !== "bulkDelete" && confirmAction.type !== "bulkApprove") ||
- bulkCount > 0)
- }
- onClose={handleCloseConfirm}
- onConfirm={() => handleConfirmAction(bulkIds)}
- errorMessage={actionError}
- title={
- confirmAction.type ==="cancel"
- ? t("orders.cancelOrder","Cancel Order")
- : confirmAction.type ==="bulkDelete"
- ? t("orders.batchDeleteTitle")
- : confirmAction.type ==="bulkApprove"
- ? t("orders.batchApproveTitle")
- : t("orders.deleteOrder")
- }
- message={
- confirmAction.type ==="cancel"
- ? cancelTargetIsDraft
- ? t(
-"orders.cancelOrderMessage",
-"Are you sure you want to cancel this order?",
- )
- : `${t(
-"orders.cancelOrderMessage",
-"Are you sure you want to cancel this order?",
- )} ${t(
-"orders.cancelConfirmedWarning",
-"This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it.",
- )}`
- : confirmAction.type ==="bulkDelete"
- ? t("orders.batchDeleteMessage", { count: bulkCount })
- : confirmAction.type ==="bulkApprove"
- ? t("orders.batchApproveMessage", { count: bulkCount })
- : t("orders.deleteOrderMessage")
- }
- confirmLabel={
- confirmAction.type ==="cancel"
- ? t("orders.cancelOrder","Cancel Order")
- : confirmAction.type ==="bulkApprove"
- ? t("orders.batchApprove")
- : t("common.delete")
- }
- dismissLabel={
- confirmAction.type ==="cancel"
- ? t("orders.keepOrder","Keep order")
- : undefined
- }
- itemName={
- confirmAction.order
- ? `${formatOrderNumber(confirmAction.order)} · ${confirmAction.order.recipient?.name ?? t("orders.unknownRecipient", "Unknown recipient")} · ${formatCurrency(confirmAction.order.total_cents, confirmAction.order.currency)}`
- : undefined
- }
- variant={
- confirmAction.type ==="cancel" || confirmAction.type ==="bulkApprove"
- ?"warning"
- :"danger"
- }
- isLoading={
- confirmAction.type ==="cancel"
- ? isCancelling
- : confirmAction.type ==="bulkDelete"
- ? isBatchDeleting
- : confirmAction.type ==="bulkApprove"
- ? isBatchApproving
- : isDeleting
- }
- />
+      {selectedOrder && (
+        <OrderDetails
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onEdit={setEditingOrder}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+          onGenerateReceipt={handleGenerateReceipt}
+          onDownloadReceipt={handleDownloadReceipt}
+          onPrintReceipt={handlePrintReceipt}
+          onShareReceipt={setShareReceiptId}
+        />
+      )}
 
- {/* Share receipt modal */}
- {shareReceiptId && (
- <ShareReceiptModal
- isOpen={!!shareReceiptId}
- onClose={() => setShareReceiptId(null)}
- receiptId={shareReceiptId}
- />
- )}
+      {/* Confirm action modal (cancel / delete / bulk delete) */}
+      <ConfirmModal
+        isOpen={
+          confirmAction.isOpen &&
+          ((confirmAction.type !== "bulkDelete" &&
+            confirmAction.type !== "bulkApprove") ||
+            bulkCount > 0)
+        }
+        onClose={handleCloseConfirm}
+        onConfirm={() => handleConfirmAction(bulkIds)}
+        errorMessage={actionError}
+        title={
+          confirmAction.type === "cancel"
+            ? t("orders.cancelOrder", "Cancel Order")
+            : confirmAction.type === "bulkDelete"
+              ? t("orders.batchDeleteTitle")
+              : confirmAction.type === "bulkApprove"
+                ? t("orders.batchApproveTitle")
+                : t("orders.deleteOrder")
+        }
+        message={
+          confirmAction.type === "cancel"
+            ? cancelTargetIsDraft
+              ? t(
+                  "orders.cancelOrderMessage",
+                  "Are you sure you want to cancel this order?",
+                )
+              : `${t(
+                  "orders.cancelOrderMessage",
+                  "Are you sure you want to cancel this order?",
+                )} ${t(
+                  "orders.cancelConfirmedWarning",
+                  "This order is confirmed: cancelling voids its receipt and revokes any public share link. Stock is not returned — delete the order to return it.",
+                )}`
+            : confirmAction.type === "bulkDelete"
+              ? t("orders.batchDeleteMessage", { count: bulkCount })
+              : confirmAction.type === "bulkApprove"
+                ? t("orders.batchApproveMessage", { count: bulkCount })
+                : t("orders.deleteOrderMessage")
+        }
+        confirmLabel={
+          confirmAction.type === "cancel"
+            ? t("orders.cancelOrder", "Cancel Order")
+            : confirmAction.type === "bulkApprove"
+              ? t("orders.batchApprove")
+              : t("common.delete")
+        }
+        dismissLabel={
+          confirmAction.type === "cancel"
+            ? t("orders.keepOrder", "Keep order")
+            : undefined
+        }
+        itemName={
+          confirmAction.order
+            ? `${formatOrderNumber(confirmAction.order)} · ${confirmAction.order.recipient?.name ?? t("orders.unknownRecipient", "Unknown recipient")} · ${formatCurrency(confirmAction.order.total_cents, confirmAction.order.currency)}`
+            : undefined
+        }
+        variant={
+          confirmAction.type === "cancel" ||
+          confirmAction.type === "bulkApprove"
+            ? "warning"
+            : "danger"
+        }
+        isLoading={
+          confirmAction.type === "cancel"
+            ? isCancelling
+            : confirmAction.type === "bulkDelete"
+              ? isBatchDeleting
+              : confirmAction.type === "bulkApprove"
+                ? isBatchApproving
+                : isDeleting
+        }
+      />
 
- {/* Upgrade modal */}
- <UpgradeModal
- isOpen={upgradeModalOpen}
- onClose={() => setUpgradeModalOpen(false)}
- reason="orders"
- />
- </div>
- );
+      {/* Share receipt modal */}
+      {shareReceiptId && (
+        <ShareReceiptModal
+          isOpen={!!shareReceiptId}
+          onClose={() => setShareReceiptId(null)}
+          receiptId={shareReceiptId}
+        />
+      )}
+
+      {/* Upgrade modal */}
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        reason="orders"
+      />
+    </div>
+  );
 };

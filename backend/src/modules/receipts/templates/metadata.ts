@@ -1,4 +1,5 @@
 import { PdfOptions } from "../services/playwright-pdf-generator.service";
+import { DOCUMENT_TYPE_SPECS } from "../document-types";
 
 export interface TemplateMetadata {
   id: string;
@@ -299,7 +300,7 @@ export const TEMPLATE_METADATA: Record<string, TemplateMetadata> = {
       "Водяной знак PROFORMA",
       "Банковские реквизиты",
       "Условия оплаты",
-      "Условия доставки",
+      "Условия поставки",
     ],
     colors: {
       primary: "#1E40AF",
@@ -337,6 +338,10 @@ export type TemplateCapabilities = {
   terms: boolean;
   generatedAt: boolean;
   paper: "A4" | "thermal";
+  /** Whether the style prints the account's signature and stamp image. */
+  signoff: boolean;
+  /** Document types this style can carry, derived from the document type specs. */
+  documentTypes: string[];
   logo: {
     minWidth: number;
     maxWidth: number;
@@ -355,6 +360,21 @@ const fullCompany = [
   "companyWebsite",
   "companyTagline",
 ];
+/** Styles with a signature block (waybill) or a seller signature (typed documents). */
+export const SIGNOFF_TEMPLATE_IDS: readonly string[] = [
+  "standard",
+  "classic",
+  "minimal",
+  "corporate",
+];
+/** A spec without a layout (the waybill) is carried by every style. */
+function documentTypesFor(id: string): string[] {
+  return Object.entries(DOCUMENT_TYPE_SPECS)
+    .filter(
+      ([, spec]) => !spec.layout || spec.layout.allowedStyles.includes(id),
+    )
+    .map(([type]) => type);
+}
 /** Capabilities describe bindings in the HTML, independently of subscription access. */
 export function getTemplateCapabilities(id: string): TemplateCapabilities {
   if (!Object.prototype.hasOwnProperty.call(TEMPLATE_METADATA, id))
@@ -404,6 +424,8 @@ export function getTemplateCapabilities(id: string): TemplateCapabilities {
       "proforma",
     ].includes(id),
     paper: id === "thermal" ? "thermal" : "A4",
+    signoff: SIGNOFF_TEMPLATE_IDS.includes(id),
+    documentTypes: documentTypesFor(id),
     logo: {
       minWidth: 24,
       maxWidth: id === "thermal" ? 120 : 200,

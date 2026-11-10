@@ -41,10 +41,10 @@ const processingBadges = (page) =>
   page.locator("span.receipt-processing:visible").count();
 
 const generatingToasts = (page) =>
-  page.locator('span:text-is("Generating receipt...")').count();
+  page.locator('span:text-is("Generating document...")').count();
 
 const panelText = async (page) => {
-  const panel = page.locator("div.fixed.right-4.z-50");
+  const panel = page.locator("div.fixed.right-4.pointer-events-none");
   if ((await panel.count()) === 0) return "";
   return (await panel.first().innerText()).replace(/\s+/g, " ").trim();
 };
@@ -84,7 +84,7 @@ export const run = async () => {
         stage: "generating_pdf",
       });
       await waitFor(
-        async () => (await panelText(page)).includes("Generating receipt"),
+        async () => (await panelText(page)).includes("Generating document"),
         { label: "the progress toast" },
       );
 
@@ -107,7 +107,7 @@ export const run = async () => {
       results.check(
         "progress toast leaves the generating state when the receipt completes",
         await settle(
-          async () => !(await panelText(page)).includes("Generating receipt"),
+          async () => !(await panelText(page)).includes("Generating document"),
           { timeoutMs: 4000 },
         ),
         `toast still reads: ${JSON.stringify(await panelText(page))}`,
@@ -187,7 +187,7 @@ export const run = async () => {
       const stillGenerating = await panelText(page);
       results.check(
         "the other order keeps its generating toast",
-        stillGenerating.includes("Generating receipt"),
+        stillGenerating.includes("Generating document"),
         `panel text was ${JSON.stringify(stillGenerating)}`,
       );
     });
@@ -363,6 +363,7 @@ export const run = async () => {
           id: "receipt-1",
           order_id: "order-1",
           number: "R-0001",
+          document_type: "waybill",
           status: "processing",
           progress: 40,
         },
@@ -378,13 +379,13 @@ export const run = async () => {
       });
       await waitFor(
         async () =>
-          (await panelText(page)).includes("Receipt generation failed"),
+          (await panelText(page)).includes("Document generation failed"),
         { label: "the failed card" },
       );
       const dismissDeadline = Date.now() + FAILED_DISMISS_MS;
 
       await page
-        .locator('div.fixed.right-4.z-50 button:text-is("Retry")')
+        .locator('div.fixed.right-4.pointer-events-none button:text-is("Retry")')
         .first()
         .click();
       await waitFor(async () => state.generateRequests.length === 1, {
@@ -480,7 +481,7 @@ export const run = async () => {
       });
       await waitFor(
         async () =>
-          (await panelText(page)).includes("Receipt generation failed"),
+          (await panelText(page)).includes("Document generation failed"),
         { label: "the failed card" },
       );
       releaseHeldLookup();

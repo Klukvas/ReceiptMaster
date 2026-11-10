@@ -15,8 +15,6 @@ interface ConfirmAction {
 }
 
 const RECEIPT_POLL_INTERVAL_MS = 4000;
-// Mirrors the backend cap: creating receipt number 11 retires the oldest one.
-const RECEIPT_RETENTION_LIMIT = 10;
 
 /**
  * Everything a cancel changes on the server: the order, its voided document,
@@ -88,21 +86,16 @@ export const useOrders = () => {
     receiptService.loadPrinters();
   }, []);
 
-  const showReceiptEvictionNotice = () =>
-    toast(t("orders.receiptLimitNotice", { limit: RECEIPT_RETENTION_LIMIT }), {
-      duration: 8000,
-    });
-
-  // A failed lookup must never block the order action itself, so errors count as "no".
-  const countReceipts = () =>
-    receiptsApi
-      .getAll({ limit: 1 })
-      .then((response) => response.data.total)
-      .catch(() => 0);
+  const showReceiptEvictionNotice = (limit: number) =>
+    toast(t("orders.receiptLimitNotice", { limit }), { duration: 8000 });
 
   // Confirming creates receipts on its own when the account setting is on; tell the user
-  // beforehand-known cases where that pushes the oldest receipts out.
-  const willAutoReceiptsEvict = async (newReceipts: number) => {
+  // beforehand-known cases where that pushes the oldest receipts out. Returns the
+  // backend's retention limit when it does, else null. A failed lookup must never block
+  // the order action itself, so errors count as "no".
+  const autoReceiptsEvictionLimit = async (
+    newReceipts: number,
+  ): Promise<number | null> => {
     const autoReceiptsOn = await queryClient
       .fetchQuery({
         queryKey: AUTO_RECEIPT_QUERY_KEY,
@@ -111,8 +104,15 @@ export const useOrders = () => {
         staleTime: 1000 * 60 * 5,
       })
       .catch(() => false);
-    if (!autoReceiptsOn) return false;
-    return (await countReceipts()) + newReceipts > RECEIPT_RETENTION_LIMIT;
+    if (!autoReceiptsOn) return null;
+    const retention = await receiptsApi
+      .getRetention()
+      .then((response) => response.data)
+      .catch(() => null);
+    if (!retention) return null;
+    return retention.count + newReceipts > retention.limit
+      ? retention.limit
+      : null;
   };
 
   const reportActionError = (error: unknown) => {
@@ -124,9 +124,9 @@ export const useOrders = () => {
   // Mutations
   const confirmMutation = useMutation({
     mutationFn: async (id: string) => {
-      const willEvict = await willAutoReceiptsEvict(1);
+      const evictionLimit = await autoReceiptsEvictionLimit(1);
       const confirmed = await orderService.confirmOrder(id);
-      if (willEvict) showReceiptEvictionNotice();
+      if (evictionLimit !== null) showReceiptEvictionNotice(evictionLimit);
       return confirmed;
     },
     onSuccess: () => {
@@ -176,9 +176,9 @@ export const useOrders = () => {
 
   const batchApproveMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      const willEvict = await willAutoReceiptsEvict(orderIds.length);
+      const evictionLimit = await autoReceiptsEvictionLimit(orderIds.length);
       const approved = await orderService.batchApproveOrders(orderIds);
-      if (willEvict) showReceiptEvictionNotice();
+      if (evictionLimit !== null) showReceiptEvictionNotice(evictionLimit);
       return approved;
     },
     onSuccess: ({ approved }) => {

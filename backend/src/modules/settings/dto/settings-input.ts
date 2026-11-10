@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { ApiErrors } from "../../../common/errors/ApiError";
+import {
+  TAX_ID_KINDS,
+  isValidTaxId,
+  isValidVatId,
+} from "../../../common/utils/ua-requisites.util";
 import { TEMPLATE_METADATA } from "../../receipts/templates/metadata";
 
 const text = (max: number) => z.string().max(max);
@@ -20,6 +25,27 @@ const website = text(500).refine((value) => {
     return false;
   }
 }, "Must be an HTTP(S) website");
+
+// Requisites are nullable (null = not specified) and an empty string means the same.
+const requisiteText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => (value === "" ? null : value))
+    .nullable()
+    .optional();
+
+const vatId = z
+  .string()
+  .trim()
+  .transform((value) => (value === "" ? null : value))
+  .nullable()
+  .refine(
+    (value) => value === null || isValidVatId(value),
+    "Must be 10 or 12 digits",
+  )
+  .optional();
 
 export const settingsInput = {
   template: z.object({
@@ -60,11 +86,40 @@ export const settingsInput = {
       companySwift: text(100).optional(),
       companyWebsite: website.optional(),
       companyTagline: text(500).optional(),
+      companyTaxIdKind: z.enum(TAX_ID_KINDS).nullable().optional(),
+      companyLegalForm: requisiteText(64),
+      companyBankName: requisiteText(200),
+      companyVatPayer: z.boolean().nullable().optional(),
+      companyVatId: vatId,
+      companySignatoryName: requisiteText(255),
+      companySignatoryPosition: requisiteText(255),
+      defaultPaymentTermDays: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .nullable()
+        .optional(),
     })
     .refine(
       (value) => Object.values(value).some((field) => field !== undefined),
       "At least one company field is required",
-    ),
+    )
+    .superRefine((value, context) => {
+      // The stored tax id is historical free text, so the format is only enforced when
+      // the caller sends a kind together with a number.
+      const { companyTaxIdKind: kind, companyTaxId: taxId } = value;
+      if (kind && taxId && !isValidTaxId(taxId, kind)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["companyTaxId"],
+          message:
+            kind === "edrpou"
+              ? "ЄДРПОУ must be 8 digits"
+              : "РНОКПП must be 10 digits",
+        });
+      }
+    }),
 };
 
 export function parseSettingsInput<T>(schema: z.ZodType<T>, body: unknown): T {

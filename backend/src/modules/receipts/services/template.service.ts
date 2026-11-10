@@ -11,6 +11,11 @@ import {
 } from "../../../common/utils/document-formatting.util";
 import type { Formatting } from "../../settings/document-config";
 import { PRINT_LAYOUT_CSS } from "../templates/print-layout";
+import {
+  DOCUMENT_PARTIALS,
+  SIGNOFF_PARTIALS,
+} from "../templates/document-blocks";
+import type { DocumentView } from "./document-view";
 
 export interface TemplateData {
   // Company info
@@ -27,6 +32,11 @@ export interface TemplateData {
   logoPath?: string;
   logoStyle?: string;
   logoSlotStyle?: string;
+
+  // Present for invoices and acts only; waybills render without it.
+  document?: DocumentView;
+  /** Fixed heading of a typed document; wins over every title rule below. */
+  documentTitle?: string;
 
   // Receipt info
   receiptTitle: string;
@@ -64,6 +74,8 @@ export interface TemplateData {
   // Footer customization
   footerTitle?: string;
   footerSubtitle?: string;
+  /** Typed documents only: true when nothing would fill the footer. Absent means shown. */
+  footerHidden?: boolean;
 
   // Branded template
   primaryColor?: string;
@@ -103,6 +115,11 @@ export class TemplateService {
   constructor() {
     this.registerHelpers();
     this.handlebars.registerPartial("printLayout", PRINT_LAYOUT_CSS);
+    for (const [name, partial] of Object.entries({
+      ...DOCUMENT_PARTIALS,
+      ...SIGNOFF_PARTIALS,
+    }))
+      this.handlebars.registerPartial(name, partial);
     this.ready = Promise.all([this.loadFonts(), this.loadTranslations()]).then(
       () => undefined,
     );
@@ -334,9 +351,9 @@ export class TemplateService {
       translations,
       fontRegular: data.fontRegular || this.fonts.get("regular") || "",
       fontBold: data.fontBold || this.fonts.get("bold") || "",
-      receiptTitle: hasCustomReceiptTitle
-        ? data.receiptTitle
-        : specialisedTitle,
+      receiptTitle:
+        data.documentTitle ??
+        (hasCustomReceiptTitle ? data.receiptTitle : specialisedTitle),
     });
   }
 

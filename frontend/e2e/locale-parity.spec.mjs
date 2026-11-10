@@ -5,8 +5,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 import { Results } from "./support/runner.mjs";
+import { loadTsModule } from "./support/transpile.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const LOCALES = ["en", "ru", "uk"];
@@ -48,27 +48,13 @@ const listed = (items) =>
     : items.join(", ");
 
 /** The registry's entries, evaluated from the TypeScript source itself. */
-const templateCount = () => {
-  const { outputText } = ts.transpileModule(
-    readFileSync(TEMPLATE_METADATA, "utf8"),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-      },
-    },
-  );
-  const module = { exports: {} };
-  const noRuntimeImports = (id) => {
-    throw new Error(`metadata.ts imports ${id} at runtime; extend this check`);
-  };
-  new Function("module", "exports", "require", outputText)(
-    module,
-    module.exports,
-    noRuntimeImports,
-  );
-  return Object.keys(module.exports.TEMPLATE_METADATA).length;
-};
+const templateCount = () =>
+  Object.keys(
+    // Only the per-template document-type lists read the specs; the count does not.
+    loadTsModule(TEMPLATE_METADATA, {
+      "../document-types": { DOCUMENT_TYPE_SPECS: {} },
+    }).TEMPLATE_METADATA,
+  ).length;
 
 const checkParity = (results, flat) => {
   const reference = new Map(flat.en);

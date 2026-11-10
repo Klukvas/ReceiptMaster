@@ -28,7 +28,10 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
-  /** Last receipt number handed out to this account; see receipt-number.ts. */
+  /**
+   * Last waybill number handed out to this account. Superseded by `document_counters`;
+   * still kept in step by receipt-number.ts for one release.
+   */
   @ApiHideProperty()
   @Column({ type: "integer", default: 0, select: false })
   receipt_counter: number;

@@ -16,6 +16,8 @@ interface ModalProps {
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   showCloseButton?: boolean;
+  /** Where focus goes on close when the opener is gone or was never focusable (a row click). */
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 const sizeClasses = {
@@ -32,6 +34,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = "md",
   showCloseButton = true,
+  returnFocus,
 }) => {
   const { t } = useTranslation();
   return (
@@ -43,6 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
       // Dialog's wrapper defaults to max-w-lg, so the size has to be set there too or
       // "lg"/"xl" modals stay 512px wide and squeeze their content.
       className={sizeClasses[size]}
+      returnFocus={returnFocus}
     >
       <DialogContent
         className={cn(
@@ -57,15 +61,16 @@ export const Modal: React.FC<ModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg p-2 text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+                data-dialog-close
+                className="inline-flex items-center justify-center rounded-lg p-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11 text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
                 aria-label={t("common.close")}
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden />
               </button>
             )}
           </DialogHeader>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="whitespace-normal px-6 py-4 text-start">{children}</div>
       </DialogContent>
     </Dialog>
   );

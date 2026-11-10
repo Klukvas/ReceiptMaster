@@ -45,7 +45,7 @@ export const PrimaryColorPicker = () => {
       setDraft(undefined);
     },
   });
-  if (error) return <SettingsLoadError error={error} retry={refetch} />;
+  if (error) return <SettingsLoadError retry={refetch} />;
   if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />;
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">

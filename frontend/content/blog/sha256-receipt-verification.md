@@ -3,7 +3,7 @@ title: "How SHA256 Protects Your Receipt Integrity"
 slug: "sha256-receipt-verification"
 date: "2026-03-20"
 category: "Technical"
-description: "Learn how receiptmaster uses SHA256 cryptographic hashing to ensure every receipt is tamper-proof and verifiable."
+description: "Learn how receiptmaster uses SHA256 cryptographic hashing to ensure every receipt is verifiable: you can check later that a document has not changed."
 ---
 
 # How SHA256 Protects Your Receipt Integrity
@@ -29,11 +29,11 @@ Two key properties: **deterministic** (same input = same hash) and **collision-r
 
 ## Why This Matters
 
-**Tax Audits** — Authorities need proof that digital invoices haven't been altered. SHA256 provides exactly that.
+**Tax Audits** — Authorities may ask whether a digital document has been altered. A hash lets you show that a stored file is unchanged; it is not a signature and does not replace what your tax rules require.
 
 **Dispute Resolution** — Verify the original receipt matches the stored hash to prove authenticity.
 
-**EU Compliance** — The EN 16931 standard recommends integrity verification for electronic invoices. SHA256 is an accepted method.
+**EU Compliance** — The EN 16931 standard recommends integrity verification for electronic invoices. SHA256 hashing is one of the methods it mentions. A hash alone does not make a document compliant; check what your jurisdiction requires.
 
 ## Verification Flow
 

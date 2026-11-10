@@ -12,6 +12,8 @@ import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ReceiptsService } from "./receipts.service";
 import { ReceiptsController } from "./receipts.controller";
+import { DocumentNumberingController } from "./document-numbering.controller";
+import { DocumentNumberingService } from "./document-numbering.service";
 import { PublicReceiptsController } from "./public-receipts.controller";
 import { PdfTestController } from "./controllers/pdf-test.controller";
 import { PdfGeneratorService } from "./services/pdf-generator.service";
@@ -56,9 +58,11 @@ import { ReceiptsGateway } from "./receipts.gateway";
     DocumentPreviewController,
     PublicReceiptsController,
     PdfTestController,
+    DocumentNumberingController,
   ],
   providers: [
     ReceiptsService,
+    DocumentNumberingService,
     DocumentRenderService,
     ReceiptSnapshotService,
     ReceiptArtifactService,

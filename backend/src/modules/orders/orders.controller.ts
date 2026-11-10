@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  ParseUUIDPipe,
   Delete,
   UseGuards,
   Headers,
@@ -28,6 +29,7 @@ import { PaginatedOrderResponse } from "../../common/dto/paginated-response.dto"
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { BatchOrderIdsDto } from "./dto/batch-orders.dto";
+import { parseOrderListFilters } from "./order-list-filters";
 import { OrderIdsResponse } from "./dto/order-ids-response.dto";
 import {
   DailyRevenueDto,
@@ -42,7 +44,6 @@ import {
 import { JwtAuthGuard } from "../../modules/users/guards/jwt-auth.guard";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { DateRangeDto } from "../../common/dto/date-range.dto";
-import { OrderStatus } from "./entities/order.entity";
 import { Order } from "./entities/order.entity";
 import { User } from "../users/entities/user.entity";
 
@@ -140,23 +141,32 @@ export class OrdersController {
     required: false,
     description: "Only orders containing this product",
   })
+  @ApiResponse({
+    status: 400,
+    description:
+      "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID",
+  })
   findAll(
     @Query() paginationDto: PaginationDto,
     @Query() dateRange: DateRangeDto,
     @Request() req: { user: User },
-    @Query("status") status?: OrderStatus,
+    @Query("status") status?: string,
     @Query("minAmount") minAmount?: string,
     @Query("maxAmount") maxAmount?: string,
     @Query("productId") productId?: string,
   ): Promise<PaginatedResponse<Order>> {
-    const filters = {
-      startDate: dateRange.startDateParsed,
-      endDate: dateRange.endDateParsed,
-      minAmount: minAmount ? parseInt(minAmount) : undefined,
-      maxAmount: maxAmount ? parseInt(maxAmount) : undefined,
+    const filters = parseOrderListFilters(dateRange, {
+      status,
+      minAmount,
+      maxAmount,
       productId,
-    };
-    return this.ordersService.findAll(paginationDto, req.user, status, filters);
+    });
+    return this.ordersService.findAll(
+      paginationDto,
+      req.user,
+      filters.status,
+      filters,
+    );
   }
 
   @Get("ids")
@@ -174,29 +184,42 @@ export class OrdersController {
   @ApiQuery({ name: "minAmount", required: false })
   @ApiQuery({ name: "maxAmount", required: false })
   @ApiQuery({ name: "productId", required: false })
+  @ApiResponse({
+    status: 400,
+    description:
+      "status is not an order status, minAmount or maxAmount is not a whole number of cents from 0 to 2147483647, or productId is not a UUID",
+  })
   findMatchingIds(
     @Query() paginationDto: PaginationDto,
     @Query() dateRange: DateRangeDto,
     @Request() req: { user: User },
-    @Query("status") status?: OrderStatus,
+    @Query("status") status?: string,
     @Query("minAmount") minAmount?: string,
     @Query("maxAmount") maxAmount?: string,
     @Query("productId") productId?: string,
   ): Promise<OrderIdsResponse> {
-    return this.ordersService.findMatchingIds(paginationDto, req.user, status, {
-      startDate: dateRange.startDateParsed,
-      endDate: dateRange.endDateParsed,
-      minAmount: minAmount ? parseInt(minAmount) : undefined,
-      maxAmount: maxAmount ? parseInt(maxAmount) : undefined,
+    const filters = parseOrderListFilters(dateRange, {
+      status,
+      minAmount,
+      maxAmount,
       productId,
     });
+    return this.ordersService.findMatchingIds(
+      paginationDto,
+      req.user,
+      filters.status,
+      filters,
+    );
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get order by ID" })
   @ApiResponse({ status: 200, description: "Order found", type: Order })
   @ApiResponse({ status: 404, description: "Order not found" })
-  findOne(@Param("id") id: string, @Request() req: { user: User }) {
+  findOne(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.ordersService.findOne(id, req.user);
   }
 
@@ -209,7 +232,10 @@ export class OrdersController {
   })
   @ApiResponse({ status: 400, description: "Cannot confirm order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  confirm(@Param("id") id: string, @Request() req: { user: User }) {
+  confirm(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.ordersService.confirm(id, req.user);
   }
 
@@ -223,7 +249,7 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: "Cannot update order" })
   @ApiResponse({ status: 404, description: "Order not found" })
   update(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() updateOrderDto: UpdateOrderDto,
     @Request() req: { user: User },
   ) {
@@ -239,7 +265,10 @@ export class OrdersController {
   })
   @ApiResponse({ status: 400, description: "Cannot cancel order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  cancel(@Param("id") id: string, @Request() req: { user: User }) {
+  cancel(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.ordersService.cancel(id, req.user);
   }
 
@@ -248,7 +277,10 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: "Order successfully deleted" })
   @ApiResponse({ status: 400, description: "Cannot delete order" })
   @ApiResponse({ status: 404, description: "Order not found" })
-  remove(@Param("id") id: string, @Request() req: { user: User }) {
+  remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.ordersService.remove(id, req.user);
   }
 

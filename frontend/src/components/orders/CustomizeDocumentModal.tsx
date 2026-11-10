@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, type Order } from "../../lib/api";
-import { documentError, documentEnvelope } from "../../lib/document-config";
+import { api, type Order, type Receipt } from "../../lib/api";
+import { notifyIssueWarnings } from "../../lib/issue-warnings";
+import { documentEnvelope, type DocumentConfig } from "../../lib/document-config";
+import { localizedDocumentError } from "../../lib/document-error";
+import { isGeneratableType, waybillOf } from "../../lib/document-types";
+import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useDocumentDraft } from "../../hooks/useDocumentDraft";
 import { formatOrderNumber } from "../../lib/order-number";
 import { DocumentEditor } from "../settings/DocumentEditor";
@@ -11,9 +15,12 @@ import { Modal } from "../ui/Modal";
 import { useTranslation } from "../../hooks/useTranslation";
 export function CustomizeDocumentModal({
   order,
+  document,
   onClose,
 }: {
   order: Order;
+  /** The document to replace; the order's waybill when omitted. */
+  document?: Receipt;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -23,7 +30,29 @@ export function CustomizeDocumentModal({
   const [pendingConfirm, setPendingConfirm] = useState<
     "replace" | "discard" | null
   >(null);
-  const active = order.receipts?.find((value) => value.status === "generated");
+  // Only the targeted document is replaced; the order's other documents are not touched.
+  const waybill = document ?? waybillOf(order);
+  const active = waybill?.status === "generated" ? waybill : undefined;
+  const documentType =
+    waybill && isGeneratableType(waybill.document_type)
+      ? waybill.document_type
+      : undefined;
+  const templates = useDocumentTemplates();
+  const draftTemplateId = model.config?.templateId;
+  // The draft starts from the account's design, which may be one the document type
+  // cannot use (thermal for an invoice); switch to one that fits instead of failing later.
+  useEffect(() => {
+    const config = model.config;
+    if (!documentType || !config || !templates.data) return;
+    const current = templates.data.find((item) => item.id === config.templateId);
+    if (!current || current.capabilities.documentTypes.includes(documentType)) return;
+    const fallback = templates.data.find(
+      (item) => !item.locked && item.capabilities.documentTypes.includes(documentType),
+    );
+    if (fallback)
+      model.update({ ...config, templateId: fallback.id as DocumentConfig["templateId"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a changed design or loaded list matters
+  }, [documentType, draftTemplateId, templates.data]);
   const requestCommit = async () => {
     if (model.busy || !model.config) return;
     if (active) setPendingConfirm("replace");
@@ -48,20 +77,21 @@ export function CustomizeDocumentModal({
             }
           : {}),
       };
-      await api.post(
+      const response = await api.post(
         active
           ? `/receipts/${active.id}/regenerate`
           : `/receipts/orders/${order.id}/receipt`,
         documentEnvelope(payload, model.file),
         { headers: { "Content-Type": "multipart/form-data" } },
       );
+      notifyIssueWarnings(response.data);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["orders"] }),
         cache.invalidateQueries({ queryKey: ["receipts"] }),
       ]);
       onClose();
     } catch (error) {
-      model.setError(await documentError(error));
+      model.setError(await localizedDocumentError(error));
     } finally {
       model.setBusy(false);
     }
@@ -75,10 +105,13 @@ export function CustomizeDocumentModal({
         mode: "reproduce",
         expectedActiveRevision: active.active_revision || 0,
       });
-      await cache.invalidateQueries({ queryKey: ["orders"] });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["orders"] }),
+        cache.invalidateQueries({ queryKey: ["receipts"] }),
+      ]);
       onClose();
     } catch (error) {
-      model.setError(await documentError(error));
+      model.setError(await localizedDocumentError(error));
     } finally {
       model.setBusy(false);
     }
@@ -146,6 +179,7 @@ export function CustomizeDocumentModal({
         <DocumentEditor
           model={model}
           documentOnly
+          documentType={documentType}
           onCommit={requestCommit}
           commitLabel={active ? t("document.replaceDocument") : undefined}
         />

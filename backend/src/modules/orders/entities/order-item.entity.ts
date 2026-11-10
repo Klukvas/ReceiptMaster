@@ -17,6 +17,10 @@ import { User } from "../../users/entities/user.entity";
   "CHK_order_items_unit_cost_non_negative",
   `"unit_cost_cents" IS NULL OR "unit_cost_cents" >= 0`,
 )
+@Check(
+  "CHK_order_items_returned_qty_range",
+  `"returned_qty" >= 0 AND "returned_qty" <= "qty"`,
+)
 @Index(["order_id"])
 @Index(["product_id"])
 export class OrderItem {
@@ -47,6 +51,13 @@ export class OrderItem {
   @ApiProperty()
   @Column({ type: "integer" })
   line_total_cents: number;
+
+  @ApiProperty({
+    description:
+      "Quantity already taken back by issued goods return notes (never above qty); a voided return note gives its quantity back",
+  })
+  @Column({ type: "integer", default: 0 })
+  returned_qty: number;
 
   @ApiProperty({
     type: Number,

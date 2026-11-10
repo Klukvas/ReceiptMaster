@@ -16,11 +16,14 @@ export function DocumentPreviewPanel({
   model,
   title,
   defaultOpen = false,
+  isAvailable = true,
 }: {
   model: DocumentDraftModel;
   title?: string;
   /** Open at once whatever the screen: the per-document dialog is about the document itself. */
   defaultOpen?: boolean;
+  /** False when the preview cannot show this document type and would mislead. */
+  isAvailable?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(
@@ -28,10 +31,27 @@ export function DocumentPreviewPanel({
       defaultOpen ||
       (typeof window !== "undefined" && window.matchMedia(WIDE_SCREEN).matches),
   );
-  useAutoPreview(model, open);
+  useAutoPreview(model, open && isAvailable);
+
+  if (!isAvailable)
+    return (
+      <section
+        aria-labelledby="document-preview-title"
+        className="min-w-0 self-start rounded-xl border border-[var(--color-border)] bg-elevated p-4 lg:sticky lg:top-4"
+      >
+        <h3 id="document-preview-title" className="font-semibold text-content">
+          {title ?? t("document.pdfPreview")}
+        </h3>
+        <p role="status" className="my-3 text-sm text-content-tertiary">
+          {t("document.previewUnavailableForType")}
+        </p>
+      </section>
+    );
 
   const status = model.previewPaused
-    ? t("document.previewPaused")
+    ? [t("document.previewPaused"), model.previewPauseReason]
+        .filter(Boolean)
+        .join(" ")
     : model.refreshing
       ? t("document.previewUpdating")
       : model.stale

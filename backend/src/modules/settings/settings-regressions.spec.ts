@@ -153,7 +153,7 @@ describe("settings audit regressions", () => {
     ).toBe("#3B82F6");
   });
   it.each([
-    ["delivery", "Накладная"],
+    ["delivery", "Отгрузочная накладная"],
     ["proforma", "Проформа-инвойс"],
   ])("shows localized automatic %s title", async (templateId, title) => {
     const f = fixture();

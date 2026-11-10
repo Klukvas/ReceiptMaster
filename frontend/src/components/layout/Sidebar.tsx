@@ -10,6 +10,7 @@ import {
   ChevronRight,
   X,
   Truck,
+  FileText,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
@@ -35,6 +36,7 @@ const navigationGroups = [
     items: [
       { nameKey: "navigation.dashboard", href: "/dashboard", icon: Home },
       { nameKey: "navigation.orders", href: "/orders", icon: ShoppingCart },
+      { nameKey: "navigation.documents", href: "/documents", icon: FileText },
       { nameKey: "navigation.recipients", href: "/recipients", icon: Users },
       { nameKey: "navigation.products", href: "/products", icon: Package },
       { nameKey: "navigation.suppliers", href: "/suppliers", icon: Truck },

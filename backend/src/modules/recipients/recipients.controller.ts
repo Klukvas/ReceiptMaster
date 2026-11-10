@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  ParseUUIDPipe,
   Query,
   Delete,
   UseGuards,
@@ -91,7 +92,10 @@ export class RecipientsController {
     type: Recipient,
   })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
-  findOne(@Param("id") id: string, @Request() req: { user: User }) {
+  findOne(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.recipientsService.findOne(id, req.user);
   }
 
@@ -107,7 +111,7 @@ export class RecipientsController {
   })
   @ApiResponse({ status: 404, description: "Получатель не найден" })
   update(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() updateRecipientDto: UpdateRecipientDto,
     @Request() req: { user: User },
   ) {
@@ -122,7 +126,10 @@ export class RecipientsController {
     status: 409,
     description: "Нельзя удалить получателя с заказами, включая удалённые",
   })
-  remove(@Param("id") id: string, @Request() req: { user: User }) {
+  remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Request() req: { user: User },
+  ) {
     return this.recipientsService.remove(id, req.user);
   }
 }

@@ -28,7 +28,6 @@ import { TemplateService } from "../src/modules/receipts/services/template.servi
 import { PlaywrightPdfGenerator } from "../src/modules/receipts/services/playwright-pdf-generator.service";
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
 import { ReceiptOutboxService } from "../src/modules/receipts/receipt-outbox.service";
-import { PdfGeneratorService } from "../src/modules/receipts/services/pdf-generator.service";
 import { LogoStorageService } from "../src/common/services/logo-storage.service";
 import { PdfStorageService } from "../src/common/services/pdf-storage.service";
 import { CacheService } from "../src/common/services/cache.service";
@@ -38,7 +37,10 @@ import { TenantInterceptor } from "../src/common/tenancy/tenant.interceptor";
 import { GlobalExceptionFilter } from "../src/common/filters/GlobalExceptionFilter";
 import { UserSettings } from "../src/modules/settings/entities/user-settings.entity";
 import { DocumentPreset } from "../src/modules/settings/entities/document-preset.entity";
-import { Receipt } from "../src/modules/receipts/entities/receipt.entity";
+import {
+  DocumentType,
+  Receipt,
+} from "../src/modules/receipts/entities/receipt.entity";
 import { Order } from "../src/modules/orders/entities/order.entity";
 import { UserSubscription } from "../src/modules/subscription/entities/user-subscription.entity";
 import { User } from "../src/modules/users/entities/user.entity";
@@ -58,9 +60,32 @@ export class MemoryDatabase {
   rows(entity: Entity): Row[] {
     return this.tables.get(entity.name) || [];
   }
-  private matches(row: Row, filter: Row = {}): boolean {
-    return Object.entries(filter).every(([key, value]) =>
-      value && typeof value === "object" && "_type" in value
+  /** Only the relations the production code filters through are modelled; an unknown
+   * nested filter throws instead of silently matching everything. */
+  private static readonly RELATIONS = new Map<
+    Entity,
+    Record<string, { target: Entity; foreignKey: string }>
+  >([[Receipt, { order: { target: Order, foreignKey: "order_id" } }]]);
+  private matches(row: Row, filter: Row = {}, entity?: Entity): boolean {
+    return Object.entries(filter).every(([key, value]) => {
+      const relation = entity && MemoryDatabase.RELATIONS.get(entity)?.[key];
+      if (
+        value &&
+        typeof value === "object" &&
+        !("_type" in value) &&
+        !(value instanceof Date)
+      ) {
+        if (!relation)
+          throw new Error(`Fixture cannot match nested filter "${key}"`);
+        // Inner-join semantics: a row whose related row is missing never matches.
+        const related = this.rows(relation.target).find(
+          (candidate) => candidate.id === row[relation.foreignKey],
+        );
+        return (
+          !!related && this.matches(related, value as Row, relation.target)
+        );
+      }
+      return value && typeof value === "object" && "_type" in value
         ? value._type === "isNull"
           ? row[key] == null
           : value._type === "moreThan"
@@ -69,8 +94,27 @@ export class MemoryDatabase {
                 new Date(String(value._value)).getTime()
             : value._type === "not"
               ? "_value" in value && row[key] !== value._value
-              : false
-        : row[key] === value,
+              : value._type === "in"
+                ? "_value" in value &&
+                  Array.isArray(value._value) &&
+                  value._value.includes(row[key])
+                : false
+        : row[key] === value;
+    });
+  }
+  /** Understands exactly one raw predicate: "the receipt's order is not soft-deleted". */
+  private matchesRaw(row: Row, sql: string, entity: Entity): boolean {
+    const notDeletedOrder =
+      entity === Receipt &&
+      /EXISTS \(SELECT 1 FROM "orders" "o" WHERE "o"\."id" = "receipts"\."order_id" AND "o"\."deleted_at" IS NULL\)/.test(
+        sql,
+      );
+    if (!notDeletedOrder)
+      throw new Error(`Fixture cannot evaluate raw condition: ${sql}`);
+    return this.matches(
+      row,
+      { order: { deleted_at: { _type: "isNull" } } },
+      entity,
     );
   }
   repository(entity: Entity): Repository<never> {
@@ -78,7 +122,7 @@ export class MemoryDatabase {
       create: (value: Row) => ({ ...value }),
       findOne: async (options: { where?: Row; select?: string[] }) => {
         const row = this.rows(entity).find((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         return row
           ? options.select
@@ -90,7 +134,7 @@ export class MemoryDatabase {
       },
       findOneOrFail: async (options: { where?: Row }) => {
         const row = this.rows(entity).find((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         if (!row) throw new Error("Fixture row not found");
         return this.project(entity, row);
@@ -104,7 +148,7 @@ export class MemoryDatabase {
         } = {},
       ) =>
         this.rows(entity)
-          .filter((value) => this.matches(value, options.where))
+          .filter((value) => this.matches(value, options.where, entity))
           .sort((a, b) => {
             for (const [key, direction] of Object.entries(
               options.order || {},
@@ -131,13 +175,14 @@ export class MemoryDatabase {
           ),
       findAndCount: async (options: { where?: Row } = {}) => {
         const rows = this.rows(entity).filter((value) =>
-          this.matches(value, options.where),
+          this.matches(value, options.where, entity),
         );
         return [rows.map((value) => this.project(entity, value)), rows.length];
       },
       count: async (options: { where?: Row } = {}) =>
-        this.rows(entity).filter((value) => this.matches(value, options.where))
-          .length,
+        this.rows(entity).filter((value) =>
+          this.matches(value, options.where, entity),
+        ).length,
       save: async (value: Row) => {
         const id = value.id || randomUUID(),
           now = new Date();
@@ -146,6 +191,9 @@ export class MemoryDatabase {
           createdAt: now,
           active_revision: 0,
           document_config_revision: 0,
+          ...(entity === Receipt
+            ? { document_type: DocumentType.WAYBILL }
+            : {}),
           ...value,
           id,
           updated_at: now,
@@ -159,12 +207,12 @@ export class MemoryDatabase {
       },
       update: async (filter: Row, patch: Row) => {
         const found = this.rows(entity).filter((value) =>
-          this.matches(value, filter),
+          this.matches(value, filter, entity),
         );
         this.tables.set(
           entity.name,
           this.rows(entity).map((row) =>
-            this.matches(row, filter)
+            this.matches(row, filter, entity)
               ? { ...row, ...structuredClone(patch) }
               : row,
           ),
@@ -178,18 +226,54 @@ export class MemoryDatabase {
           this.rows(entity).filter((row) =>
             Array.isArray(filter)
               ? !filter.includes(String(row.id))
-              : !this.matches(row, filter),
+              : !this.matches(row, filter, entity),
           ),
         );
         this.writes.push(`delete:${entity.name}`);
       },
       createQueryBuilder: () => {
         let params: Row = {};
+        let patch: Row | null = null;
+        let filter: Row = {};
+        let isUpdate = false;
+        const rawConditions: string[] = [];
         const qb = {
           addSelect: () => qb,
-          where: (_sql: string, values: Row) => {
-            params = values;
+          update: () => {
+            isUpdate = true;
             return qb;
+          },
+          set: (value: Row) => {
+            patch = value;
+            return qb;
+          },
+          where: (condition: string | Row, values?: Row) => {
+            if (typeof condition === "string") params = values || {};
+            else filter = { ...filter, ...condition };
+            return qb;
+          },
+          andWhere: (sql: string) => {
+            rawConditions.push(sql);
+            return qb;
+          },
+          execute: async () => {
+            if (!isUpdate || !patch)
+              throw new Error("Fixture query builder only executes UPDATE");
+            const applied = patch;
+            const targets = this.rows(entity).filter(
+              (row) =>
+                this.matches(row, filter, entity) &&
+                rawConditions.every((sql) => this.matchesRaw(row, sql, entity)),
+            );
+            const ids = new Set(targets.map((row) => row.id));
+            this.tables.set(
+              entity.name,
+              this.rows(entity).map((row) =>
+                ids.has(row.id) ? { ...row, ...structuredClone(applied) } : row,
+              ),
+            );
+            this.writes.push(`update:${entity.name}`);
+            return { affected: targets.length, raw: [], generatedMaps: [] };
           },
           getOne: async () => {
             const row = this.rows(entity).find(
@@ -237,6 +321,8 @@ export class MemoryDatabase {
       this.repository(entity).find(options as never),
     count: (entity: Entity, options: { where?: Row }) =>
       this.repository(entity).count(options as never),
+    exists: async (entity: Entity, options: { where?: Row }) =>
+      (await this.repository(entity).count(options as never)) > 0,
     save: (entity: Entity, value: Row) =>
       this.repository(entity).save(value as never),
     update: (entity: Entity, filter: Row, value: Row) =>
@@ -245,8 +331,7 @@ export class MemoryDatabase {
       this.repository(entity).delete(filter as never),
     query: async (sql: string, params: unknown[] = []) => {
       this.queries.push(sql);
-      if (/receipt_counter/.test(sql))
-        return [{ receipt_counter: ++this.counter }];
+      if (/document_counters/.test(sql)) return [{ value: ++this.counter }];
       const userId = String(params[0]);
       const logoUsed = (id: unknown) =>
         this.rows(UserSettings).some(
@@ -405,12 +490,9 @@ export async function createTemplateFixture(
   } as unknown as ReceiptOutboxService;
   const receipts = new ReceiptsService(
     db.getRepository(Receipt),
-    db.getRepository(Order),
-    {} as PdfGeneratorService,
     pdfs,
     db,
     config,
-    settings,
     outbox,
     snapshots,
     artifacts,

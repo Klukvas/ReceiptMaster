@@ -1,15 +1,27 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource, IsNull, Not } from "typeorm";
+import { DataSource, EntityManager, IsNull, Not } from "typeorm";
 import { createHash, randomUUID } from "crypto";
-import { Receipt, ReceiptStatus } from "../entities/receipt.entity";
-import { Order, OrderStatus } from "../../orders/entities/order.entity";
+import {
+  DocumentType,
+  Receipt,
+  ReceiptStatus,
+} from "../entities/receipt.entity";
+import { updateReceiptOnFailure } from "../receipt-failure";
+import {
+  DOCUMENTS_RETAINED_PER_TYPE,
+  isRetentionExempt,
+} from "../document-retention";
+import { specFor } from "../document-types";
+import { isLockingDocumentType, syncOrderLock } from "../order-lock";
+import { Order } from "../../orders/entities/order.entity";
 import { DocumentRenderService } from "./document-render.service";
 import { DocumentArtifactsService } from "./document-artifacts.service";
 import { ReceiptSnapshotService } from "./receipt-snapshot.service";
 
 @Injectable()
 export class ReceiptArtifactService {
+  private readonly logger = new Logger(ReceiptArtifactService.name);
   constructor(
     @InjectDataSource() private readonly db: DataSource,
     private readonly snapshots: ReceiptSnapshotService,
@@ -79,8 +91,12 @@ export class ReceiptArtifactService {
       });
       if (
         !order ||
-        order.status !== OrderStatus.CONFIRMED ||
-        (receipt.status === ReceiptStatus.GENERATED && !order.is_locked)
+        !specFor(receipt.document_type).allowedOrderStatuses.includes(
+          order.status,
+        ) ||
+        (receipt.status === ReceiptStatus.GENERATED &&
+          isLockingDocumentType(receipt.document_type) &&
+          !order.is_locked)
       )
         return null;
       await manager.findOne(Receipt, {
@@ -130,36 +146,13 @@ export class ReceiptArtifactService {
         },
       );
       if (!updated.affected) return null;
-      if (current.status === ReceiptStatus.PROCESSING) {
-        const total = await manager.count(Receipt, {
-          where: { user_id: userId, status: ReceiptStatus.GENERATED },
-        });
-        if (total > 10) {
-          const oldest = await manager.find(Receipt, {
-            where: {
-              user_id: userId,
-              status: ReceiptStatus.GENERATED,
-              id: Not(id),
-            },
-            select: [
-              "id",
-              "user_id",
-              "pdf_path",
-              "active_logo_asset_id",
-              "pending_logo_asset_id",
-            ],
-            order: { created_at: "ASC", id: "ASC" },
-            take: total - 10,
-          });
-          const locked = await this.lockRetirements(oldest, userId, manager);
-          for (const old of locked) await this.retire(old, manager);
-          for (const old of locked)
-            await manager.delete(Receipt, {
-              id: old.id,
-              user_id: userId,
-              status: ReceiptStatus.GENERATED,
-            });
-        }
+      // Eviction happens here, at a successful first promotion, never when a row is created:
+      // a generation that fails must not cost an older document its place.
+      if (
+        current.status === ReceiptStatus.PROCESSING &&
+        !isRetentionExempt(current.document_type)
+      ) {
+        await this.evictOverCap(manager, userId, current.document_type, id);
       }
       await this.leases.retire(userId, current.pdf_path, manager);
       if (receipt.active_logo_asset_id !== receipt.pending_logo_asset_id)
@@ -168,14 +161,76 @@ export class ReceiptArtifactService {
           receipt.active_logo_asset_id,
           manager,
         );
-      await manager.update(
-        Order,
-        { id: receipt.order_id, user_id: userId },
-        { is_locked: true },
-      );
+      if (isLockingDocumentType(current.document_type))
+        await manager.update(
+          Order,
+          { id: receipt.order_id, user_id: userId },
+          { is_locked: true },
+        );
       return manager.findOneOrFail(Receipt, { where: { id, user_id: userId } });
     });
   }
+  /**
+   * Brings the type back to the cap after a promotion: the oldest generated documents of the
+   * type (never the one just promoted) are retired and deleted, rows locked in a stable order
+   * before any PDF or logo lease. The caller has excluded the types that are never evicted.
+   */
+  async evictOverCap(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+  ): Promise<void> {
+    const total = await manager.count(Receipt, {
+      where: {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+      },
+    });
+    if (total <= DOCUMENTS_RETAINED_PER_TYPE) return;
+    const oldest = await manager.find(Receipt, {
+      where: {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+        id: Not(promotedId),
+      },
+      select: [
+        "id",
+        "user_id",
+        "order_id",
+        "pdf_path",
+        "active_logo_asset_id",
+        "pending_logo_asset_id",
+      ],
+      order: { created_at: "ASC", id: "ASC" },
+      take: total - DOCUMENTS_RETAINED_PER_TYPE,
+    });
+    // An evicted locking document may have been the last one holding its order locked.
+    // The orders are locked first, in id order and before any receipt of theirs, so the
+    // lock-flag recount below sees a stable set of documents.
+    const orderIds = isLockingDocumentType(type)
+      ? [...new Set(oldest.map((row) => row.order_id))].sort()
+      : [];
+    for (const orderId of orderIds)
+      await manager.findOne(Order, {
+        where: { id: orderId, user_id: userId },
+        select: ["id"],
+        lock: { mode: "pessimistic_write" },
+      });
+    const locked = await this.lockRetirements(oldest, userId, manager);
+    for (const old of locked) await this.retire(old, manager);
+    for (const old of locked)
+      await manager.delete(Receipt, {
+        id: old.id,
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+      });
+    for (const orderId of orderIds)
+      await syncOrderLock(manager, orderId, userId);
+  }
+
   private matches(receipt: Receipt, generationId: string): boolean {
     return (
       receipt.generation_id === generationId &&
@@ -196,9 +251,11 @@ export class ReceiptArtifactService {
       receipt.generation_id === generationId &&
       receipt.status === ReceiptStatus.PROCESSING &&
       !receipt.pending_id
-    ) {
-      const result = await this.db.manager.update(
-        Receipt,
+    )
+      return updateReceiptOnFailure(
+        this.db,
+        this.logger,
+        receipt,
         {
           id,
           user_id: userId,
@@ -211,8 +268,6 @@ export class ReceiptArtifactService {
             "Frozen candidate missing. Explicit reconstruction is required.",
         },
       );
-      return Boolean(result.affected);
-    }
     if (!this.matches(receipt, generationId)) return false;
     const change =
       receipt.status === ReceiptStatus.GENERATED
@@ -226,8 +281,10 @@ export class ReceiptArtifactService {
             error_message:
               "Generation failed. Retry uses the frozen candidate.",
           };
-    const result = await this.db.manager.update(
-      Receipt,
+    return updateReceiptOnFailure(
+      this.db,
+      this.logger,
+      receipt,
       {
         id,
         user_id: userId,
@@ -237,7 +294,6 @@ export class ReceiptArtifactService {
       },
       change,
     );
-    return Boolean(result.affected);
   }
   /** Select oldest eligible candidates first, then lock/refetch all IDs in stable order
    * before touching any lease/logo. Never retire a pre-lock pointer after repair. */
@@ -298,7 +354,13 @@ export class ReceiptArtifactService {
         where: { id: receipt.order_id, user_id: userId },
         lock: { mode: "pessimistic_write" },
       });
-      if (!order || order.status !== OrderStatus.CONFIRMED || !order.is_locked)
+      if (
+        !order ||
+        !specFor(receipt.document_type).allowedOrderStatuses.includes(
+          order.status,
+        ) ||
+        (isLockingDocumentType(receipt.document_type) && !order.is_locked)
+      )
         return false;
       // Receipt before either new or retired lease, matching eviction/promotion.
       await manager.findOne(Receipt, {

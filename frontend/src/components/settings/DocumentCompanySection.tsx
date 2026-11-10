@@ -3,8 +3,14 @@ import {
   type DocumentTemplate,
 } from "../../lib/document-config";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  HIGHLIGHT_CLASS,
+  useHighlightedFields,
+} from "../../hooks/useHighlightedFields";
+import { requisiteFieldId } from "../../lib/document-requisites";
 import { Disclosure } from "../ui/Disclosure";
 import { Input } from "../ui/Input";
+import { CompanyFieldNote } from "./CompanyFieldNote";
 import { CheckField, DocumentSection, FieldHint } from "./document-ui";
 
 type Company = DocumentConfig["company"];
@@ -30,6 +36,13 @@ const CUSTOMER_FIELDS = [
   "recipientAddress",
 ] as const satisfies ReadonlyArray<keyof Visibility>;
 
+/** Company inputs that double as seller requisites of invoices and acts. */
+const SELLER_FIELD_KEY: Partial<Record<CompanyField, string>> = {
+  companyName: "seller.name",
+  companyTaxId: "seller.taxId",
+  companyIban: "seller.iban",
+};
+
 const maxLength = (field: CompanyField): number =>
   field === "companyName"
     ? 200
@@ -50,6 +63,7 @@ export function DocumentCompanySection({
   template?: DocumentTemplate;
 }) {
   const { t } = useTranslation();
+  const highlighted = useHighlightedFields(true);
   const caps = template?.capabilities;
   const setCompany = (field: CompanyField, value: string) =>
     onChange({ ...config, company: { ...config.company, [field]: value } });
@@ -67,9 +81,16 @@ export function DocumentCompanySection({
     const label = t(`settings.${name}`);
     const supported = caps ? caps.companyFields.includes(name) : undefined;
     const toggle = name in config.visibility;
+    const sellerKey = SELLER_FIELD_KEY[name];
     return (
       <div key={name} className="space-y-1">
         <Input
+          id={sellerKey && requisiteFieldId(sellerKey)}
+          className={
+            sellerKey && highlighted.has(sellerKey)
+              ? HIGHLIGHT_CLASS
+              : undefined
+          }
           label={label}
           value={config.company[name]}
           placeholder={t(`settings.${name}Placeholder`, "")}
@@ -77,6 +98,7 @@ export function DocumentCompanySection({
           maxLength={maxLength(name)}
           onChange={(event) => setCompany(name, event.target.value)}
         />
+        <CompanyFieldNote field={name} value={config.company[name]} />
         {toggle && (
           <CheckField
             label={t("document.showOnDocument")}
@@ -90,7 +112,11 @@ export function DocumentCompanySection({
     );
   };
 
-  const hasBankDetails = BANK_FIELDS.some((name) => config.company[name]);
+  // A link that points at a bank requisite must land on a visible field.
+  const hasBankDetails = BANK_FIELDS.some(
+    (name) =>
+      config.company[name] || highlighted.has(SELLER_FIELD_KEY[name] ?? ""),
+  );
 
   return (
     <>

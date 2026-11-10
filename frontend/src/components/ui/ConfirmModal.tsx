@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
@@ -15,6 +16,10 @@ interface ConfirmModalProps {
   dismissLabel?: string;
   variant?: "danger" | "warning" | "default";
   isLoading?: boolean;
+  /** The action can no longer succeed (e.g. the server refused it for good); Cancel stays active. */
+  confirmDisabled?: boolean;
+  /** Extra content under the message, e.g. a field the confirmation collects. */
+  children?: ReactNode;
   /** Failure of the last confirm attempt; the buttons stay usable so it can be retried. */
   errorMessage?: string | null;
 }
@@ -30,6 +35,8 @@ export const ConfirmModal = ({
   dismissLabel,
   variant = "danger",
   isLoading = false,
+  confirmDisabled = false,
+  children,
   errorMessage,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
@@ -64,6 +71,7 @@ export const ConfirmModal = ({
               {itemName}
             </p>
           )}
+          {children}
         </div>
       </div>
       {errorMessage && (
@@ -75,13 +83,14 @@ export const ConfirmModal = ({
         </p>
       )}
       <div className="flex justify-end gap-3 mt-6">
-        <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+        <Button variant="secondary" onClick={onClose} disabled={isLoading} softDisabled>
           {dismissLabel ?? t("common.cancel")}
         </Button>
         <Button
           variant={buttonVariant}
           onClick={onConfirm}
-          disabled={isLoading}
+          disabled={isLoading || confirmDisabled}
+          softDisabled
           className={
             buttonVariant === "danger"
               ? "border border-danger-base"

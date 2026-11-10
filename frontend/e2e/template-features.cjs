@@ -60,21 +60,21 @@ async function check(name, operation) {
         assert.match(await page.getByText(/^Example:/).innerText(), /2026/);
       },
     );
-    await field("Receipt Title").fill("");
+    await field("Document Title").fill("");
     await tab("Save changes");
     await check(
       "blank custom title is required without losing the draft",
       async () => {
         assert.equal(
-          await field("Receipt Title").evaluate(
+          await field("Document Title").evaluate(
             (el) => el.validity.valueMissing,
           ),
           true,
         );
-        assert.equal(await field("Receipt Title").inputValue(), "");
+        assert.equal(await field("Document Title").inputValue(), "");
       },
     );
-    await field("Receipt Title").fill("   ");
+    await field("Document Title").fill("   ");
     await tab("Update now");
     await check(
       "whitespace custom title shows friendly validation and retains draft",
@@ -83,14 +83,14 @@ async function check(name, operation) {
           .getByRole("alert")
           .filter({ hasText: "Enter a title" })
           .waitFor();
-        assert.equal(await field("Receipt Title").inputValue(), "   ");
+        assert.equal(await field("Document Title").inputValue(), "   ");
         assert.equal(
           (await state()).defaults.config.title.text,
           "Saved invoice",
         );
       },
     );
-    await field("Receipt Title").fill("Invoice");
+    await field("Document Title").fill("Invoice");
     await tab("Discard changes");
     await page.evaluate(() =>
       history.pushState(
@@ -119,7 +119,8 @@ async function check(name, operation) {
       "contextual warning preserves unsupported Proforma terms in Branded",
       async () => {
         assert.match(
-          await page.locator("form").innerText(),
+          // The design editor; numbering rows below it are forms of their own.
+          await page.locator("form").first().innerText(),
           /does not print terms/,
         );
         assert.equal(
@@ -133,7 +134,8 @@ async function check(name, operation) {
     })
       .png()
       .toBuffer();
-    await page.locator('input[type="file"]').setInputFiles({
+    // The logo input of the design editor, not the signature/stamp uploads further down.
+    await page.locator("form").first().locator('input[type="file"]').setInputFiles({
       name: "staged-logo.png",
       mimeType: "image/png",
       buffer: png,

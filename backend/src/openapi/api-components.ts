@@ -11,10 +11,14 @@ import {
 } from "../modules/settings/document-config";
 import { settingsInput } from "../modules/settings/dto/settings-input";
 import {
+  documentGenerationSchema,
   previewSchema,
   regenerationSchema,
 } from "../modules/receipts/document-schemas";
-import { ReceiptStatus } from "../modules/receipts/entities/receipt.entity";
+import {
+  DocumentType,
+  ReceiptStatus,
+} from "../modules/receipts/entities/receipt.entity";
 import { TEMPLATE_METADATA } from "../modules/receipts/templates/metadata";
 import type { SharedSchemaName } from "./api-docs.decorators";
 import { OpenApiSchema, zodComponents } from "./zod-openapi";
@@ -46,6 +50,7 @@ const preset = z.object({
 export const receiptProjectionSchema = z.object({
   id: z.string().uuid(),
   order_id: z.string().uuid(),
+  document_type: z.nativeEnum(DocumentType),
   number: z.string(),
   pdf_url: z.string().nullable(),
   hash: z.string().nullable(),
@@ -63,10 +68,102 @@ export const receiptProjectionSchema = z.object({
   replacement_error: z.string().nullable(),
 });
 
+/** Mirrors `issuedDocument()`: the projection plus the optional issue-time warnings. */
+export const receiptIssueResultSchema = receiptProjectionSchema.extend({
+  warnings: z
+    .array(
+      z.object({
+        code: z.literal("SIGNOFF_UNAVAILABLE"),
+        kinds: z.array(z.enum(["signature", "stamp"])).min(1),
+        message: z.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Present only when something is missing from the issued document: SIGNOFF_UNAVAILABLE means the signature or stamp image set on the account could not be read, so the document was issued without it",
+    ),
+});
+
+/** Mirrors `documentListItem()`: the projection plus the order the document belongs to. */
+export const documentListItemSchema = receiptProjectionSchema.extend({
+  order: z
+    .object({
+      id: z.string().uuid(),
+      order_number: z.number().int(),
+      status: z.enum(["draft", "confirmed", "cancelled"]),
+      recipient_name: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+export const numberingSettingSchema = z.object({
+  documentType: z.nativeEnum(DocumentType),
+  prefix: z.string().max(16),
+  padding: z.number().int().min(1).max(9),
+  includeYear: z.boolean(),
+  resetEveryYear: z
+    .boolean()
+    .describe(
+      "The counter restarts every calendar year; nextValue and minStart then describe the current year",
+    ),
+  nextValue: z.number().int().min(1),
+  minStart: z.number().int().min(1),
+  nextNumber: z.string(),
+});
+
+/** Documentation twin of `UpdateNumberingDto`; a unit test keeps the limits in step. */
+export const numberingUpdateRequestSchema = z.object({
+  prefix: z
+    .string()
+    .max(16)
+    .describe(
+      'Letters, digits and . _ - space; may not end with a digit or contain / \\ "',
+    ),
+  padding: z.number().int().min(1).max(9),
+  includeYear: z.boolean(),
+  resetEveryYear: z
+    .boolean()
+    .optional()
+    .describe(
+      "Restart the counter every calendar year (in the document time zone); requires includeYear. Omitted keeps the saved value (default false). A new year starts at the saved start number, or after the numbers already issued that year",
+    ),
+  startNumber: z
+    .number()
+    .int()
+    .min(1)
+    .max(2_000_000_000)
+    .optional()
+    .describe(
+      "Raises the counter so the next number is this one; never lowers it",
+    ),
+});
+
+export const signoffImageSchema = z.object({
+  assetId: z.string().uuid(),
+  width: z.number().int(),
+  height: z.number().int(),
+  bytes: z.number().int(),
+  updatedAt: z.string().datetime(),
+});
+
+export const signoffStateSchema = z.object({
+  signature: signoffImageSchema.nullable(),
+  stamp: signoffImageSchema.nullable(),
+});
+
 export const SHARED_SCHEMAS = {
   ApiErrorResponse: z.object({
     error: z.union([z.string(), z.array(z.string())]),
     errorCode: z.string(),
+    // DOCUMENT_REQUISITES_MISSING: what blocks generation, and what is only advisory.
+    fields: z.array(z.string()).optional(),
+    warnings: z.array(z.string()).optional(),
+    // NUMBERING_START_TOO_LOW: the lowest start number that is still allowed.
+    minStart: z.number().int().optional(),
+    // INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: the request key at fault and both dates (YYYY-MM-DD).
+    field: z.string().optional(),
+    dueDate: z.string().optional(),
+    issueDate: z.string().optional(),
   }),
   MessageResponse: z.object({ message: z.string() }),
   DocumentConfig: documentConfigSchema,
@@ -77,6 +174,7 @@ export const SHARED_SCHEMAS = {
   DocumentPresetUpdateRequest: presetUpdateSchema,
   DocumentRevisionRequest: revisionSchema,
   DocumentSelectionRequest: selectionSchema,
+  DocumentGenerationRequest: documentGenerationSchema,
   ReceiptRegenerationRequest: regenerationSchema,
   DocumentPreviewRequest: previewSchema,
   DocumentConfigVersion: configVersion,
@@ -87,8 +185,17 @@ export const SHARED_SCHEMAS = {
   DocumentPresetResponse: data(preset),
   DocumentPresetDeletedResponse: data(z.object({ deleted: z.literal(true) })),
   ReceiptProjection: receiptProjectionSchema,
+  ReceiptIssueResult: receiptIssueResultSchema,
+  DocumentListItem: documentListItemSchema,
+  NumberingSetting: numberingSettingSchema,
+  NumberingSettingsResponse: z.object({
+    types: z.array(numberingSettingSchema),
+  }),
+  NumberingUpdateRequest: numberingUpdateRequestSchema,
+  SignoffImage: signoffImageSchema,
+  SignoffState: signoffStateSchema,
   ReceiptListResponse: z.object({
-    data: z.array(receiptProjectionSchema),
+    data: z.array(documentListItemSchema),
     total: z.number().int(),
     offset: z.number().int(),
     limit: z.number().int(),

@@ -8,12 +8,22 @@ import { DataSource, EntityManager } from "typeorm";
 import { createHash, randomUUID } from "crypto";
 import sharp = require("sharp");
 import { LogoStorageService } from "../../../common/services/logo-storage.service";
+import {
+  SignoffKind,
+  normalizeSignoffImage,
+} from "../../../common/services/signoff-image";
 import { DocumentAsset } from "../entities/document-asset.entity";
 import { UserSettings } from "../entities/user-settings.entity";
-import { STORAGE_GRACE_MS, STORAGE_BATCH } from "./document-storage-sweep";
+import {
+  SIGNOFF_RELEASE_GRACE_MS,
+  STORAGE_GRACE_MS,
+  STORAGE_BATCH,
+  scheduleStorageSweep,
+} from "./document-storage-sweep";
 import { DocumentDraft } from "../document-config";
 
 import {
+  abandonUpload,
   reserveUpload,
   settleUpload,
   collectClaim,
@@ -36,14 +46,58 @@ export class DocumentAssetsService {
     assetId: string,
     manager = this.db.manager,
     lock = false,
+    kind: DocumentAsset["kind"] = "logo",
   ): Promise<DocumentAsset> {
+    // The kind is part of the lookup: a logo pointer can never resolve to a signature.
     const asset = await manager.findOne(DocumentAsset, {
-      where: { id: assetId, user_id: userId },
+      where: { id: assetId, user_id: userId, kind },
       ...(lock ? { lock: { mode: "pessimistic_write" as const } } : {}),
     });
     if (!asset || asset.state !== "ready")
-      throw new NotFoundException("Logo asset not available");
+      throw new NotFoundException(
+        kind === "logo" ? "Logo asset not available" : `No such ${kind} image`,
+      );
     return asset;
+  }
+
+  /** The stored, integrity-checked PNG of a signature or stamp. */
+  async readSignoff(
+    userId: string,
+    assetId: string,
+    kind: SignoffKind,
+  ): Promise<Buffer> {
+    const asset = await this.owned(
+      userId,
+      assetId,
+      this.db.manager,
+      false,
+      kind,
+    );
+    const bytes = await this.storage.readImmutable(
+      asset.object_key,
+      userId,
+      "signoffs",
+    );
+    if (createHash("sha256").update(bytes).digest("hex") !== asset.sha256)
+      throw new ConflictException("Image integrity check failed");
+    return bytes;
+  }
+
+  /**
+   * Normalizes and uploads a signature or stamp as a new, still unreferenced asset.
+   * Runs outside any transaction (storage I/O); the caller attaches it afterwards.
+   */
+  async stageSignoff(
+    userId: string,
+    kind: SignoffKind,
+    file: Express.Multer.File,
+  ): Promise<DocumentAsset> {
+    const { png } = await normalizeSignoffImage(
+      file.buffer,
+      file.mimetype,
+      kind,
+    );
+    return this.upload(userId, png, kind);
   }
 
   async read(userId: string, assetId: string): Promise<Buffer> {
@@ -89,12 +143,23 @@ export class DocumentAssetsService {
         ? await this.normalize(file)
         : await this.preview(userId, draft);
     if (!bytes) return null;
+    return (await this.upload(userId, bytes, "logo")).id;
+  }
+
+  /** Lease cycle shared by every kind: reserve, upload, settle (see document-storage-cleanup). */
+  private async upload(
+    userId: string,
+    bytes: Buffer,
+    kind: DocumentAsset["kind"],
+  ): Promise<DocumentAsset> {
     const id = randomUUID();
+    const prefix = kind === "logo" ? "logos" : "signoffs";
     const meta = await sharp(bytes).metadata();
     const asset = this.db.manager.create(DocumentAsset, {
       id,
       user_id: userId,
-      object_key: `logos/${userId}/${id}.png`,
+      kind,
+      object_key: `${prefix}/${userId}/${id}.png`,
       sha256: createHash("sha256").update(bytes).digest("hex"),
       bytes: bytes.length,
       width: meta.width,
@@ -110,34 +175,54 @@ export class DocumentAssetsService {
       await manager.save(DocumentAsset, asset);
     });
     // Rejection can mean a remote PUT is still in flight; retain upload_pending intent.
-    await this.storage.uploadImmutable(bytes, userId, id);
+    try {
+      await this.storage.uploadImmutable(bytes, userId, id, prefix);
+    } catch (error) {
+      await abandonUpload(this.db, DocumentAsset, asset);
+      throw error;
+    }
     const ready = await settleUpload(this.db, DocumentAsset, asset);
-    if (!ready) throw new ConflictException("Logo upload lease expired");
-    return id;
+    if (!ready) throw new ConflictException("Image upload lease expired");
+    return asset;
   }
 
   async attach(
     userId: string,
     assetId: string | null,
     manager: EntityManager,
+    kind: DocumentAsset["kind"] = "logo",
   ): Promise<void> {
     if (assetId) {
-      await this.owned(userId, assetId, manager, true);
+      await this.owned(userId, assetId, manager, true, kind);
       await this.release(userId, assetId, manager);
     }
   }
 
+  /**
+   * Starts the cleanup grace of an asset (the collector still skips it while anything
+   * references it). A logo keeps 24 hours: presets and documents may point at it. A
+   * signature or stamp gets a short grace and an early sweep, because issued documents
+   * carry its bytes and nothing else reads a released one.
+   */
   async release(
     userId: string,
     assetId: string | null,
     manager: EntityManager,
   ): Promise<void> {
-    if (assetId)
-      await manager.update(
-        DocumentAsset,
-        { id: assetId, user_id: userId, state: "ready" },
-        { lease_expires_at: new Date(Date.now() + 86400000) },
-      );
+    if (!assetId) return;
+    const asset = await manager.findOne(DocumentAsset, {
+      where: { id: assetId, user_id: userId },
+      select: ["id", "kind"],
+    });
+    if (!asset) return;
+    const isSignoff = asset.kind === "signature" || asset.kind === "stamp";
+    const graceMs = isSignoff ? SIGNOFF_RELEASE_GRACE_MS : STORAGE_GRACE_MS;
+    await manager.update(
+      DocumentAsset,
+      { id: assetId, user_id: userId, state: "ready" },
+      { lease_expires_at: new Date(Date.now() + graceMs) },
+    );
+    if (isSignoff) await scheduleStorageSweep(manager, userId, graceMs);
   }
 
   /** Called by scheduled tenant maintenance; no eager deletes after ambiguous commits. */
@@ -145,13 +230,13 @@ export class DocumentAssetsService {
     const claimed: DocumentAsset[] = await this.db.transaction(
       async (manager) => {
         const assets: DocumentAsset[] = await manager.query(
-          `SELECT a.* FROM document_assets a WHERE a.user_id=$1 AND a.lease_expires_at < now() AND NOT EXISTS (SELECT 1 FROM user_settings s WHERE s."userId"=$1::text AND s.logo_asset_id=a.id) AND NOT EXISTS (SELECT 1 FROM document_presets p WHERE p.user_id=$1 AND p.logo_asset_id=a.id) AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.user_id=$1 AND (r.active_logo_asset_id=a.id OR r.pending_logo_asset_id=a.id)) ORDER BY a.lease_expires_at,a.id LIMIT ${STORAGE_BATCH} FOR UPDATE OF a SKIP LOCKED`,
+          `SELECT a.* FROM document_assets a WHERE a.user_id=$1 AND a.lease_expires_at < now() AND NOT EXISTS (SELECT 1 FROM user_settings s WHERE s."userId"=$1::text AND (s.logo_asset_id=a.id OR s.signature_asset_id=a.id OR s.stamp_asset_id=a.id)) AND NOT EXISTS (SELECT 1 FROM document_presets p WHERE p.user_id=$1 AND p.logo_asset_id=a.id) AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.user_id=$1 AND (r.active_logo_asset_id=a.id OR r.pending_logo_asset_id=a.id)) ORDER BY a.lease_expires_at,a.id LIMIT ${STORAGE_BATCH} FOR UPDATE OF a SKIP LOCKED`,
           [userId],
         );
         const confirmed: DocumentAsset[] = [];
         for (const asset of assets) {
           const references: Array<{ used: boolean }> = await manager.query(
-            `SELECT EXISTS(SELECT 1 FROM user_settings WHERE "userId"=$1::text AND logo_asset_id=$2 UNION ALL SELECT 1 FROM document_presets WHERE user_id=$1::uuid AND logo_asset_id=$2 UNION ALL SELECT 1 FROM receipts WHERE user_id=$1::uuid AND (active_logo_asset_id=$2 OR pending_logo_asset_id=$2)) AS used`,
+            `SELECT EXISTS(SELECT 1 FROM user_settings WHERE "userId"=$1::text AND (logo_asset_id=$2 OR signature_asset_id=$2 OR stamp_asset_id=$2) UNION ALL SELECT 1 FROM document_presets WHERE user_id=$1::uuid AND logo_asset_id=$2 UNION ALL SELECT 1 FROM receipts WHERE user_id=$1::uuid AND (active_logo_asset_id=$2 OR pending_logo_asset_id=$2)) AS used`,
             [userId, asset.id],
           );
           if (references[0]?.used) continue;

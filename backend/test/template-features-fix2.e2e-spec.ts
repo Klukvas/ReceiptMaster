@@ -572,6 +572,12 @@ describe("FIX2 outbox observed-candidate CAS", () => {
           entity === Receipt
             ? repo
             : { find: async () => entries, delete: async () => undefined },
+        // The outbox now writes through updateReceiptOnFailure, which uses the
+        // manager; without it the dispatch error was swallowed and nothing updated.
+        manager: {
+          update: async (_entity: unknown, where: Row, patch: Row) =>
+            repo.update(where, patch),
+        },
       };
       const publisher = {
         queue: {

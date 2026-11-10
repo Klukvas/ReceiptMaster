@@ -9,6 +9,7 @@ import {
   ReceiptPublisher,
   ReceiptPublisherFactory,
 } from "./receipt-publisher";
+import { updateReceiptOnFailure } from "./receipt-failure";
 import { runWithTenant } from "../../common/tenancy/tenant-context";
 
 export function generationJobId(
@@ -86,6 +87,8 @@ export class ReceiptOutboxService implements OnModuleDestroy {
               "replacement_status",
               "active_revision",
               "pending_id",
+              "order_id",
+              "document_type",
             ],
           });
           if (
@@ -109,7 +112,10 @@ export class ReceiptOutboxService implements OnModuleDestroy {
           if (job) {
             const state = await this.redisCall(() => job.getState());
             if (state === "failed" || state === "completed") {
-              await receipts.update(
+              await updateReceiptOnFailure(
+                this.dataSource,
+                this.logger,
+                receipt,
                 {
                   id: receipt.id,
                   user_id: entry.user_id,

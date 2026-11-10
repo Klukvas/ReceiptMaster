@@ -13,6 +13,9 @@ export class DocumentAsset {
   @Column({ unique: true }) object_key: string;
   @Column({ length: 64 }) sha256: string;
   @Column({ default: "image/png" }) mime: string;
+  /** What the image is for; a signature or stamp can never be used as a logo. */
+  @Column({ type: "varchar", length: 16, default: "logo" })
+  kind: "logo" | "signature" | "stamp";
   @Column({ type: "integer" }) bytes: number;
   @Column({ type: "integer" }) width: number;
   @Column({ type: "integer" }) height: number;

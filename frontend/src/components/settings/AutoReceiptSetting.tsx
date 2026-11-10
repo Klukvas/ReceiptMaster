@@ -53,7 +53,7 @@ export const AutoReceiptSetting = () => {
     >
       {error ? (
         <div className="mt-4">
-          <SettingsLoadError error={error} retry={refetch} />
+          <SettingsLoadError retry={refetch} />
         </div>
       ) : (
         <div className="mt-4 space-y-3">
@@ -104,7 +104,7 @@ export const AutoReceiptSetting = () => {
           <p className="text-xs text-content-tertiary leading-relaxed">
             {t(
               "settings.autoReceiptHint",
-              "Your account keeps the 10 most recent receipts. Approving many orders at once replaces the oldest ones.",
+              "The 10 most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
             )}
           </p>
         </div>

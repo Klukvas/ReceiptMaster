@@ -25,6 +25,17 @@ export const ErrorCode = {
   RECEIPT_ALREADY_EXISTS: "RECEIPT_ALREADY_EXISTS",
   RECEIPT_GENERATION_FAILED: "RECEIPT_GENERATION_FAILED",
   RECEIPT_PRINT_FAILED: "RECEIPT_PRINT_FAILED",
+  DOCUMENT_REQUISITES_MISSING: "DOCUMENT_REQUISITES_MISSING",
+  DOCUMENT_ALREADY_EXISTS: "DOCUMENT_ALREADY_EXISTS",
+  DOCUMENT_NOT_VOIDABLE: "DOCUMENT_NOT_VOIDABLE",
+  DOCUMENT_NUMBERS_EXHAUSTED: "DOCUMENT_NUMBERS_EXHAUSTED",
+  DOCUMENT_TEMPLATE_UNSUPPORTED: "DOCUMENT_TEMPLATE_UNSUPPORTED",
+  DOCUMENT_TYPE_NOT_SUPPORTED: "DOCUMENT_TYPE_NOT_SUPPORTED",
+  DOCUMENT_AMOUNT_INVALID: "DOCUMENT_AMOUNT_INVALID",
+  RECONSTRUCTION_REQUIRED: "RECONSTRUCTION_REQUIRED",
+  RETURN_QUANTITY_EXCEEDED: "RETURN_QUANTITY_EXCEEDED",
+  NUMBERING_START_TOO_LOW: "NUMBERING_START_TOO_LOW",
+  INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
 
   // Product errors
   PRODUCT_NOT_FOUND: "PRODUCT_NOT_FOUND",
@@ -51,6 +62,8 @@ export const ErrorCode = {
   // Validation errors
   VALIDATION_ERROR: "VALIDATION_ERROR",
   REQUIRED_FIELD_MISSING: "REQUIRED_FIELD_MISSING",
+
+  RATE_LIMITED: "RATE_LIMITED",
 
   // General errors
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
@@ -83,6 +96,23 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECEIPT_ALREADY_EXISTS]: "Receipt for this order already exists",
   [ErrorCode.RECEIPT_GENERATION_FAILED]: "Failed to generate receipt",
   [ErrorCode.RECEIPT_PRINT_FAILED]: "Failed to print receipt",
+  [ErrorCode.DOCUMENT_REQUISITES_MISSING]:
+    "Some requisites required for this document are missing",
+  [ErrorCode.DOCUMENT_ALREADY_EXISTS]:
+    "A document of this type already exists for this order",
+  [ErrorCode.DOCUMENT_NOT_VOIDABLE]:
+    "This document is not issued yet and cannot be voided. Retry its generation instead",
+  [ErrorCode.DOCUMENT_NUMBERS_EXHAUSTED]:
+    "The numbering of this document type has run out of numbers. Change the number format in Settings > Documents",
+  [ErrorCode.DOCUMENT_TEMPLATE_UNSUPPORTED]:
+    "This design cannot be used for this document type",
+  [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
+  [ErrorCode.RETURN_QUANTITY_EXCEEDED]:
+    "You can return no more than is left of an item. Check the quantities and try again",
+  [ErrorCode.INVOICE_DUE_DATE_BEFORE_ISSUE_DATE]:
+    "The due date cannot be before the issue date",
+  [ErrorCode.NUMBERING_START_TOO_LOW]:
+    "The starting number cannot be lower than the next number to be issued",
 
   // Product errors
   [ErrorCode.IDEMPOTENCY_KEY_REUSED]:
@@ -167,10 +197,13 @@ export function parseApiError(error: unknown): {
     };
   }
 
-  // Throttled (login/register allow 5 per minute): the body is a raw English exception.
+  // Throttled (login/register allow 5 per minute): the body is a raw English exception. A
+  // RATE_LIMITED body carries the server's wait instead and is read below.
   if (
     isAxiosError(error) &&
-    error.response?.status === HTTP_TOO_MANY_REQUESTS
+    error.response?.status === HTTP_TOO_MANY_REQUESTS &&
+    (error.response.data as Partial<ApiErrorResponse> | undefined)?.errorCode !==
+      ErrorCode.RATE_LIMITED
   ) {
     return {
       message: i18n.t("errors.tooManyRequests", {
@@ -183,6 +216,13 @@ export function parseApiError(error: unknown): {
   // Check if it's an Axios error with API error response
   if (isAxiosError(error) && error.response?.data) {
     const data = error.response.data as Partial<ApiErrorResponse>;
+
+    if (data.errorCode === ErrorCode.RATE_LIMITED) {
+      return {
+        message: rateLimitedMessage((data as { retryAfterSeconds?: unknown }).retryAfterSeconds),
+        code: ErrorCode.RATE_LIMITED,
+      };
+    }
 
     if (data.error && data.errorCode) {
       const detail = serverDetail(data.error);
@@ -241,6 +281,57 @@ export function parseApiError(error: unknown): {
   };
 }
 
+/** The HTTP status of an API refusal, or undefined for a network failure or a non-HTTP error. */
+export function httpStatusOf(error: unknown): number | undefined {
+  return isAxiosError(error) ? error.response?.status : undefined;
+}
+
+/** "Too many requests, try again in N s" with the server's wait when it sent one. */
+export function rateLimitedMessage(retryAfterSeconds: unknown): string {
+  return typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    ? i18n.t("errors.rateLimitedIn", { seconds: Math.ceil(retryAfterSeconds) })
+    : i18n.t("errors.rateLimited");
+}
+
+/** A response body as an object, also when it came back as a Blob (PDF endpoints). */
+async function bodyObjectOf(data: unknown): Promise<Record<string, unknown> | null> {
+  let body = data;
+  if (body instanceof Blob) {
+    try {
+      body = JSON.parse(await body.text());
+    } catch {
+      return null;
+    }
+  }
+  return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+}
+
+/**
+ * The text for a 429 from a preview endpoint. A RATE_LIMITED refusal keeps the server's wait
+ * ("try again in N s"); any other 429 there means another preview of the account is still
+ * rendering, which `errors.previewBusy` says. Null when the error is not a 429.
+ */
+export async function previewRateLimitText(error: unknown): Promise<string | null> {
+  if (!isAxiosError(error) || error.response?.status !== 429) return null;
+  const body = await bodyObjectOf(error.response.data);
+  return body?.errorCode === ErrorCode.RATE_LIMITED
+    ? rateLimitedMessage(body.retryAfterSeconds)
+    : i18n.t("errors.previewBusy");
+}
+
+/**
+ * The text of an API error in the interface language, or null when the only text available is the
+ * server's own (a generic code that carries the server's detail, an untranslated code, a legacy
+ * body). Callers show their own localized message for null instead of an English sentence.
+ */
+export function translatedApiError(error: unknown): string | null {
+  const { code, message } = parseApiError(error);
+  if (isAxiosError(error) && !error.response) return message;
+  if (code === ErrorCode.RATE_LIMITED) return message;
+  if (GENERIC_ERROR_CODES.has(code) || code === ErrorCode.UNKNOWN_ERROR) return null;
+  return i18n.exists(errorTranslationKey(code)) ? message : null;
+}
+
 /**
  * Type guard for Axios errors
  */
@@ -265,4 +356,48 @@ export function getErrorMessage(errorCode: string, fallback?: string): string {
 export function isErrorCode(error: unknown, code: ErrorCode): boolean {
   const parsed = parseApiError(error);
   return parsed.code === code;
+}
+
+export type RequisitesError = {
+  /** Requisite keys that must be filled in, e.g. `seller.iban`. */
+  fields: string[];
+  /** Soft requisites the document goes ahead without. */
+  warnings: string[];
+};
+
+const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/** The missing-requisites 422 of document creation, or null for any other error. */
+export function parseRequisitesError(error: unknown): RequisitesError | null {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  if (typeof body !== "object" || body === null) return null;
+  const { errorCode, fields, warnings } = body as Record<string, unknown>;
+  if (errorCode !== ErrorCode.DOCUMENT_REQUISITES_MISSING) return null;
+  return {
+    fields: isStringList(fields) ? fields : [],
+    warnings: isStringList(warnings) ? warnings : [],
+  };
+}
+
+/**
+ * The field a "Validation error for X: …" response blames, as the full dotted
+ * path (e.g. `details.contractRef`), or null when the error is not of that shape.
+ */
+export function validationField(error: unknown): string | null {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  if (typeof body !== "object" || body === null) return null;
+  // Typed refusals name their field directly ({ errorCode, field: "details.dueDate" }).
+  const field = (body as { field?: unknown }).field;
+  if (typeof field === "string" && /^[\w.[\]]+$/.test(field)) return field;
+  const message = (body as { error?: unknown }).error;
+  const parts = Array.isArray(message) ? message : [message];
+  for (const part of parts) {
+    if (typeof part !== "string") continue;
+    const match = /^Validation error for ([\w.[\]]+): /.exec(part);
+    if (match) return match[1];
+  }
+  return null;
 }

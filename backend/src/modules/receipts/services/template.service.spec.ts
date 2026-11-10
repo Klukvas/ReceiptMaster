@@ -89,7 +89,7 @@ describe("TemplateService", () => {
       expect(result.items[0].productName).toBe("Widget");
       expect(result.items[0].qty).toBe(2);
       expect(result.hasCustomLogo).toBe(false);
-      expect(result.receiptTitle).toBe("Invoice");
+      expect(result.receiptTitle).toBe("Delivery note");
     });
 
     it("should handle custom logo", () => {
@@ -129,7 +129,7 @@ describe("TemplateService", () => {
         "uk",
       );
 
-      expect(result.receiptTitle).toBe("Інвойс");
+      expect(result.receiptTitle).toBe("Видаткова накладна");
     });
 
     it("should use Russian default title when language is ru and no custom title", () => {
@@ -143,7 +143,7 @@ describe("TemplateService", () => {
         "ru",
       );
 
-      expect(result.receiptTitle).toBe("Инвойс");
+      expect(result.receiptTitle).toBe("Расходная накладная");
     });
 
     it("should handle footer customization", () => {
@@ -329,8 +329,7 @@ describe("TemplateService", () => {
 
       const freshService = new TemplateService();
 
-      // Wait for async loadTranslations to complete
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await freshService.ready;
 
       const result = freshService.prepareTemplateData(
         {

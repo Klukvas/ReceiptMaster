@@ -4,6 +4,16 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BaseObjectStorageService } from "./base-object-storage.service";
 
+export type ImmutablePrefix = "logos" | "signoffs";
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+/** `<prefix>/<userId>/<assetId>.png`; user and asset ids are the caller's own UUIDs. */
+function immutableKeyPattern(prefix: ImmutablePrefix, userId: string): RegExp {
+  const escapedUser = userId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${prefix}/${escapedUser}/${UUID}\\.png$`, "i");
+}
+
 @Injectable()
 export class LogoStorageService extends BaseObjectStorageService {
   private readonly bucket: string;
@@ -21,7 +31,9 @@ export class LogoStorageService extends BaseObjectStorageService {
    * Get bucket for specific folder
    */
   protected getBucketForFolder(folder: string): string | null {
-    return folder === "logos" ? this.configService.get("LOGOS_BUCKET") : null;
+    return folder === "logos" || folder === "signoffs"
+      ? this.configService.get("LOGOS_BUCKET")
+      : null;
   }
 
   /**
@@ -127,27 +139,33 @@ export class LogoStorageService extends BaseObjectStorageService {
     }
   }
 
+  /** Immutable per-asset objects: logos and signature/stamp images share the bucket. */
   async uploadImmutable(
     png: Buffer,
     userId: string,
     assetId: string,
+    prefix: ImmutablePrefix = "logos",
   ): Promise<string> {
-    const key = `logos/${userId}/${assetId}.png`;
+    const key = `${prefix}/${userId}/${assetId}.png`;
     await this.uploadFile(this.bucket, key, png, "image/png");
     return key;
   }
 
-  async readImmutable(key: string, userId: string): Promise<Buffer> {
-    if (
-      !key.startsWith(`logos/${userId}/`) ||
-      !/^logos\/[a-f0-9-]+\/[a-f0-9-]+\.png$/i.test(key)
-    )
+  async readImmutable(
+    key: string,
+    userId: string,
+    prefix: ImmutablePrefix = "logos",
+  ): Promise<Buffer> {
+    if (!immutableKeyPattern(prefix, userId).test(key))
       throw new Error("Invalid logo key");
     return this.downloadFile(this.bucket, key);
   }
 
   async removeImmutable(key: string, userId: string): Promise<void> {
-    if (!key.startsWith(`logos/${userId}/`))
+    if (
+      !key.startsWith(`logos/${userId}/`) &&
+      !key.startsWith(`signoffs/${userId}/`)
+    )
       throw new Error("Invalid logo key");
     await this.deleteFile(this.bucket, key);
   }

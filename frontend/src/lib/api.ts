@@ -10,6 +10,26 @@ import {
   storeSession,
 } from "./auth-session";
 import type { components } from "./api-types.generated";
+import { documentEnvelope } from "./document-config";
+import type {
+  DocumentListItem,
+  DocumentListParams,
+  NumberingSetting,
+  NumberingUpdate,
+  SignoffImage,
+  SignoffKind,
+  SignoffState,
+} from "./documents-api-types";
+
+export type {
+  DocumentListItem,
+  DocumentListParams,
+  NumberingSetting,
+  NumberingUpdate,
+  SignoffImage,
+  SignoffKind,
+  SignoffState,
+} from "./documents-api-types";
 
 export type {
   Product,
@@ -436,23 +456,42 @@ export const dashboardApi = {
     api.get<TotalTurnover>("/orders/dashboard/total-turnover", { params }),
 };
 
-export const receiptsApi = {
-  getAll: (params?: { offset?: number; limit?: number }) =>
-    api.get<{ data: Receipt[]; total: number; offset: number; limit: number }>(
-      "/receipts",
-      { params },
-    ),
+type RequestWithDefaults<T> = T extends unknown
+  ? Omit<T, "logoAction" | "details"> &
+      Partial<Pick<T, Extract<keyof T, "logoAction" | "details">>>
+  : never;
 
+/** DocumentGenerationRequest as sent: the server fills in `logoAction` and `details` when absent. */
+export type DocumentRequestBody = RequestWithDefaults<
+  components["schemas"]["DocumentGenerationRequest"]
+>;
+
+export const receiptsApi = {
+  getAll: (params?: DocumentListParams) =>
+    api.get<PaginatedResponse<DocumentListItem>>("/receipts", { params }),
+
+  /** Waybill. Other document types go through `createDocument`. */
   create: (orderId: string) =>
     api.post<Receipt>(`/receipts/orders/${orderId}/receipt`),
 
-  /** Retention cap and the receipt the next one would replace (null while under the cap). */
-  getRetention: () =>
+  /**
+   * Any generatable document. `body` is the DocumentGenerationRequest (type,
+   * details, overrides, …); the optional logo travels as a multipart part.
+   */
+  createDocument: (orderId: string, body: DocumentRequestBody, logo?: File) =>
+    api.post<Receipt>(
+      `/receipts/orders/${orderId}/documents`,
+      documentEnvelope(body, logo),
+      { headers: { "Content-Type": "multipart/form-data" } },
+    ),
+
+  /** Retention cap and the document the next one would replace (null while under the cap). */
+  getRetention: (type?: Receipt["document_type"]) =>
     api.get<{
       limit: number;
       count: number;
       replaces: { id: string; number: string; order_id: string } | null;
-    }>("/receipts/retention"),
+    }>("/receipts/retention", { params: type ? { type } : undefined }),
 
   getById: (id: string) => api.get<Receipt>(`/receipts/${id}`),
 
@@ -488,10 +527,35 @@ export const receiptsApi = {
   },
 };
 
-export type CompanyInfo = {
-  companyName: string; companyAddress: string; companyEmail: string; companyPhone: string;
-  companyTaxId: string; companyIban: string; companySwift: string; companyWebsite: string; companyTagline: string;
-};
+export type CompanyInfo = components["schemas"]["CompanyInfoResponseDto"];
+
+/**
+ * Body of POST /settings/company-info. The OpenAPI document does not describe it,
+ * so it follows `settingsInput.company` in the backend. Absent keys stay as they are;
+ * for the nullable requisites `null` (or an empty string) clears the value.
+ */
+export type CompanyInfoUpdate = Partial<
+  Pick<
+    CompanyInfo,
+    | "companyName"
+    | "companyAddress"
+    | "companyEmail"
+    | "companyPhone"
+    | "companyTaxId"
+    | "companyIban"
+    | "companySwift"
+    | "companyWebsite"
+    | "companyTagline"
+    | "companyTaxIdKind"
+    | "companyLegalForm"
+    | "companyBankName"
+    | "companyVatPayer"
+    | "companyVatId"
+    | "companySignatoryName"
+    | "companySignatoryPosition"
+    | "defaultPaymentTermDays"
+  >
+>;
 export type ReceiptDesignSettings = {
   receiptTitle: string; hasCustomReceiptTitle?: boolean; templateId: string; templateLanguage: string;
   footerTitle: string; footerSubtitle: string; primaryColor: string; paymentTerms: string; deliveryTerms: string;
@@ -594,17 +658,30 @@ export const settingsApi = {
 
   completeOnboarding: () => api.post("/settings/onboarding-complete"),
 
-  updateCompanyInfo: (companyInfo: {
-    companyName?: string;
-    companyAddress?: string;
-    companyEmail?: string;
-    companyPhone?: string;
-    companyTaxId?: string;
-    companyIban?: string;
-    companySwift?: string;
-    companyWebsite?: string;
-    companyTagline?: string;
-  }) => api.post("/settings/company-info", companyInfo),
+  updateCompanyInfo: (companyInfo: CompanyInfoUpdate) =>
+    api.post("/settings/company-info", companyInfo),
+
+  getNumbering: () =>
+    api.get<{ types: NumberingSetting[] }>("/settings/document-numbering"),
+
+  updateNumbering: (type: NumberingSetting["documentType"], body: NumberingUpdate) =>
+    api.put<NumberingSetting>(`/settings/document-numbering/${type}`, body),
+
+  getSignoff: () => api.get<SignoffState>("/settings/signoff"),
+
+  getSignoffImage: (kind: SignoffKind) =>
+    api.get<Blob>(`/settings/signoff/${kind}/image`, { responseType: "blob" }),
+
+  uploadSignoff: (kind: SignoffKind, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.put<SignoffImage>(`/settings/signoff/${kind}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  deleteSignoff: (kind: SignoffKind) =>
+    api.delete<void>(`/settings/signoff/${kind}`),
 };
 
 // Formatting utilities
@@ -624,11 +701,12 @@ const DATE_LOCALES: Record<string, string> = {
   uk: "uk-UA",
   en: "en-GB",
 };
-const dateLocale = (): string =>
+export const dateLocale = (): string =>
   DATE_LOCALES[i18n.language?.split("-")[0] ?? "en"] ?? "en-GB";
 
-export const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleString(dateLocale());
+/** `timeZone` shows the moment on that zone's clock (the document zone) instead of the viewer's. */
+export const formatDate = (dateString: string, timeZone?: string) =>
+  new Date(dateString).toLocaleString(dateLocale(), timeZone ? { timeZone } : undefined);
 
 export const formatDateOnly = (dateString: string | number | Date) =>
   new Date(dateString).toLocaleDateString(dateLocale());

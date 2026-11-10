@@ -3,10 +3,10 @@ import { useIsDesktop } from "../../hooks/useIsDesktop";
 
 const ERROR_DURATION_MS = 7000;
 
-// On a phone the top-right corner is where the fixed 56px header and its Logout button
-// live, so toasts go top-center and start below the header (and the notch).
+// On a phone the top holds the fixed 56px header with its Logout button, and an open
+// dialog's title and Close button; toasts go to the bottom, above the home indicator.
 const MOBILE_CONTAINER_STYLE = {
-  top: "calc(56px + env(safe-area-inset-top) + 8px)",
+  bottom: "calc(16px + env(safe-area-inset-bottom))",
 } as const;
 
 const ERROR_ARIA_PROPS = { role: "alert", "aria-live": "assertive" } as const;
@@ -21,7 +21,7 @@ export function AppToaster() {
 
   return (
     <Toaster
-      position={isDesktop ? "top-right" : "top-center"}
+      position={isDesktop ? "top-right" : "bottom-center"}
       containerStyle={isDesktop ? undefined : MOBILE_CONTAINER_STYLE}
       toastOptions={{
         duration: 4000,

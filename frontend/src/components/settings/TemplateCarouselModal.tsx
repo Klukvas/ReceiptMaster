@@ -5,6 +5,7 @@ import { X, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { clsx } from "clsx";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 
 interface Template {
   id: string;
@@ -154,7 +155,7 @@ export const TemplateCarouselModal = ({
               id="carousel-dialog-title"
               className="text-lg font-semibold text-content truncate"
             >
-              {current.name}
+              {templateDisplayName(t, current)}
             </h2>
             <p className="text-sm text-content-tertiary truncate">
               {current.description}
@@ -217,7 +218,7 @@ export const TemplateCarouselModal = ({
                     ? "w-4 bg-accent-base"
                     : "w-2 bg-surface-alt hover:bg-surface-alt",
                 )}
-                aria-label={tpl.name}
+                aria-label={templateDisplayName(t, tpl)}
               />
             ))}
           </div>

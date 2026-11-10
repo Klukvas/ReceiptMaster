@@ -156,3 +156,6 @@ secrets.json
 # Backup files
 *.bak
 *.backup
+
+# Local scratch output of verification scripts (template captures, PDFs)
+/backend/temp/

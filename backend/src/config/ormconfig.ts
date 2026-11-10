@@ -1,4 +1,5 @@
 import { DataSource } from "typeorm";
+import { DB_SESSION_OPTIONS } from "./database-session";
 import { config } from "dotenv";
 
 // Загружаем переменные окружения
@@ -15,4 +16,5 @@ export default new DataSource({
   migrations: [__dirname + "/migrations/*{.ts,.js}"],
   synchronize: false,
   logging: process.env.NODE_ENV === "development",
+  extra: { options: DB_SESSION_OPTIONS },
 });

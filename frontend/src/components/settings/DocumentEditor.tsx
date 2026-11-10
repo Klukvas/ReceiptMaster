@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
 import {
   type DocumentConfig,
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import type { GeneratableType } from "../../lib/document-types";
 import { DocumentCompanySection } from "./DocumentCompanySection";
 import { DocumentFormatSection } from "./DocumentFormatSection";
 import {
@@ -26,24 +26,25 @@ type TemplateId = DocumentConfig["templateId"];
 export function DocumentEditor({
   model,
   documentOnly = false,
+  documentType,
   onCommit,
   commitLabel,
 }: {
   model: DocumentDraftModel;
   /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
   documentOnly?: boolean;
+  /** The type being customized; designs that cannot carry it are not offered. */
+  documentType?: GeneratableType;
   onCommit?: () => Promise<void>;
   commitLabel?: string;
 }) {
   const { t } = useTranslation();
   const [gallery, setGallery] = useState(false);
-  const templates = useQuery({
-    queryKey: ["document-templates"],
-    queryFn: async () =>
-      (await api.get<{ data: DocumentTemplate[] }>("/settings/templates")).data
-        .data,
-    retry: false,
-  });
+  const templates = useDocumentTemplates();
+  const fitsType = (template: DocumentTemplate) =>
+    !documentType || template.capabilities.documentTypes.includes(documentType);
+  // The preview endpoint renders the waybill layout only, so it would mislead for the other types.
+  const canPreview = !documentType || documentType === "waybill";
   const config = model.config;
   if (!config)
     return (
@@ -70,6 +71,7 @@ export function DocumentEditor({
       config={config}
       templates={templates}
       onBrowseTemplates={() => setGallery(true)}
+      fitsType={fitsType}
     />
   );
   const brandGroup = (
@@ -162,6 +164,7 @@ export function DocumentEditor({
             <DocumentPreviewPanel
               model={model}
               defaultOpen={documentOnly}
+              isAvailable={canPreview}
               title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
             />
           </div>
@@ -217,7 +220,11 @@ export function DocumentEditor({
           isOpen={gallery}
           language={config.documentLanguage}
           onClose={() => setGallery(false)}
-          templates={templates.data?.filter((value) => !value.locked) || []}
+          templates={
+            templates.data?.filter(
+              (value) => !value.locked && fitsType(value),
+            ) || []
+          }
           initialTemplateId={config.templateId}
           onSelectTemplate={(templateId) => {
             model.update({ ...config, templateId: templateId as TemplateId });

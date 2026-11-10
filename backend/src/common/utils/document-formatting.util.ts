@@ -25,6 +25,28 @@ export function formatDocumentMoney(
     maximumFractionDigits: 2,
   }).format(cents / 100);
 }
+const NON_BREAKING_SPACES = /[\u00a0\u202f]/g;
+
+/**
+ * An amount for text a person copies into a bank app (the payment purpose): digits with
+ * ordinary spaces and the unit as letters. The currency symbol and the no-break spaces of
+ * `formatDocumentMoney` are rejected or mangled by some banks' forms.
+ */
+export function formatPlainAmount(
+  cents: number,
+  unit: string,
+  preferences: Formatting,
+): string {
+  if (!Number.isSafeInteger(cents)) throw new Error("Invalid money input");
+  const digits = new Intl.NumberFormat(preferences.numberLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(cents / 100)
+    .replace(NON_BREAKING_SPACES, " ");
+  return `${digits} ${unit}`;
+}
+
 export function formatDocumentDate(
   date: Date | string,
   language: string,
@@ -60,4 +82,22 @@ export function formatDocumentDate(
     hourCycle: preferences.hourCycle,
     timeZone: preferences.timeZone,
   }).format(new Date(date));
+}
+
+// Calendar date without a clock time, in the same locale as the document's other dates
+// (e.g. "15 жовтня 2026 р." for uk). A moment is shown in the document's time zone; a plain
+// "YYYY-MM-DD" is already a calendar date, so it is formatted in UTC to avoid a day shift.
+export function formatDocumentDateOnly(
+  date: Date | string,
+  language: string,
+  preferences: Formatting,
+): string {
+  const isCalendarDate =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  return formatDocumentDate(date, language, {
+    ...preferences,
+    dateStyle: "long",
+    timeStyle: "none",
+    ...(isCalendarDate ? { timeZone: "UTC" } : {}),
+  });
 }

@@ -35,6 +35,16 @@ export interface UseServerPaginationOptions<T> {
   columnsVersion?: number;
   /** Search text to start with, e.g. from a deep link. */
   initialSearch?: string;
+  /** Page to start on, e.g. from a deep link (1-based). */
+  initialPage?: number;
+  /** False holds the request back (e.g. while the filters cannot match anything). */
+  enabled?: boolean;
+  /** A sort owned by the caller (e.g. kept in the URL) instead of internal state. */
+  sort?: {
+    sortBy: string;
+    sortOrder: SortOrder;
+    onChange: (sortBy: string, sortOrder: SortOrder) => void;
+  };
 }
 
 export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
@@ -50,12 +60,15 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     storageKeyPrefix,
     columnsVersion = 1,
     initialSearch = '',
+    initialPage = 1,
+    enabled = true,
+    sort: controlledSort,
   } = options;
   const columnsStorageKey = storageKeyPrefix
     ? `${storageKeyPrefix}${columnsVersion > 1 ? `_v${columnsVersion}` : ''}_columns`
     : null;
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
     if (storageKeyPrefix) {
       const saved = localStorage.getItem(`${storageKeyPrefix}_itemsPerPage`);
@@ -65,8 +78,10 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   });
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
-  const [sortBy, setSortBy] = useState<string | null>(defaultSortBy);
-  const [sortOrder, setSortOrder] = useState<SortOrder>(defaultSortOrder);
+  const [ownSortBy, setOwnSortBy] = useState<string | null>(defaultSortBy);
+  const [ownSortOrder, setOwnSortOrder] = useState<SortOrder>(defaultSortOrder);
+  const sortBy = controlledSort ? controlledSort.sortBy : ownSortBy;
+  const sortOrder = controlledSort ? controlledSort.sortOrder : ownSortOrder;
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
     const defaults = Object.fromEntries(
       initialColumns.map((col) => [col.key, col.visible !== false])
@@ -132,6 +147,7 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   const queryResult = useQuery({
     queryKey: [queryKey, fullParams],
     queryFn: () => queryFn(fullParams),
+    enabled,
     placeholderData: (previousData: { data: PaginatedResponse<T> } | undefined) => previousData,
   });
 
@@ -152,14 +168,16 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     if (!col?.sortable) return;
 
     const actualSortKey = col.sortKey || col.key;
-    if (sortBy === actualSortKey) {
-      setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'));
+    const nextOrder: SortOrder =
+      sortBy === actualSortKey ? (sortOrder === 'ASC' ? 'DESC' : 'ASC') : 'ASC';
+    if (controlledSort) {
+      controlledSort.onChange(actualSortKey, nextOrder);
     } else {
-      setSortBy(actualSortKey);
-      setSortOrder('ASC');
+      setOwnSortBy(actualSortKey);
+      setOwnSortOrder(nextOrder);
     }
     setCurrentPage(1);
-  }, [initialColumns, sortBy]);
+  }, [initialColumns, sortBy, sortOrder, controlledSort]);
 
   const toggleColumnVisibility = useCallback((columnKey: string) => {
     setColumnVisibility((prev) => ({
@@ -191,6 +209,8 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     total,
     isLoading: queryResult.isLoading,
     isFetching: queryResult.isFetching,
+    /** True while the rows on screen belong to the previous query (page, sort or filter just changed). */
+    isShowingPreviousQuery: queryResult.isPlaceholderData,
     // React Query pauses (does not fail) a fetch while the browser is offline.
     isOffline: queryResult.fetchStatus === 'paused',
     isSearchPending: searchQuery.trim() !== debouncedSearch.trim(),

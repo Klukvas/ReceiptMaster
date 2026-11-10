@@ -1,0 +1,101 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`invoice and act layout readable .doc-* fragments (standard, uk) act 1`] = `
+"<div class="doc-parties">
+          <div class="doc-party">
+            <div class="doc-role">Виконавець</div>
+            <div class="doc-name">ТОВ Продавець</div>
+            <div>ЄДРПОУ 12345678</div>
+            <div>Київ, вул. Продавця 1</div>
+            <div>ІПН 123456789012</div>
+          </div>
+          <div class="doc-party">
+            <div class="doc-role">Замовник</div>
+            <div class="doc-name">ТОВ Іван Покупець</div>
+            <div>ЄДРПОУ 87654321</div>
+            <div>м. Львів</div>
+          </div>
+        </div>
+---
+
+---
+<div class="doc-totals">
+          <div class="doc-total-row"><span>Разом</span><span>2 050,50 ₴</span></div>
+          <div class="doc-total-row"><span>Сума без ПДВ</span><span>1 708,75 ₴</span></div>
+          <div class="doc-total-row"><span>У тому числі ПДВ (20%)</span><span>341,75 ₴</span></div>
+          <div class="doc-total-row doc-grand"><span>Всього до сплати</span><span>2 050,50 ₴</span></div>
+        </div>
+---
+<div class="doc-words"><span class="doc-label">Сума прописом:</span> Дві тисячі п’ятдесят гривень 50 копійок</div>
+---
+<div class="doc-closing">
+          <div>Роботи виконано в повному обсязі, сторони претензій одна до одної не мають.</div>
+          <div><span class="doc-label">Договір:</span> Договір 7</div>
+          <div><span class="doc-label">Період:</span> 1 жовтня 2026 р. – 31 жовтня 2026 р.</div>
+          <div class="doc-signatures">
+            <div class="doc-signature">
+              <div class="doc-sign-heading">Від Виконавця</div>
+              <div>Директор</div>
+              <div class="doc-sign-line"></div>
+              <div class="doc-sign-caption">Підпис / М.П.</div>
+              <div class="doc-sign-name">Петренко Петро</div>
+            </div>
+            <div class="doc-signature">
+              <div class="doc-sign-heading">Від Замовника</div>
+              <div>ТОВ Іван Покупець</div>
+              <div class="doc-sign-line"></div>
+              <div class="doc-sign-caption">Підпис / М.П.</div>
+              <div class="doc-sign-line doc-sign-line-name"></div>
+              <div class="doc-sign-caption">посада, ПІБ</div>
+            </div>
+          </div>
+        </div>"
+`;
+
+exports[`invoice and act layout readable .doc-* fragments (standard, uk) invoice 1`] = `
+"<div class="doc-parties">
+          <div class="doc-party">
+            <div class="doc-role">Постачальник</div>
+            <div class="doc-name">ТОВ Продавець</div>
+            <div>ЄДРПОУ 12345678</div>
+            <div>Київ, вул. Продавця 1</div>
+            <div>ІПН 123456789012</div>
+          </div>
+          <div class="doc-party">
+            <div class="doc-role">Платник</div>
+            <div class="doc-name">ТОВ Іван Покупець</div>
+            <div>ЄДРПОУ 87654321</div>
+            <div>м. Львів</div>
+          </div>
+        </div>
+---
+<div class="doc-payment">
+          <div class="doc-payment-title">Реквізити для оплати</div>
+          <div><span class="doc-label">Одержувач:</span> ТОВ Продавець</div>
+          <div><span class="doc-label">IBAN:</span> UA21 3223 1300 0002 6007 2335 6600 1</div>
+          <div><span class="doc-label">Банк:</span> АТ Банк</div>
+          <div><span class="doc-label">Призначення платежу:</span> Оплата згідно з рахунком № 2026-000007 від 15.10.2026, у т.ч. ПДВ 20% — 341,75 грн</div>
+        </div>
+---
+<div class="doc-totals">
+          <div class="doc-total-row"><span>Разом</span><span>2 050,50 ₴</span></div>
+          <div class="doc-total-row"><span>Сума без ПДВ</span><span>1 708,75 ₴</span></div>
+          <div class="doc-total-row"><span>У тому числі ПДВ (20%)</span><span>341,75 ₴</span></div>
+          <div class="doc-total-row doc-grand"><span>Всього до сплати</span><span>2 050,50 ₴</span></div>
+        </div>
+---
+<div class="doc-words"><span class="doc-label">Сума прописом:</span> Дві тисячі п’ятдесят гривень 50 копійок</div>
+---
+<div class="doc-closing">
+          <div><strong>Сплатити до:</strong> 20 жовтня 2026 р.</div>
+          <div class="doc-signatures">
+            <div class="doc-signature">
+              <div class="doc-sign-heading">Виписав(ла)</div>
+              <div>Директор</div>
+              <div class="doc-sign-line"></div>
+              <div class="doc-sign-caption">Підпис / М.П.</div>
+              <div class="doc-sign-name">Петренко Петро</div>
+            </div>
+          </div>
+        </div>"
+`;

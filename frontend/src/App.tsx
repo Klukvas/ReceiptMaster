@@ -31,6 +31,9 @@ const SuppliersPage = React.lazy(() =>
 const OrdersPage = React.lazy(() =>
   import("./pages/OrdersPage").then((m) => ({ default: m.OrdersPage })),
 );
+const DocumentsPage = React.lazy(() =>
+  import("./pages/DocumentsPage").then((m) => ({ default: m.DocumentsPage })),
+);
 const DashboardPage = React.lazy(() =>
   import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
@@ -155,6 +158,16 @@ const AppRoutes: React.FC = () => {
           }
         />
         <Route
+          path="/documents"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DocumentsPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/analytics"
           element={
             <AuthenticatedPage>
@@ -197,12 +210,13 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <PaddleProvider>
-              <Router>
+            <Router>
+              {/* Inside the router: Paddle must not load on the public share page. */}
+              <PaddleProvider>
                 <ScrollToTop />
                 <AppRoutes />
-              </Router>
-            </PaddleProvider>
+              </PaddleProvider>
+            </Router>
             <AppToaster />
           </AuthProvider>
         </ThemeProvider>

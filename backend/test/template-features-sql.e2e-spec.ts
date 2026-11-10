@@ -10,6 +10,7 @@ import { installTenantContext } from "../src/common/tenancy/tenant-data-source";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { DocumentUploadFencing1792100000002 } from "../src/config/migrations/1792100000002-DocumentUploadFencing";
 import { DocumentStorageLeases1792100000001 } from "../src/config/migrations/1792100000001-DocumentStorageLeases";
+import { DocumentSignoffAssets1793500000000 } from "../src/config/migrations/1793500000000-DocumentSignoffAssets";
 import { DocumentConfiguration1792100000000 } from "../src/config/migrations/1792100000000-DocumentConfiguration";
 import { DocumentAssetsService } from "../src/modules/settings/services/document-assets.service";
 import { DocumentConfigService } from "../src/modules/settings/services/document-config.service";
@@ -60,7 +61,7 @@ describeIsolatedPostgres(
         `ALTER TABLE receipts DROP COLUMN active_revision, DROP COLUMN active_snapshot, DROP COLUMN pending_snapshot, DROP COLUMN pending_html, DROP COLUMN pending_id, DROP COLUMN pending_expected_revision, DROP COLUMN replacement_status, DROP COLUMN replacement_error, DROP COLUMN active_logo_asset_id, DROP COLUMN pending_logo_asset_id`,
       );
       await owner.query(
-        `ALTER TABLE user_settings DROP COLUMN document_config, DROP COLUMN document_config_revision, DROP COLUMN logo_asset_id`,
+        `ALTER TABLE user_settings DROP COLUMN document_config, DROP COLUMN document_config_revision, DROP COLUMN logo_asset_id, DROP COLUMN signature_asset_id, DROP COLUMN stamp_asset_id`,
       );
       await owner.query(`DROP TABLE document_presets`);
       await owner.query(`DROP TABLE document_assets`);
@@ -72,6 +73,9 @@ describeIsolatedPostgres(
       // synchronize created the asset fencing columns before the old-schema reconstruction;
       // DocumentConfiguration recreated assets without them, and artifacts were dropped.
       await new DocumentUploadFencing1792100000002().up(runner);
+      // The entities carry `kind` and the signoff pointers, so the schema the fixtures use
+      // must include the later migration that adds them.
+      await new DocumentSignoffAssets1793500000000().up(runner);
       await runner.commitTransaction();
       await runner.release();
       const rolePassword = await createRestrictedRole(admin, role);
@@ -157,6 +161,8 @@ describeIsolatedPostgres(
       const runner = owner.createQueryRunner();
       await runner.startTransaction();
       try {
+        // Newest first: the signoff migration sits on top of the three below.
+        await new DocumentSignoffAssets1793500000000().down(runner);
         await new DocumentUploadFencing1792100000002().down(runner);
         await new DocumentStorageLeases1792100000001().down(runner);
         const inactiveTenant = randomUUID();

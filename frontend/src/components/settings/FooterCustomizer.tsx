@@ -87,7 +87,7 @@ export const FooterCustomizer = () => {
       }
     >
       {error ? (
-        <SettingsLoadError error={error} retry={refetch} />
+        <SettingsLoadError retry={refetch} />
       ) : isLoading ? (
         <div className="space-y-4">
           {[...Array(2)].map((_, i) => (

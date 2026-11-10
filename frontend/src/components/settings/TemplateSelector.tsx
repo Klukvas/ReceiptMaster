@@ -9,6 +9,7 @@ import { settingsApi, type ReceiptDesignSettings } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { SettingsSection } from "./SettingsSection";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 import { UpgradeModal } from "../subscription/UpgradeModal";
@@ -54,11 +55,12 @@ const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
 // Document titles match the receipt renderer's translations/defaults.ts;
 // interface-language labels are independent of the saved document language.
 const AUTOMATIC_TITLES: Record<string, Record<string, string>> = {
-  standard: { en: "Invoice", ru: "Инвойс", uk: "Інвойс" },
+  standard: { en: "Delivery note", ru: "Расходная накладная", uk: "Видаткова накладна" },
+  // The price-less style is a shipping note, not a видаткова накладна (which carries prices).
   delivery: {
-    en: "Delivery Note",
-    ru: "Накладная",
-    uk: "Видаткова накладна",
+    en: "Shipping note",
+    ru: "Отгрузочная накладная",
+    uk: "Накладна на відвантаження",
   },
   proforma: {
     en: "Proforma Invoice",
@@ -159,7 +161,7 @@ export const TemplateSelector = () => {
   };
 
   if (designError)
-    return <SettingsLoadError error={designError} retry={refetchDesign} />;
+    return <SettingsLoadError retry={refetchDesign} />;
   if (isLoadingTemplates || isLoadingCurrent) {
     return (
       <SettingsSection
@@ -286,7 +288,7 @@ export const TemplateSelector = () => {
               {/* Template Info */}
               <div className="space-y-2.5">
                 <h3 className="font-semibold text-content text-sm">
-                  {template.name}
+                  {templateDisplayName(t, template)}
                 </h3>
 
                 <p className="text-xs text-content-tertiary leading-relaxed line-clamp-2">

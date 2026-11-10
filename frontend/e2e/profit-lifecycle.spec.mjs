@@ -434,7 +434,7 @@ const cancelWarnsAndRefreshes = async (results) => {
     const draftDialog = await page.getByRole("dialog").innerText();
     results.check(
       "cancelling a draft asks without the confirmed-order warning",
-      !draftDialog.includes("voids its receipt"),
+      !draftDialog.includes("voids its documents"),
       draftDialog,
     );
     // The draft only checks the wording; keep it so the confirmed order is the one cancel.
@@ -450,7 +450,7 @@ const cancelWarnsAndRefreshes = async (results) => {
     const warning = await dialog.innerText();
     results.check(
       "cancelling a confirmed order warns: receipt voided, link revoked, stock not returned",
-      warning.includes("voids its receipt") &&
+      warning.includes("voids its documents") &&
         warning.includes("share link") &&
         warning.includes("Stock is not returned"),
       warning,

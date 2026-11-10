@@ -57,6 +57,49 @@ describe("free-text input validation", () => {
   });
 });
 
+describe("recipient requisites", () => {
+  const validate$ = async (body: Record<string, unknown>) =>
+    failingProperties(
+      plainToInstance(CreateRecipientDto, { name: "Acme", ...body }),
+    );
+
+  it("normalises the IBAN before validating it", async () => {
+    const dto = plainToInstance(CreateRecipientDto, {
+      name: "Acme",
+      iban: " ua21 3223 1300 0002 6007 2335 6600 1\u00a0",
+    });
+
+    expect(dto.iban).toBe("UA213223130000026007233566001");
+    expect(await failingProperties(dto)).toHaveLength(0);
+  });
+
+  it("rejects a bad checksum, a foreign IBAN and a huge string", async () => {
+    expect(await validate$({ iban: "UA223223130000026007233566001" })).toEqual([
+      "iban",
+    ]);
+    expect(await validate$({ iban: "DE89370400440532013000" })).toEqual([
+      "iban",
+    ]);
+    expect(await validate$({ iban: "9".repeat(100000) })).toEqual(["iban"]);
+  });
+
+  it("accepts 8 or 10 digit tax ids and rejects letters and other lengths", async () => {
+    expect(await validate$({ tax_id: "12345678" })).toEqual([]);
+    expect(await validate$({ tax_id: " 1234567890 " })).toEqual([]);
+    expect(await validate$({ tax_id: "123456789" })).toEqual(["tax_id"]);
+    expect(await validate$({ tax_id: "1234567a" })).toEqual(["tax_id"]);
+  });
+
+  it("limits the free-text requisites", async () => {
+    expect(await validate$({ bank_name: "x".repeat(201) })).toEqual([
+      "bank_name",
+    ]);
+    expect(await validate$({ legal_name: "x".repeat(256) })).toEqual([
+      "legal_name",
+    ]);
+  });
+});
+
 describe("product numeric ranges", () => {
   const product = (overrides: Record<string, unknown>) =>
     plainToInstance(CreateProductDto, {

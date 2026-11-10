@@ -79,6 +79,7 @@ describe("OrdersService", () => {
     receiptsService = {
       generateReceipt: jest.fn(),
       voidForCancellation: jest.fn().mockResolvedValue(0),
+      revokePublicLinksForOrders: jest.fn().mockResolvedValue(0),
     };
     settingsService = {
       getAutoGenerateReceipt: jest.fn().mockResolvedValue(false),
@@ -125,7 +126,9 @@ describe("OrdersService", () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       findOneOrFail: jest.fn().mockImplementation(async () => ({
         ...locked,
-        status: manager.update.mock.calls.at(-1)?.[2]?.status,
+        status:
+          manager.update.mock.calls[manager.update.mock.calls.length - 1]?.[2]
+            ?.status,
       })),
     };
     dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
@@ -198,6 +201,24 @@ describe("OrdersService", () => {
         expect.any(String),
       );
     });
+
+    it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])(
+      "ignores the inherited sort key %s and sorts by the default",
+      async (sortBy) => {
+        const qb = ordersRepo.createQueryBuilder();
+        const before = Object.getOwnPropertyNames(Object.prototype).sort();
+
+        await service.findAll({ limit: 10, offset: 0, sortBy }, mockUser);
+
+        expect(qb.orderBy).toHaveBeenCalledWith(
+          "order.created_at",
+          expect.any(String),
+        );
+        expect(Object.getOwnPropertyNames(Object.prototype).sort()).toEqual(
+          before,
+        );
+      },
+    );
   });
 
   describe("findOne", () => {
@@ -359,7 +380,7 @@ describe("OrdersService", () => {
   });
 
   describe("cancel", () => {
-    it("cancels a draft without touching documents", async () => {
+    it("cancels a draft and voids its documents, such as a quotation", async () => {
       const manager = lockedOrderTransaction(mockOrder);
       ordersRepo.findOne.mockResolvedValue({
         ...mockOrder,
@@ -369,7 +390,11 @@ describe("OrdersService", () => {
       const result = await service.cancel("order-1", mockUser);
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
-      expect(receiptsService.voidForCancellation).not.toHaveBeenCalled();
+      expect(receiptsService.voidForCancellation).toHaveBeenCalledWith(
+        manager,
+        "order-1",
+        "user-1",
+      );
       expect(manager.update).toHaveBeenCalledWith(
         Order,
         { id: "order-1", user_id: "user-1", status: OrderStatus.DRAFT },
@@ -797,6 +822,27 @@ describe("OrdersService", () => {
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
+    it("revokes the public links of the order's documents in the same transaction", async () => {
+      const manager = {
+        find: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn().mockResolvedValue({ ...mockOrder }),
+        softDelete: jest.fn(),
+        increment: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await service.remove("order-1", mockUser);
+
+      expect(receiptsService.revokePublicLinksForOrders).toHaveBeenCalledWith(
+        manager,
+        ["order-1"],
+        mockUser.id,
+      );
+      expect(
+        receiptsService.revokePublicLinksForOrders.mock.invocationCallOrder[0],
+      ).toBeLessThan(manager.softDelete.mock.invocationCallOrder[0]);
+    });
+
     it("should handle product not found during removal", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
@@ -814,9 +860,34 @@ describe("OrdersService", () => {
   });
 
   describe("deleteBatch", () => {
+    it("takes the tenant document lock before locking any order", async () => {
+      const calls: string[] = [];
+      dataSource.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          query: jest.fn(async (sql: string) => {
+            calls.push(sql);
+          }),
+          find: jest.fn(async () => {
+            calls.push("find orders");
+            return [{ id: "o1" }];
+          }),
+        }),
+      );
+
+      await expect(service.deleteBatch(["o1", "o2"], mockUser)).rejects.toThrow(
+        ApiErrorResponse,
+      );
+
+      expect(calls[0]).toMatch(
+        /pg_advisory_xact_lock\(hashtextextended\(\$1, 1\)\)/,
+      );
+      expect(calls[1]).toBe("find orders");
+    });
+
     it("should delete batch and restore quantities", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
+          query: jest.fn(),
           find: jest
             .fn()
             .mockResolvedValueOnce([{ id: "o1" }, { id: "o2" }]) // orders
@@ -837,11 +908,17 @@ describe("OrdersService", () => {
 
       expect(result.deleted).toBe(2);
       expect(cacheService.delByPattern).toHaveBeenCalled();
+      expect(receiptsService.revokePublicLinksForOrders).toHaveBeenCalledWith(
+        expect.anything(),
+        ["o1", "o2"],
+        mockUser.id,
+      );
     });
 
     it("should throw if some orders not found", async () => {
       dataSource.transaction.mockImplementation(async (cb: any) => {
         const manager = {
+          query: jest.fn(),
           find: jest.fn().mockResolvedValue([{ id: "o1" }]),
         };
         return cb(manager);

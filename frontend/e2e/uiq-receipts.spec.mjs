@@ -84,7 +84,7 @@ const errorStates = async (results) => {
     await installApiMocks(page, createState());
     await page.route("**/api/v1/public/receipts/gone", (route) => json(route, 404, {}));
     await page.goto(`${BASE_URL}/r/gone`);
-    await page.getByText("Receipt Not Found").waitFor();
+    await page.getByText("Document Not Found").waitFor();
     results.check(
       "404 shows not-found without a Retry button",
       (await page.getByRole("button", { name: "Retry" }).count()) === 0,
@@ -102,7 +102,7 @@ const errorStates = async (results) => {
       return json(route, 200, RECEIPT);
     });
     await page.goto(`${BASE_URL}/r/flaky`);
-    await page.getByText("Could not load this receipt").waitFor();
+    await page.getByText("Could not load this document").waitFor();
     results.check(
       "500 shows the retry message, not 'revoked'",
       !(await page.locator("body").innerText()).includes("revoked"),
@@ -118,7 +118,7 @@ const errorStates = async (results) => {
     await installApiMocks(page, createState());
     await page.route("**/api/v1/public/receipts/offline", (route) => route.abort("connectionfailed"));
     await page.goto(`${BASE_URL}/r/offline`);
-    await page.getByText("Could not load this receipt").waitFor();
+    await page.getByText("Could not load this document").waitFor();
     results.check(
       "a network failure offers Retry",
       (await page.getByRole("button", { name: "Retry" }).count()) === 1,
@@ -172,7 +172,8 @@ const clipboardFailure = async (results) => {
     });
     await page.goto(`${BASE_URL}/orders`);
     await page.getByText("Buyer").first().click();
-    await page.getByRole("button", { name: "Share" }).click();
+    // The waybill card in the order details; the footer repeats its actions.
+    await page.getByTestId("document-card").first().getByRole("button", { name: "Share" }).click();
     const dialog = page.getByRole("dialog").last();
     await dialog.getByRole("button", { name: /Copy/ }).click();
     const alertCount = await dialog.getByRole("alert").count();

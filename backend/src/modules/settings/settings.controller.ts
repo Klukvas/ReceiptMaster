@@ -452,6 +452,14 @@ export class SettingsController {
       companySwift?: string;
       companyWebsite?: string;
       companyTagline?: string;
+      companyTaxIdKind?: "edrpou" | "rnokpp" | null;
+      companyLegalForm?: string | null;
+      companyBankName?: string | null;
+      companyVatPayer?: boolean | null;
+      companyVatId?: string | null;
+      companySignatoryName?: string | null;
+      companySignatoryPosition?: string | null;
+      defaultPaymentTermDays?: number | null;
     },
   ) {
     const input = parseSettingsInput(settingsInput.company, body);

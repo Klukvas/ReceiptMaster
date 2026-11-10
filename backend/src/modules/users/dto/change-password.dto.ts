@@ -1,6 +1,10 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsString, MinLength } from "class-validator";
-import { MIN_PASSWORD_LENGTH } from "./password-policy";
+import {
+  MAX_PASSWORD_BYTES,
+  MaxPasswordBytes,
+  MIN_PASSWORD_LENGTH,
+} from "./password-policy";
 
 export class ChangePasswordDto {
   @ApiProperty({
@@ -11,7 +15,7 @@ export class ChangePasswordDto {
   currentPassword: string;
 
   @ApiProperty({
-    description: "Новый пароль",
+    description: `Новый пароль: не короче ${MIN_PASSWORD_LENGTH} символов и не длиннее ${MAX_PASSWORD_BYTES} байт в UTF-8 (bcrypt хэширует только первые ${MAX_PASSWORD_BYTES} байта)`,
     example: "newPassword123",
     minLength: MIN_PASSWORD_LENGTH,
   })
@@ -19,6 +23,7 @@ export class ChangePasswordDto {
   @MinLength(MIN_PASSWORD_LENGTH, {
     message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
   })
+  @MaxPasswordBytes()
   newPassword: string;
 
   @ApiProperty({

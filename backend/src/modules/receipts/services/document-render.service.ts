@@ -1,9 +1,17 @@
-import { HttpException, Injectable } from "@nestjs/common";
+import { HttpException, Injectable, Optional } from "@nestjs/common";
 import { createHash } from "crypto";
 import { Order, OrderStatus } from "../../orders/entities/order.entity";
 import { DocumentConfig, DocumentDraft } from "../../settings/document-config";
 import { DocumentAssetsService } from "../../settings/services/document-assets.service";
 import { TemplateService, ReceiptTemplate } from "./template.service";
+import {
+  SignoffImages,
+  buildDocumentRenderData,
+  languageOf,
+} from "./document-view";
+import { SignoffSource } from "../../../common/services/signoff-image";
+import { DocumentSignoffService } from "../../settings/services/document-signoff.service";
+import { DOCUMENT_LABELS } from "../templates/translations/document-labels";
 import {
   PlaywrightPdfGenerator,
   PdfOptions,
@@ -17,6 +25,12 @@ import {
   formatDocumentMoney,
 } from "../../../common/utils/document-formatting.util";
 import { resolveReceiptTitle } from "../templates/translations/defaults";
+import {
+  buildFrozenDocument,
+  DocumentContext,
+  FrozenDocument,
+} from "../frozen-document";
+import { assertTemplateSupportsDocument } from "../document-template-support";
 
 export type FrozenOrder = {
   id: string;
@@ -59,7 +73,39 @@ export type RenderSnapshot = {
   sourceRevision: number;
   sourcePreset?: { id: string; revision: number };
   reconstructed?: boolean;
+  /** Every typed document; a waybill snapshot has no such key. Never public. */
+  document?: FrozenDocument;
+  /**
+   * Which signature/stamp images are embedded in the HTML. Ids and hashes only, never the
+   * bytes; present only when the style prints them and at least one is set, so a document
+   * without images keeps the snapshot it always had.
+   */
+  signoff?: SnapshotSignoff;
 };
+export type SnapshotSignoff = {
+  signatureAssetId: string | null;
+  stampAssetId: string | null;
+  signatureSha256?: string;
+  stampSha256?: string;
+};
+
+const sha256 = (bytes: Buffer) =>
+  createHash("sha256").update(bytes).digest("hex");
+const pngDataUri = (bytes: Buffer) =>
+  `data:image/png;base64,${bytes.toString("base64")}`;
+
+/** What the snapshot records about the images in `source`, if any. */
+function snapshotSignoff(source: SignoffSource): SnapshotSignoff | undefined {
+  const { signature, stamp } = source;
+  if (!signature && !stamp) return undefined;
+  return {
+    signatureAssetId: signature?.assetId ?? null,
+    stampAssetId: stamp?.assetId ?? null,
+    ...(signature ? { signatureSha256: sha256(signature.bytes) } : {}),
+    ...(stamp ? { stampSha256: sha256(stamp.bytes) } : {}),
+  };
+}
+
 export function captureOrder(order: Order): FrozenOrder {
   return {
     id: order.id,
@@ -81,17 +127,20 @@ export function captureOrder(order: Order): FrozenOrder {
     })),
   };
 }
+/**
+ * What a prepared document printed from the order: lines, totals, recipient (all through
+ * `captureOrder`) and the status that allows the type. Bookkeeping columns stay out:
+ * `updated_at` and `is_locked` move when another document of the order is promoted (it
+ * locks the order), which changes nothing printed and must not fail this generation.
+ */
 export function orderFingerprint(order: Order): string {
+  const captured = captureOrder(order);
   return createHash("sha256")
     .update(
       JSON.stringify({
-        ...captureOrder(order),
-        items: captureOrder(order)
-          .items.map((item) => JSON.stringify(item))
-          .sort(),
+        ...captured,
+        items: captured.items.map((item) => JSON.stringify(item)).sort(),
         status: order.status,
-        is_locked: order.is_locked,
-        updated_at: order.updated_at,
       }),
     )
     .digest("hex");
@@ -135,13 +184,23 @@ export function sampleOrder(userId: string): Order {
     ],
   } as Order;
 }
+/** Previews rendering at once in this process; each holds a Chrome page. */
+export const PREVIEW_GLOBAL_LIMIT = 2;
+/**
+ * One preview in flight per account, so a single tenant clicking fast cannot hold every
+ * global slot and starve the others.
+ */
+export const PREVIEW_PER_USER_LIMIT = 1;
+
 @Injectable()
 export class DocumentRenderService {
   private previewCount = 0;
+  private readonly previewsByUser = new Map<string, number>();
   constructor(
     private readonly templates: TemplateService,
     private readonly renderer: PlaywrightPdfGenerator,
     private readonly assets: DocumentAssetsService,
+    @Optional() private readonly signoffs?: DocumentSignoffService,
   ) {}
   async prepare(
     userId: string,
@@ -149,9 +208,16 @@ export class DocumentRenderService {
     order: FrozenOrder,
     number: string,
     logo?: Buffer,
+    document?: DocumentContext,
+    signoffSource: SignoffSource = {},
+    now: Date = new Date(),
   ) {
     await this.templates.ready;
     const caps = getTemplateCapabilities(config.templateId);
+    // A style without a signature block ignores the account's images entirely.
+    const signoff: SignoffSource = caps.signoff ? signoffSource : {};
+    if (document)
+      assertTemplateSupportsDocument(document.request.type, config.templateId);
     const visibleCompany = Object.fromEntries(
       Object.entries(config.company).map(([key, value]) => [
         key,
@@ -176,14 +242,45 @@ export class DocumentRenderService {
         ]),
       ),
     };
-    const title = resolveReceiptTitle(
-      config.title.mode === "custom" ? config.title.text : null,
-      config.templateId,
-      config.documentLanguage,
-    );
-    const capturedAt = new Date().toISOString();
+    const capturedAt = now.toISOString();
+    const frozenDocument = document
+      ? buildFrozenDocument(document, config, now)
+      : undefined;
+    // A typed document has a fixed heading; the user's custom title only applies to waybills.
+    const title =
+      frozenDocument?.title ||
+      resolveReceiptTitle(
+        config.title.mode === "custom" ? config.title.text : null,
+        config.templateId,
+        config.documentLanguage,
+      );
     const money = (cents: number) =>
       formatDocumentMoney(cents, order.currency, config.formatting);
+    const documentData = frozenDocument
+      ? buildDocumentRenderData(frozenDocument, order, number, config, {
+          ...(signoff.signature
+            ? { signature: pngDataUri(signoff.signature.bytes) }
+            : {}),
+          ...(signoff.stamp ? { stamp: pngDataUri(signoff.stamp.bytes) } : {}),
+        } satisfies SignoffImages)
+      : undefined;
+    const waybillSignoff =
+      !frozenDocument && (signoff.signature || signoff.stamp)
+        ? {
+            ...(signoff.signature
+              ? { signatureImage: pngDataUri(signoff.signature.bytes) }
+              : {}),
+            ...(signoff.stamp
+              ? { stampImage: pngDataUri(signoff.stamp.bytes) }
+              : {}),
+            labels: {
+              signature: DOCUMENT_LABELS[languageOf(config)].signature,
+              stamp: DOCUMENT_LABELS[languageOf(config)].stamp,
+            },
+          }
+        : undefined;
+    const hidesPrices = documentData?.view.hidesItemPrices === true;
+    const showsMoney = caps.money && !hidesPrices;
     const data = this.templates.prepareTemplateData(
       {
         ...order,
@@ -191,7 +288,8 @@ export class DocumentRenderService {
         recipient,
       } as unknown as Order,
       number,
-      visibleCompany,
+      // The document blocks print the tax id, IBAN and SWIFT themselves.
+      { ...visibleCompany, ...documentData?.headerCompany },
       Boolean(config.logo.visible && logo),
       config.logo.visible && logo
         ? `data:image/png;base64,${logo.toString("base64")}`
@@ -203,7 +301,7 @@ export class DocumentRenderService {
       caps.accent ? config.primaryColor : undefined,
       caps.terms ? config.paymentTerms : undefined,
       caps.terms ? config.deliveryTerms : undefined,
-      config.title.mode === "custom",
+      Boolean(frozenDocument) || config.title.mode === "custom",
       config.formatting,
     );
     // Automatic mode keeps the original template/shared print CSS geometry.
@@ -224,27 +322,53 @@ export class DocumentRenderService {
         ...data,
         logoStyle,
         logoSlotStyle,
+        ...(waybillSignoff ? { signoff: waybillSignoff } : {}),
+        ...(frozenDocument && documentData
+          ? {
+              documentTitle: frozenDocument.title,
+              document: documentData.view,
+              translations: {
+                ...data.translations,
+                ...documentData.translationOverrides,
+              },
+            }
+          : {}),
+        // Minimal's footer is only a rule when nothing fills it; on a typed document that
+        // rule can fall alone onto an otherwise blank last page.
+        footerHidden:
+          Boolean(frozenDocument) &&
+          ![
+            data.footerTitle,
+            data.footerSubtitle,
+            data.companyIban,
+            data.companyEmail,
+            data.companyPhone,
+            data.companyWebsite,
+          ].some(Boolean),
         recipientEmail: recipient.email,
         recipientPhone: recipient.phone,
         recipientAddress: recipient.address,
-        orderDate: formatDocumentDate(
-          order.created_at,
-          config.documentLanguage,
-          config.formatting,
-        ),
+        orderDate:
+          documentData?.orderDate ??
+          formatDocumentDate(
+            order.created_at,
+            config.documentLanguage,
+            config.formatting,
+          ),
         generatedAt: formatDocumentDate(
           capturedAt,
           config.documentLanguage,
           config.formatting,
         ),
+        // A document without money never formats a price, so none can reach its HTML.
         items: order.items.map((item) => ({
           productName: item.product_name,
           qty: item.qty,
-          unitPrice: money(item.unit_price_cents),
-          lineTotal: money(item.line_total_cents),
+          unitPrice: hidesPrices ? "" : money(item.unit_price_cents),
+          lineTotal: hidesPrices ? "" : money(item.line_total_cents),
         })),
-        subtotal: money(order.subtotal_cents),
-        total: money(order.total_cents),
+        subtotal: hidesPrices ? "" : money(order.subtotal_cents),
+        total: hidesPrices ? "" : money(order.total_cents),
       },
     );
     const publicProjection: PublicProjection = {
@@ -252,17 +376,17 @@ export class DocumentRenderService {
       order: {
         ...order,
         recipient,
-        subtotal_cents: caps.money ? order.subtotal_cents : undefined,
-        total_cents: caps.money ? order.total_cents : undefined,
+        subtotal_cents: showsMoney ? order.subtotal_cents : undefined,
+        total_cents: showsMoney ? order.total_cents : undefined,
         items: order.items.map((item) =>
-          caps.money
+          showsMoney
             ? item
             : { product_name: item.product_name, qty: item.qty },
         ),
       },
       formatting: config.formatting,
       documentLanguage: config.documentLanguage,
-      money: caps.money,
+      money: showsMoney,
     };
     const snapshot: RenderSnapshot = {
       config,
@@ -273,6 +397,10 @@ export class DocumentRenderService {
       htmlHash: createHash("sha256").update(html).digest("hex"),
       publicProjection,
       sourceRevision: 0,
+      ...(frozenDocument ? { document: frozenDocument } : {}),
+      ...(snapshotSignoff(signoff)
+        ? { signoff: snapshotSignoff(signoff) }
+        : {}),
     };
     return { html, snapshot };
   }
@@ -282,9 +410,14 @@ export class DocumentRenderService {
     order: Order,
     file?: Express.Multer.File,
   ): Promise<Buffer> {
-    if (this.previewCount >= 2)
+    const userPreviews = this.previewsByUser.get(userId) ?? 0;
+    if (
+      this.previewCount >= PREVIEW_GLOBAL_LIMIT ||
+      userPreviews >= PREVIEW_PER_USER_LIMIT
+    )
       throw new HttpException("Preview busy; retry shortly", 429);
     this.previewCount++;
+    this.previewsByUser.set(userId, userPreviews + 1);
     try {
       const logo = await this.assets.preview(userId, draft, file);
       const { html, snapshot } = await this.prepare(
@@ -293,10 +426,18 @@ export class DocumentRenderService {
         captureOrder(order),
         "PREVIEW-0001",
         logo,
+        undefined,
+        // The preview shows the stored images; a styles without a signature block drops them.
+        getTemplateCapabilities(draft.config.templateId).signoff
+          ? (await this.signoffs?.load(userId))?.source
+          : undefined,
       );
       return await this.renderer.generatePdf(html, snapshot.options);
     } finally {
       this.previewCount--;
+      const remaining = (this.previewsByUser.get(userId) ?? 1) - 1;
+      if (remaining > 0) this.previewsByUser.set(userId, remaining);
+      else this.previewsByUser.delete(userId);
     }
   }
   async render(html: string, snapshot: RenderSnapshot): Promise<Buffer> {

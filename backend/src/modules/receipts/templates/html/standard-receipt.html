@@ -235,6 +235,12 @@
             }
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoffStyles}}
+        {{/if}}
     </style>
 </head>
 <body>
@@ -266,6 +272,7 @@
                 <span class="info-label">{{#if translations.date}}{{translations.date}}{{else}}Date:{{/if}}</span>
                 <span class="info-value">{{orderDate}}</span>
             </div>
+            {{#unless document}}
             <div class="info-row">
                 <span class="info-label">{{#if translations.recipient}}{{translations.recipient}}{{else}}Recipient:{{/if}}</span>
                 <span class="info-value">{{recipientName}}</span>
@@ -288,31 +295,52 @@
                 <span class="info-value">{{recipientAddress}}</span>
             </div>
             {{/if}}
+            {{/unless}}
         </div>
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead>
                 <tr>
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    {{#if document}}
+                    <th class="doc-unit">{{document.labels.unitOfMeasure}}</th>
+                    {{/if}}
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#unless document.hidesItemPrices}}
                     <th class="col-price">{{#if translations.price}}{{translations.price}}{{else}}Price{{/if}}</th>
                     <th class="col-total">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/unless}}
                 </tr>
             </thead>
             <tbody>
                 {{#each items}}
                 <tr>
                     <td class="col-description">{{productName}}</td>
+                    {{#if @root.document}}
+                    <td class="doc-unit">{{@root.document.itemUnit}}</td>
+                    {{/if}}
                     <td class="col-qty">{{qty}}</td>
+                    {{#unless @root.document.hidesItemPrices}}
                     <td class="col-price">{{unitPrice}}</td>
                     <td class="col-total">{{lineTotal}}</td>
+                    {{/unless}}
                 </tr>
                 {{/each}}
             </tbody>
         </table>
         
         <!-- Totals -->
+        {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="totals-section">
             <div class="subtotal-row">
                 <span class="subtotal-label">{{#if translations.subtotal}}{{translations.subtotal}}{{else}}Subtotal{{/if}}</span>
@@ -323,7 +351,14 @@
                 <span class="total-value">{{total}}</span>
             </div>
         </div>
+        {{/if}}
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoff}}
+        {{/if}}
         <!-- Footer -->
         <div class="footer">
             {{#if footerTitle}}
@@ -361,8 +396,11 @@
                 {{/if}}
             </div>
             
-            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Receipt generated:{{/if}} {{generatedAt}}</div>
+            <div class="footer-timestamp">{{#if translations.generatedAt}}{{translations.generatedAt}}{{else}}Document generated:{{/if}} {{generatedAt}}</div>
         </div>
+        {{#if document}}
+        </div>
+        {{/if}}
     </div>
 </body>
 </html>

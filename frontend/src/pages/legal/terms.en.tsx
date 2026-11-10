@@ -4,7 +4,7 @@ import type { LegalContent } from "./types";
 export const termsEn: LegalContent = {
   title: "Terms of Service",
   seoDescription:
-    "Terms of Service for ReceiptMaster — cloud-based platform for digital receipts and invoices.",
+    "Terms of Service for ReceiptMaster — cloud-based platform for business documents: delivery notes, quotes, payment invoices, acts of completed work, sales receipts, packing lists and return notes.",
   body: (
     <>
       <h2>1. Introduction</h2>
@@ -22,10 +22,117 @@ export const termsEn: LegalContent = {
       <h2>2. Description of Service</h2>
       <p>
         ReceiptMaster is a cloud-based platform that allows businesses to
-        create, manage, and share digital receipts and invoices. The Service
-        includes product catalog management, order processing, receipt
-        generation with customizable templates, and analytics dashboards.
+        create, manage, and share business documents as PDF files: a delivery
+        note, a quote (commercial offer), a payment invoice, an act of completed
+        work or services, a sales receipt, a packing list and a return note. The Service includes product catalog management, order processing,
+        document generation with customizable templates, and analytics
+        dashboards.
       </p>
+
+      <h3>2.1 Documents and your responsibility</h3>
+      <p>
+        The documents are generated from the data you enter. Please note:
+      </p>
+      <ul>
+        <li>
+          You are responsible for the accuracy of everything that appears in a
+          document: names, tax numbers, bank details, addresses, prices,
+          quantities and VAT, and for whether a given document is suitable and
+          sufficient for your situation under applicable law.
+        </li>
+        <li>
+          The documents are PDF files. The Service does not sign them with a
+          qualified electronic signature (QES) or any other electronic
+          signature. If you need a signed document, print and sign it by hand,
+          or sign the file yourself using other tools.
+        </li>
+        <li>
+          You are responsible for having the right to use any signature or
+          stamp image you upload, and for its accuracy. Upload only your own
+          images or images you are properly authorised to use.
+        </li>
+        <li>
+          An image of a signature or stamp (a facsimile) printed on a document
+          is not a qualified electronic signature (QES). A document that
+          carries such an image does not become electronically signed.
+        </li>
+        <li>
+          A facsimile reproduction of a signature has legal effect only where
+          the law provides for it or where the parties have agreed to it in
+          writing (Article 207 of the Civil Code of Ukraine).
+        </li>
+        <li>
+          The documents are not fiscal receipts or settlement documents issued
+          through a registrar of settlement operations (RRO/PRRO) and do not
+          replace them where the law requires one.
+        </li>
+        <li>
+          A sales receipt is a non-fiscal document that confirms a sale. It is
+          not a settlement document of an RRO/PRRO and does not replace one.
+        </li>
+        <li>
+          A packing list contains no prices and is not a primary document
+          confirming payment.
+        </li>
+        <li>
+          A payment invoice is a request for payment. It is generally not a
+          primary accounting document and does not by itself confirm that goods
+          were delivered or services were performed.
+        </li>
+        <li>
+          A quote (commercial offer) is an informational offer. It is not an
+          invoice, not a primary accounting document and not a basis for
+          payment or accounting entries.
+        </li>
+        <li>
+          A return note is an informational document that records which goods
+          and in what quantity are returned under an order. It does not change
+          stock levels, is not a fiscal or settlement document of an RRO/PRRO
+          and is not a tax invoice adjustment calculation. An order can have
+          several return notes, but together they cannot exceed the quantity
+          ordered.
+        </li>
+        <li>
+          The Service does not generate tax invoices and does not register them
+          in the Unified Register of Tax Invoices.
+        </li>
+        <li>
+          If you mark yourself as a VAT payer in your company settings, the
+          documents show VAT at a fixed rate of 20% as included in the prices;
+          other rates are not supported and the rate cannot be changed at this
+          time. If you mark yourself as not
+          a VAT payer, they state "without VAT". Please check with your
+          accountant that this fits your case.
+        </li>
+        <li>
+          The Service does not provide accounting, tax or legal advice and does
+          not verify that a document meets the requirements that apply to you.
+        </li>
+      </ul>
+
+      <h3>2.2 Storage and sharing of documents</h3>
+      <ul>
+        <li>
+          The Service is not an archive of your accounting records. It keeps
+          the 10 most recent generated documents of each of these types:
+          delivery note, quote, sales receipt and packing list. Generating a
+          new one permanently removes the oldest document of the same type,
+          together with its PDF file and public link. Payment invoices, acts of
+          completed work, return notes, and voided and failed documents of any
+          type are not removed under this limit and are kept for as long as
+          your account exists. You are responsible for saving copies of the
+          documents you are required to keep.
+        </li>
+        <li>
+          You can share a document through a public link. Anyone who has the
+          link can open the document, and it may contain details of both
+          parties, such as tax numbers, the seller's bank account number (IBAN)
+          and addresses. You decide whom to give a link to. You can revoke a
+          link in the Service; it also stops working when the document is
+          voided, its order is cancelled, or the document is removed under the
+          storage limit.
+        </li>
+      </ul>
 
       <h2>3. Account Registration</h2>
       <p>
@@ -131,7 +238,7 @@ export const termsEn: LegalContent = {
           Interfere with or disrupt the integrity or performance of the Service
         </li>
         <li>Upload or transmit malicious code, viruses, or harmful data</li>
-        <li>Use the Service to generate fraudulent receipts or documents</li>
+        <li>Use the Service to generate fraudulent or falsified documents</li>
         <li>
           Resell, sublicense, or redistribute the Service without our written
           consent

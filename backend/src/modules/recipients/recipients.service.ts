@@ -1,7 +1,8 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Raw, Repository } from "typeorm";
+import { EntityManager, Raw, Repository } from "typeorm";
 import { Recipient } from "./entities/recipient.entity";
 import { Order } from "../orders/entities/order.entity";
 import { CreateRecipientDto } from "./dto/create-recipient.dto";
@@ -16,6 +17,11 @@ import {
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
 import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
+import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
+import {
+  inferTaxIdKind,
+  TaxIdKind,
+} from "../../common/utils/ua-requisites.util";
 
 const RECIPIENT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "recipient.name",
@@ -32,7 +38,89 @@ const CLEARABLE_FIELDS: ReadonlySet<string> = new Set([
   "email",
   "phone",
   "address",
+  "legal_name",
+  "tax_id",
+  "tax_id_kind",
+  "iban",
+  "bank_name",
+  "legal_address",
 ]);
+
+/** Partial unique index on (user_id, lower(email)), migration RecipientEmailUnique1793800000000. */
+export const RECIPIENT_EMAIL_UNIQUE_INDEX = "IDX_recipients_user_email_unique";
+
+/**
+ * The pre-check gives the friendly error in the common case; the unique index is the
+ * rule, so a concurrent write that slips past the check gets the same 409.
+ */
+async function rejectingDuplicateEmail<T>(
+  email: string | null | undefined,
+  write: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (email && isUniqueViolationOf(error, RECIPIENT_EMAIL_UNIQUE_INDEX)) {
+      throw ApiErrors.RECIPIENT_ALREADY_EXISTS(email);
+    }
+    throw error;
+  }
+}
+
+type TaxIdPair = { tax_id: string | null; tax_id_kind: TaxIdKind | null };
+
+/** The kind follows the number's length; a kind that disagrees with it is a client error. */
+function resolveTaxId(input: {
+  tax_id?: string | null;
+  tax_id_kind?: TaxIdKind | null;
+}): Partial<TaxIdPair> {
+  const { tax_id: taxId, tax_id_kind: kind } = input;
+  if (taxId === undefined || taxId === null) {
+    if (kind) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "tax_id_kind",
+        "tax_id_kind requires tax_id",
+      );
+    }
+    return {};
+  }
+  const inferred = inferTaxIdKind(taxId);
+  if (kind && kind !== inferred) {
+    throw ApiErrors.VALIDATION_ERROR(
+      "tax_id_kind",
+      `tax_id_kind ${kind} does not match the length of tax_id`,
+    );
+  }
+  return { tax_id: taxId, tax_id_kind: inferred };
+}
+
+/** PATCH semantics: tax_id and its kind always move together, and null clears both. */
+function resolveTaxIdChange(
+  input: UpdateRecipientDto,
+  current: Pick<Recipient, "tax_id">,
+): Partial<TaxIdPair> {
+  if (input.tax_id === null) {
+    if (input.tax_id_kind) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "tax_id_kind",
+        "tax_id_kind requires tax_id",
+      );
+    }
+    return { tax_id: null, tax_id_kind: null };
+  }
+  if (input.tax_id !== undefined) return resolveTaxId(input);
+  if (input.tax_id_kind === undefined) return {};
+  if (input.tax_id_kind === null || !current.tax_id) {
+    throw ApiErrors.VALIDATION_ERROR(
+      "tax_id_kind",
+      "tax_id_kind cannot be set or cleared without tax_id",
+    );
+  }
+  return resolveTaxId({
+    tax_id: current.tax_id,
+    tax_id_kind: input.tax_id_kind,
+  });
+}
 
 @Injectable()
 export class RecipientsService {
@@ -45,22 +133,30 @@ export class RecipientsService {
     createRecipientDto: CreateRecipientDto,
     user: User,
   ): Promise<Recipient> {
-    await this.assertEmailAvailable(createRecipientDto.email, user);
+    await this.assertEmailAvailable(
+      this.recipientsRepository.manager,
+      createRecipientDto.email,
+      user,
+    );
     const recipient = this.recipientsRepository.create({
       ...createRecipientDto,
+      ...resolveTaxId(createRecipientDto),
       user_id: user.id,
     });
-    return this.recipientsRepository.save(recipient);
+    return rejectingDuplicateEmail(createRecipientDto.email, () =>
+      this.recipientsRepository.save(recipient),
+    );
   }
 
   private async assertEmailAvailable(
-    email: string | undefined,
+    manager: EntityManager,
+    email: string | null | undefined,
     user: User,
     excludeRecipientId?: string,
   ): Promise<void> {
     if (!email) return;
 
-    const duplicate = await this.recipientsRepository.findOne({
+    const duplicate = await manager.findOne(Recipient, {
       where: {
         user_id: user.id,
         email: Raw((alias) => `LOWER(${alias}) = :email`, {
@@ -74,28 +170,41 @@ export class RecipientsService {
     }
   }
 
-  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  /**
+   * A repeated Idempotency-Key replays the first create instead of adding a duplicate.
+   * The email check runs after the key lookup, so a replay of a create that stored an
+   * email returns the stored response instead of a 409 for its own recipient.
+   */
   async createWithIdempotencyKey(
     createRecipientDto: CreateRecipientDto,
     user: User,
     idempotencyKey: string,
   ): Promise<IdempotentCreateResult<Recipient>> {
-    return this.recipientsRepository.manager.transaction((manager) =>
-      createIdempotently(
-        manager,
-        {
-          scope: "recipient",
-          key: idempotencyKey,
-          userId: user.id,
-          payload: createRecipientDto,
-        },
-        () =>
-          manager.save(
-            manager.create(Recipient, {
-              ...createRecipientDto,
-              user_id: user.id,
-            }),
-          ),
+    return rejectingDuplicateEmail(createRecipientDto.email, () =>
+      this.recipientsRepository.manager.transaction((manager) =>
+        createIdempotently(
+          manager,
+          {
+            scope: "recipient",
+            key: idempotencyKey,
+            userId: user.id,
+            payload: createRecipientDto,
+          },
+          async () => {
+            await this.assertEmailAvailable(
+              manager,
+              createRecipientDto.email,
+              user,
+            );
+            return manager.save(
+              manager.create(Recipient, {
+                ...createRecipientDto,
+                ...resolveTaxId(createRecipientDto),
+                user_id: user.id,
+              }),
+            );
+          },
+        ),
       ),
     );
   }
@@ -133,8 +242,11 @@ export class RecipientsService {
       );
     }
 
-    const sortColumn =
-      RECIPIENT_SORTABLE_COLUMNS[sortBy] || "recipient.created_at";
+    const sortColumn = pickSortColumn(
+      RECIPIENT_SORTABLE_COLUMNS,
+      sortBy,
+      "recipient.created_at",
+    );
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     // Many recipients tie on a count or a sum (most have none), so a stable tiebreak keeps
     // pages from repeating or skipping rows.
@@ -175,9 +287,20 @@ export class RecipientsService {
   ): Promise<Recipient> {
     assertNoNullForRequiredFields(updateRecipientDto, CLEARABLE_FIELDS);
     const recipient = await this.findOne(id, user);
-    await this.assertEmailAvailable(updateRecipientDto.email, user, id);
-    Object.assign(recipient, updateRecipientDto);
-    return this.recipientsRepository.save(recipient);
+    await this.assertEmailAvailable(
+      this.recipientsRepository.manager,
+      updateRecipientDto.email,
+      user,
+      id,
+    );
+    Object.assign(
+      recipient,
+      updateRecipientDto,
+      resolveTaxIdChange(updateRecipientDto, recipient),
+    );
+    return rejectingDuplicateEmail(updateRecipientDto.email, () =>
+      this.recipientsRepository.save(recipient),
+    );
   }
 
   async remove(id: string, user: User): Promise<void> {

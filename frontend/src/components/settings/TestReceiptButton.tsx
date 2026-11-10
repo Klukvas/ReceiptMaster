@@ -1,6 +1,7 @@
 import { useState } from"react";
 import { FileText, Loader2, Download, Eye } from"lucide-react";
 import { receiptsApi } from"../../lib/api";
+import { previewRateLimitText } from"../../lib/api-errors";
 import { Button } from"../ui/Button";
 import { SettingsSection } from"./SettingsSection";
 import { useTranslation } from"../../hooks/useTranslation";
@@ -11,6 +12,10 @@ export const TestReceiptButton = () => {
  const [isGenerating, setIsGenerating] = useState(false);
  const [error, setError] = useState<string | null>(null);
 
+ // A 429 is either the rate limit (with its wait) or a preview of this account still rendering.
+ const failureText = async (error: unknown): Promise<string> =>
+ (await previewRateLimitText(error)) ?? t("settings.testReceiptError","Failed to generate test receipt");
+
  const handleTestPreview = async () => {
  setIsGenerating(true);
  setError(null);
@@ -18,10 +23,8 @@ export const TestReceiptButton = () => {
  const response = await receiptsApi.testPreview();
  const blob = new Blob([response.data], { type:"application/pdf" });
  openPdfInNewTab(blob);
- } catch {
- setError(
- t("settings.testReceiptError","Failed to generate test receipt"),
- );
+ } catch (error) {
+ setError(await failureText(error));
  } finally {
  setIsGenerating(false);
  }
@@ -34,10 +37,8 @@ export const TestReceiptButton = () => {
  const response = await receiptsApi.testPreview();
  const blob = new Blob([response.data], { type:"application/pdf" });
  downloadPdf(blob,"test-receipt.pdf");
- } catch {
- setError(
- t("settings.testReceiptError","Failed to generate test receipt"),
- );
+ } catch (error) {
+ setError(await failureText(error));
  } finally {
  setIsGenerating(false);
  }

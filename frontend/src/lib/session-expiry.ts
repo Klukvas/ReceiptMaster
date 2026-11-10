@@ -3,6 +3,7 @@ const SESSION_EXPIRED_KEY = "session_expired";
 const PROTECTED_PATH_PREFIXES = [
   "/dashboard",
   "/orders",
+  "/documents",
   "/products",
   "/recipients",
   "/suppliers",

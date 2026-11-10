@@ -1,6 +1,7 @@
 export interface ApiError {
   error: string;
   errorCode: string;
+  [detail: string]: unknown;
 }
 
 export class ApiErrorResponse extends Error {
@@ -8,17 +9,27 @@ export class ApiErrorResponse extends Error {
   public readonly errorCode: string;
   public readonly statusCode: number;
 
-  constructor(error: string, errorCode: string, statusCode: number = 400) {
+  /** Machine-readable extras (e.g. the missing `fields`), merged into the response body. */
+  public readonly details?: Record<string, unknown>;
+
+  constructor(
+    error: string,
+    errorCode: string,
+    statusCode: number = 400,
+    details?: Record<string, unknown>,
+  ) {
     super(error);
     this.error = error;
     this.errorCode = errorCode;
     this.statusCode = statusCode;
+    this.details = details;
   }
 
   toJSON(): ApiError {
     return {
       error: this.error,
       errorCode: this.errorCode,
+      ...this.details,
     };
   }
 }
@@ -98,6 +109,66 @@ export const ApiErrors = {
       `Receipt for order ${orderId} already exists`,
       "RECEIPT_ALREADY_EXISTS",
       409,
+    ),
+  DOCUMENT_ALREADY_EXISTS: (orderId: string, type: string) =>
+    new ApiErrorResponse(
+      `A ${type} for order ${orderId} already exists`,
+      "DOCUMENT_ALREADY_EXISTS",
+      409,
+    ),
+  DOCUMENT_NOT_VOIDABLE: (id: string, type: string, status: string) =>
+    new ApiErrorResponse(
+      `The ${type} ${id} is ${status}, not issued, and cannot be voided: a voided ${type} closes the order's ${type} slot for good. Retry the generation instead.`,
+      "DOCUMENT_NOT_VOIDABLE",
+      409,
+    ),
+  DOCUMENT_NUMBERS_EXHAUSTED: (type: string) =>
+    new ApiErrorResponse(
+      `The ${type} counter has reached the largest possible number; no further ${type} number can be issued. Change the number format or contact support.`,
+      "DOCUMENT_NUMBERS_EXHAUSTED",
+      409,
+    ),
+  DOCUMENT_TYPE_NOT_SUPPORTED: (type: string) =>
+    new ApiErrorResponse(
+      `Document type "${type}" cannot be generated yet`,
+      "DOCUMENT_TYPE_NOT_SUPPORTED",
+      400,
+    ),
+  DOCUMENT_TEMPLATE_UNSUPPORTED: (type: string, templateId: string) =>
+    new ApiErrorResponse(
+      `Template "${templateId}" cannot carry this document type (${type}); choose another template`,
+      "DOCUMENT_TEMPLATE_UNSUPPORTED",
+      400,
+    ),
+  DOCUMENT_AMOUNT_INVALID: (orderId: string) =>
+    new ApiErrorResponse(
+      `The total or currency of order ${orderId} cannot be printed on a document; check the order's currency and amounts`,
+      "DOCUMENT_AMOUNT_INVALID",
+      422,
+    ),
+  DOCUMENT_REQUISITES_MISSING: (
+    type: string,
+    fields: string[],
+    warnings: string[],
+  ) =>
+    new ApiErrorResponse(
+      `Cannot generate a ${type}: fill in ${fields.join(", ")}`,
+      "DOCUMENT_REQUISITES_MISSING",
+      422,
+      { fields, warnings },
+    ),
+  RETURN_QUANTITY_EXCEEDED: (
+    shortfalls: Array<{
+      orderItemId: string;
+      requested: number;
+      remaining: number;
+    }>,
+  ) =>
+    new ApiErrorResponse(
+      "Cannot return more than was sold: the quantity left to return is lower than requested",
+      "RETURN_QUANTITY_EXCEEDED",
+      422,
+      { items: shortfalls },
     ),
   RECEIPT_GENERATION_FAILED: (orderId: string) =>
     new ApiErrorResponse(
@@ -188,6 +259,21 @@ export const ApiErrors = {
       `Validation error for ${field}: ${message}`,
       "VALIDATION_ERROR",
       400,
+    ),
+  /** Stable code for the client to localize; `field` names the request key at fault. */
+  INVOICE_DUE_DATE_BEFORE_ISSUE_DATE: (dueDate: string, issueDate: string) =>
+    new ApiErrorResponse(
+      "Validation error for details.dueDate: must not be earlier than the issue date",
+      "INVOICE_DUE_DATE_BEFORE_ISSUE_DATE",
+      400,
+      { field: "details.dueDate", dueDate, issueDate },
+    ),
+  NUMBERING_START_TOO_LOW: (minStart: number) =>
+    new ApiErrorResponse(
+      `The start number must be at least ${minStart}: lower numbers are already used`,
+      "NUMBERING_START_TOO_LOW",
+      409,
+      { minStart },
     ),
   REQUIRED_FIELD_MISSING: (field: string) =>
     new ApiErrorResponse(

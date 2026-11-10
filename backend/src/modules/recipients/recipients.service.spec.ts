@@ -7,6 +7,13 @@ import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
+import { QueryFailedError } from "typeorm";
+
+const uniqueEmailViolation = () =>
+  new QueryFailedError("INSERT", [], {
+    code: "23505",
+    constraint: "IDX_recipients_user_email_unique",
+  } as unknown as Error);
 
 describe("RecipientsService", () => {
   let service: RecipientsService;
@@ -46,6 +53,10 @@ describe("RecipientsService", () => {
       remove: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
+    // The email pre-check reads through the manager; route it to the same mock.
+    recipientsRepo.manager = {
+      findOne: jest.fn((_entity, options) => recipientsRepo.findOne(options)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,10 +82,15 @@ describe("RecipientsService", () => {
   });
 
   describe("createWithIdempotencyKey", () => {
-    const transactionManager = (stored: unknown) => ({
+    const transactionManager = (
+      stored: unknown,
+      duplicate: unknown = null,
+    ) => ({
       queryRunner: { isTransactionActive: true },
       query: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(stored),
+      findOne: jest.fn((entity) =>
+        Promise.resolve(entity === Recipient ? duplicate : stored),
+      ),
       delete: jest.fn(),
       insert: jest.fn().mockResolvedValue({}),
       create: jest.fn((_entity, data) => ({ ...data })),
@@ -123,6 +139,62 @@ describe("RecipientsService", () => {
       });
       expect(manager.save).not.toHaveBeenCalled();
     });
+
+    it("refuses an email another recipient of the user already has", async () => {
+      const manager = transactionManager(null, { id: "rec-other" });
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+          "key-2",
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_ALREADY_EXISTS",
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it("replays a stored create with an email instead of reporting its own recipient as a duplicate", async () => {
+      const manager = transactionManager(
+        {
+          id: "row-1",
+          response: { id: "rec-1", email: "john@test.com" },
+          expires_at: new Date(Date.now() + 60_000),
+        },
+        { id: "rec-1" },
+      );
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane", email: "john@test.com" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result.replayed).toBe(true);
+    });
+
+    it("maps a concurrent duplicate caught by the unique index to 409", async () => {
+      recipientsRepo.manager = {
+        transaction: jest.fn().mockRejectedValue(uniqueEmailViolation()),
+      };
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+          "key-3",
+        ),
+      ).rejects.toMatchObject({ errorCode: "RECIPIENT_ALREADY_EXISTS" });
+    });
   });
 
   describe("findAll", () => {
@@ -159,6 +231,24 @@ describe("RecipientsService", () => {
       );
       expect(qb.addOrderBy).toHaveBeenCalledWith("recipient.id", "ASC");
     });
+
+    it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])(
+      "ignores the inherited sort key %s and sorts by the default",
+      async (sortBy) => {
+        const qb = recipientsRepo.createQueryBuilder();
+        const before = Object.getOwnPropertyNames(Object.prototype).sort();
+
+        await service.findAll({ limit: 10, offset: 0, sortBy }, mockUser);
+
+        expect(qb.orderBy).toHaveBeenCalledWith(
+          "recipient.created_at",
+          expect.any(String),
+        );
+        expect(Object.getOwnPropertyNames(Object.prototype).sort()).toEqual(
+          before,
+        );
+      },
+    );
   });
 
   describe("findOne", () => {
@@ -215,6 +305,32 @@ describe("RecipientsService", () => {
       );
 
       expect(recipientsRepo.save).toHaveBeenCalled();
+    });
+
+    it("maps a unique-index violation on create to 409", async () => {
+      recipientsRepo.findOne.mockResolvedValue(null);
+      recipientsRepo.save.mockRejectedValue(uniqueEmailViolation());
+
+      await expect(
+        service.create(
+          { name: "Jane", email: "john@test.com" } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: "RECIPIENT_ALREADY_EXISTS",
+      });
+    });
+
+    it("maps a unique-index violation on update to 409", async () => {
+      recipientsRepo.findOne
+        .mockResolvedValueOnce({ ...mockRecipient })
+        .mockResolvedValueOnce(null);
+      recipientsRepo.save.mockRejectedValue(uniqueEmailViolation());
+
+      await expect(
+        service.update("rec-1", { email: "new@test.com" } as any, mockUser),
+      ).rejects.toMatchObject({ errorCode: "RECIPIENT_ALREADY_EXISTS" });
     });
   });
 
@@ -273,10 +389,97 @@ describe("RecipientsService", () => {
     );
   });
 
+  describe("counterparty requisites", () => {
+    const withRequisites = {
+      id: "rec-1",
+      name: "John Doe",
+      user_id: "user-1",
+      tax_id: "12345678",
+      tax_id_kind: "edrpou",
+      iban: "UA213223130000026007233566001",
+    };
+
+    it("derives the kind from the tax id length on create", async () => {
+      await service.create({ name: "A", tax_id: "1234567890" }, mockUser);
+
+      expect(recipientsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: "1234567890",
+          tax_id_kind: "rnokpp",
+        }),
+      );
+    });
+
+    it("rejects a kind that disagrees with the tax id", async () => {
+      await expect(
+        service.create(
+          { name: "A", tax_id: "12345678", tax_id_kind: "rnokpp" },
+          mockUser,
+        ),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("rejects a kind without a tax id", async () => {
+      await expect(
+        service.create({ name: "A", tax_id_kind: "edrpou" }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+    });
+
+    it("recomputes the kind when a new tax id arrives without one", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id: "1234567890" }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: "1234567890",
+          tax_id_kind: "rnokpp",
+        }),
+      );
+    });
+
+    it("clears the kind together with the tax id on null", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id: null, iban: null }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tax_id: null,
+          tax_id_kind: null,
+          iban: null,
+        }),
+      );
+    });
+
+    it("refuses to change or clear the kind alone", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await expect(
+        service.update("rec-1", { tax_id_kind: "rnokpp" }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+      await expect(
+        service.update("rec-1", { tax_id_kind: null }, mockUser),
+      ).rejects.toThrow(ApiErrorResponse);
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("accepts a kind alone when it matches the stored tax id", async () => {
+      recipientsRepo.findOne.mockResolvedValue({ ...withRequisites });
+
+      await service.update("rec-1", { tax_id_kind: "edrpou" }, mockUser);
+
+      expect(recipientsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ tax_id: "12345678", tax_id_kind: "edrpou" }),
+      );
+    });
+  });
+
   describe("remove", () => {
     beforeEach(() => {
       recipientsRepo.findOne.mockResolvedValue(mockRecipient);
-      recipientsRepo.manager = { exists: jest.fn() };
+      recipientsRepo.manager = { ...recipientsRepo.manager, exists: jest.fn() };
     });
 
     it("should delete recipient without orders", async () => {

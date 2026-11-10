@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
+import type { DocumentWarning } from "../document-warnings";
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { Order } from "../../orders/entities/order.entity";
 import { User } from "../../users/entities/user.entity";
@@ -19,9 +20,36 @@ export enum ReceiptStatus {
   FAILED = "failed",
 }
 
+/**
+ * `waybill` (видаткова накладна), `invoice` (рахунок на оплату), `act` (акт виконаних
+ * робіт), `sales_receipt` (товарний чек, non-fiscal) and `packing_list` (пакувальний лист,
+ * no prices) are generated today; the rest are reserved.
+ */
+export enum DocumentType {
+  WAYBILL = "waybill",
+  INVOICE = "invoice",
+  QUOTE = "quote",
+  ACT = "act",
+  SALES_RECEIPT = "sales_receipt",
+  PACKING_LIST = "packing_list",
+  RETURN_NOTE = "return_note",
+}
+
 @Entity("receipts")
-@Index(["order_id"], { unique: true })
-@Index(["user_id", "number"], { unique: true })
+// A return note is the one type an order may carry several of (partial returns). A voided
+// invoice, act or quotation is history and frees its slot for a reissue; any other voided type keeps it.
+@Index("IDX_receipts_order_document_type", ["order_id", "document_type"], {
+  unique: true,
+  where: `"document_type" <> 'return_note' AND ("status" <> 'void' OR "document_type" NOT IN ('invoice', 'act', 'quote'))`,
+})
+@Index(
+  "IDX_receipts_user_type_number",
+  ["user_id", "document_type", "number"],
+  {
+    unique: true,
+  },
+)
+@Index("IDX_receipts_order_id", ["order_id"])
 @Index(["user_id", "created_at"])
 export class Receipt {
   @ApiProperty()
@@ -29,8 +57,17 @@ export class Receipt {
   id: string;
 
   @ApiProperty()
-  @Column({ type: "uuid", unique: true })
+  @Column({ type: "uuid" })
   order_id: string;
+
+  @ApiProperty({ enum: DocumentType })
+  @Column({
+    type: "enum",
+    enum: DocumentType,
+    enumName: "receipts_document_type_enum",
+    default: DocumentType.WAYBILL,
+  })
+  document_type: DocumentType;
 
   @ApiProperty()
   @Column({ type: "varchar", length: 50 })
@@ -138,4 +175,7 @@ export class Receipt {
   @ManyToOne(() => Order, (order) => order.receipts)
   @JoinColumn({ name: "order_id" })
   order: Order;
+
+  /** Not a column: set only on the row returned by the call that issued the document. */
+  warnings?: DocumentWarning[];
 }

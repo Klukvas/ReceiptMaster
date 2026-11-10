@@ -1,4 +1,9 @@
-import { HttpException, HttpStatus, Logger } from "@nestjs/common";
+import {
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from "@nestjs/common";
 import { QueryFailedError } from "typeorm";
 import { GlobalExceptionFilter } from "./GlobalExceptionFilter";
 import { ApiErrorResponse, ApiErrors } from "../errors/ApiError";
@@ -165,6 +170,34 @@ describe("GlobalExceptionFilter", () => {
 
     expect(mockResponse.status).toHaveBeenCalledWith(
       HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  });
+});
+
+describe("GlobalExceptionFilter: error details", () => {
+  it("keeps the machine-readable fields of DOCUMENT_REQUISITES_MISSING", () => {
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json });
+    const host = {
+      switchToHttp: () => ({ getResponse: () => ({ status }) }),
+    } as unknown as ArgumentsHost;
+
+    new GlobalExceptionFilter().catch(
+      ApiErrors.DOCUMENT_REQUISITES_MISSING(
+        "invoice",
+        ["seller.iban"],
+        ["buyer.taxId"],
+      ),
+      host,
+    );
+
+    expect(status).toHaveBeenCalledWith(422);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: "DOCUMENT_REQUISITES_MISSING",
+        fields: ["seller.iban"],
+        warnings: ["buyer.taxId"],
+      }),
     );
   });
 });

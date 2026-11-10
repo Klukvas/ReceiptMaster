@@ -336,10 +336,33 @@
             }
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoffStyles}}
+        {{/if}}
+        {{#if document.hidesItemPrices}}
+        .items-table th:nth-child(1) { width: 8%; }
+        .items-table th:nth-child(2) { width: 62%; }
+        .items-table th:nth-child(3) { width: 10%; }
+        .items-table th:nth-child(4) { width: 20%; }
+        .items-body td.doc-unit { text-align: center; }
+        {{else}}
+        {{#if document}}
+        .items-table th:nth-child(1) { width: 6%; }
+        .items-table th:nth-child(2) { width: 40%; }
+        .items-table th:nth-child(3), .items-table th:nth-child(4) { width: 9%; }
+        .items-table th:nth-child(5), .items-table th:nth-child(6) { width: 18%; }
+        .items-body td:nth-child(6) { text-align: right; }
+        .items-body td.doc-unit { text-align: center; }
+        {{else}}
         .items-table th:nth-child(1) { width: 8%; }
         .items-table th:nth-child(2) { width: 42%; }
         .items-table th:nth-child(3) { width: 10%; }
         .items-table th:nth-child(4), .items-table th:nth-child(5) { width: 20%; }
+        {{/if}}
+        {{/if}}
         img[alt="Logo"] { max-height: 80px; }
     </style>
 </head>
@@ -380,11 +403,14 @@
         <!-- Document Type Header -->
         <div class="document-header">
             <div class="document-type-center">{{receiptTitle}}</div>
+            {{#unless document.hidesOriginalMark}}
             <div class="document-type-right">{{#if translations.original}}{{translations.original}}{{else}}Original{{/if}}</div>
+            {{/unless}}
         </div>
         
         <!-- Client Details -->
         <div class="client-details">
+            {{#unless document}}
             <div class="client-info">
                 <div class="client-label">{{translations.billToLabel}}</div>
                 <div class="client-data">
@@ -394,6 +420,7 @@
                     {{#if recipientEmail}}{{recipientEmail}}{{/if}}
                 </div>
             </div>
+            {{/unless}}
             <div class="invoice-info">
                 <div class="invoice-row">
                     <span class="invoice-label">{{#if translations.invoiceNo}}{{translations.invoiceNo}}{{else}}Invoice No :{{/if}}</span>
@@ -407,14 +434,23 @@
         </div>
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead class="items-header">
                 <tr>
                     <th>{{#if translations.srNo}}{{translations.srNo}}{{else}}SrNo{{/if}}</th>
                     <th>{{#if translations.productName}}{{translations.productName}}{{else}}Product Name{{/if}}</th>
+                    {{#if document}}
+                    <th class="doc-unit">{{document.labels.unitOfMeasure}}</th>
+                    {{/if}}
                     <th>{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#unless document.hidesItemPrices}}
                     <th>{{#if translations.rate}}{{translations.rate}}{{else}}Rate{{/if}}</th>
                     <th>{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/unless}}
                 </tr>
             </thead>
             <tbody class="items-body">
@@ -422,19 +458,32 @@
                 <tr>
                     <td>{{add @index 1}}</td>
                     <td>{{productName}}</td>
+                    {{#if @root.document}}
+                    <td class="doc-unit">{{@root.document.itemUnit}}</td>
+                    {{/if}}
                     <td>{{qty}}</td>
+                    {{#unless @root.document.hidesItemPrices}}
                     <td>{{unitPrice}}</td>
                     <td>{{lineTotal}}</td>
+                    {{/unless}}
                 </tr>
                 {{/each}}
+                {{#unless document}}
                 <tr class="subtotal-row">
                     <td colspan="4">{{#if translations.subTotal}}{{translations.subTotal}}{{else}}Sub Total:{{/if}}</td>
                     <td>{{subtotal}}</td>
                 </tr>
+                {{/unless}}
             </tbody>
         </table>
         
         <!-- Tax and Total Section -->
+        {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="tax-total-section">
             <div class="tax-info">
                 {{#if companyTaxId}}
@@ -452,8 +501,16 @@
                 </div>
             </div>
         </div>
+        {{/if}}
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoff}}
+        {{/if}}
         <!-- Footer Section -->
+        {{#unless document}}
         <div class="footer-section">
             {{#if footerTitle}}
             <div class="note-section" style="margin-bottom: 16px;">
@@ -470,6 +527,26 @@
                 <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
                 {{/if}}
         </div>
+        {{/unless}}
+        {{#if document}}
+        {{#if footerTitle}}
+        <div class="footer-section">
+            <div class="note-section">
+                <div class="note-label">{{footerTitle}}</div>
+            </div>
+            {{#if footerSubtitle}}
+            <div class="note-content" style="margin-top: 8px;">{{footerSubtitle}}</div>
+            {{/if}}
+        </div>
+        {{else}}
+        {{#if footerSubtitle}}
+        <div class="footer-section">
+            <div class="note-content">{{footerSubtitle}}</div>
+        </div>
+        {{/if}}
+        {{/if}}
+        </div>
+        {{/if}}
     </div>
 </body>
 </html>

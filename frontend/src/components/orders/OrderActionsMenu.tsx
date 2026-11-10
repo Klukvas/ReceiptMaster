@@ -1,4 +1,5 @@
 import { CustomizeDocumentModal } from "./CustomizeDocumentModal";
+import { CreateDocumentModal } from "./CreateDocumentModal";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   MoreVertical,
@@ -14,6 +15,14 @@ import {
 } from "lucide-react";
 import type { Order } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
+import {
+  activeDocument,
+  canCreate,
+  CREATABLE_TYPES,
+  DOCUMENT_TYPE_META,
+  type CreatableType,
+  waybillOf,
+} from "../../lib/document-types";
 
 interface MenuItem {
   icon: React.ElementType;
@@ -22,6 +31,26 @@ interface MenuItem {
   className: string;
   disabled?: boolean;
   isDividerBefore?: boolean;
+  /** Items of one group sit under a shared heading. */
+  group?: string;
+}
+
+type MenuSection = {
+  group?: string;
+  items: { item: MenuItem; index: number }[];
+};
+
+/** Consecutive items with the same group share one section; flat indices are kept for keyboard focus. */
+function sectionsOf(items: MenuItem[]): MenuSection[] {
+  return items.reduce<MenuSection[]>((sections, item, index) => {
+    const last = sections.at(-1);
+    if (last && last.group !== undefined && last.group === item.group)
+      return [
+        ...sections.slice(0, -1),
+        { ...last, items: [...last.items, { item, index }] },
+      ];
+    return [...sections, { group: item.group, items: [{ item, index }] }];
+  }, []);
 }
 
 interface OrderActionsMenuProps {
@@ -35,6 +64,59 @@ interface OrderActionsMenuProps {
   onPrintReceipt: (receiptId: string) => void;
   onGenerateReceipt: (orderId: string) => void;
   isDeleting: boolean;
+}
+
+function MenuSectionView({
+  section,
+  focusedIndex,
+  headingId,
+}: {
+  section: MenuSection;
+  focusedIndex: number;
+  headingId: string;
+}) {
+  const buttons = section.items.map(({ item, index }) => {
+    const Icon = item.icon;
+    return (
+      <React.Fragment key={index}>
+        {item.isDividerBefore && (
+          <div
+            role="separator"
+            className="border-t border-[var(--color-border-light)] my-1"
+          />
+        )}
+        {index === section.items[0].index && section.group && (
+          <div
+            id={headingId}
+            role="presentation"
+            className="px-3 pt-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-content-tertiary"
+          >
+            {section.group}
+          </div>
+        )}
+        <button
+          onClick={item.onClick}
+          disabled={item.disabled}
+          role="menuitem"
+          className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors ${
+            item.className
+          } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
+            index === focusedIndex ? "bg-surface-alt" : ""
+          }`}
+        >
+          <Icon className="w-4 h-4 flex-shrink-0" />
+          <span>{item.label}</span>
+        </button>
+      </React.Fragment>
+    );
+  });
+  return section.group ? (
+    <div role="group" aria-labelledby={headingId}>
+      {buttons}
+    </div>
+  ) : (
+    <>{buttons}</>
+  );
 }
 
 export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
@@ -52,6 +134,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
+  const [creating, setCreating] = useState<CreatableType | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -101,13 +184,16 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      const menuHeight = 280;
+      const menuHeight = 520;
+      const proposedTop =
+        spaceBelow < menuHeight
+          ? rect.top - menuHeight + rect.height
+          : rect.bottom + 4;
+      // Keep the whole menu on screen: with the document group it can be taller than the room above.
+      const maxTop = Math.max(8, window.innerHeight - menuHeight - 8);
 
       setPosition({
-        top:
-          spaceBelow < menuHeight
-            ? rect.top - menuHeight + rect.height
-            : rect.bottom + 4,
+        top: Math.max(8, Math.min(proposedTop, maxTop)),
         left: rect.right - 192,
       });
     }
@@ -137,6 +223,21 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       className: baseItem,
     });
 
+    const creatableTypes = CREATABLE_TYPES.filter((type) =>
+      canCreate(order, type),
+    );
+    const createItems: MenuItem[] = creatableTypes.map((type, position) => {
+      const meta = DOCUMENT_TYPE_META[type];
+      return {
+        icon: meta.icon,
+        label: t("documents.menuItem", { type: t(meta.labelKey) }),
+        onClick: (e) => handleAction(() => setCreating(type), e),
+        className: baseItem,
+        group: t("documents.createGroup"),
+        isDividerBefore: position === 0,
+      };
+    });
+
     // Status-dependent actions
     if (order.status === "draft" && !order.is_locked) {
       items.push(
@@ -162,11 +263,14 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       );
     }
 
+    // A draft offers only the documents that do not need a confirmed order.
+    if (order.status === "draft") items.push(...createItems);
+
     if (order.status === "confirmed") {
-      const pendingReplacement = order.receipts?.find(
-        (r) => r.replacement_status === "processing",
-      );
-      if (pendingReplacement)
+      // Download/print/customize act on the waybill; other documents have their own entries.
+      const waybill = waybillOf(order);
+      const isReplacing = waybill?.replacement_status === "processing";
+      if (isReplacing)
         items.push({
           icon: Loader2,
           label: t("document.replacing"),
@@ -176,10 +280,9 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         });
 
       if (
-        !pendingReplacement &&
-        !order.receipts?.some(
-          (r) => r.status === "processing" || r.status === "void",
-        )
+        !isReplacing &&
+        waybill?.status !== "processing" &&
+        waybill?.status !== "void"
       )
         items.push({
           icon: Edit,
@@ -187,9 +290,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
           onClick: (e) => handleAction(() => setCustomizing(true), e),
           className: baseItem,
         });
-      const activeReceipt = order.receipts?.find(
-        (r) => r.status === "generated" || r.status === "processing",
-      );
+      const activeReceipt = activeDocument(waybill) ? waybill : undefined;
 
       if (activeReceipt?.status === "generated") {
         items.push(
@@ -219,7 +320,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
           disabled: true,
           isDividerBefore: true,
         });
-      } else {
+      } else if (canCreate(order, "waybill")) {
         items.push({
           icon: FileText,
           label: t("orders.generateReceipt"),
@@ -229,7 +330,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         });
       }
 
-      items.push({
+      items.push(...createItems, {
         icon: XCircle,
         label: t("orders.cancel"),
         onClick: (e) => handleAction(() => onCancel(order.id), e),
@@ -321,8 +422,19 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
           }}
         />
       )}
+      {creating && (
+        <CreateDocumentModal
+          order={order}
+          type={creating}
+          onClose={() => {
+            setCreating(null);
+            requestAnimationFrame(() => buttonRef.current?.focus());
+          }}
+        />
+      )}
       <button
         ref={buttonRef}
+        data-order-actions={order.id}
         onClick={handleToggle}
         className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors"
         title={t("orders.moreActions")}
@@ -342,29 +454,14 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
           }}
           role="menu"
         >
-          {menuItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <React.Fragment key={index}>
-                {item.isDividerBefore && (
-                  <div className="border-t border-[var(--color-border-light)] my-1" />
-                )}
-                <button
-                  onClick={item.onClick}
-                  disabled={item.disabled}
-                  role="menuitem"
-                  className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors ${
-                    item.className
-                  } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
-                    index === focusedIndex ? "bg-surface-alt" : ""
-                  }`}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span>{item.label}</span>
-                </button>
-              </React.Fragment>
-            );
-          })}
+          {sectionsOf(menuItems).map((section, sectionIndex) => (
+            <MenuSectionView
+              key={sectionIndex}
+              section={section}
+              focusedIndex={focusedIndex}
+              headingId={`order-menu-group-${order.id}-${sectionIndex}`}
+            />
+          ))}
         </div>
       )}
     </>

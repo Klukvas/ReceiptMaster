@@ -1,4 +1,5 @@
-import { useState, useMemo } from"react";
+import { useState, useMemo, useEffect } from"react";
+import { useSearchParams } from"react-router-dom";
 import { useMutation, useQueryClient } from"@tanstack/react-query";
 import { Plus, Users, ShoppingCart } from"lucide-react";
 import toast from"react-hot-toast";
@@ -18,18 +19,54 @@ import {
 } from"../hooks/useServerPagination";
 import { useTranslation } from"../hooks/useTranslation";
 
+const UUID_PATTERN =
+ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Opens a recipient's edit form when the page is reached through `?edit=<id>` (the
+ * "fill in the buyer's requisites" link of a document). The `edit` parameter is
+ * dropped once handled; `highlight` stays while the form is open (see handleFormClose).
+ */
+function useEditIntent(onEdit: (recipient: Recipient) => void) {
+ const [params, setParams] = useSearchParams();
+ const editId = params.get("edit");
+
+ useEffect(() => {
+ if (!editId) return;
+ setParams(
+ (previous) => {
+ const next = new URLSearchParams(previous);
+ next.delete("edit");
+ return next;
+ },
+ { replace: true },
+ );
+ if (!UUID_PATTERN.test(editId)) return;
+ recipientsApi
+ .getById(editId)
+ .then((response) => onEdit(response.data))
+ .catch((error: unknown) => toast.error(parseApiError(error).message));
+ // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per link
+ }, [editId]);
+}
+
 export const RecipientsPage = () => {
  const [showForm, setShowForm] = useState(false);
  useCreateIntent(() => setShowForm(true));
  const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(
  null,
  );
+ useEditIntent((recipient) => {
+ setEditingRecipient(recipient);
+ setShowForm(true);
+ });
  const [drawerRecipient, setDrawerRecipient] = useState<Recipient | null>(
  null,
  );
  const [deleteTarget, setDeleteTarget] = useState<Recipient | null>(null);
  const queryClient = useQueryClient();
  const { t } = useTranslation();
+ const [, setSearchParams] = useSearchParams();
 
  const columns: ColumnDef<Recipient>[] = useMemo(
  () => [
@@ -165,6 +202,14 @@ export const RecipientsPage = () => {
  const handleFormClose = () => {
  setShowForm(false);
  setEditingRecipient(null);
+ setSearchParams(
+ (previous) => {
+ const next = new URLSearchParams(previous);
+ next.delete("highlight");
+ return next;
+ },
+ { replace: true },
+ );
  };
 
  return (

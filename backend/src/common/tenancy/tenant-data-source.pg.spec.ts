@@ -1,5 +1,5 @@
 import { ConflictException } from "@nestjs/common";
-import { DataSource } from "typeorm";
+import { DataSource, UpdateQueryBuilder } from "typeorm";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { join } from "path";
 import { Client } from "pg";
@@ -419,10 +419,11 @@ describeIsolatedPostgres(
       ).toEqual([]);
       const service = new ReceiptsService(
         source.getRepository(Receipt),
-        source.getRepository(Order),
-        undefined,
         undefined,
         source,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -581,15 +582,14 @@ describeIsolatedPostgres(
         );
         const receipts = new ReceiptsService(
           runtime.getRepository(Receipt),
-          runtime.getRepository(Order),
-          undefined,
           storage as never,
           runtime,
-          undefined,
           undefined,
           { dispatch: jest.fn() } as never,
           snapshots,
           artifacts,
+          undefined,
+          undefined,
         );
         return { receipts, artifacts, started, release: () => release() };
       }
@@ -695,11 +695,12 @@ describeIsolatedPostgres(
       });
       const service = new ReceiptsService(
         source.getRepository(Receipt),
-        source.getRepository(Order),
-        undefined,
         undefined,
         source,
         { get: () => "https://example.test" } as never,
+        undefined,
+        undefined,
+        undefined,
         undefined,
         undefined,
       );
@@ -726,7 +727,9 @@ describeIsolatedPostgres(
         public_token: null,
       });
       const repository = source.getRepository(Receipt);
-      const update = repository.update.bind(repository);
+      // generatePublicToken writes through a query builder UPDATE, so the race is paused
+      // right before that statement runs; only the service's own UPDATE is intercepted.
+      const execute = UpdateQueryBuilder.prototype.execute;
       let resume: () => void;
       let started: () => void;
       const paused = new Promise<void>((resolve) => {
@@ -736,20 +739,20 @@ describeIsolatedPostgres(
         started = resolve;
       });
       const intercepted = jest
-        .spyOn(repository, "update")
-        .mockImplementationOnce(async (criteria, values) => {
+        .spyOn(UpdateQueryBuilder.prototype, "execute")
+        .mockImplementationOnce(function (this: UpdateQueryBuilder<Receipt>) {
           started();
-          await paused;
-          return update(criteria, values);
+          return paused.then(() => execute.call(this));
         });
       try {
         const service = new ReceiptsService(
           repository,
-          source.getRepository(Order),
-          undefined,
           undefined,
           source,
           { get: () => "https://example.test" } as never,
+          undefined,
+          undefined,
+          undefined,
           undefined,
           undefined,
         );

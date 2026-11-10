@@ -43,6 +43,18 @@ const SPECS = [
   { name: "uiq-leftovers", load: () => import("./uiq-leftovers.spec.mjs") },
   { name: "document-form", load: () => import("./document-form.spec.mjs") },
   { name: "back-closes-modal", load: () => import("./back-closes-modal.spec.mjs") },
+  { name: "requisites-parity", load: () => import("./requisites-parity.spec.mjs") },
+  { name: "document-types-parity", load: () => import("./document-types-parity.spec.mjs") },
+  { name: "documents-orders", load: () => import("./documents-orders.spec.mjs") },
+  { name: "documents-page", load: () => import("./documents-page.spec.mjs") },
+  { name: "documents-hardening", load: () => import("./documents-hardening.spec.mjs") },
+  { name: "documents-dialogs", load: () => import("./documents-dialogs.spec.mjs") },
+  { name: "documents-review", load: () => import("./documents-review.spec.mjs") },
+  { name: "settings-numbering", load: () => import("./settings-numbering.spec.mjs") },
+  { name: "settings-signoff", load: () => import("./settings-signoff.spec.mjs") },
+  { name: "requisites-forms", load: () => import("./requisites-forms.spec.mjs") },
+  { name: "numbering-format-parity", load: () => import("./numbering-format-parity.spec.mjs") },
+  { name: "tax-id-checksum", load: () => import("./tax-id-checksum.spec.mjs") },
 ];
 
 const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");

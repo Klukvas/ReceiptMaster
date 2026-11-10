@@ -15,6 +15,9 @@ export enum SortOrder {
   DESC = "DESC",
 }
 
+/** Deep offsets are a table scan per request; no tenant pages a million rows deep. */
+export const MAX_PAGE_OFFSET = 1_000_000;
+
 export class PaginationDto {
   @ApiPropertyOptional({
     description: "Количество элементов на странице",
@@ -32,11 +35,13 @@ export class PaginationDto {
   @ApiPropertyOptional({
     description: "Смещение для пагинации",
     minimum: 0,
+    maximum: MAX_PAGE_OFFSET,
     default: 0,
   })
   @IsOptional()
   @Type(() => Number)
   @Min(0)
+  @Max(MAX_PAGE_OFFSET)
   offset?: number = 0;
 
   @ApiPropertyOptional({

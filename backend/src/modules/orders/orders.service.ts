@@ -1,3 +1,4 @@
+import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable, HttpStatus, Logger } from "@nestjs/common";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
@@ -51,6 +52,20 @@ export interface IdempotencyResponse {
   statusCode: number;
   data: any;
   isFromCache: boolean;
+}
+
+/**
+ * The tenant advisory lock of receipts and document configuration (generation, promotion,
+ * retention). Taken first in the transaction, before any row lock (lock-order rule in
+ * docs/context/backend-patterns.md).
+ */
+async function lockTenantDocuments(
+  manager: EntityManager,
+  userId: string,
+): Promise<void> {
+  await manager.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))", [
+    userId,
+  ]);
 }
 
 @Injectable()
@@ -403,7 +418,11 @@ export class OrdersService {
 
     this.applyListFilters(queryBuilder, search, status, filters);
 
-    const sortColumn = ORDER_SORTABLE_COLUMNS[sortBy] || "order.created_at";
+    const sortColumn = pickSortColumn(
+      ORDER_SORTABLE_COLUMNS,
+      sortBy,
+      "order.created_at",
+    );
     const direction = sortOrder === SortOrder.ASC ? "ASC" : "DESC";
     queryBuilder.orderBy(sortColumn, direction);
 
@@ -487,24 +506,19 @@ export class OrdersService {
   /**
    * DRAFT or CONFIRMED → CANCELLED in one transaction, taking the tenant receipt
    * lock first and then the order row (the same tenant → order → receipt order as
-   * generation and promotion). Cancelling a confirmed order voids its active
-   * document and pending candidate and revokes the share link; voided documents
-   * stay as history. Stock is not returned here — only deleting the order does
+   * generation and promotion). Cancelling voids the order's active documents
+   * and pending candidates and revokes the share links (a draft carries
+   * documents too: a quotation); voided documents stay as history. Stock is not returned here — only deleting the order does
    * that, exactly once.
    */
   async cancel(id: string, user: User): Promise<Order> {
     await this.dataSource.transaction(async (manager) => {
-      await manager.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 1))",
-        [user.id],
-      );
+      await lockTenantDocuments(manager, user.id);
       const order = await this.lockOrder(manager, id, user.id);
       if (order.status === OrderStatus.CANCELLED) {
         throw ApiErrors.ORDER_ALREADY_CANCELLED(id);
       }
-      if (order.status === OrderStatus.CONFIRMED) {
-        await this.receiptsService.voidForCancellation(manager, id, user.id);
-      }
+      await this.receiptsService.voidForCancellation(manager, id, user.id);
       await this.transition(manager, order, OrderStatus.CANCELLED);
     });
     await this.invalidateDashboardCache(user.id);
@@ -712,6 +726,12 @@ export class OrdersService {
         );
       }
 
+      await this.receiptsService.revokePublicLinksForOrders(
+        manager,
+        [id],
+        user.id,
+      );
+
       // Soft delete the order (sets deleted_at timestamp)
       await manager.softDelete(Order, { id, user_id: user.id });
     });
@@ -784,6 +804,9 @@ export class OrdersService {
     const uniqueIds = [...new Set(orderIds)].sort();
 
     const result = await this.dataSource.transaction(async (manager) => {
+      // Tenant lock first, as cancel and document retention take it: retention evicts
+      // receipts under it, and this batch locks several orders, then their receipts.
+      await lockTenantDocuments(manager, user.id);
       const orders = await manager.find(Order, {
         where: { id: In(uniqueIds), user_id: user.id },
         order: { id: "ASC" },
@@ -822,6 +845,11 @@ export class OrdersService {
         );
       }
 
+      await this.receiptsService.revokePublicLinksForOrders(
+        manager,
+        uniqueIds,
+        user.id,
+      );
       await manager.softDelete(Order, { id: In(uniqueIds), user_id: user.id });
 
       return { deleted: orders.length };

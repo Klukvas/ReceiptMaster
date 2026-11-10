@@ -85,7 +85,7 @@ export const ReceiptTitleCustomizer: React.FC = () => {
       }
     >
       {error ? (
-        <SettingsLoadError error={error} retry={refetch} />
+        <SettingsLoadError retry={refetch} />
       ) : (
         <div className="max-w-md">
           <Input

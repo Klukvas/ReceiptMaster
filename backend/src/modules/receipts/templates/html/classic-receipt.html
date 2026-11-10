@@ -88,6 +88,7 @@
         .meta-row {
             display: flex;
             justify-content: space-between;
+            gap: 12px;
             margin-bottom: 2px;
         }
         
@@ -283,6 +284,12 @@
             margin-top: 10px;
         }
         {{> printLayout}}
+        {{#if document}}
+        {{> documentStyles}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoffStyles}}
+        {{/if}}
     </style>
 </head>
 <body>
@@ -319,6 +326,7 @@
         </div>
         
         <!-- Company Info -->
+        {{#unless document}}
         <div class="company-info">
             <div class="info-section">
                 <div class="section-title">{{#if translations.billTo}}{{translations.billTo}}{{else}}Bill To{{/if}}</div>
@@ -363,35 +371,56 @@
                 </div>
             </div>
         </div>
+        {{/unless}}
         
         <!-- Items Table -->
+        {{#if document}}
+        {{> documentParties}}
+        {{> documentPayment}}
+        {{/if}}
         <table class="items-table">
             <thead>
                 <tr>
                     <th class="col-qty">{{#if translations.qty}}{{translations.qty}}{{else}}Qty{{/if}}</th>
+                    {{#if document}}
+                    <th class="doc-unit">{{document.labels.unitOfMeasure}}</th>
+                    {{/if}}
                     <th class="col-description">{{#if translations.description}}{{translations.description}}{{else}}Description{{/if}}</th>
+                    {{#unless document.hidesItemPrices}}
                     <th class="col-unit-price">{{#if translations.unitPrice}}{{translations.unitPrice}}{{else}}Unit Price{{/if}}</th>
                     <th class="col-amount">{{#if translations.amount}}{{translations.amount}}{{else}}Amount{{/if}}</th>
+                    {{/unless}}
                 </tr>
             </thead>
             <tbody>
                 {{#each items}}
                 <tr>
                     <td class="col-qty">{{qty}}</td>
+                    {{#if @root.document}}
+                    <td class="doc-unit">{{@root.document.itemUnit}}</td>
+                    {{/if}}
                     <td class="col-description">
                         {{productName}}
                         {{#if description}}
                         <div class="description-text">{{description}}</div>
                         {{/if}}
                     </td>
+                    {{#unless @root.document.hidesItemPrices}}
                     <td class="col-unit-price">{{unitPrice}}</td>
                     <td class="col-amount">{{lineTotal}}</td>
+                    {{/unless}}
                 </tr>
                 {{/each}}
             </tbody>
         </table>
         
         <!-- Totals -->
+        {{#if document}}
+        <div class="doc-tail">
+        {{/if}}
+        {{#if document}}
+        {{> documentTotals}}
+        {{else}}
         <div class="totals-section">
             <table class="totals-table">
                 <tr>
@@ -422,8 +451,15 @@
                 </tr>
             </table>
         </div>
+        {{/if}}
         
         
+        {{#if document}}
+        {{> documentClosing}}
+        {{/if}}
+        {{#if signoff}}
+        {{> waybillSignoff}}
+        {{/if}}
         <!-- Footer -->
         <div class="footer">
             {{#if footerTitle}}
@@ -440,6 +476,9 @@
             
            
         </div>
+        {{#if document}}
+        </div>
+        {{/if}}
     </div>
 </body>
 </html>

@@ -11,7 +11,7 @@ export const HomePage = () => {
     <>
       <SEO
         path="/"
-        description="The complete back-office for modern merchants. Manage products, customers, and orders — generate professional PDF invoices in seconds."
+        description="The complete back-office for modern merchants. Manage products, customers, and orders — generate PDF waybills, quotes, invoices and acts in seconds."
       />
       <OrganizationJsonLd />
       <WebSiteJsonLd />
