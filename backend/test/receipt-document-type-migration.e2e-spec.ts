@@ -130,13 +130,13 @@ describeIsolatedPostgres(
     it("allows one document of each other type on an order but not two of the same", async () => {
       await migrateToLatest();
 
-      await expect(insertReceipt("waybill", "2026-000002")).rejects.toMatchObject(
-        { code: "23505", constraint: TYPE_INDEX },
-      );
+      await expect(
+        insertReceipt("waybill", "2026-000002"),
+      ).rejects.toMatchObject({ code: "23505", constraint: TYPE_INDEX });
       await insertReceipt("invoice", "2026-000003");
-      await expect(insertReceipt("invoice", "2026-000004")).rejects.toMatchObject(
-        { code: "23505", constraint: TYPE_INDEX },
-      );
+      await expect(
+        insertReceipt("invoice", "2026-000004"),
+      ).rejects.toMatchObject({ code: "23505", constraint: TYPE_INDEX });
     });
 
     it("allows several return notes on one order", async () => {

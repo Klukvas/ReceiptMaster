@@ -1,14 +1,11 @@
 import "reflect-metadata";
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { CacheService } from "../src/common/services/cache.service";
 import { ApiErrorResponse } from "../src/common/errors/ApiError";
 import { OrdersService } from "../src/modules/orders/orders.service";
-import {
-  Order,
-  OrderStatus,
-} from "../src/modules/orders/entities/order.entity";
+import { Order } from "../src/modules/orders/entities/order.entity";
 import { OrderItem } from "../src/modules/orders/entities/order-item.entity";
 import { IdempotencyKey } from "../src/modules/orders/entities/idempotency-key.entity";
 import {
@@ -24,7 +21,6 @@ import { UserSettings } from "../src/modules/settings/entities/user-settings.ent
 import { DocumentAssetsService } from "../src/modules/settings/services/document-assets.service";
 import { DocumentConfigService } from "../src/modules/settings/services/document-config.service";
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
-import { ReceiptsController } from "../src/modules/receipts/receipts.controller";
 import {
   DocumentType,
   Receipt,
@@ -498,7 +494,8 @@ describeIsolatedPostgres(
         await promote(waybill);
         const invoice = await generate(order, DocumentType.INVOICE);
 
-        const [promotion, voided] = await Promise.allSettled([
+        // Either side may lose the race; only the resulting lock state is asserted.
+        await Promise.allSettled([
           promote(invoice),
           asTenant(() => receipts.voidReceipt(invoice.id, user, "race")),
         ]);

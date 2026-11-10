@@ -60,22 +60,22 @@ async function check(name, operation) {
         );
       },
     );
-    await tab("Receipt Design");
-    await field("Receipt Title").fill("");
+    await tab("Document Design");
+    await field("Document Title").fill("");
     await tab("Save changes");
     await check(
       "blank custom title is required without losing the draft",
       async () => {
         assert.equal(
-          await field("Receipt Title").evaluate(
+          await field("Document Title").evaluate(
             (el) => el.validity.valueMissing,
           ),
           true,
         );
-        assert.equal(await field("Receipt Title").inputValue(), "");
+        assert.equal(await field("Document Title").inputValue(), "");
       },
     );
-    await field("Receipt Title").fill("   ");
+    await field("Document Title").fill("   ");
     await tab("Refresh preview");
     await check(
       "whitespace custom title shows friendly validation and retains draft",
@@ -84,14 +84,14 @@ async function check(name, operation) {
           .getByRole("alert")
           .filter({ hasText: "Enter a title" })
           .waitFor();
-        assert.equal(await field("Receipt Title").inputValue(), "   ");
+        assert.equal(await field("Document Title").inputValue(), "   ");
         assert.equal(
           (await state()).defaults.config.title.text,
           "Saved invoice",
         );
       },
     );
-    await field("Receipt Title").fill("Invoice");
+    await field("Document Title").fill("Invoice");
     await tab("Discard");
     await tab("Company Info");
     await page.evaluate(() =>
@@ -113,7 +113,7 @@ async function check(name, operation) {
     );
     await tab("Discard");
     await field("Company Name").fill("Unsaved Studio");
-    await tab("Receipt Design");
+    await tab("Document Design");
     await field("Template").selectOption("branded");
     await field("Footer Title").fill("Draft footer");
     await field("Payment Terms").fill("Net 45 retained");
@@ -198,7 +198,7 @@ async function check(name, operation) {
       async () => {
         await tab("Company Info");
         assert.equal(await field("Company Name").inputValue(), "Latest draft");
-        await tab("Receipt Design");
+        await tab("Document Design");
         assert.equal(
           await field("Payment Terms").inputValue(),
           "Net 45 retained",
@@ -225,7 +225,7 @@ async function check(name, operation) {
     );
     await tab("Company Info");
     await field("Company Name").fill("Discard me");
-    await tab("Receipt Design");
+    await tab("Document Design");
     await tab("Remove logo in draft");
     await tab("Reset design in draft");
     await tab("Discard");
@@ -234,7 +234,7 @@ async function check(name, operation) {
       async () => {
         await tab("Company Info");
         assert.equal(await field("Company Name").inputValue(), "Latest draft");
-        await tab("Receipt Design");
+        await tab("Document Design");
         assert.equal(await field("Footer Title").inputValue(), "Draft footer");
         assert.equal((await state()).defaults.revision, 1);
       },
@@ -369,7 +369,7 @@ async function check(name, operation) {
       .fill("Only this document");
     const revision = (await state()).defaults.revision;
     await dialog
-      .getByRole("button", { name: "Generate this document", exact: true })
+      .getByRole("button", { name: "Create this document", exact: true })
       .click();
     await dialog.waitFor({ state: "hidden" });
     await check(
