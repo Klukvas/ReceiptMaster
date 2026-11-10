@@ -24,6 +24,7 @@ import { TAX_ID_KINDS, isValidTaxId } from "../../lib/ua-requisites";
 import { COMPANY_INFO_KEY, useCompanyInfo } from "../../hooks/useCompanyInfo";
 import { HIGHLIGHT_CLASS, useHighlightedFields } from "../../hooks/useHighlightedFields";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { selectClass } from "./document-ui";
@@ -58,6 +59,9 @@ export function CompanyRequisitesCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedJson]);
 
+  const isDirty = form !== null && saved !== null && JSON.stringify(form) !== savedJson;
+  useUnsavedChangesGuard(isDirty, "settings.requisites.discardConfirm");
+
   const save = useMutation({
     mutationFn: (values: RequisitesForm) => settingsApi.updateCompanyInfo(updateFromForm(values)),
     onSuccess: async () => {
@@ -82,7 +86,6 @@ export function CompanyRequisitesCard() {
     );
   if (!form || !saved) return null;
 
-  const isDirty = JSON.stringify(form) !== JSON.stringify(saved);
   const errors: RequisitesErrors = { ...shownErrors, ...serverErrors };
   const setField = <F extends RequisitesField>(field: F, value: RequisitesForm[F]) => {
     setForm({ ...form, [field]: value });
@@ -163,6 +166,7 @@ export function CompanyRequisitesCard() {
             id={requisiteFieldId("seller.vatPayer")}
             className={`${selectClass} ${markedClass("vatPayer") ?? ""}`}
             value={form.vatPayer}
+            aria-describedby="requisite-vat-rate-note"
             onChange={(event) => setField("vatPayer", event.target.value as VatPayerChoice)}
           >
             {VAT_CHOICES.map((choice) => (
@@ -171,6 +175,10 @@ export function CompanyRequisitesCard() {
               </option>
             ))}
           </select>
+          {/* The rate is fixed (UA_VAT_RATE_PERCENT on the server); say so before a 7% or 14% seller issues. */}
+          <p id="requisite-vat-rate-note" className="text-xs text-content-tertiary">
+            {t("settings.requisites.vatRateNote")}
+          </p>
         </div>
         <Input
           id={requisiteFieldId("seller.vatId")}

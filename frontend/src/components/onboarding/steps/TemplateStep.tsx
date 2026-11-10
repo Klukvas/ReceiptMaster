@@ -18,22 +18,22 @@ interface Template {
   locked?: boolean;
 }
 
-const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
+const CATEGORY_STYLES: Record<string, { labelKey: string; className: string }> = {
   business: {
-    label: "Business",
+    labelKey: "onboarding.templateCategories.business",
     className: "bg-[var(--color-accent-light)] text-accent-base",
   },
   creative: {
-    label: "Creative",
+    labelKey: "onboarding.templateCategories.creative",
     className:
       "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300",
   },
   minimal: {
-    label: "Minimal",
+    labelKey: "onboarding.templateCategories.minimal",
     className: "bg-surface-alt text-content-secondary",
   },
   premium: {
-    label: "Premium",
+    labelKey: "onboarding.templateCategories.premium",
     className: "bg-[var(--color-warning-light)] text-warning-base",
   },
 };
@@ -191,7 +191,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
                 <span
                   className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${category.className}`}
                 >
-                  {category.label}
+                  {t(category.labelKey)}
                 </span>
                 <div className="flex gap-0.5">
                   {[

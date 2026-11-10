@@ -151,6 +151,25 @@ export function readableValidationMessage(
 }
 
 const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_PAYLOAD_TOO_LARGE = 413;
+
+/**
+ * Logo refusals carry only an English sentence: the image check ("Validation error for logo:
+ * …"), the upload type filter ("Use PNG, JPEG, GIF or SVG") and the size limit (413).
+ */
+export function logoRefusalKey(
+  status: number | undefined,
+  message: unknown,
+): string | undefined {
+  if (status === HTTP_PAYLOAD_TOO_LARGE) return "document.errors.logoTooLarge";
+  if (
+    typeof message === "string" &&
+    (/^Validation error for logo:/.test(message) ||
+      /^Use PNG, JPEG, GIF or SVG/.test(message))
+  )
+    return "document.errors.logoInvalid";
+  return undefined;
+}
 
 /** Looks up a localized message; injected so this module stays free of the i18n runtime. */
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -158,6 +177,7 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
 /** Domain refusals that have a localized message (`errors.<camelCase code>`). */
 const LOCALIZED_ERROR_CODES: ReadonlySet<string> = new Set([
   "DOCUMENT_TEMPLATE_UNSUPPORTED",
+  "TEMPLATE_PLAN_RESTRICTED",
   "DOCUMENT_TYPE_NOT_SUPPORTED",
   "DOCUMENT_ALREADY_EXISTS",
   "DOCUMENT_NUMBERS_EXHAUSTED",
@@ -212,6 +232,8 @@ export async function documentError(
           : "message" in body
             ? body.message
             : undefined;
+      const logoKey = logoRefusalKey(error.response?.status, value);
+      if (logoKey && translate) return translate(logoKey);
       if (typeof value === "string")
         return readableValidationMessage(value, fieldLabel).slice(0, 500);
       if (

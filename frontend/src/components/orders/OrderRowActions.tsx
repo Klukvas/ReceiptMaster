@@ -9,7 +9,7 @@ interface OrderRowActionsProps {
  onView: (order: Order) => void;
  onEdit: (order: Order) => void;
  onConfirm: (id: string) => void;
- onCancel: (id: string) => void;
+ onCancel: (order: Order) => void;
  onDelete: (order: Order) => void;
  onDownloadReceipt: (receiptId: string) => void;
  onPrintReceipt: (receiptId: string) => void;

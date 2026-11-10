@@ -29,6 +29,15 @@ import {
   collectClaim,
 } from "./document-storage-cleanup";
 
+/** S3 `GetObject` on an absent key fails with `NoSuchKey` (HTTP 404). */
+const isMissingObject = (error: unknown): boolean => {
+  const { code, statusCode } = (error ?? {}) as {
+    code?: unknown;
+    statusCode?: unknown;
+  };
+  return code === "NoSuchKey" || statusCode === 404;
+};
+
 @Injectable()
 export class DocumentAssetsService {
   constructor(
@@ -73,11 +82,18 @@ export class DocumentAssetsService {
       false,
       kind,
     );
-    const bytes = await this.storage.readImmutable(
-      asset.object_key,
-      userId,
-      "signoffs",
-    );
+    const bytes = await this.storage
+      .readImmutable(asset.object_key, userId, "signoffs")
+      .catch((error: unknown) => {
+        // The row points at an object the bucket no longer has: the image is gone, which
+        // is a 404 for the client, not a storage failure (a 500).
+        if (isMissingObject(error))
+          throw new NotFoundException({
+            message: `The stored ${kind} image is missing`,
+            errorCode: "FILE_NOT_FOUND",
+          });
+        throw error;
+      });
     if (createHash("sha256").update(bytes).digest("hex") !== asset.sha256)
       throw new ConflictException("Image integrity check failed");
     return bytes;

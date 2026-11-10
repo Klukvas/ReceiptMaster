@@ -1,10 +1,18 @@
 # API Reference
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-11
 
 **Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
+
+**Revoked access tokens.** Every access token carries a `tv` claim, the account's
+`users.token_version` when it was signed. Logout and a password change add 1 to it, so every
+access token signed before stops working at once, not when it expires. Such a token gets the
+same `401 { error: "Unauthorized access", errorCode: "UNAUTHORIZED" }` as an invalid or expired
+one, and the client refreshes as it would on expiry. Tokens without the claim (signed before
+this release) count as version 0. The receipts WebSocket (`/receipts` namespace) applies the
+same check when a client connects and disconnects a revoked token.
 
 **Base URL:** `http://localhost:3000/api/v1` (in development; configure via `API_PREFIX` env var)
 
@@ -40,6 +48,7 @@ Creates a new user account.
 **Errors:**
 - 409 `USER_ALREADY_EXISTS` — Email already registered; also the answer when two registrations race and the unique email index rejects the loser's insert (never a 500)
 - 400 `VALIDATION_ERROR` — Invalid input
+- 429 `RATE_LIMITED` — more than 5 registrations in 60 s from this client IP (with `retryAfterSeconds`)
 
 ---
 
@@ -66,7 +75,7 @@ Authenticates user and returns tokens. Rate-limited to 5 attempts per 60 seconds
 
 **Errors:**
 - 401 `INVALID_CREDENTIALS` — Wrong email or password
-- 429 Too Many Requests — Rate limit exceeded
+- 429 `RATE_LIMITED` — more than 5 attempts in 60 s from this client IP; `{ error, errorCode: "RATE_LIMITED", retryAfterSeconds }` plus `Retry-After`
 
 ---
 
@@ -109,7 +118,7 @@ stored as SHA-256 only; tokens issued earlier keep their stored plaintext until 
 **Errors:**
 - 400 — Malformed/missing refresh token
 - 401 `UNAUTHORIZED` — Unknown, expired, already redeemed or replayed refresh token, or inactive user
-- 429 — More than 20 refreshes in 60 s from this client IP
+- 429 `RATE_LIMITED` — More than 20 refreshes in 60 s from this client IP (with `retryAfterSeconds`)
 
 ---
 
@@ -118,7 +127,13 @@ stored as SHA-256 only; tokens issued earlier keep their stored plaintext until 
 **POST** `/auth/logout` (requires auth)
 
 Revokes the refresh token. A logged-out token presented later gets a plain 401; only a token that
-a refresh already redeemed counts as a replay.
+a refresh already redeemed counts as a replay. Only a token of the signed-in user is revoked: a
+token of another account (or an unknown one) gets the same 201 and is left untouched, so the
+answer reveals nothing about whose token it is.
+
+Also bumps the user's token version (in the same transaction, users row first), so every access
+token of the user stops working, on every device. Other devices keep their refresh tokens: their
+next request gets a 401, they refresh and continue without signing in again.
 
 **Response** (201):
 ```typescript
@@ -146,7 +161,7 @@ Returns authenticated user profile without password field.
 ```
 
 **Errors:**
-- 401 `UNAUTHORIZED` — Missing or invalid JWT
+- 401 `UNAUTHORIZED` — Missing, invalid or expired JWT, or one revoked by a logout or a password change (stale `tv`)
 
 ---
 
@@ -176,8 +191,12 @@ Updates user profile information.
 
 **POST** `/auth/change-password` (requires auth)
 
-Changes authenticated user's password and, in the same transaction, revokes all of the user's
-refresh tokens — including the successor of a refresh that is committing at the same moment.
+Changes authenticated user's password and, in the same transaction, bumps the token version (every
+access token issued before stops working, the caller's too) and revokes all of the user's refresh
+tokens — including the successor of a refresh that is committing at the same moment. It then
+issues a new pair for the calling session (a new rotation family, stored after the revocation)
+and returns it, so the caller stays signed in while every other session is signed out. The
+client must store the returned pair the way it stores a login's.
 
 **Request Body:**
 ```typescript
@@ -188,9 +207,14 @@ refresh tokens — including the successor of a refresh that is committing at th
 }
 ```
 
-**Response** (201):
+**Response** (201) — `ChangePasswordResponseDto`, the login shape plus `message`:
 ```typescript
-{ message: "Password changed successfully" }
+{
+  message: "Password changed successfully",
+  access_token: string,   // signed with the new token version
+  refresh_token: string,  // 128 hex characters, single use like any refresh token
+  user: { id: string; email: string }
+}
 ```
 
 **Errors:**
@@ -244,6 +268,9 @@ hits this error.
 - 409 `PRODUCT_ALREADY_EXISTS` — Another live (not soft-deleted) product of this user has exactly
   this name. The partial unique index decides, so of two racing creates one gets 201 and the other
   409; a refused create stores no `Idempotency-Key` response, so a retry is checked again
+- 404 `SUPPLIER_NOT_FOUND` — `supplier_id` is not one of this user's suppliers (another tenant's or
+  unknown); nothing is created. `suppliers` has no RLS, so this check is the only tenant fence
+- 400 `HTTP_EXCEPTION` — a fractional price or quantity (`@IsInt`; it used to reach the database as a 500)
 
 **Request Body:**
 ```typescript
@@ -251,9 +278,9 @@ hits this error.
   name: string,                  // trimmed, non-empty, max 255
   purchase_price_cents: number,  // integer cents, 0 to 2147483647
   sale_price_cents: number,      // integer cents, 0 to 2147483647
-  quantity: number,              // 0 to 2147483647 (Postgres integer)
+  quantity: number,              // integer, 0 to 2147483647 (Postgres integer)
   currency: string,              // enum, e.g. "UAH"
-  supplier_id?: string | null,   // UUID
+  supplier_id?: string | null,   // UUID of one of the user's own suppliers
 }
 ```
 
@@ -338,6 +365,8 @@ re-checks after that order commits. Nothing in the body is saved on a mismatch.
 - 400 `VALIDATION_ERROR` — `quantity` without `expectedQuantity` or vice versa (class-validator
   errors such as a negative or fractional `expectedQuantity` return 400 `HTTP_EXCEPTION`)
 - 404 `PRODUCT_NOT_FOUND` — Missing, soft-deleted or another tenant's product
+- 404 `SUPPLIER_NOT_FOUND` — `supplier_id` is not one of this user's suppliers; nothing is saved
+  (`supplier_id: null` still unlinks)
 - 409 `PRODUCT_QUANTITY_CONFLICT` — Stock no longer equals `expectedQuantity`; reload with
   `GET /products/:id` and resend against the current value. **Compatibility change (2026-10-29):**
   a client sending `quantity` alone now gets 400 instead of a blind overwrite.
@@ -384,13 +413,14 @@ Soft-deletes multiple products in one call.
 
 **GET** `/products/low-stock`
 
-Returns products below stock threshold.
+Returns products whose `quantity` is strictly below `threshold` (`quantity < threshold`; it was
+`<=` until 2026-11-10). The dashboard's Low Stock widget calls it with `threshold=10`.
 
 **Query Params:**
 
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
-| threshold | number | 10 | Stock level below this is "low" |
+| threshold | number | 10 | A quantity strictly below this is "low" |
 | limit | number | 50 | Max 100 results |
 
 **Response** (200):
@@ -404,7 +434,9 @@ Product[]
 
 Aggregate worth of everything currently in stock for the authenticated user, at
 both cost and retail price. Soft-deleted products are excluded. All products share
-one currency (UAH), so a single total is returned.
+one currency (UAH), so a single total is returned. Each product is widened to `bigint` before
+`quantity × price` (both `integer` columns), so large stock no longer overflows into a 500; the
+sums are plain JSON numbers, exact up to 2^53 cents.
 
 **Response** (200):
 ```typescript
@@ -504,12 +536,10 @@ Updates supplier details.
 
 **DELETE** `/suppliers/:id`
 
-Soft-deletes supplier.
+Deletes the supplier row for good (suppliers have no soft delete). Its products stay and lose the
+link (`products.supplier_id` is `ON DELETE SET NULL`).
 
-**Response** (200):
-```typescript
-{ ok: true }
-```
+**Response** (200): empty body.
 
 **Errors:**
 - 404 `SUPPLIER_NOT_FOUND`
@@ -563,7 +593,7 @@ different body. Without the header the route behaves as before.
 **Errors:**
 - 400 `VALIDATION_ERROR` — Invalid `Idempotency-Key`
 - 409 `RECIPIENT_ALREADY_EXISTS` — Email already registered for this user (case-insensitive), also with an `Idempotency-Key` (a replay of the key's own create still returns its stored 201) and when a concurrent create wins the race (unique index `IDX_recipients_user_email_unique`)
-- 400 validation errors — blank name, over-long values, malformed phone or email, invalid IBAN or tax ID
+- 400 validation errors — blank name, over-long values, malformed phone or email, invalid IBAN or tax ID. An IBAN of the right shape (UA + 27 digits) whose mod-97 check digits fail gets its own message, `iban check digits do not match: check the IBAN for a typo`; any other bad IBAN gets `iban must be a valid Ukrainian IBAN (UA + 27 digits)`
 - 400 `VALIDATION_ERROR` — `tax_id_kind` that disagrees with the `tax_id` length, or a kind without a `tax_id`
 
 ---
@@ -697,13 +727,19 @@ it. The internal `unit_cost_estimated` flag is never returned.
 
 Duplicate `productId` entries and products with different currencies are rejected on create/update
 with 400 `VALIDATION_ERROR`. Supply items as `{ productId, qty, unitPriceCents? }`; an explicit
-`unitPriceCents: 0` is valid. Idempotency replays run before monthly quota refusal; parallel creates
+`unitPriceCents: 0` is valid. `qty` is an integer from 1 to 2147483647 and `unitPriceCents` an
+integer from 0 to 2147483647 (both `integer` columns; a fractional value is 400 `HTTP_EXCEPTION`,
+it used to be a 500). Idempotency replays run before monthly quota refusal; parallel creates
 are serialized per user for the quota check.
 
 **Errors:**
 - 400 `VALIDATION_ERROR` — Duplicate product or mixed currencies
+- 400 `VALIDATION_ERROR` (`items`) — the order total would exceed 2147483647 cents (21 474 836.47,
+  the `integer` limit of `total_cents` / `line_total_cents`); refused before anything is written
+  (also on `PATCH /orders/:id`)
 - 404 `RECIPIENT_NOT_FOUND` — Recipient doesn't exist
-- 404 `PRODUCT_NOT_FOUND` — Product doesn't exist
+- 404 `PRODUCT_NOT_FOUND` — Product doesn't exist or belongs to another tenant; the message names the
+  first such id (`Product with id <uuid> not found`)
 - 402 `ORDER_MONTHLY_LIMIT_EXCEEDED` — Free plan limit (20 orders/month)
 
 ---
@@ -787,8 +823,10 @@ same product and quantity as before keeps its `unit_cost_cents` (including null)
 captures the product's current purchase cost.
 
 **Errors:**
-- 400 `VALIDATION_ERROR` — Duplicate product IDs or mixed currencies
+- 400 `VALIDATION_ERROR` — Duplicate product IDs or mixed currencies, or (`items`) a total above
+  2147483647 cents
 - 400 `ORDER_CANNOT_BE_MODIFIED` — Order is not DRAFT
+- 404 `PRODUCT_NOT_FOUND` — a product that is missing or another tenant's; the message names its id
 
 ---
 
@@ -840,10 +878,7 @@ Deletes an order (soft delete, stock returned). In the same transaction the shar
 **Path Params:**
 - `id` (string, UUID)
 
-**Response** (200):
-```typescript
-{ ok: true }
-```
+**Response** (200): empty body.
 
 **Errors:**
 - 404 `ORDER_NOT_FOUND`
@@ -932,7 +967,7 @@ Time-series profit and turnover for sparkline/chart (last N days).
 ```typescript
 [
   {
-    date: string,                // "2026-08-20"
+    date: string,                // "2026-08-20": the day in UTC, so an order placed shortly after midnight in Kyiv counts toward the previous day
     revenue_cents: number | null, // 0 for a day without orders; null when every line that day has an unknown cost
     turnover_cents: number,
     ...ProfitCompleteness
@@ -1305,46 +1340,10 @@ Downloads receipt as PDF file.
 
 **Download file names.** The name is `receipt-<number>.pdf` for a waybill and `<type>-<number>.pdf` for the others. Since a number may carry a prefix with non-Latin letters (`РФ-2026-000043`), `receipts/content-disposition.ts::pdfDisposition` writes an ASCII `filename` (every non-ASCII character, `"`, `\` and `%` becomes `_`) plus an RFC 5987 `filename*` with the exact name. Both PDF endpoints (`/receipts/:id/pdf` and `/public/receipts/:token/pdf`) use it; writing the raw name used to make Node throw on a non-Latin-1 header and answer 500.
 
----
-
-### Print Receipt to Printer
-
-**POST** `/receipts/:id/print`
-
-Sends generated receipt to physical printer.
-
-**Path Params:**
-- `id` (string, UUID)
-
-**Query Params:**
-- `printer` (string, optional) — Printer name; defaults to system default
-
-**Response** (201):
-```typescript
-{ ok: true }
-```
-
-**Errors:**
-- 404 `RECEIPT_NOT_FOUND`
-- 500 `RECEIPT_PRINT_FAILED` — Printer offline or error
-
----
-
-### Get Available Printers
-
-**GET** `/receipts/printers`
-
-Lists connected receipt printers (if configured).
-
-**Response** (200):
-```typescript
-[
-  {
-    name: string,
-    status: string     // "ready", "offline", etc.
-  }
-]
-```
+**Printing uses this route.** There is no print endpoint: the web app opens this PDF in a new tab
+and the user prints it from the browser's PDF viewer. `POST /receipts/:id/print` and
+`GET /receipts/printers` (which ran `lp`/`lpr`/`lpstat` on the API host, where production has no
+printers) and the error `RECEIPT_PRINT_FAILED` were removed on 2026-11-11.
 
 ---
 
@@ -1651,6 +1650,8 @@ Returns current receipt template language.
 
 Sets template rendering language. Only `en`, `ru` and `uk` are accepted.
 
+The language switch also moves the formatting that follows the language (`settings/document-config.ts::followDocumentLanguage`): the hour cycle (`h12` for English, `h23` otherwise) and the number locale (`en-US` / `ru-RU` / `uk-UA`) change with it unless the user chose them, i.e. unless the saved value differs from what the old language implies (the legacy number locale `ru-RU` counts as not chosen). Other formatting fields are kept.
+
 **Request Body:**
 ```typescript
 { language: string }
@@ -1782,7 +1783,7 @@ Uploads company logo (replaces existing). File stored in Object Storage.
   - SVG scripts, event handlers, foreign objects and external resources are rejected; local fragment references are supported
   - The stable `logos/logo-{userId}.png` key is overwritten after successful validation, without pre-deleting the existing object
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
   message: string,
@@ -1796,6 +1797,8 @@ Uploads company logo (replaces existing). File stored in Object Storage.
 
 **Errors:**
 - 400 — File format not supported (not image/*)
+- 400 `REQUIRED_FIELD_MISSING` — the multipart body has no `logo` part
+- 400 `HTTP_EXCEPTION` `"Too many fields"` — the body carries more than one text field (one stray text part up to 1 KiB is ignored, so a form with a text field and no file gets `REQUIRED_FIELD_MISSING`)
 - 413 — File too large (> 5 MB)
 - 500 `FILE_UPLOAD_FAILED` — Storage error
 
@@ -2000,7 +2003,7 @@ Returns whether user has completed initial onboarding.
 
 Marks onboarding as complete.
 
-**Response** (200):
+**Response** (201):
 ```typescript
 { data: { completed: true } }
 ```
@@ -2099,7 +2102,7 @@ Account-level images printed on documents whose style has a signature block (`ca
 
 **GET** `/settings/signoff/:kind/image` — `kind` is `signature` or `stamp` (anything else is `400`, on every `/settings/signoff/:kind` route).
 
-**Response** (200): the stored PNG with `Content-Type: image/png`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`. 404 when not set. Needs the bearer token, so a client fetches it as a blob rather than through an `<img src>`.
+**Response** (200): the stored PNG with `Content-Type: image/png`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`. 404 when not set. 404 `FILE_NOT_FOUND` ("The stored signature image is missing") when the image is set but its object is gone from storage (it was a 500). Needs the bearer token, so a client fetches it as a blob rather than through an `<img src>`.
 
 #### Replace
 
@@ -2109,6 +2112,7 @@ Account-level images printed on documents whose style has a signature block (`ca
 
 **Errors:**
 - 400 `VALIDATION_ERROR` (message names `signature` or `stamp`) — not a PNG or JPEG, the file's first bytes do not match its declared type, a side outside 32..4096 px, animated PNG, undecodable, or no `file` part (`REQUIRED_FIELD_MISSING`)
+- 400 `HTTP_EXCEPTION` `"Too many fields"` — the body carries more than one text field (one stray text part up to 1 KiB is ignored; without a file that is `REQUIRED_FIELD_MISSING`)
 - 413 — file above 2 MiB (refused while streaming, before decoding)
 - 429 `RATE_LIMITED` — more than 10 uploads a minute from this user (counted per user, not per address)
 
@@ -2138,7 +2142,9 @@ other data from the owner. Malformed, revoked and void tokens return 404. Both p
 **Path Params:**
 - `token` (string) — Public share token from `/receipts/:id/share`
 
-**Response** (200): Receipt metadata
+**Response** (200): Receipt metadata. `receipt` carries `id`, `number`, `document_type` (since
+2026-11-10; the share page names the downloaded PDF `<type>-<number>.pdf`, a waybill `receipt-<number>.pdf`,
+as `GET /receipts/:id/pdf` does), `status`, `created_at` and the projected `order`.
 
 **Errors:**
 - 404 — Receipt not found or share link revoked
@@ -2162,8 +2168,13 @@ Downloads receipt PDF using public share token (no auth).
 - The PDF contains the signature and stamp images the document was issued with, when its style prints them (they are embedded in the frozen HTML; the JSON data of `GET /public/receipts/:token` never carries images)
 
 **Errors:**
-- 404 — Receipt not found or share link revoked, or its stored file is missing: the body of a missing-file 404 is always the fixed `File not found: receipt PDF` (`FILE_NOT_FOUND`); the storage path (bucket, key, account id) is only written to the server log
-- Rate limited to 20 requests/min per IP
+- 404 `NOT_FOUND` — Receipt not found or share link revoked
+- 404 `FILE_NOT_FOUND` — its stored file is missing: the body is always the fixed `File not found: receipt PDF`; the storage path (bucket, key, account id) is only written to the server log
+- 500 `INTERNAL_SERVER_ERROR` — anything unexpected (storage outage), with the generic message
+- 429 `RATE_LIMITED` — more than 20 requests/min per IP
+
+Every error is the standard `{ error, errorCode }` body (until 2026-11-10 this route answered
+`{ error }` without a code) and keeps the `X-Robots-Tag` / `Cache-Control` headers.
 
 ---
 
@@ -2171,45 +2182,11 @@ Downloads receipt PDF using public share token (no auth).
 
 **Template previews** — authenticated sample-data rendering without creating orders or receipts.
 
-File: `backend/src/modules/receipts/controllers/pdf-test.controller.ts` (3 endpoints)
+File: `backend/src/modules/receipts/controllers/pdf-test.controller.ts` (1 endpoint)
 
-These JWT-guarded endpoints also serve the settings/onboarding template previews. They use shared translations and fonts, and do not persist sample data. Test PDFs use each template's production PDF options, including the content-sized 80 mm Thermal roll.
+This JWT-guarded endpoint serves the settings/onboarding template gallery. It uses shared translations and fonts and does not persist sample data. The controller is registered unconditionally, so the route is reachable in production by any signed-in user; it renders HTML only (no Playwright) and is not limited.
 
-### Generate Test PDF (GET)
-
-**GET** `/pdf-test/generate-test-pdf`
-
-Generates a PDF with sample data and the selected template's production page options.
-
-**Query Params:**
-- `template` (string, optional) — Template ID: "standard", "compact", etc. Default: "standard"
-- `logo` (boolean, optional) — Include sample logo. Default: false
-- `language` (string, optional) — Language code: "en", "ru", "uk". Default: "en"
-
-**Response** (200): Binary PDF file
-
-**Valid Templates:** standard, compact, classic, modern, elegant, vintage, tech, wave, minimal, corporate, thermal, dark, branded, delivery, proforma. Invalid template/language values return HTTP 400.
-
-**Valid Languages:** en, ru, uk
-
----
-
-### Generate Test PDF (POST)
-
-**POST** `/pdf-test/generate-test-pdf`
-
-Generates a PDF with sample data and the selected template's production page options.
-
-**Request Body:**
-```typescript
-{
-  template?: string,    // "standard", "compact", etc.
-  withLogo?: boolean,
-  language?: string     // "en", "ru", "uk"
-}
-```
-
-**Response** (200): Binary PDF file
+The sample-data test PDF (`/pdf-test/generate-test-pdf`, GET and POST) is no longer routed (404 since 2026-11-11): no page used it, and it let any signed-in user start Playwright renders. `PdfTestController.generateTestPdf` stays as a plain method for `backend/test/verify-receipt-templates.ts`, which renders each template's production PDF options (including the content-sized 80 mm Thermal roll) through it. **Valid templates** for the preview: standard, compact, classic, modern, elegant, vintage, tech, wave, minimal, corporate, thermal, dark, branded, delivery, proforma; **valid languages:** en, ru, uk. Invalid values return HTTP 400.
 
 ---
 
@@ -2328,6 +2305,12 @@ All errors follow this shape (`ApiErrorResponse` in the OpenAPI contract):
 
 `GlobalExceptionFilter` builds this body for every error. Plain Nest HTTP exceptions get `errorCode: "HTTP_EXCEPTION"` unless the exception object carries its own `errorCode` (e.g. `RECONSTRUCTION_REQUIRED`); other extra fields such as `revision` are dropped. An `ApiErrorResponse` with `details` (e.g. `DOCUMENT_REQUISITES_MISSING`) spreads them into the body. Class-validator DTO failures can put an array of messages in `error`. Any other error — a database `QueryFailedError`, a runtime exception — is answered `500 { error: "Internal server error", errorCode: "INTERNAL_SERVER_ERROR" }`; its original message and stack are only logged.
 
+Input refused before any handler or validation runs, on every route:
+- 413 `PAYLOAD_TOO_LARGE` (`"Request body is too large"`) — a JSON body above express's default limit (100 KB). Other body-parser client errors keep their own 4xx with `HTTP_EXCEPTION`; malformed JSON is 400 `HTTP_EXCEPTION`.
+- 400 `VALIDATION_ERROR` — a NUL character (`\u0000`) in any string or key of a body, query or route parameter (`Validation error for search: must not contain the NUL character`), or a body nested deeper than 32 levels (`RejectUnsafeInputPipe`).
+- 429 `RATE_LIMITED` — every throttled route answers `{ error, errorCode: "RATE_LIMITED", retryAfterSeconds }` with a `Retry-After` header (see *Rate Limiting*).
+- 401 `UNAUTHORIZED` — a JWT whose signature is valid but whose `sub` is not a user id (uuid).
+
 Common HTTP status codes:
 
 | Code | Meaning |
@@ -2370,48 +2353,68 @@ To fetch next page: `offset = current_offset + limit`
 
 ## Rate Limiting
 
-- Global: 30 requests per 60 seconds per IP
-- Auth endpoints (login/register): 5 requests per 60 seconds per IP
-- `/auth/refresh`: 20 requests per 60 seconds per IP
-- Paddle webhook: 60 requests per 60 seconds (per webhook endpoint)
+There is **no global API throttle**: `ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])` only
+supplies defaults, and no `APP_GUARD` applies them, so a route is limited only when it carries a
+throttler guard. Per-route limits:
 
-"IP" is the client address the frontend nginx saw: the API trusts exactly one proxy hop
-(`X-Forwarded-For` entries a client writes itself are ignored).
+- Per client IP (`ThrottlerGuard`): login and register 5 per 60 s each, `/auth/refresh` 20 per 60 s,
+  `/public/receipts/*` 20 per 60 s, Paddle webhook 60 per 60 s
+- Per signed-in user (`UserThrottlerGuard`): document issuing 20 per 60 s in one bucket,
+  `POST /receipts/test-preview` 10 per 60 s, `POST /receipts/preview` 30 per 60 s,
+  `PUT /settings/signoff/:kind` 10 per 60 s
 
-Returns 429 (Too Many Requests) when limit exceeded.
+In front of the API, the production nginx (`frontend/nginx.conf`, `limit_req zone=api`) allows
+each client 10 requests/s on `/api/` with a burst of 40 (`nodelay`); beyond that nginx answers
+itself, before the request reaches the API, with `429 {"error", "errorCode": "RATE_LIMITED",
+"retryAfterSeconds": 1}` and `Retry-After: 1`. Preflight `OPTIONS`, `/socket.io/` and
+`/paddle/webhook` are not limited. (Until 2026-11-11 this limit lived only in an unused
+`nginx/nginx.conf`, so production had none.)
+
+"Client" and "IP" mean the real client address. Production sits behind Cloudflare: nginx restores
+the address from `CF-Connecting-IP`, but only when the TCP peer is in Cloudflare's published ranges
+(`set_real_ip_from` in `frontend/nginx.conf`; a direct request to the origin keeps its own
+address and cannot choose one). The API trusts exactly one proxy hop, that nginx, which appends
+the restored address as the last `X-Forwarded-For` entry; entries a client writes itself are
+ignored. Before 2026-11-11 nginx did not restore it, so every per-IP limit counted per Cloudflare
+edge.
+
+Every API throttle answers `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }` with a
+`Retry-After` header (seconds). The stock `ThrottlerGuard`'s `ThrottlerException` is turned into
+that body by `GlobalExceptionFilter`; until 2026-11-10 it was
+`{ error: "ThrottlerException: Too Many Requests", errorCode: "HTTP_EXCEPTION" }`.
 
 ---
 
 ## WebSocket (Receipt Generation Progress)
 
-**Connection:** `ws://localhost:3000/receipts/progress/:userId`
+File: `backend/src/modules/receipts/receipts.gateway.ts`; client: `frontend/src/hooks/useReceiptSocket.ts`.
 
-**Auth:** Pass JWT in query string: `?token=<access_token>`
+**Connection:** socket.io namespace `/receipts` (transport path `/socket.io/`, proxied by
+`frontend/nginx.conf`), e.g. `io("https://receiptmaster.org/receipts", { auth: { token } })`.
 
-**Events:**
+**Auth:** the access JWT in `auth.token` of the handshake, or an `Authorization: Bearer <token>`
+header. The connection is refused (server-side disconnect) without a token, with an invalid or
+expired one, with one whose account is missing or inactive, or with one revoked by logout or a
+password change (stale `tv` claim, see *Authentication*). A connected socket joins the room
+`user:<userId>`; there are no client-to-server messages (no subscribe/join).
 
-### progress
+Before each event is sent, the user's sockets in this process are checked against the account's
+current `token_version`; a socket that connected with an older version (its user logged out or
+changed the password since) is disconnected instead of receiving it. A user's events keep their
+order. With several backend replicas, a replica only reaches the sockets connected to it (there is
+no shared socket.io adapter), so events from another replica are not delivered.
 
-Emitted during receipt generation:
-
-```typescript
-{
-  receiptId: string,
-  orderId: string,
-  progress: number,    // 0-100
-  stage: string        // "generating_pdf", "uploading_s3", "done", etc.
-}
-```
-
-### error
-
-Emitted if generation fails:
+**Events** (server → client, only to the owner's sockets):
 
 ```typescript
-{
-  receiptId: string,
-  error: string
-}
+// receipt.progress
+{ receiptId: string, orderId: string, progress: number /* 0-100 */, stage: string }
+
+// receipt.completed
+{ receiptId: string, orderId: string, pdfUrl?: string, receiptNumber: string }
+
+// receipt.failed
+{ receiptId: string, orderId: string, error: string }
 ```
 
 ---

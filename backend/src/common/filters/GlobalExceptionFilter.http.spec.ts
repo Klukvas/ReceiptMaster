@@ -23,7 +23,7 @@ class FailingController {
 
   @Get("deliberate")
   deliberate(): never {
-    throw ApiErrors.RECEIPT_PRINT_FAILED("receipt-1");
+    throw ApiErrors.RECEIPT_GENERATION_FAILED("order-1");
   }
 }
 
@@ -84,8 +84,8 @@ describe("GlobalExceptionFilter over HTTP", () => {
       .expect(500);
 
     expect(res.body).toEqual({
-      error: "Failed to print receipt receipt-1",
-      errorCode: "RECEIPT_PRINT_FAILED",
+      error: "Failed to generate receipt for order order-1",
+      errorCode: "RECEIPT_GENERATION_FAILED",
     });
   });
 });

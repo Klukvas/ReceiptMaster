@@ -251,7 +251,7 @@ export const documentsListHandlers = (state) => [
       return answer(json, route, { data: matching.slice(offset, offset + limit), total: matching.length, offset, limit });
     }
     const one = /^\/receipts\/([^/]+)(\/pdf|\/share|\/void)?$/.exec(path);
-    if (!one || one[1] === "retention" || one[1] === "printers" || one[1] === "orders") return false;
+    if (!one || one[1] === "retention" || one[1] === "orders") return false;
     const doc = state.documents.find((candidate) => candidate.id === one[1]);
     if (!doc) return false;
     if (one[2] === "/pdf" && method === "GET") {

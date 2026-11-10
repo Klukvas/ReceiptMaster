@@ -219,8 +219,13 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
               ? t("recipients.editRecipient")
               : t("recipients.createRecipient")}
           </h2>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
+            <X className="w-4 h-4" aria-hidden />
           </Button>
         </div>
 
@@ -262,10 +267,14 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
           />
 
           <div>
-            <label className="block text-sm font-medium text-content-secondary mb-1">
+            <label
+              htmlFor="recipient-address"
+              className="block text-sm font-medium text-content-secondary mb-1"
+            >
               {t("recipients.address")}
             </label>
             <textarea
+              id="recipient-address"
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
               value={formData.address}
               onChange={(e) =>

@@ -63,6 +63,8 @@ const WS_URL = resolveSocketUrl(
   window.location.origin,
 );
 
+const TOKEN_WATCH_INTERVAL_MS = 3000;
+
 export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
@@ -76,8 +78,13 @@ export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
     const token = localStorage.getItem("auth_token");
     if (!token || !isAuthenticated) return;
 
+    // Read on every (re)connection attempt, so a reconnect uses the latest refreshed token.
+    let connectingWith = token;
     const socket = io(`${WS_URL}/receipts`, {
-      auth: { token },
+      auth: (send) => {
+        connectingWith = localStorage.getItem("auth_token") ?? "";
+        send({ token: connectingWith });
+      },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 10,
@@ -101,6 +108,25 @@ export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
       isFirstConnect.current = false;
     });
 
+    // The server ends a socket whose token was revoked (a logout or password change on any
+    // device), and socket.io does not reconnect after a server-side disconnect. The same token
+    // would be refused again, so wait until the API client has stored a newer one.
+    let tokenWatch: ReturnType<typeof setInterval> | undefined;
+    const stopTokenWatch = () => {
+      clearInterval(tokenWatch);
+      tokenWatch = undefined;
+    };
+    socket.on("disconnect", (reason) => {
+      if (reason !== "io server disconnect" || tokenWatch) return;
+      const refused = connectingWith;
+      tokenWatch = setInterval(() => {
+        const latest = localStorage.getItem("auth_token");
+        if (!latest || latest === refused) return;
+        stopTokenWatch();
+        socket.connect();
+      }, TOKEN_WATCH_INTERVAL_MS);
+    });
+
     socket.on("receipt.progress", (payload: ReceiptProgressPayload) => {
       callbacksRef.current?.onProgress?.(payload);
     });
@@ -118,6 +144,7 @@ export const useReceiptSocket = (callbacks?: ReceiptSocketCallbacks) => {
     });
 
     return () => {
+      stopTokenWatch();
       socket.disconnect();
       socketRef.current = null;
       isFirstConnect.current = true;

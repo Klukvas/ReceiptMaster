@@ -90,7 +90,10 @@ export class DocumentSignoffController {
       limits: {
         fileSize: SIGNOFF_LIMITS.maxUploadBytes,
         files: 1,
-        fields: 0,
+        // One stray text part is tolerated and ignored, so a form without the file gets
+        // REQUIRED_FIELD_MISSING from the handler rather than multer's "Too many fields".
+        fields: 1,
+        fieldSize: 1024,
         // One file plus the part that trips the limit; multer's parts limit is exclusive.
         parts: 2,
       },

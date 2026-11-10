@@ -3,6 +3,7 @@ import type {
   DocumentTemplate,
 } from "../../lib/document-config";
 import { useTranslation } from "../../hooks/useTranslation";
+import { templateDisplayName } from "../../lib/template-name";
 import { Disclosure } from "../ui/Disclosure";
 import { DocumentSection, LabelledField, selectClass } from "./document-ui";
 
@@ -45,7 +46,7 @@ export function DocumentTextSection({
   const termsHint = (help: string) =>
     termsUnsupported
       ? t("document.notShownByTemplateTerms", {
-          template: template?.name ?? "",
+          template: template ? templateDisplayName(t, template) : "",
         })
       : help;
 

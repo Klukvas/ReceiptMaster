@@ -225,7 +225,9 @@ export function DataTable<T>({
       : ("descending" as const);
   };
 
-  const sortableColumns = visibleColumns.filter((col) => col.sortable);
+  // Cards do not follow the table's column choice, so the phone sort offers every sortable
+  // column, including a hidden one the list is sorted by (e.g. the default "Date added").
+  const sortableColumns = columns.filter((col) => col.sortable);
   const activeSortColumn = sortableColumns.find(
     (col) => (col.sortKey || col.key) === sortBy,
   );
@@ -553,6 +555,7 @@ export function DataTable<T>({
                 size="sm"
                 data-testid="data-table-sort-direction"
                 onClick={() => activeSortColumn && onSort(activeSortColumn.key)}
+                disabled={!activeSortColumn}
                 aria-describedby={sortHintId}
               >
                 {sortOrder === "ASC" ? (

@@ -1,6 +1,6 @@
 import { CustomizeDocumentModal } from "./CustomizeDocumentModal";
 import { CreateDocumentModal } from "./CreateDocumentModal";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useId } from "react";
 import {
   MoreVertical,
   Edit,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { Order } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 import {
   activeDocument,
   canCreate,
@@ -58,7 +59,7 @@ interface OrderActionsMenuProps {
   onView: (order: Order) => void;
   onEdit: (order: Order) => void;
   onConfirm: (id: string) => void;
-  onCancel: (id: string) => void;
+  onCancel: (order: Order) => void;
   onDelete: (order: Order) => void;
   onDownloadReceipt: (receiptId: string) => void;
   onPrintReceipt: (receiptId: string) => void;
@@ -66,13 +67,17 @@ interface OrderActionsMenuProps {
   isDeleting: boolean;
 }
 
+const getEnabledItems = (menu: HTMLElement | null) =>
+  Array.from(
+    menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ??
+      [],
+  );
+
 function MenuSectionView({
   section,
-  focusedIndex,
   headingId,
 }: {
   section: MenuSection;
-  focusedIndex: number;
   headingId: string;
 }) {
   const buttons = section.items.map(({ item, index }) => {
@@ -98,14 +103,13 @@ function MenuSectionView({
           onClick={item.onClick}
           disabled={item.disabled}
           role="menuitem"
-          className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors ${
+          tabIndex={-1}
+          className={`w-full px-3 py-2 pointer-coarse:py-3 pointer-coarse:min-h-11 text-left text-sm flex items-center gap-2.5 transition-colors focus:outline-none focus-visible:bg-surface-alt focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] ${
             item.className
-          } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""} ${
-            index === focusedIndex ? "bg-surface-alt" : ""
-          }`}
+          } ${item.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
         >
           <Icon className="w-4 h-4 flex-shrink-0" />
-          <span>{item.label}</span>
+          <span className="min-w-0 break-words">{item.label}</span>
         </button>
       </React.Fragment>
     );
@@ -135,10 +139,10 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [creating, setCreating] = useState<CreatableType | null>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const [focusedIndex, setFocusedIndex] = useState(-1);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const position = useMenuPosition(isOpen, buttonRef, dropdownRef);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -180,33 +184,13 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     };
   }, [isOpen]);
 
-  const updatePosition = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const menuHeight = 520;
-      const proposedTop =
-        spaceBelow < menuHeight
-          ? rect.top - menuHeight + rect.height
-          : rect.bottom + 4;
-      // Keep the whole menu on screen: with the document group it can be taller than the room above.
-      const maxTop = Math.max(8, window.innerHeight - menuHeight - 8);
-
-      setPosition({
-        top: Math.max(8, Math.min(proposedTop, maxTop)),
-        left: rect.right - 192,
-      });
-    }
-  };
-
-  const handleToggle = () => {
-    if (!isOpen) updatePosition();
-    setIsOpen(!isOpen);
-    setFocusedIndex(-1);
-  };
+  const handleToggle = () => setIsOpen(!isOpen);
 
   const handleAction = (action: () => void, event: React.MouseEvent) => {
     event.stopPropagation();
+    // The focused item unmounts with the menu. Focus the trigger first, so a dialog the action
+    // opens records it as its opener and hands focus back to it on close.
+    buttonRef.current?.focus();
     action();
     setIsOpen(false);
   };
@@ -257,7 +241,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         {
           icon: XCircle,
           label: t("orders.cancel"),
-          onClick: (e) => handleAction(() => onCancel(order.id), e),
+          onClick: (e) => handleAction(() => onCancel(order), e),
           className: "text-warning-base hover:bg-[var(--color-warning-light)]",
         },
       );
@@ -333,7 +317,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       items.push(...createItems, {
         icon: XCircle,
         label: t("orders.cancel"),
-        onClick: (e) => handleAction(() => onCancel(order.id), e),
+        onClick: (e) => handleAction(() => onCancel(order), e),
         className: "text-warning-base hover:bg-[var(--color-warning-light)]",
       });
     }
@@ -369,46 +353,49 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
 
   const menuItems = getMenuItems();
 
-  // Keyboard navigation
+  // Keyboard users get real focus inside the menu as soon as it opens (as in PortalDropdown).
   useEffect(() => {
-    if (!isOpen) {
-      setFocusedIndex(-1);
+    if (isOpen)
+      getEnabledItems(dropdownRef.current)[0]?.focus({ preventScroll: true });
+  }, [isOpen]);
+
+  const closeAndRefocusTrigger = () => {
+    buttonRef.current?.focus();
+    setIsOpen(false);
+  };
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeAndRefocusTrigger();
       return;
     }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "Escape":
-          e.preventDefault();
-          setIsOpen(false);
-          buttonRef.current?.focus();
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setFocusedIndex((prev) => (prev + 1) % menuItems.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setFocusedIndex(
-            (prev) => (prev - 1 + menuItems.length) % menuItems.length,
-          );
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (
-            focusedIndex >= 0 &&
-            focusedIndex < menuItems.length &&
-            !menuItems[focusedIndex].disabled
-          ) {
-            menuItems[focusedIndex].onClick(e as unknown as React.MouseEvent);
-          }
-          break;
-      }
+    // Focus is back on the trigger before Tab's default action, so Tab moves on from there.
+    if (e.key === "Tab") {
+      closeAndRefocusTrigger();
+      return;
+    }
+    const items = getEnabledItems(dropdownRef.current);
+    if (items.length === 0) return;
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const targets: Record<string, number> = {
+      ArrowDown: (current + 1) % items.length,
+      ArrowUp: (current - 1 + items.length) % items.length,
+      Home: 0,
+      End: items.length - 1,
     };
+    if (e.key in targets) {
+      // Also keeps Home/End from scrolling the page.
+      e.preventDefault();
+      items[targets[e.key]].focus();
+    }
+  };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, focusedIndex, menuItems]);
+  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" || isOpen) return;
+    e.preventDefault();
+    setIsOpen(true);
+  };
 
   return (
     <>
@@ -436,10 +423,13 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
         ref={buttonRef}
         data-order-actions={order.id}
         onClick={handleToggle}
+        onKeyDown={handleTriggerKeyDown}
         className="p-1.5 pointer-coarse:p-3.5 rounded-lg hover:bg-surface-alt transition-colors"
         title={t("orders.moreActions")}
         aria-label={t("orders.moreActions")}
         aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? menuId : undefined}
       >
         <MoreVertical className="w-4 h-4 text-content-tertiary" />
       </button>
@@ -447,18 +437,18 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed w-48 bg-elevated rounded-xl shadow-xl border border-[var(--color-border)] z-50 py-1 animate-modal-content"
-          style={{
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-          }}
+          id={menuId}
+          // Document labels run long in ru/uk: the menu grows to fit them, then wraps.
+          className="fixed w-max min-w-48 max-w-[min(20rem,calc(100vw-1rem))] bg-elevated rounded-xl shadow-xl border border-[var(--color-border)] z-50 py-1 animate-modal-content"
+          style={position}
           role="menu"
+          aria-label={t("orders.moreActions")}
+          onKeyDown={handleMenuKeyDown}
         >
           {sectionsOf(menuItems).map((section, sectionIndex) => (
             <MenuSectionView
               key={sectionIndex}
               section={section}
-              focusedIndex={focusedIndex}
               headingId={`order-menu-group-${order.id}-${sectionIndex}`}
             />
           ))}

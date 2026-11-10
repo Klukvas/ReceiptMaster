@@ -452,6 +452,7 @@ const SelectedProductCard = ({
               ref={qtyInputRef}
               type="number"
               min="1"
+              aria-label={t("orders.quantity")}
               value={item.qty}
               onChange={(e) =>
                 onUpdate(
@@ -506,6 +507,7 @@ const SelectedProductCard = ({
               <input
                 type="text"
                 inputMode="decimal"
+                aria-label={t("orders.unitPrice")}
                 value={
                   priceInput !== undefined
                     ? priceInput

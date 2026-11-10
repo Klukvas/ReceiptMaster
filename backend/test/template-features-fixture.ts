@@ -120,17 +120,24 @@ export class MemoryDatabase {
   repository(entity: Entity): Repository<never> {
     const repo = {
       create: (value: Row) => ({ ...value }),
-      findOne: async (options: { where?: Row; select?: string[] }) => {
+      findOne: async (options: {
+        where?: Row;
+        select?: string[];
+        relations?: unknown;
+      }) => {
         const row = this.rows(entity).find((value) =>
           this.matches(value, options.where, entity),
         );
-        return row
-          ? options.select
-            ? Object.fromEntries(
-                options.select.map((key) => [key, structuredClone(row[key])]),
-              )
-            : this.project(entity, row)
-          : null;
+        if (!row) return null;
+        if (options.select)
+          return Object.fromEntries(
+            options.select.map((key) => [key, structuredClone(row[key])]),
+          );
+        return this.withRelations(
+          entity,
+          this.project(entity, row),
+          options.relations,
+        );
       },
       findOneOrFail: async (options: { where?: Row }) => {
         const row = this.rows(entity).find((value) =>
@@ -291,6 +298,30 @@ export class MemoryDatabase {
       },
     };
     return repo as unknown as Repository<never>;
+  }
+  /**
+   * `relations: { order: true }` as TypeORM loads it: a soft-deleted related row is absent.
+   * Only the modelled relations are loaded; any other form is ignored, as it always was here.
+   */
+  private withRelations(entity: Entity, value: Row, relations: unknown): Row {
+    const known = MemoryDatabase.RELATIONS.get(entity) || {};
+    if (!relations || typeof relations !== "object" || Array.isArray(relations))
+      return value;
+    const loaded = Object.entries(relations as Record<string, unknown>)
+      .filter(([key, wanted]) => wanted === true && key in known)
+      .map(([key]) => {
+        const relation = known[key];
+        const related = this.rows(relation.target).find(
+          (candidate) =>
+            candidate.id === value[relation.foreignKey] &&
+            candidate.deleted_at == null,
+        );
+        return [
+          key,
+          related ? this.project(relation.target, related) : null,
+        ] as const;
+      });
+    return { ...value, ...Object.fromEntries(loaded) };
   }
   project(entity: Entity, row: Row): Row {
     const value = structuredClone(row);

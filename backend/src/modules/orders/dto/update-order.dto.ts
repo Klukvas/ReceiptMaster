@@ -3,12 +3,13 @@ import {
   IsUUID,
   IsArray,
   ValidateNested,
-  IsPositive,
   Min,
+  Max,
   IsOptional,
   IsInt,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { MAX_INT4 } from "../../../common/dto/trimmed-string";
 
 export class UpdateOrderItemDto {
   @ApiProperty({
@@ -19,8 +20,9 @@ export class UpdateOrderItemDto {
   productId: string;
 
   @ApiProperty({ description: "Quantity", example: 2, minimum: 1 })
-  @IsPositive()
+  @IsInt()
   @Min(1)
+  @Max(MAX_INT4)
   qty: number;
 
   @ApiProperty({
@@ -32,6 +34,7 @@ export class UpdateOrderItemDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(MAX_INT4)
   unitPriceCents?: number;
 }
 

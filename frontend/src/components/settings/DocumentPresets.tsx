@@ -20,6 +20,13 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const [loaded, setLoaded] = useState<Preset>();
   const [name, setName] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  // "Discard changes" drops the preset's values from the editor; "Update" must not then write
+  // the saved defaults over the preset, so the preset counts as no longer loaded.
+  const [seenDiscards, setSeenDiscards] = useState(model.discards);
+  if (seenDiscards !== model.discards) {
+    setSeenDiscards(model.discards);
+    setLoaded(undefined);
+  }
   const presets = useQuery({
     queryKey: ["document-presets"],
     queryFn: async () =>
@@ -100,7 +107,7 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
             <option value="">{t("document.choosePreset")}</option>
             {presets.data?.map((value) => (
               <option key={value.id} value={value.id}>
-                {value.name} · {value.revision}
+                {value.name}
               </option>
             ))}
           </select>

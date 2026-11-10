@@ -7,6 +7,7 @@ import { useTranslation } from "./useTranslation";
 import { orderService } from "../services/OrderService";
 import { receiptService } from "../services/ReceiptService";
 import { parseApiError } from "../lib/api-errors";
+import { showGeneratingToast } from "../lib/generating-toast";
 
 interface ConfirmAction {
   isOpen: boolean;
@@ -81,11 +82,6 @@ export const useOrders = () => {
   // Selection state
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
-  // Load printers on mount
-  useEffect(() => {
-    receiptService.loadPrinters();
-  }, []);
-
   const showReceiptEvictionNotice = (limit: number) =>
     toast(t("orders.receiptLimitNotice", { limit }), { duration: 8000 });
 
@@ -114,6 +110,11 @@ export const useOrders = () => {
       ? retention.limit
       : null;
   };
+
+  // The order stays in state after closing: the dialog keeps its text while it closes, and its
+  // close hands focus back to that order's "More actions" button.
+  const closeConfirmDialog = () =>
+    setConfirmAction((previous) => ({ ...previous, isOpen: false }));
 
   const reportActionError = (error: unknown) => {
     const { message } = parseApiError(error);
@@ -144,7 +145,7 @@ export const useOrders = () => {
       toast.success(t("orders.orderCancelled"));
       for (const queryKey of CANCEL_AFFECTED_QUERIES)
         queryClient.invalidateQueries({ queryKey: [...queryKey] });
-      setConfirmAction({ isOpen: false, type: null, order: null });
+      closeConfirmDialog();
     },
     onError: reportActionError,
   });
@@ -156,7 +157,7 @@ export const useOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
-      setConfirmAction({ isOpen: false, type: null, order: null });
+      closeConfirmDialog();
     },
     onError: reportActionError,
   });
@@ -164,8 +165,7 @@ export const useOrders = () => {
   const generateReceiptMutation = useMutation({
     mutationFn: async (orderId: string) => {
       await receiptService.generateReceipt(orderId);
-      // The PDF renders in the background; say so, otherwise nothing seems to happen.
-      toast(t("receipts.generatingReceipt"));
+      showGeneratingToast();
     },
     onError: (error) => toast.error(parseApiError(error).message),
     onSuccess: () => {
@@ -186,7 +186,7 @@ export const useOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       setSelectedKeys(new Set());
-      setConfirmAction({ isOpen: false, type: null, order: null });
+      closeConfirmDialog();
     },
     onError: reportActionError,
   });
@@ -199,7 +199,7 @@ export const useOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       setSelectedKeys(new Set());
-      setConfirmAction({ isOpen: false, type: null, order: null });
+      closeConfirmDialog();
     },
     onError: reportActionError,
   });
@@ -209,14 +209,10 @@ export const useOrders = () => {
     confirmMutation.mutate(id);
   };
 
-  const handleCancel = (id: string) => {
+  // The dialog names the order (number, recipient, total), so it needs the whole order.
+  const handleCancel = (order: Order) => {
     setActionError(null);
-    // Find order from id to show in modal — use a stub with id
-    setConfirmAction({
-      isOpen: true,
-      type: "cancel",
-      order: { id } as Order,
-    });
+    setConfirmAction({ isOpen: true, type: "cancel", order });
   };
 
   const handleDeleteOrder = (order: Order) => {
@@ -241,7 +237,7 @@ export const useOrders = () => {
 
   const handleCloseConfirm = () => {
     setActionError(null);
-    setConfirmAction({ isOpen: false, type: null, order: null });
+    closeConfirmDialog();
   };
 
   // Generating beyond the retention cap deletes the oldest receipt and breaks its public
@@ -283,7 +279,8 @@ export const useOrders = () => {
   };
 
   const confirmReceiptReplacement = () => {
-    if (receiptReplacement) generateReceiptMutation.mutate(receiptReplacement.orderId);
+    if (receiptReplacement)
+      generateReceiptMutation.mutate(receiptReplacement.orderId);
     setReceiptReplacement(null);
   };
 
@@ -291,8 +288,9 @@ export const useOrders = () => {
     receiptService.downloadReceipt(receiptId);
   };
 
+  // Synchronous up to the tab it opens: called straight from the click handler.
   const handlePrintReceipt = (receiptId: string) => {
-    receiptService.handlePrintReceipt(receiptId);
+    void receiptService.openReceiptForPrinting(receiptId);
   };
 
   // Batch action handlers

@@ -11,6 +11,9 @@ import { useEffect, useLayoutEffect, useRef } from "react";
  *
  * History traversal is asynchronous (it ends in a `popstate`), so pushes and pops are
  * serialised: nothing is pushed while a pop of ours is still in flight.
+ *
+ * Leaving the page from inside a dialog (sign-in lands on the dashboard) goes through
+ * `navigateOutOfDialogs`: a pop of ours would cancel that navigation.
  */
 
 interface Entry {
@@ -27,6 +30,8 @@ const entries: Entry[] = [];
 let pendingPops = 0;
 let isAwaitingPop = false;
 let popTimeout: ReturnType<typeof setTimeout> | undefined;
+// A full-page navigation is under way: any history step now would abort it.
+let isLeavingPage = false;
 
 const hasMarker = () =>
   typeof window.history.state === "object" &&
@@ -40,7 +45,7 @@ const finishPop = () => {
 };
 
 function drain(): void {
-  if (isAwaitingPop) return;
+  if (isAwaitingPop || isLeavingPage) return;
 
   if (pendingPops > 0) {
     const count = pendingPops;
@@ -111,6 +116,24 @@ function release(entry: Entry): void {
     pendingPops += 1;
     drain();
   }
+}
+
+/**
+ * Loads `url` as a new page while dialogs may be open. Their markers are left alone (popping
+ * one cancels the navigation); the marker the user stands on is replaced instead, so Back
+ * from the new page returns to the page itself, not to a dead copy of it.
+ */
+export function navigateOutOfDialogs(url: string): void {
+  isLeavingPage = true;
+  if (hasMarker()) window.location.replace(url);
+  else window.location.assign(url);
+}
+
+// Back from the new page may restore this one from the back/forward cache, module state included.
+if (typeof window !== "undefined") {
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) isLeavingPage = false;
+  });
 }
 
 export function useBackClosesDialog(isOpen: boolean, onClose?: () => void): void {

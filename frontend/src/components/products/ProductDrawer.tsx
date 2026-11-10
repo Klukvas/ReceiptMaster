@@ -1,4 +1,9 @@
 import { useState, useEffect } from "react";
+import {
+  marginPercent,
+  marginTone,
+  type MarginTone,
+} from "../../lib/product-metrics";
 import { useQuery } from "@tanstack/react-query";
 import {
   Package,
@@ -25,6 +30,12 @@ import { ProductStockBadge } from "./ProductStockBadge";
 import { ProductMarginBadge } from "./ProductMarginBadge";
 import { OrderStatusBadge } from "../orders/OrderStatusBadge";
 import { useTranslation } from "../../hooks/useTranslation";
+
+const MARGIN_TEXT_CLASS: Record<MarginTone, string> = {
+  good: "text-success-base",
+  fair: "text-warning-base",
+  poor: "text-danger-base",
+};
 
 interface ProductDrawerProps {
   product: Product | null;
@@ -76,13 +87,11 @@ export const ProductDrawer = ({
 
   if (!product) return null;
 
-  // Same definition as ProductMarginBadge: (sale - purchase) / sale.
-  const margin =
-    product.sale_price_cents > 0
-      ? ((product.sale_price_cents - product.purchase_price_cents) /
-          product.sale_price_cents) *
-        100
-      : 0;
+  // Same definition and colours as ProductMarginBadge.
+  const margin = marginPercent(
+    product.purchase_price_cents,
+    product.sale_price_cents,
+  );
 
   const handleEdit = () => {
     setMenuOpen(false);
@@ -200,13 +209,7 @@ export const ProductDrawer = ({
               {t("products.margin", "Margin %")}
             </span>
             <span
-              className={`text-sm font-semibold tabular-nums ${
-                margin > 30
-                  ? "text-success-base"
-                  : margin > 10
-                    ? "text-warning-base"
-                    : "text-danger-base"
-              }`}
+              className={`text-sm font-semibold tabular-nums ${MARGIN_TEXT_CLASS[marginTone(margin)]}`}
             >
               {margin.toFixed(1)}%
             </span>

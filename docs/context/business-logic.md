@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-11
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -57,15 +57,18 @@ export enum OrderStatus {
    - Acquire a transaction-scoped advisory lock per user before counting monthly orders
    - This serializes creates across different products, including accounts with no subscription row
    - Reject an additional order beyond the plan limit with `ORDER_MONTHLY_LIMIT_EXCEEDED`
-   - Cancelled and deleted orders do not count toward the month, so cancelling frees a place (as it also returns the stock)
+   - Cancelled and deleted orders do not count toward the month, so cancelling frees a place (it does not return the stock; only deleting the order does)
    - File: `backend/src/modules/subscription/subscription.service.ts::assertCanCreateOrderInTx()`
 
 3. **Validate References**
    - Recipient must exist and belong to the user
    - Each Product in OrderItems must exist and belong to the user
-   - Throw `RECIPIENT_NOT_FOUND` or `PRODUCT_NOT_FOUND` if missing
+   - Throw `RECIPIENT_NOT_FOUND` or `PRODUCT_NOT_FOUND` (naming the first missing product id) if missing
    - Reject duplicate `productId` entries and mixed product currencies with 400 `VALIDATION_ERROR`
-   - Optional custom `unitPriceCents` is an integer at least zero; explicit zero is preserved
+   - Optional custom `unitPriceCents` is an integer from 0 to 2147483647; explicit zero is preserved;
+     `qty` is an integer of at least 1
+   - The order total must fit the `integer` columns (`total_cents`, `line_total_cents`): above
+     2147483647 cents the create or update is 400 `VALIDATION_ERROR` (`items`) before any write
 
 4. **Create Atomic Transaction**
    - Insert Order (DRAFT status)
@@ -155,7 +158,7 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 
 *Rollback.* `DocumentNumberingFormat1793400000000` is additive. An older image ignores the format columns and keeps issuing `YYYY-NNNNNN` from the same counters (still unique, since the old numbers are in the same value space); the deploy script's rollback note says so. Its `down` drops the constraints and columns, losing the saved formats. `DocumentCounterYear1793700000000` is additive too (two defaulted columns on `document_counters`, one new table); an older image ignores them. Its `down` first raises each flat counter (and the legacy waybill counter) to the highest yearly value, using temporary `TO CURRENT_USER` policies because both tables force row security against the owner role, then drops the table and columns (saved reset switches and year counters are lost).
 
-**Dates in documents:** the live render path (`DocumentRenderService.prepare`) formats order date and "generated at" with `formatDocumentDate` and the saved document formatting (language, locale, style, hour cycle, one time zone for both). `TemplateService.prepareTemplateData` takes the same `Formatting` (default `DEFAULT_DOCUMENT_FORMATTING`, UTC; the live path for an account without saved `documentConfig` uses `legacyConfig`, i.e. `Europe/Kyiv`) so the dev `pdf-test` endpoints and legacy `PdfGeneratorService` cannot drift to the server's locale/time zone. The old React-PDF `standard`/`compact` templates were unreachable and are deleted. The Telegram bot's order confirmation is Russian-only by design (`ru-RU`).
+**Dates in documents:** the live render path (`DocumentRenderService.prepare`) formats order date and "generated at" with `formatDocumentDate` and the saved document formatting (language, locale, style, hour cycle, one time zone for both). `TemplateService.prepareTemplateData` takes the same `Formatting` (default `DEFAULT_DOCUMENT_FORMATTING`, UTC; the live path for an account without saved `documentConfig` uses `legacyConfig`, i.e. `Europe/Kyiv`) so the `pdf-test` template preview and legacy `PdfGeneratorService` cannot drift to the server's locale/time zone. The old React-PDF `standard`/`compact` templates were unreachable and are deleted. The Telegram bot's order confirmation is Russian-only by design (`ru-RU`).
 
 **Statuses** (`ReceiptStatus`): `PROCESSING` → `GENERATED`, or `FAILED`; a generated
 receipt can later be `VOID`. A receipt has a `document_type` (`DocumentType`: `waybill`,
@@ -560,29 +563,49 @@ Rotation, in one transaction:
    transaction returns an outcome and the 401 is thrown only after it commits, so the family
    revocation persists.
 
-Password change: `UPDATE users` and revoking every live token run in one transaction, users row
-first. A rotation in flight holds that row `FOR NO KEY UPDATE`, so the password change waits for it
-and its revocation (a later statement) sees and revokes the successor; a rotation that starts later
-finds its token revoked. Logout revokes by hash (plaintext for pre-hashing rows) and leaves
-`redeemed_at` alone.
+Password change: `UPDATE users` (password, then `token_version + 1`) and revoking every live token
+run in one transaction, users row first. A rotation in flight holds that row `FOR NO KEY UPDATE`, so
+the password change waits for it and its revocation (a later statement) sees and revokes the
+successor; a rotation that starts later finds its token revoked. Last in the same transaction it
+issues a new pair for the calling session (a new family, inserted after the revocation, access
+token signed with the bumped version) and returns it: **the caller stays signed in, every other
+session — other devices, other browsers — is signed out** (their access tokens fail the version
+check, their refresh tokens are revoked). Tabs of the caller's browser share its storage and
+continue with the new pair.
+
+Logout revokes by hash (plaintext for pre-hashing rows) and leaves `redeemed_at` alone. It also
+bumps `token_version` first (same transaction, users row first): every access token of the user
+dies at once, but other devices keep their refresh tokens and refresh silently on their next 401.
+
+**Session revocation (`users.token_version`).** An access token is valid only while its `tv` claim
+equals the user's `token_version` (a missing claim counts as 0, for tokens signed before the claim
+existed). Bumps happen only on logout and password change; nothing else revokes access tokens
+early. See `backend-patterns.md` (Guards) for the mechanics.
 
 **JWT Strategy:**
 
 File: `backend/src/modules/users/strategies/jwt.strategy.ts`
 
 - Reads Authorization header (`Bearer <token>`)
-- Verifies signature using `JWT_SECRET`
-- Populates `req.user` with decoded payload
+- Verifies signature and expiry using `JWT_SECRET`
+- Loads the user with its `token_version` in one query; missing/inactive user or a stale `tv` → 401
+  `UNAUTHORIZED` (the same answer as an invalid token)
+- Populates `req.user` with the user entity (`token_version` is read beside it, never loaded onto it)
 
 **Rate Limiting:**
 
 File: `backend/src/app.module.ts`
 
 ```typescript
-ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])  // 30 reqs per 60s globally
+ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])  // defaults only: no APP_GUARD applies them
 ```
 
-Controller-level override (`ThrottlerGuard` is applied per route, not globally):
+There is no global API throttle; a route is limited only where it carries `ThrottlerGuard` (per IP)
+or `UserThrottlerGuard` (per user). The production nginx (`frontend/nginx.conf`) limits `/api/` to
+10 r/s per client with burst 40 (the client address restored from Cloudflare). The full
+list is in `api-reference.md` *Rate Limiting*. Every 429 is `RATE_LIMITED` with `retryAfterSeconds`.
+
+Per-route limits on the auth routes:
 
 ```typescript
 @Throttle({ default: { ttl: 60000, limit: 5 } })  // login/register: 5 attempts per 60s
@@ -606,6 +629,10 @@ File: `backend/src/modules/products/entities/product.entity.ts`
 - Name, price (in cents), currency
 - Used when creating OrderItems
 - Scoped to tenant via `user_id`
+- Prices and quantity are integers (`@IsInt`); an optional `supplier_id` must be one of the user's own
+  suppliers (404 `SUPPLIER_NOT_FOUND` otherwise, checked in the service because `suppliers` has no
+  RLS); `null` unlinks
+- Low stock (`GET /products/low-stock`, the dashboard widget) means `quantity < threshold` (default 10)
 
 **Creation:**
 
@@ -681,7 +708,7 @@ cannot restore or purge a soft-deleted order, so such a recipient stays in their
 
 Named tenant presets are independent copies (maximum 20, trimmed 1–80 character names, optimistic revisions). Explicit preset selection/use does not save account defaults. Per-document configuration is accepted from the Orders customization editor, with no account change. Unsupported template values remain in configurations but are excluded from rendering.
 
-Money/date preferences control presentation only: bounded number/date locales, currency display, date/time style, hour cycle and valid IANA timezone. Integer cents and order currency are unchanged. Legacy defaults retain ru-RU money formatting, document-language numeric dates with four-digit years and seconds, visible contacts, automatic logo sizing and the fixed default timezone `Europe/Kyiv` (`DEFAULT_DOCUMENT_TIME_ZONE`, not the server's own zone) for future documents of accounts without saved formatting; documents already issued keep their frozen dates. Numeric dates match the old TemplateService `toLocaleString(locale)` presentation in that timezone; en defaults h12, ru/uk h23. Short/medium/long date styles remain explicit choices. Configuration and timezone freeze with the candidate; existing stored choices and frozen HTML are unchanged.
+Money/date preferences control presentation only: bounded number/date locales, currency display, date/time style, hour cycle and valid IANA timezone. Integer cents and order currency are unchanged. Legacy defaults write money in the document language's locale (en-US, uk-UA, ru-RU; until 2026-11-11 always ru-RU, so English documents printed "1 234,56", and a saved ru-RU is still treated as that unchosen default when the language changes), document-language numeric dates with four-digit years and seconds, visible contacts, automatic logo sizing and the fixed default timezone `Europe/Kyiv` (`DEFAULT_DOCUMENT_TIME_ZONE`, not the server's own zone) for future documents of accounts without saved formatting; documents already issued keep their frozen dates. Numeric dates match the old TemplateService `toLocaleString(locale)` presentation in that timezone; en defaults h12, ru/uk h23. Short/medium/long date styles remain explicit choices. Configuration and timezone freeze with the candidate; existing stored choices and frozen HTML are unchanged.
 
 Logo Save normalizes a compact PNG, uploads an immutable tenant asset before the settings transaction, then switches config/pointer in one DB commit. Upload or DB failure leaves the prior account configuration and logo valid. Removal detaches references; reference-aware leased cleanup runs through scheduled bounded tenant sweeps after a 24-hour grace. PDF uploads have durable intent, guarded attachment and transactional retirement; replacement failure preserves the active PDF. Cleanup retries storage failures and never deletes a referenced active/pending logo or active PDF. Preview normalization stays entirely in memory. Logo bytes are embedded once in frozen HTML and never repeated as base64 in configuration JSON.
 

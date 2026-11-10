@@ -19,7 +19,10 @@ import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
-import { AuthResponseDto } from "./dto/auth-response.dto";
+import {
+  AuthResponseDto,
+  ChangePasswordResponseDto,
+} from "./dto/auth-response.dto";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { User } from "./entities/user.entity";
@@ -43,6 +46,11 @@ export class UsersController {
     status: 409,
     description: "User with this email already exists",
   })
+  @ApiResponse({
+    status: 429,
+    description:
+      "More than 5 attempts a minute from this client IP (RATE_LIMITED, with retryAfterSeconds)",
+  })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return this.usersService.register(registerDto);
   }
@@ -57,7 +65,11 @@ export class UsersController {
     type: AuthResponseDto,
   })
   @ApiResponse({ status: 401, description: "Invalid credentials" })
-  @ApiResponse({ status: 429, description: "Too many login attempts" })
+  @ApiResponse({
+    status: 429,
+    description:
+      "More than 5 attempts a minute from this client IP (RATE_LIMITED, with retryAfterSeconds)",
+  })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.usersService.login(loginDto);
   }
@@ -74,7 +86,7 @@ export class UsersController {
   @ApiFailureResponses({
     400: "Malformed or missing refresh_token",
     401: "Unknown, expired or already redeemed refresh token, or inactive user (UNAUTHORIZED); single use. A redeemed token presented again more than 30 s after its redemption also revokes every live token of its rotation family",
-    429: "Too many refresh attempts from this client (20 per minute)",
+    429: "Too many refresh attempts from this client (20 per minute; RATE_LIMITED, with retryAfterSeconds)",
   })
   async refresh(@Body() body: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.usersService.refreshToken(body.refresh_token);
@@ -84,9 +96,16 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Logout and revoke refresh token" })
-  @ApiResponse({ status: 201, description: "Logged out successfully" })
-  async logout(@Body() body: RefreshTokenDto): Promise<{ message: string }> {
-    await this.usersService.revokeRefreshToken(body.refresh_token);
+  @ApiResponse({
+    status: 201,
+    description:
+      "Logged out successfully. Every access token of the user stops working (other devices refresh). Only a refresh token of the signed-in user is revoked; any other token gets the same answer and is left alone",
+  })
+  async logout(
+    @Body() body: RefreshTokenDto,
+    @Request() req: { user: User },
+  ): Promise<{ message: string }> {
+    await this.usersService.revokeRefreshToken(body.refresh_token, req.user.id);
     return { message: "Logged out successfully" };
   }
 
@@ -118,14 +137,22 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth("bearer")
   @ApiOperation({ summary: "Change current user password" })
-  @ApiResponse({ status: 201, description: "Password changed successfully" })
+  @ApiResponse({
+    status: 201,
+    description:
+      "Password changed. Every other session is signed out (access and refresh tokens); the response carries a new token pair for the calling session",
+    type: ChangePasswordResponseDto,
+  })
   @ApiResponse({ status: 400, description: "Validation error" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   async changePassword(
     @Request() req,
     @Body() changePasswordDto: ChangePasswordDto,
-  ): Promise<{ message: string }> {
-    await this.usersService.changePassword(req.user.id, changePasswordDto);
-    return { message: "Password changed successfully" };
+  ): Promise<ChangePasswordResponseDto> {
+    const session = await this.usersService.changePassword(
+      req.user.id,
+      changePasswordDto,
+    );
+    return { message: "Password changed successfully", ...session };
   }
 }

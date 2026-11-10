@@ -3,28 +3,11 @@ import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { DocumentConfigService } from "../settings/services/document-config.service";
 import { DocumentRenderService } from "./services/document-render.service";
 import { legacyConfig } from "../settings/document-config";
-// Mock fs/promises, crypto, and child_process before any imports
+// Mock fs/promises before any imports
 jest.mock("fs/promises", () => ({
   readFile: jest.fn().mockResolvedValue(Buffer.from("fake-pdf")),
   access: jest.fn().mockResolvedValue(undefined),
-  unlink: jest.fn().mockResolvedValue(undefined),
-  mkdir: jest.fn().mockResolvedValue(undefined),
-  writeFile: jest.fn().mockResolvedValue(undefined),
 }));
-
-const mockExecPromise = jest.fn().mockResolvedValue({
-  stdout: "printer Printer1 is idle.\nprinter Printer2 is idle.\n",
-  stderr: "",
-});
-
-jest.mock("child_process", () => {
-  const execFileFn = jest.fn();
-  const customSymbol =
-    Symbol.for("nodejs.util.promisify.custom") ||
-    require("util").promisify.custom; // eslint-disable-line @typescript-eslint/no-var-requires
-  execFileFn[customSymbol] = (...args: any[]) => mockExecPromise(...args);
-  return { execFile: execFileFn };
-});
 
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken, getDataSourceToken } from "@nestjs/typeorm";
@@ -1020,7 +1003,10 @@ describe("ReceiptsService", () => {
 
       await expect(
         service.voidReceipt("receipt-1", mockUser, "reason"),
-      ).rejects.toThrow(ApiErrorResponse);
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: "RECEIPT_IS_ALREADY_VOIDED",
+      });
     });
   });
 
@@ -1254,20 +1240,6 @@ describe("ReceiptsService", () => {
     });
   });
 
-  describe("getAvailablePrinters", () => {
-    it("should return list of printers", async () => {
-      const result = await service.getAvailablePrinters();
-      expect(result).toEqual({ printers: ["Printer1", "Printer2"] });
-    });
-
-    it("should return empty list on error", async () => {
-      mockExecPromise.mockRejectedValueOnce(new Error("exec failed"));
-
-      const result = await service.getAvailablePrinters();
-      expect(result).toEqual({ printers: [] });
-    });
-  });
-
   describe("generatePublicToken", () => {
     const tokenUpdate = {
       update: jest.fn().mockReturnThis(),
@@ -1276,20 +1248,24 @@ describe("ReceiptsService", () => {
       andWhere: jest.fn().mockReturnThis(),
       execute: jest.fn(),
     };
+    const liveOrder = { id: "order-1", deleted_at: null };
+    const shareable = (overrides: Record<string, unknown> = {}) => ({
+      ...mockReceipt,
+      status: ReceiptStatus.GENERATED,
+      public_token: null,
+      order: liveOrder,
+      ...overrides,
+    });
     beforeEach(() => {
       tokenUpdate.execute.mockResolvedValue({ affected: 1 });
       receiptsRepo.createQueryBuilder = jest.fn().mockReturnValue(tokenUpdate);
+      (service as any).configService = {
+        get: jest.fn().mockReturnValue("https://app.example.com"),
+      };
     });
 
     it("should generate a public token for a generated receipt", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        status: ReceiptStatus.GENERATED,
-        public_token: null,
-      });
-
-      const configGet = jest.fn().mockReturnValue("https://app.example.com");
-      (service as any).configService = { get: configGet };
+      receiptsRepo.findOne.mockResolvedValue(shareable());
 
       const result = await service.generatePublicToken("receipt-1", mockUser);
 
@@ -1305,46 +1281,59 @@ describe("ReceiptsService", () => {
       );
     });
 
-    it("looks the receipt up only while its order is not deleted", async () => {
-      receiptsRepo.findOne.mockResolvedValue(null);
+    it("loads the order with the receipt, so a soft-deleted one is absent", async () => {
+      receiptsRepo.findOne.mockResolvedValue(shareable());
 
-      await expect(
-        service.generatePublicToken("receipt-1", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
+      await service.generatePublicToken("receipt-1", mockUser);
 
       expect(receiptsRepo.findOne).toHaveBeenCalledWith({
-        where: expect.objectContaining({
-          id: "receipt-1",
-          order: { deleted_at: expect.anything() },
-        }),
+        where: { id: "receipt-1", user_id: mockUser.id },
+        relations: { order: true },
       });
     });
 
-    it("does not report a link when the order was deleted before the UPDATE", async () => {
-      receiptsRepo.findOne
-        .mockResolvedValueOnce({
-          ...mockReceipt,
-          status: ReceiptStatus.GENERATED,
-          public_token: null,
-        })
-        .mockResolvedValueOnce(null);
-      tokenUpdate.execute.mockResolvedValue({ affected: 0 });
-      (service as any).configService = { get: jest.fn().mockReturnValue("x") };
+    it("answers a document of a deleted order with 404 RECEIPT_NOT_FOUND", async () => {
+      // The join drops a soft-deleted order, so the receipt comes back without it.
+      receiptsRepo.findOne.mockResolvedValue(shareable({ order: null }));
 
       await expect(
         service.generatePublicToken("receipt-1", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "RECEIPT_NOT_FOUND",
+      });
+      expect(tokenUpdate.execute).not.toHaveBeenCalled();
+    });
+
+    it("answers 404 RECEIPT_NOT_FOUND when the order was deleted before the UPDATE", async () => {
+      receiptsRepo.findOne
+        .mockResolvedValueOnce(shareable())
+        .mockResolvedValueOnce(shareable({ order: null }));
+      tokenUpdate.execute.mockResolvedValue({ affected: 0 });
+
+      await expect(
+        service.generatePublicToken("receipt-1", mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "RECEIPT_NOT_FOUND",
+      });
+    });
+
+    it("returns the winning token of a concurrent share", async () => {
+      receiptsRepo.findOne
+        .mockResolvedValueOnce(shareable())
+        .mockResolvedValueOnce(shareable({ public_token: "winner" }));
+      tokenUpdate.execute.mockResolvedValue({ affected: 0 });
+
+      const result = await service.generatePublicToken("receipt-1", mockUser);
+
+      expect(result.token).toBe("winner");
     });
 
     it("should return existing token if already shared", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        status: ReceiptStatus.GENERATED,
-        public_token: "existing-token-abc",
-      });
-
-      const configGet = jest.fn().mockReturnValue("https://app.example.com");
-      (service as any).configService = { get: configGet };
+      receiptsRepo.findOne.mockResolvedValue(
+        shareable({ public_token: "existing-token-abc" }),
+      );
 
       const result = await service.generatePublicToken("receipt-1", mockUser);
 
@@ -1358,30 +1347,22 @@ describe("ReceiptsService", () => {
 
       await expect(
         service.generatePublicToken("unknown", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
-    });
-
-    it("should throw if receipt is not GENERATED", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        status: ReceiptStatus.PROCESSING,
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "RECEIPT_NOT_FOUND",
       });
-
-      await expect(
-        service.generatePublicToken("receipt-1", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
     });
 
-    it("should throw if receipt is VOID", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        status: ReceiptStatus.VOID,
-      });
+    it.each([ReceiptStatus.PROCESSING, ReceiptStatus.VOID])(
+      "answers a %s document with 400",
+      async (status) => {
+        receiptsRepo.findOne.mockResolvedValue(shareable({ status }));
 
-      await expect(
-        service.generatePublicToken("receipt-1", mockUser),
-      ).rejects.toThrow(ApiErrorResponse);
-    });
+        await expect(
+          service.generatePublicToken("receipt-1", mockUser),
+        ).rejects.toMatchObject({ statusCode: 400 });
+      },
+    );
   });
 
   describe("revokePublicToken", () => {
@@ -1512,163 +1493,6 @@ describe("ReceiptsService", () => {
       await expect(service.getPublicReceiptPdf("a".repeat(64))).rejects.toThrow(
         ApiErrorResponse,
       );
-    });
-  });
-
-  describe("printReceipt", () => {
-    beforeEach(() => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: "/local/receipt.pdf",
-      });
-    });
-
-    it("should print a local receipt on darwin/linux", async () => {
-      mockExecPromise.mockResolvedValueOnce({ stdout: "", stderr: "" });
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain("2025-000001");
-    });
-
-    it("should print with a specific printer name", async () => {
-      mockExecPromise.mockResolvedValueOnce({ stdout: "", stderr: "" });
-
-      const result = await service.printReceipt(
-        "receipt-1",
-        mockUser,
-        "MyPrinter",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain("MyPrinter");
-    });
-
-    it("should reject invalid printer name", async () => {
-      const result = await service.printReceipt(
-        "receipt-1",
-        mockUser,
-        "printer; rm -rf /",
-      );
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should return failure on print error", async () => {
-      mockExecPromise.mockRejectedValueOnce(new Error("print failed"));
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should handle receipt with no pdf_path", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: null,
-      });
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should download from object storage to temp file before printing", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: "object-storage://bucket/receipt.pdf",
-      });
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue({
-        bucket: "bucket",
-        key: "receipt.pdf",
-      });
-      pdfStorageService.fileExists.mockResolvedValue(true);
-      pdfStorageService.downloadFile.mockResolvedValue(Buffer.from("pdf"));
-      mockExecPromise.mockResolvedValueOnce({ stdout: "", stderr: "" });
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(true);
-      expect(pdfStorageService.downloadFile).toHaveBeenCalledWith(
-        "bucket",
-        "receipt.pdf",
-      );
-      expect(fs.mkdir).toHaveBeenCalled();
-      expect(fs.writeFile).toHaveBeenCalled();
-    });
-
-    it("should throw when object storage file does not exist", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: "object-storage://bucket/receipt.pdf",
-      });
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue({
-        bucket: "bucket",
-        key: "receipt.pdf",
-      });
-      pdfStorageService.fileExists.mockResolvedValue(false);
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should handle stderr with non-warning content", async () => {
-      mockExecPromise.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "critical error occurred",
-      });
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should ignore warnings in stderr", async () => {
-      mockExecPromise.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "warning: something minor",
-      });
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(true);
-    });
-
-    it("should handle invalid object storage path during print", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: "object-storage://invalid",
-      });
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue(null);
-
-      const result = await service.printReceipt("receipt-1", mockUser);
-
-      expect(result.success).toBe(false);
-    });
-
-    it("should clean up temp file on error", async () => {
-      receiptsRepo.findOne.mockResolvedValue({
-        ...mockReceipt,
-        pdf_path: "object-storage://bucket/receipt.pdf",
-      });
-
-      pdfStorageService.parseObjectStoragePath.mockReturnValue({
-        bucket: "bucket",
-        key: "receipt.pdf",
-      });
-      pdfStorageService.fileExists.mockResolvedValue(true);
-      pdfStorageService.downloadFile.mockResolvedValue(Buffer.from("pdf"));
-      mockExecPromise.mockRejectedValueOnce(new Error("print failed"));
-
-      await service.printReceipt("receipt-1", mockUser);
-
-      // temp file cleanup should be called in finally block
-      expect(fs.unlink).toHaveBeenCalled();
     });
   });
 

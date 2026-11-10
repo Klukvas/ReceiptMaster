@@ -75,7 +75,7 @@ export const AutoReceiptSetting = () => {
               disabled={isBusy}
               onClick={handleToggle}
               className={clsx(
-                "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2 disabled:opacity-60",
+                "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full pointer-coarse:after:absolute pointer-coarse:after:-inset-y-2 pointer-coarse:after:inset-x-0 pointer-coarse:after:content-[''] transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2 disabled:opacity-60",
                 isEnabled
                   ? "bg-accent-base"
                   : "border border-[var(--color-border-hover)] bg-surface-alt",

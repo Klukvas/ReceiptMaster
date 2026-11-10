@@ -28,6 +28,7 @@ import { containsPattern } from "../../common/utils/like-pattern.util";
 import { dashboardCachePattern } from "./dashboard-cache";
 import { draftLineCost, snapshotCost } from "./order-item-cost";
 import { nextOrderNumber } from "./order-number";
+import { MAX_INT4 } from "../../common/dto/trimmed-string";
 
 export interface OrderListFilters {
   startDate?: Date;
@@ -173,6 +174,20 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Line and order totals are int4 columns. Lines are non-negative, so the
+   * subtotal bounds every line; checking it before any write turns a database
+   * overflow (a 500 after partial work) into a clean 400.
+   */
+  private assertStorableTotal(subtotalCents: number): void {
+    if (subtotalCents > MAX_INT4) {
+      throw ApiErrors.VALIDATION_ERROR(
+        "items",
+        `Order total cannot exceed ${MAX_INT4} cents`,
+      );
+    }
+  }
+
   private orderCurrency(products: Product[]): string {
     const currency = products[0]?.currency;
     if (
@@ -236,11 +251,11 @@ export class OrdersService {
         lock: { mode: "pessimistic_write" },
       });
 
-      if (products.length !== productIds.length) {
-        throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
-      }
-
       const productMap = new Map(products.map((p) => [p.id, p]));
+      const missingProductId = productIds.find((pid) => !productMap.has(pid));
+      if (missingProductId) {
+        throw ApiErrors.PRODUCT_NOT_FOUND(missingProductId);
+      }
 
       // Check product quantities and calculate amounts
       let subtotalCents = 0;
@@ -263,6 +278,7 @@ export class OrdersService {
         const lineTotalCents = unitPriceCents * itemDto.qty;
         subtotalCents += lineTotalCents;
       }
+      this.assertStorableTotal(subtotalCents);
 
       // Create order with calculated amounts
       const newOrder = manager.create(Order, {
@@ -603,9 +619,11 @@ export class OrdersService {
           .map((pid) => productMap.get(pid))
           .filter(Boolean) as Product[];
         const ownedProducts = products.filter((p) => p.user_id === user.id);
-
-        if (ownedProducts.length !== newProductIds.length) {
-          throw ApiErrors.PRODUCT_NOT_FOUND("One or more products not found");
+        const missingProductId = newProductIds.find(
+          (pid) => productMap.get(pid)?.user_id !== user.id,
+        );
+        if (missingProductId) {
+          throw ApiErrors.PRODUCT_NOT_FOUND(missingProductId);
         }
 
         // Check quantities and calculate new amounts
@@ -629,6 +647,7 @@ export class OrdersService {
           const lineTotalCents = unitPriceCents * itemDto.qty;
           subtotalCents += lineTotalCents;
         }
+        this.assertStorableTotal(subtotalCents);
 
         // Update order amounts
         order.subtotal_cents = subtotalCents;

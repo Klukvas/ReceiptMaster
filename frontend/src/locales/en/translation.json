@@ -56,7 +56,10 @@
     "opensInNewTab": "(opens in a new tab)",
     "sortOrderAscending": "Ascending",
     "sortOrderDescending": "Descending",
-    "sortReverseHint": "Press to reverse the order."
+    "sortReverseHint": "Press to reverse the order.",
+    "dateAdded": "Date added",
+    "skipToContent": "Skip to content",
+    "discardUnsavedChanges": "Discard unsaved changes?"
   },
   "auth": {
     "login": "Login",
@@ -217,7 +220,6 @@
     "orderId": "Order ID",
     "copyId": "Copy ID",
     "idCopied": "Copied!",
-    "downloadReceipt": "Download Document",
     "addProduct": "Add Product",
     "recipientHelper": "Select the customer for this order",
     "emptyProducts": "Add products to start building this order.",
@@ -289,7 +291,9 @@
     "outOfStock": "Out of stock",
     "lowStock": "Low",
     "inStock": "in stock",
-    "marginTooltip": "Margin: (Sale - Purchase) / Sale × 100"
+    "marginTooltip": "Margin: (Sale - Purchase) / Sale × 100",
+    "priceTooHigh": "The price is too high. The maximum is {{max}}.",
+    "quantityTooHigh": "The quantity is too large. The maximum is {{max}}."
   },
   "recipients": {
     "deleteRecipient": "Delete Recipient",
@@ -360,6 +364,7 @@
         "taxId": "An EDRPOU has 8 digits, an RNOKPP has 10",
         "taxIdKindMismatch": "The number's length does not match the chosen kind",
         "iban": "Enter a Ukrainian IBAN: UA and 27 digits",
+        "ibanChecksum": "The IBAN check digits do not match: check it for a typo",
         "serverInvalid": "The server rejected this value"
       }
     }
@@ -523,7 +528,8 @@
     "autoReceiptEnabled": "Waybills will be created on confirm",
     "autoReceiptDisabled": "Automatic waybills turned off",
     "templateNames": {
-      "delivery": "Shipping note"
+      "delivery": "Shipping note",
+      "corporate": "Corporate"
     },
     "requisites": {
       "title": "Requisites for documents",
@@ -544,6 +550,7 @@
         "yes": "VAT payer",
         "no": "Not a VAT payer"
       },
+      "vatRateNote": "Documents of a VAT payer add VAT at 20%; other rates are not supported yet.",
       "vatId": "VAT number (10 or 12 digits)",
       "paymentTermDays": "Default payment term, days",
       "signatoryName": "Signatory name",
@@ -557,7 +564,8 @@
         "vatId": "The VAT number must have 10 or 12 digits",
         "paymentTermDays": "Enter a whole number from 1 to 365",
         "serverInvalid": "The server rejected this value"
-      }
+      },
+      "discardConfirm": "Discard unsaved requisites changes?"
     },
     "tabDocuments": "Documents"
   },
@@ -589,8 +597,7 @@
     "downloadPdf": "Download PDF",
     "poweredBy": "Powered by ReceiptMaster",
     "downloaded": "Document downloaded",
-    "copyFailed": "Could not copy the link. Select it and copy it manually.",
-    "choosePrinter": "Available printers: {{printers}}\nEnter printer name (or leave empty for default):"
+    "copyFailed": "Could not copy the link. Select it and copy it manually."
   },
   "profile": {
     "unlimitedAccess": "Unlimited access",
@@ -616,8 +623,13 @@
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
-    "passwordChanged": "Password changed. Your other devices are signed out and will ask you to sign in again when their session ends.",
-    "passwordChangeFailed": "Failed to change password"
+    "passwordChanged": "Password changed. Your other devices and browsers have been signed out; you stay signed in here.",
+    "passwordChangeFailed": "Failed to change password",
+    "errors": {
+      "emailInvalid": "Enter a valid email address",
+      "currentPasswordWrong": "The current password is incorrect",
+      "newPasswordSame": "The new password must be different from the current one"
+    }
   },
   "landing": {
     "welcome": "Welcome",
@@ -681,7 +693,7 @@
         "title": "PDF documents",
         "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts, packing lists and return notes are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
         "tag1": "15 templates",
-        "tag2": "SHA256 hash",
+        "tag2": "7 document types",
         "tag3": "public link"
       },
       "analytics": {
@@ -824,11 +836,30 @@
       "contact": "Contact",
       "github": "GitHub",
       "rights": "All rights reserved."
+    },
+    "mock": {
+      "generated": "Generated",
+      "receiptNumber": "Receipt #{{number}}",
+      "billedTo": "Billed to",
+      "total": "Total",
+      "revenue30Days": "Revenue · 30 days",
+      "recentOrders": "Recent Orders",
+      "today": "Today, {{time}}",
+      "yesterday": "Yesterday",
+      "confirmed": "Confirmed",
+      "paid": "Paid",
+      "draft": "Draft",
+      "topProducts": "Top Products",
+      "pieces": "{{count}} pcs",
+      "inStock": "In stock",
+      "lowStock": "Low",
+      "outOfStock": "Out",
+      "orderStatus": "Order Status"
     }
   },
   "home": {
     "order": "Order",
-    "welcome": "Welcome to Receipt Master",
+    "welcome": "Welcome to receiptmaster",
     "subtitle": "Manage products, orders and documents in one place",
     "latestProducts": "Latest Products",
     "latestRecipients": "Latest Recipients",
@@ -910,7 +941,9 @@
     "profitPartialTooltip": "Excludes {{lines}} order line(s) with an unknown purchase cost ({{turnover}} of turnover)",
     "csvProfitComplete": "Profit complete",
     "csvUnknownCostLines": "Lines with unknown cost",
-    "csvUnknownCostTurnover": "Turnover with unknown cost"
+    "csvUnknownCostTurnover": "Turnover with unknown cost",
+    "ordersCount_one": "{{count}} order",
+    "ordersCount_other": "{{count}} orders"
   },
   "notFound": {
     "title": "Page Not Found",
@@ -947,6 +980,12 @@
     "step4": {
       "title": "First Customer",
       "subtitle": "Add your first customer"
+    },
+    "templateCategories": {
+      "business": "Business",
+      "creative": "Creative",
+      "minimal": "Minimal",
+      "premium": "Premium"
     }
   },
   "subscription": {
@@ -1035,7 +1074,6 @@
     "receiptNotFound": "Document not found",
     "receiptAlreadyExists": "A waybill for this order already exists",
     "receiptGenerationFailed": "Failed to generate document",
-    "receiptPrintFailed": "Failed to print document",
     "productNotFound": "Product not found",
     "productAlreadyExists": "Product with this name already exists",
     "productQuantityConflict": "This product's stock changed while you were editing, so nothing was saved. Reload and try again.",
@@ -1073,9 +1111,11 @@
     "rateLimited": "Too many requests. Try again in a moment.",
     "rateLimitedIn": "Too many requests. Try again in {{seconds}} s.",
     "documentNotVoidable": "This document is not issued yet, so it cannot be voided. Retry its generation instead.",
+    "receiptIsAlreadyVoided": "This document is already voided.",
     "documentNumbersExhausted": "The numbers for this document type have run out. Change the number format in Settings → Documents or contact support.",
     "previewBusy": "A preview is already being prepared. Try again in a moment.",
-    "passwordTooLong": "The password is too long: at most {{max}} bytes (a Latin letter or digit is 1 byte, a Cyrillic letter 2, an emoji 4)"
+    "passwordTooLong": "The password is too long: at most {{max}} bytes (a Latin letter or digit is 1 byte, a Cyrillic letter 2, an emoji 4)",
+    "templatePlanRestricted": "This template is not included in your plan. Choose another one under “Template and title”, or upgrade your plan."
   },
   "document": {
     "interfaceLanguage": "Interface language",
@@ -1221,7 +1261,14 @@
     "sectionBrandHelp": "The accent colour and the logo shown on documents.",
     "forOrder": "For {{order}}",
     "pdfPreviewOrder": "Preview of this document",
-    "previewUnavailableForType": "The preview only renders the waybill layout, so it is turned off for this document type. You can view the finished document once it is created."
+    "previewUnavailableForType": "The preview only renders the waybill layout, so it is turned off for this document type. You can view the finished document once it is created.",
+    "templateNotInPlan": "Your plan no longer includes the “{{name}}” template. Documents keep using it until you change it, but saving changes needs another template: choose one above or upgrade your plan.",
+    "errors": {
+      "logoInvalid": "Logo: use a PNG, JPEG, GIF or static SVG image up to 4096 × 4096 pixels.",
+      "logoTooLarge": "Logo: the file is too large. Use an image up to 5 MiB."
+    },
+    "templateNotForType": "not for this document type",
+    "templateNotForTypeHint": "Only some templates can lay out this document type; the others are listed but cannot be chosen."
   },
   "blog": {
     "title": "Blog",
@@ -1322,7 +1369,8 @@
       "checkFields": "Some details were not accepted. Check the highlighted field and try again.",
       "requestRejected": "The document could not be created with these details. Check the form and try again.",
       "createFailed": "The document could not be created. Try again in a moment.",
-      "voidFailed": "The document could not be voided. Try again in a moment."
+      "voidFailed": "The document could not be voided. Try again in a moment.",
+      "dueDateTooFar": "The due date must be within 365 days of the issue date"
     },
     "status": {
       "generated": "Ready",
@@ -1363,7 +1411,9 @@
       "stopped": "Generation was interrupted. Create the document again.",
       "reconstruction": "The saved draft of this document is missing. Create the document again from the order.",
       "generationFailed": "The document could not be generated. Try again.",
-      "unknown": "The document could not be generated. Try again or contact support."
+      "unknown": "The document could not be generated. Try again or contact support.",
+      "generationFailedFinal": "The document could not be generated.",
+      "unknownFinal": "The document could not be generated. If this keeps happening, contact support."
     },
     "requisitesRefusedTitle": "The document was not created: these details are missing",
     "fieldInThisDialog": "{{field}} (a field in this dialog)",
@@ -1372,7 +1422,8 @@
     "voidedFinal": "A new {{type}} cannot be created for this order.",
     "voidedRepeatable": "Its quantities are available for a new return note.",
     "replaceOldestUnknownMessage": "We could not check how many documents of this type ({{type}}) are kept. Creating this one may permanently delete your oldest document of this type, and its public link would stop working. Download it first if you need a copy.",
-    "replaceOldestUnknownTitle": "The oldest document may be replaced"
+    "replaceOldestUnknownTitle": "The oldest document may be replaced",
+    "voidedOrderCancelled": "The order is cancelled, so no new documents can be created for it."
   },
   "documentFields": {
     "seller": {
@@ -1457,13 +1508,14 @@
       "prefixRejected": "The prefix is not accepted: up to {{max}} letters, digits, spaces and . _ - only, and it cannot end with a digit",
       "paddingInvalid": "Choose the number of digits from the list",
       "rejected": "The numbering was not accepted. Check the prefix, the number of digits and the start number.",
-      "startTooLow": "The start number must be at least {{min}}: lower numbers are already used"
+      "startTooLow": "The start number must be at least {{min}}: numbering only moves forward, so no number is issued twice"
     },
-    "prefixHint": "Optional. Include the separator in it: “{{example}}” gives {{example}}0001.",
+    "prefixHint": "Optional. Include the separator in it: “{{prefix}}” gives {{example}}.",
     "paddingHint": "Zero-padded: {{value}} becomes {{example}}.",
     "yearHint": "The counter does not restart each year; only the year inside the number changes.",
     "prefixExample": "INV-",
-    "prefixSpaceHint": "A trailing space is not kept: a hyphen goes between the prefix and the number, e.g. {{example}}."
+    "prefixSpaceHint": "A trailing space is not kept: a hyphen goes between the prefix and the number, e.g. {{example}}.",
+    "discardConfirm": "Discard unsaved numbering changes?"
   },
   "signoff": {
     "title": "Signature and stamp",
@@ -1505,6 +1557,22 @@
     "deleteSignatureTitle": "Delete the signature?",
     "deleteStampTitle": "Delete the stamp?",
     "deleteSignatureMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
-    "deleteStampMessage": "New documents will no longer carry it. Documents already issued keep their copy."
+    "deleteStampMessage": "New documents will no longer carry it. Documents already issued keep their copy.",
+    "actions": {
+      "signature": {
+        "upload": "Upload signature",
+        "replace": "Replace signature",
+        "delete": "Delete signature"
+      },
+      "stamp": {
+        "upload": "Upload stamp",
+        "replace": "Replace stamp",
+        "delete": "Delete stamp"
+      }
+    },
+    "missing": {
+      "signature": "The signature image is missing. New documents will be issued without the signature until you upload it again.",
+      "stamp": "The stamp image is missing. New documents will be issued without the stamp until you upload it again."
+    }
   }
 }

@@ -10,6 +10,7 @@ import { InventoryValueDto } from "./dto/inventory-value.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import { Supplier } from "../suppliers/entities/supplier.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { containsPattern } from "../../common/utils/like-pattern.util";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../../common/idempotency/idempotent-create";
 import { assertNoNullForRequiredFields } from "../../common/utils/null-fields.util";
 import { isUniqueViolationOf } from "../../common/utils/unique-violation.util";
+import { isForeignKeyViolationOf } from "../../common/utils/foreign-key-violation.util";
 
 const PRODUCT_SORTABLE_COLUMNS: Record<string, string> = {
   name: "product.name",
@@ -49,23 +51,34 @@ const CLEARABLE_FIELDS: ReadonlySet<string> = new Set(["supplier_id"]);
 /** Partial unique index on (user_id, name) WHERE deleted_at IS NULL. */
 const PRODUCT_NAME_UNIQUE_INDEX = "IDX_products_user_name";
 
+/** FK from products.supplier_id to suppliers.id (ON DELETE SET NULL). */
+const PRODUCT_SUPPLIER_FOREIGN_KEY = "FK_products_supplier";
+
 /**
  * The index is the only duplicate-name check, so it also settles racing
- * creates and renames; its violation becomes the documented 409. A write
- * without a name cannot hit the index, so its errors pass through untouched.
+ * creates and renames; its violation becomes the documented 409. A supplier
+ * deleted between assertOwnSupplier and the write fails the foreign key; that
+ * is the same 404 as a supplier that was never there. A write that sets
+ * neither field cannot hit either constraint, so its errors pass untouched.
  */
-async function rejectingDuplicateName<T>(
-  name: string | undefined,
+async function rejectingWriteConflicts<T>(
+  fields: { name?: string; supplier_id?: string | null },
   write: () => Promise<T>,
 ): Promise<T> {
   try {
     return await write();
   } catch (error) {
     if (
-      name !== undefined &&
+      fields.name !== undefined &&
       isUniqueViolationOf(error, PRODUCT_NAME_UNIQUE_INDEX)
     ) {
-      throw ApiErrors.PRODUCT_ALREADY_EXISTS(name);
+      throw ApiErrors.PRODUCT_ALREADY_EXISTS(fields.name);
+    }
+    if (
+      typeof fields.supplier_id === "string" &&
+      isForeignKeyViolationOf(error, PRODUCT_SUPPLIER_FOREIGN_KEY)
+    ) {
+      throw ApiErrors.SUPPLIER_NOT_FOUND(fields.supplier_id);
     }
     throw error;
   }
@@ -76,6 +89,22 @@ function presentFields(fields: ProductChanges): Partial<Product> {
   return Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   ) as Partial<Product>;
+}
+
+/**
+ * `suppliers` has no row-level security, so the FK alone would accept another
+ * tenant's supplier. An absent or null id (null unlinks) needs no check.
+ */
+async function assertOwnSupplier(
+  manager: EntityManager,
+  supplierId: string | null | undefined,
+  user: User,
+): Promise<void> {
+  if (supplierId === undefined || supplierId === null) return;
+  const isOwn = await manager.exists(Supplier, {
+    where: { id: supplierId, user_id: user.id },
+  });
+  if (!isOwn) throw ApiErrors.SUPPLIER_NOT_FOUND(supplierId);
 }
 
 @Injectable()
@@ -95,7 +124,7 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
-    return rejectingDuplicateName(createProductDto.name, () =>
+    return rejectingWriteConflicts(createProductDto, () =>
       this.productsRepository.manager.transaction((manager) =>
         this.insertWithinQuota(manager, createProductDto, user),
       ),
@@ -112,7 +141,7 @@ export class ProductsService {
     user: User,
     idempotencyKey: string,
   ): Promise<IdempotentCreateResult<Product>> {
-    return rejectingDuplicateName(createProductDto.name, () =>
+    return rejectingWriteConflicts(createProductDto, () =>
       this.productsRepository.manager.transaction((manager) =>
         createIdempotently(
           manager,
@@ -133,6 +162,7 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
+    await assertOwnSupplier(manager, createProductDto.supplier_id, user);
     await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
     const product = manager.create(Product, {
       ...createProductDto,
@@ -205,6 +235,11 @@ export class ProductsService {
     assertStockPrecondition(fields.quantity, expectedQuantity);
     const changes = presentFields(fields);
     if (Object.keys(changes).length === 0) return this.findOne(id, user);
+    await assertOwnSupplier(
+      this.productsRepository.manager,
+      fields.supplier_id,
+      user,
+    );
 
     const query = this.productsRepository
       .createQueryBuilder()
@@ -216,7 +251,7 @@ export class ProductsService {
     if (expectedQuantity !== undefined) {
       query.andWhere("quantity = :expectedQuantity", { expectedQuantity });
     }
-    const { affected } = await rejectingDuplicateName(fields.name, () =>
+    const { affected } = await rejectingWriteConflicts(fields, () =>
       query.execute(),
     );
     if (!affected) {
@@ -257,14 +292,17 @@ export class ProductsService {
    * All products share one currency (UAH), so a single total is returned.
    */
   async getInventoryValue(user: User): Promise<InventoryValueDto> {
+    // Both factors are int4, and so is their product: widen before multiplying.
+    // SUM(bigint) is numeric, which pg returns as a string; Number() keeps the
+    // JSON a plain number (exact up to 2^53 cents, about 90 trillion UAH).
     const raw = await this.productsRepository
       .createQueryBuilder("product")
       .select(
-        "COALESCE(SUM(product.quantity * product.purchase_price_cents), 0)",
+        "COALESCE(SUM(product.quantity::bigint * product.purchase_price_cents), 0)",
         "purchaseValueCents",
       )
       .addSelect(
-        "COALESCE(SUM(product.quantity * product.sale_price_cents), 0)",
+        "COALESCE(SUM(product.quantity::bigint * product.sale_price_cents), 0)",
         "saleValueCents",
       )
       .addSelect("COALESCE(SUM(product.quantity), 0)", "totalUnits")
@@ -294,7 +332,7 @@ export class ProductsService {
     return this.productsRepository
       .createQueryBuilder("product")
       .where("product.user_id = :userId", { userId: user.id })
-      .andWhere("product.quantity <= :threshold", { threshold })
+      .andWhere("product.quantity < :threshold", { threshold })
       .orderBy("product.quantity", "ASC")
       .take(Math.min(limit, 100))
       .getMany();

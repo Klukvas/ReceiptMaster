@@ -77,6 +77,8 @@ export function buildInvoiceDetails(
     // `today` is the calendar day in the document time zone, as the server counts it.
     if (today && form.dueDate < today)
       return { ok: false, errors: { dueDate: "documents.errors.dueDateBeforeToday" } };
+    if (today && form.dueDate > addDays(today, MAX_PAYMENT_TERM_DAYS))
+      return { ok: false, errors: { dueDate: "documents.errors.dueDateTooFar" } };
     return { ok: true, value: { dueDate: form.dueDate } };
   }
   const days = Number(form.days);

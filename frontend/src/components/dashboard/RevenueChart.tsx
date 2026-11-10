@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from "../../lib/api";
 import { AnalyticsChartSkeleton } from "./DashboardSkeletons";
 import { QueryErrorState } from "./QueryErrorState";
+import { ChartCategoryTick } from "./ChartCategoryTick";
 import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion";
 
 const TABULAR_TICK_STYLE = { fontVariantNumeric: "tabular-nums" } as const;
@@ -54,7 +55,8 @@ const CustomTooltip = ({
   const note = payload[0].payload?.note;
   return (
     <div className="rounded-lg bg-surface border border-[var(--color-border)] px-3 py-2 shadow-xl">
-      <p className="text-xs text-content-tertiary mb-0.5 truncate max-w-[180px]">
+      {/* The full name: the axis label is cut to one line. */}
+      <p className="text-xs text-content-tertiary mb-0.5 max-w-[220px] break-words">
         {label}
       </p>
       <p className="text-sm font-semibold text-content tabular-nums">
@@ -127,7 +129,7 @@ export const RevenueChart = ({
             <YAxis
               type="category"
               dataKey="name"
-              tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }}
+              tick={<ChartCategoryTick />}
               axisLine={false}
               tickLine={false}
               width={90}

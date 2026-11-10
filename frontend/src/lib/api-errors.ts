@@ -24,10 +24,10 @@ export const ErrorCode = {
   RECEIPT_NOT_FOUND: "RECEIPT_NOT_FOUND",
   RECEIPT_ALREADY_EXISTS: "RECEIPT_ALREADY_EXISTS",
   RECEIPT_GENERATION_FAILED: "RECEIPT_GENERATION_FAILED",
-  RECEIPT_PRINT_FAILED: "RECEIPT_PRINT_FAILED",
   DOCUMENT_REQUISITES_MISSING: "DOCUMENT_REQUISITES_MISSING",
   DOCUMENT_ALREADY_EXISTS: "DOCUMENT_ALREADY_EXISTS",
   DOCUMENT_NOT_VOIDABLE: "DOCUMENT_NOT_VOIDABLE",
+  RECEIPT_IS_ALREADY_VOIDED: "RECEIPT_IS_ALREADY_VOIDED",
   DOCUMENT_NUMBERS_EXHAUSTED: "DOCUMENT_NUMBERS_EXHAUSTED",
   DOCUMENT_TEMPLATE_UNSUPPORTED: "DOCUMENT_TEMPLATE_UNSUPPORTED",
   DOCUMENT_TYPE_NOT_SUPPORTED: "DOCUMENT_TYPE_NOT_SUPPORTED",
@@ -95,18 +95,19 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.RECEIPT_NOT_FOUND]: "Receipt not found",
   [ErrorCode.RECEIPT_ALREADY_EXISTS]: "Receipt for this order already exists",
   [ErrorCode.RECEIPT_GENERATION_FAILED]: "Failed to generate receipt",
-  [ErrorCode.RECEIPT_PRINT_FAILED]: "Failed to print receipt",
   [ErrorCode.DOCUMENT_REQUISITES_MISSING]:
     "Some requisites required for this document are missing",
   [ErrorCode.DOCUMENT_ALREADY_EXISTS]:
     "A document of this type already exists for this order",
   [ErrorCode.DOCUMENT_NOT_VOIDABLE]:
     "This document is not issued yet and cannot be voided. Retry its generation instead",
+  [ErrorCode.RECEIPT_IS_ALREADY_VOIDED]: "This document is already voided",
   [ErrorCode.DOCUMENT_NUMBERS_EXHAUSTED]:
     "The numbering of this document type has run out of numbers. Change the number format in Settings > Documents",
   [ErrorCode.DOCUMENT_TEMPLATE_UNSUPPORTED]:
     "This design cannot be used for this document type",
-  [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]: "This document type is not supported",
+  [ErrorCode.DOCUMENT_TYPE_NOT_SUPPORTED]:
+    "This document type is not supported",
   [ErrorCode.RETURN_QUANTITY_EXCEEDED]:
     "You can return no more than is left of an item. Check the quantities and try again",
   [ErrorCode.INVOICE_DUE_DATE_BEFORE_ISSUE_DATE]:
@@ -202,8 +203,8 @@ export function parseApiError(error: unknown): {
   if (
     isAxiosError(error) &&
     error.response?.status === HTTP_TOO_MANY_REQUESTS &&
-    (error.response.data as Partial<ApiErrorResponse> | undefined)?.errorCode !==
-      ErrorCode.RATE_LIMITED
+    (error.response.data as Partial<ApiErrorResponse> | undefined)
+      ?.errorCode !== ErrorCode.RATE_LIMITED
   ) {
     return {
       message: i18n.t("errors.tooManyRequests", {
@@ -219,7 +220,9 @@ export function parseApiError(error: unknown): {
 
     if (data.errorCode === ErrorCode.RATE_LIMITED) {
       return {
-        message: rateLimitedMessage((data as { retryAfterSeconds?: unknown }).retryAfterSeconds),
+        message: rateLimitedMessage(
+          (data as { retryAfterSeconds?: unknown }).retryAfterSeconds,
+        ),
         code: ErrorCode.RATE_LIMITED,
       };
     }
@@ -288,13 +291,17 @@ export function httpStatusOf(error: unknown): number | undefined {
 
 /** "Too many requests, try again in N s" with the server's wait when it sent one. */
 export function rateLimitedMessage(retryAfterSeconds: unknown): string {
-  return typeof retryAfterSeconds === "number" && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+  return typeof retryAfterSeconds === "number" &&
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds > 0
     ? i18n.t("errors.rateLimitedIn", { seconds: Math.ceil(retryAfterSeconds) })
     : i18n.t("errors.rateLimited");
 }
 
 /** A response body as an object, also when it came back as a Blob (PDF endpoints). */
-async function bodyObjectOf(data: unknown): Promise<Record<string, unknown> | null> {
+async function bodyObjectOf(
+  data: unknown,
+): Promise<Record<string, unknown> | null> {
   let body = data;
   if (body instanceof Blob) {
     try {
@@ -303,7 +310,9 @@ async function bodyObjectOf(data: unknown): Promise<Record<string, unknown> | nu
       return null;
     }
   }
-  return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+  return typeof body === "object" && body !== null
+    ? (body as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -311,7 +320,9 @@ async function bodyObjectOf(data: unknown): Promise<Record<string, unknown> | nu
  * ("try again in N s"); any other 429 there means another preview of the account is still
  * rendering, which `errors.previewBusy` says. Null when the error is not a 429.
  */
-export async function previewRateLimitText(error: unknown): Promise<string | null> {
+export async function previewRateLimitText(
+  error: unknown,
+): Promise<string | null> {
   if (!isAxiosError(error) || error.response?.status !== 429) return null;
   const body = await bodyObjectOf(error.response.data);
   return body?.errorCode === ErrorCode.RATE_LIMITED
@@ -328,7 +339,8 @@ export function translatedApiError(error: unknown): string | null {
   const { code, message } = parseApiError(error);
   if (isAxiosError(error) && !error.response) return message;
   if (code === ErrorCode.RATE_LIMITED) return message;
-  if (GENERIC_ERROR_CODES.has(code) || code === ErrorCode.UNKNOWN_ERROR) return null;
+  if (GENERIC_ERROR_CODES.has(code) || code === ErrorCode.UNKNOWN_ERROR)
+    return null;
   return i18n.exists(errorTranslationKey(code)) ? message : null;
 }
 

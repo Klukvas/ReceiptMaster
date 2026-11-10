@@ -15,6 +15,7 @@ import type { NumberingSetting } from "../../lib/api";
 import { useUpdateDocumentNumbering } from "../../hooks/useDocumentNumbering";
 import { useSettledValue } from "../../hooks/useSettledValue";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 
@@ -49,6 +50,7 @@ const formOf = (setting: NumberingSetting): RowForm => ({
 /** A pause long enough that typing in a field is announced once, not per keystroke. */
 const ANNOUNCE_DELAY_MS = 800;
 const PADDING_EXAMPLE_VALUE = 7;
+const INVALID_PREVIEW = "—";
 
 const focusField = (id: string) => {
   // The field is re-rendered with its error first; focusing after that keeps the caret there.
@@ -93,11 +95,17 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
     form.includeYear !== setting.includeYear ||
     form.resetEveryYear !== setting.resetEveryYear ||
     startText !== "";
+  useUnsavedChangesGuard(isDirty, "numbering.discardConfirm");
   const canSave = isDirty && Object.keys(clientErrors).length === 0 && !update.isPending;
 
-  const preview = isDirty
-    ? formatDocumentNumber(form, startNumber ?? setting.nextValue)
-    : setting.nextNumber;
+  // A prefix the server would refuse is not shown as if it were a number the account will get.
+  const preview = !isDirty
+    ? setting.nextNumber
+    : problem
+      ? INVALID_PREVIEW
+      : formatDocumentNumber(form, startNumber ?? setting.nextValue);
+  // The hint's example follows the row's own digits and year, so it is the number "INV-" would give.
+  const prefixHintExample = formatDocumentNumber({ ...form, prefix: prefixExample }, 1);
   // Only the row being edited speaks, and only once the user pauses.
   const announcedPreview = useSettledValue(preview, ANNOUNCE_DELAY_MS);
   const paddingExample = String(PADDING_EXAMPLE_VALUE).padStart(form.padding, "0");
@@ -177,9 +185,9 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
             className={`${INPUT_CLASS} ${borderOf(Boolean(errorOf("prefix")))}`}
           />
           <p id={idOf("prefix-hint")} className={HINT_CLASS}>
-            {trailingSpaceBecomesHyphen(form.prefix)
+            {trailingSpaceBecomesHyphen(form.prefix) && !problem
               ? t("numbering.prefixSpaceHint", { example: formatDocumentNumber({ ...form, includeYear: false }, 1) })
-              : t("numbering.prefixHint", { example: prefixExample })}
+              : t("numbering.prefixHint", { prefix: prefixExample, example: prefixHintExample })}
           </p>
           <FieldError id={idOf("prefix-error")} message={errorOf("prefix")} />
         </div>

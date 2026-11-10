@@ -29,8 +29,11 @@ export function DocumentEditor({
   documentType,
   onCommit,
   commitLabel,
+  isVisible = true,
 }: {
   model: DocumentDraftModel;
+  /** False while the editor is mounted but hidden behind another tab; the preview then stays idle. */
+  isVisible?: boolean;
   /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
   documentOnly?: boolean;
   /** The type being customized; designs that cannot carry it are not offered. */
@@ -165,6 +168,7 @@ export function DocumentEditor({
               model={model}
               defaultOpen={documentOnly}
               isAvailable={canPreview}
+              isVisible={isVisible}
               title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
             />
           </div>

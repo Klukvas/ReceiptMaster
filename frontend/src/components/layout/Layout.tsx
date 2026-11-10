@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
-import { Link } from "react-router-dom";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Menu, LogOut } from "lucide-react";
 import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
@@ -12,14 +12,71 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+const MAIN_CONTENT_ID = "main-content";
+
+/**
+ * Module-level, not a ref: most routes share one Layout, but some (e.g. /documents) mount
+ * their own, and a navigation there must still count as one.
+ */
+let lastShownPathname: string | null = null;
+
+/**
+ * Focuses <main> without leaving it focusable: a permanent tabIndex would let a click on any text
+ * inside the page focus <main>, and a dialog opened by that click would then return focus there
+ * instead of to the control the user reached it from.
+ */
+const focusMain = (main: HTMLElement) => {
+  main.setAttribute("tabindex", "-1");
+  main.addEventListener("blur", () => main.removeAttribute("tabindex"), {
+    once: true,
+  });
+  focusMain(main);
+};
+
+/**
+ * After a navigation, focus moves to the new page instead of staying on the sidebar link.
+ * It is left alone when a dialog holds it, or when the page already focused one of its fields.
+ */
+const focusMainAfterNavigation = (main: HTMLElement | null) => {
+  if (!main) return;
+  const active = document.activeElement;
+  const isInDialog =
+    active instanceof Element && active.closest('[role="dialog"]') !== null;
+  const isInPage = active !== main && main.contains(active);
+  if (isInDialog || isInPage || document.querySelector('[aria-modal="true"]'))
+    return;
+  main.focus({ preventScroll: true });
+};
+
 export const Layout = ({ children }: LayoutProps) => {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const previous = lastShownPathname;
+    lastShownPathname = pathname;
+    // Not on the first page load: that keeps the browser's own focus.
+    if (previous !== null && previous !== pathname)
+      focusMainAfterNavigation(mainRef.current);
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-surface-alt transition-colors duration-200">
+      <a
+        href={`#${MAIN_CONTENT_ID}`}
+        onClick={(event) => {
+          // Moving focus is the point; a hash in the URL would only confuse the router.
+          event.preventDefault();
+          if (mainRef.current) focusMain(mainRef.current);
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-elevated focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-content focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+      >
+        {t("common.skipToContent")}
+      </a>
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-elevated/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg border-b border-[var(--color-border)] transition-colors duration-200 motion-reduce:transition-none">
         <div className="flex h-14 items-center justify-between px-4">
@@ -70,7 +127,11 @@ export const Layout = ({ children }: LayoutProps) => {
           sidebarCollapsed ? "lg:pl-[68px]" : "lg:pl-[260px]",
         )}
       >
-        <main className="flex-1 py-6 pt-[calc(5rem+env(safe-area-inset-top))] lg:pt-6 pb-8">
+        <main
+          ref={mainRef}
+          id={MAIN_CONTENT_ID}
+          className="flex-1 py-6 pt-[calc(5rem+env(safe-area-inset-top))] lg:pt-6 pb-8 focus:outline-none"
+        >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <OfflineBanner />
             {children}

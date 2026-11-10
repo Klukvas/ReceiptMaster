@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken, getDataSourceToken } from "@nestjs/typeorm";
 import { ProductsService } from "./products.service";
 import { Product } from "./entities/product.entity";
+import { Supplier } from "../suppliers/entities/supplier.entity";
 import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
@@ -58,12 +59,16 @@ describe("ProductsService", () => {
     txManager = {
       create: jest.fn((_entity, data) => ({ ...data })),
       save: jest.fn((data) => Promise.resolve({ id: "prod-1", ...data })),
+      exists: jest.fn().mockResolvedValue(true),
     };
     productsRepo = {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
       softDelete: jest.fn().mockResolvedValue({ affected: 1 }),
-      manager: { transaction: jest.fn((work) => work(txManager)) },
+      manager: {
+        transaction: jest.fn((work) => work(txManager)),
+        exists: jest.fn().mockResolvedValue(true),
+      },
     };
     subscriptionService = { assertCanCreateProductInTx: jest.fn() };
 
@@ -153,6 +158,93 @@ describe("ProductsService", () => {
       await expect(
         service.create({ name: "Widget" } as CreateProductDto, mockUser),
       ).rejects.toBe(otherViolation);
+    });
+  });
+
+  describe("supplier ownership", () => {
+    const supplierId = "11111111-1111-4111-8111-111111111111";
+
+    it("creates a product linked to the user's own supplier", async () => {
+      await service.create(
+        { name: "Widget", supplier_id: supplierId } as any,
+        mockUser,
+      );
+
+      expect(txManager.exists).toHaveBeenCalledWith(Supplier, {
+        where: { id: supplierId, user_id: "user-1" },
+      });
+      expect(txManager.save).toHaveBeenCalled();
+    });
+
+    it("rejects another tenant's or an unknown supplier on create with 404", async () => {
+      txManager.exists.mockResolvedValue(false);
+
+      await expect(
+        service.create(
+          { name: "Widget", supplier_id: supplierId } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "SUPPLIER_NOT_FOUND",
+      });
+      expect(txManager.save).not.toHaveBeenCalled();
+    });
+
+    it("rejects another tenant's supplier on update before writing", async () => {
+      productsRepo.manager.exists.mockResolvedValue(false);
+
+      await expect(
+        service.update("prod-1", { supplier_id: supplierId }, mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "SUPPLIER_NOT_FOUND",
+      });
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
+    });
+
+    it("maps a supplier deleted after the ownership check to 404 on create and update", async () => {
+      const vanished = new QueryFailedError(
+        'INSERT INTO "products"',
+        [],
+        Object.assign(new Error("violates foreign key constraint"), {
+          code: "23503",
+          constraint: "FK_products_supplier",
+        }),
+      );
+      txManager.save.mockRejectedValue(vanished);
+      queryBuilder.execute.mockRejectedValue(vanished);
+
+      await expect(
+        service.create(
+          { name: "Widget", supplier_id: supplierId } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "SUPPLIER_NOT_FOUND",
+      });
+      await expect(
+        service.update("prod-1", { supplier_id: supplierId }, mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "SUPPLIER_NOT_FOUND",
+      });
+    });
+
+    it("unlinks with supplier_id null without a supplier lookup", async () => {
+      productsRepo.findOne.mockResolvedValue(mockProduct);
+
+      await service.update("prod-1", { supplier_id: null }, mockUser);
+
+      expect(productsRepo.manager.exists).not.toHaveBeenCalled();
+      expect(queryBuilder.set).toHaveBeenCalledWith({ supplier_id: null });
+    });
+
+    it("does not look up a supplier when the body has none", async () => {
+      await service.create({ name: "Widget" } as any, mockUser);
+
+      expect(txManager.exists).not.toHaveBeenCalled();
     });
   });
 
@@ -492,7 +584,7 @@ describe("ProductsService", () => {
       await service.getLowStockProducts(mockUser);
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        "product.quantity <= :threshold",
+        "product.quantity < :threshold",
         { threshold: 10 },
       );
     });
@@ -520,6 +612,29 @@ describe("ProductsService", () => {
       expect(qb.where).toHaveBeenCalledWith("product.user_id = :userId", {
         userId: mockUser.id,
       });
+    });
+
+    it("widens to bigint before multiplying int4 quantity by int4 price", async () => {
+      const qb = productsRepo.createQueryBuilder();
+      qb.getRawOne.mockResolvedValue({
+        purchaseValueCents: "4611686014132420609",
+        saleValueCents: "0",
+        totalUnits: "2147483647",
+        productCount: "1",
+      });
+
+      const result = await service.getInventoryValue(mockUser);
+
+      expect(qb.select.mock.calls[0][0]).toContain(
+        "product.quantity::bigint * product.purchase_price_cents",
+      );
+      expect(qb.addSelect.mock.calls[0][0]).toContain(
+        "product.quantity::bigint * product.sale_price_cents",
+      );
+      expect(typeof result.purchaseValueCents).toBe("number");
+      expect(JSON.parse(JSON.stringify(result)).purchaseValueCents).toBe(
+        result.purchaseValueCents,
+      );
     });
 
     it("returns zeros when the user has no products", async () => {

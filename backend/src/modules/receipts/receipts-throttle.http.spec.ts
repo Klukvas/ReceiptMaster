@@ -13,6 +13,9 @@ import { ReceiptsService } from "./receipts.service";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { GlobalExceptionFilter } from "../../common/filters/GlobalExceptionFilter";
 import { trustReverseProxy } from "../../config/trusted-proxy";
+import { PdfTestController } from "./controllers/pdf-test.controller";
+import { TemplateService } from "./services/template.service";
+import { PlaywrightPdfGenerator } from "./services/playwright-pdf-generator.service";
 
 const PREVIEW_LIMIT_PER_MINUTE = 10;
 const RECEIPT_ID = "6f1d2c1e-7a53-4f43-9f3a-2f6a1c9a0b11";
@@ -167,5 +170,64 @@ describe("the draft preview route is limited per user", () => {
     expect(response.status).toBe(429);
     expect(response.body.errorCode).toBe("RATE_LIMITED");
     expect((await previewAs("user-q")).status).toBe(400);
+  });
+});
+
+describe("the test-PDF routes share the preview limit per user", () => {
+  let app: NestExpressApplication;
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot([{ ttl: 60000, limit: 1000 }])],
+      controllers: [PdfTestController],
+      providers: [
+        {
+          provide: TemplateService,
+          useValue: {
+            ready: Promise.resolve(),
+            prepareTemplateData: jest.fn().mockReturnValue({}),
+            renderTemplate: jest.fn().mockResolvedValue("<html></html>"),
+          },
+        },
+        {
+          provide: PlaywrightPdfGenerator,
+          useValue: {
+            generatePdf: jest.fn().mockResolvedValue(Buffer.from("%PDF-1.4")),
+          },
+        },
+      ],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = { id: req.headers["x-test-user"] };
+          return true;
+        },
+      })
+      .compile();
+    app = module.createNestApplication<NestExpressApplication>();
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    await app.init();
+  });
+
+  afterAll(async () => app.close());
+
+  it("no longer routes the sample-data test PDF that no page used", async () => {
+    for (const method of ["get", "post"] as const) {
+      const response = await request(app.getHttpServer())
+        [method]("/pdf-test/generate-test-pdf")
+        .set("x-test-user", "user-t");
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it("does not limit the HTML template preview the gallery loads", async () => {
+    for (let i = 0; i < 12; i++) {
+      const response = await request(app.getHttpServer())
+        .get("/pdf-test/preview-template")
+        .set("x-test-user", "user-v");
+      expect(response.status).toBe(200);
+    }
   });
 });

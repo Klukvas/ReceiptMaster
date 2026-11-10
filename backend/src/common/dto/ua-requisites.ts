@@ -10,6 +10,10 @@ import {
   normalizeIban,
 } from "../utils/ua-requisites.util";
 
+// The shape alone; isValidUaIban also checks the mod-97 check digits. A value of the
+// right shape that still fails is a typo, which gets its own message.
+const UA_IBAN_SHAPE = /^UA\d{27}$/;
+
 /** Compact upper-case IBAN, so "ua21 3223 ..." and the stored value are the same account. */
 export const NormalizedIban = (): PropertyDecorator =>
   Transform(({ value }) => normalizeIban(value));
@@ -21,7 +25,10 @@ export function IsUaIban(options?: ValidationOptions): PropertyDecorator {
       target: target.constructor,
       propertyName: propertyName as string,
       options: {
-        message: "iban must be a valid Ukrainian IBAN (UA + 27 digits)",
+        message: (args: ValidationArguments) =>
+          typeof args.value === "string" && UA_IBAN_SHAPE.test(args.value)
+            ? "iban check digits do not match: check the IBAN for a typo"
+            : "iban must be a valid Ukrainian IBAN (UA + 27 digits)",
         ...options,
       },
       validator: { validate: (value: unknown) => isValidUaIban(value) },

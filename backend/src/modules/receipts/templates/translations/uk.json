@@ -1,7 +1,7 @@
 {
   "date": "Дата:",
-  "invoiceDate": "Дата рахунку:",
-  "invoiceNo": "Номер рахунку:",
+  "invoiceDate": "Дата документа:",
+  "invoiceNo": "Номер документа:",
   "due": "Термін",
   "recipient": "Одержувач:",
   "email": "Email:",
@@ -26,7 +26,7 @@
   "subTotal": "Проміжний підсумок:",
   "total": "Разом",
   "grandTotal": "Загальний підсумок",
-  "invoiceTotal": "Сума рахунку",
+  "invoiceTotal": "Загальна сума",
   "summary": "Підсумки",
   "discount": "Знижка",
   "shipping": "Доставка",

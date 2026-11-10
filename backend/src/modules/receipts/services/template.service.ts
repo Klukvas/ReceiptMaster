@@ -103,6 +103,19 @@ export enum ReceiptTemplate {
   PROFORMA = "proforma",
 }
 
+const BASE64 = /^[A-Za-z0-9+/_-]*={0,2}$/;
+
+/**
+ * A font for `url('data:font/ttf;base64,{{{fontRegular}}}')`. The templates insert it
+ * unescaped: `{{…}}` turned the "=" padding into "&#x3D;", which `<style>` never decodes, so
+ * NotoSans-Regular (whose base64 ends in "=") was an invalid data URL. Chromium logged
+ * ERR_INVALID_URL and printed the regular text in a system font. Only plain base64, which cannot
+ * leave the CSS string, gets through; anything else is dropped.
+ */
+function base64Font(value: string): string {
+  return BASE64.test(value) ? value : "";
+}
+
 @Injectable()
 export class TemplateService {
   private readonly logger = new Logger(TemplateService.name);
@@ -349,8 +362,10 @@ export class TemplateService {
       ...data,
       language,
       translations,
-      fontRegular: data.fontRegular || this.fonts.get("regular") || "",
-      fontBold: data.fontBold || this.fonts.get("bold") || "",
+      fontRegular: base64Font(
+        data.fontRegular || this.fonts.get("regular") || "",
+      ),
+      fontBold: base64Font(data.fontBold || this.fonts.get("bold") || ""),
       receiptTitle:
         data.documentTitle ??
         (hasCustomReceiptTitle ? data.receiptTitle : specialisedTitle),

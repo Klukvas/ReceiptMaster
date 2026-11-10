@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NestInterceptor,
   ExecutionContext,
   CallHandler,
@@ -34,6 +35,8 @@ const bodyScopeFor = (
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(AuditLogInterceptor.name);
+
   constructor(private readonly auditLogService: AuditLogService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -54,20 +57,28 @@ export class AuditLogInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap((responseData) => {
-        const action = this.mapAction(method, handlerName);
-        this.auditLogService.log({
-          userId: user?.id,
-          action,
-          entityType,
-          entityId: entityId || responseData?.id,
-          newValues:
-            method !== "DELETE" && !isWebhook
-              ? this.sanitize(request.body, bodyScope)
-              : undefined,
-          ipAddress: request.ip,
-          userAgent: request.headers["user-agent"]?.substring(0, 500),
-          requestId: request["requestId"],
-        });
+        // The change is already committed: a failure to build the audit entry must not
+        // turn that success into a 500 the client would retry.
+        try {
+          this.auditLogService.log({
+            userId: user?.id,
+            action: this.mapAction(method, handlerName),
+            entityType,
+            entityId: entityId || responseData?.id,
+            newValues:
+              method !== "DELETE" && !isWebhook
+                ? this.sanitize(request.body, bodyScope)
+                : undefined,
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"]?.substring(0, 500),
+            requestId: request["requestId"],
+          });
+        } catch (error) {
+          this.logger.error(
+            `Failed to build audit entry for ${method} ${controllerName}.${handlerName} (request ${request["requestId"]})`,
+            error instanceof Error ? error.stack : String(error),
+          );
+        }
       }),
     );
   }
@@ -158,19 +169,21 @@ const SCOPED_KEYS: Record<MaskScope, ReadonlySet<string>> = {
   ]),
   void: new Set(["reason"]),
 };
-const PARENT_KEY_SCOPES: Readonly<Record<string, MaskScope>> = {
-  recipient: "recipient",
-  recipients: "recipient",
-  supplier: "supplier",
-  suppliers: "supplier",
-  details: "details",
-};
+// A Map, not an object literal: body keys are client input, and an object lookup would
+// resolve `constructor` or `toString` to inherited Object.prototype members.
+const PARENT_KEY_SCOPES: ReadonlyMap<string, MaskScope> = new Map([
+  ["recipient", "recipient"],
+  ["recipients", "recipient"],
+  ["supplier", "supplier"],
+  ["suppliers", "supplier"],
+  ["details", "details"],
+]);
 
 const normalizeKey = (key: string): string =>
   key.toLowerCase().replace(/[_-]/g, "");
 
 const scopeBelow = (normalizedKey: string): MaskScope =>
-  PARENT_KEY_SCOPES[normalizedKey] ?? "plain";
+  PARENT_KEY_SCOPES.get(normalizedKey) ?? "plain";
 
 /** Absent values and on/off switches say nothing about the person; anything else may. */
 const carriesPersonalData = (item: unknown): boolean =>

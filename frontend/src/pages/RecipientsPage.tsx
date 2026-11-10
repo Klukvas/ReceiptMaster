@@ -7,6 +7,7 @@ import { recipientsApi, formatCurrency, type Recipient } from"../lib/api";
 import { parseApiError } from"../lib/api-errors";
 import { Button } from"../components/ui/Button";
 import { DataTable } from"../components/ui/DataTable";
+import { dateAddedColumn } from"../components/ui/date-added-column";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
 import { useCreateIntent } from"../hooks/useCreateIntent";
 import { RecipientForm } from"../components/recipients/RecipientForm";
@@ -77,7 +78,7 @@ export const RecipientsPage = () => {
  render: (r) => (
  <button
  onClick={() => setDrawerRecipient(r)}
- className="flex items-center gap-3 text-left group"
+ className="flex items-center gap-3 text-left group pointer-coarse:min-h-11"
  >
  <RecipientAvatar
  name={r.name}
@@ -164,6 +165,7 @@ export const RecipientsPage = () => {
  </span>
  ),
  },
+ dateAddedColumn<Recipient>(t("common.dateAdded")),
  ],
  [t],
  );
@@ -285,7 +287,7 @@ export const RecipientsPage = () => {
  <div className="flex items-start justify-between mb-3">
  <button
  onClick={() => setDrawerRecipient(r)}
- className="flex items-center gap-3 text-left"
+ className="flex items-center gap-3 text-left pointer-coarse:min-h-11"
  >
  <RecipientAvatar
  name={r.name}

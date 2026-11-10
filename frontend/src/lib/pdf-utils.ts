@@ -33,6 +33,9 @@ export const downloadBlob = (blob: Blob, filename: string) => {
  */
 export const downloadPdf = downloadBlob;
 
+/** Long enough for the browser's PDF viewer to have read the blob. */
+const PDF_TAB_REVOKE_DELAY_MS = 60_000;
+
 /**
  * Открывает PDF в новой вкладке браузера.
  * Вызывать ТОЛЬКО из синхронного обработчика клика
@@ -41,5 +44,32 @@ export const downloadPdf = downloadBlob;
 export const openPdfInNewTab = (blob: Blob) => {
   const url = window.URL.createObjectURL(blob);
   window.open(url, "_blank");
-  setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => window.URL.revokeObjectURL(url), PDF_TAB_REVOKE_DELAY_MS);
+};
+
+/** A tab opened during a click, to be filled with a PDF that is still being fetched. */
+export interface PendingPdfTab {
+  show: (blob: Blob) => void;
+  close: () => void;
+}
+
+/**
+ * Opens an empty tab now and shows the PDF in it later. Browsers allow `window.open` only
+ * while the click is being handled, so call this before the first `await`. Returns null
+ * when the tab was blocked.
+ */
+export const openPendingPdfTab = (): PendingPdfTab | null => {
+  const tab = window.open("", "_blank");
+  if (!tab) return null;
+  return {
+    show: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      tab.location.href = url;
+      setTimeout(
+        () => window.URL.revokeObjectURL(url),
+        PDF_TAB_REVOKE_DELAY_MS,
+      );
+    },
+    close: () => tab.close(),
+  };
 };

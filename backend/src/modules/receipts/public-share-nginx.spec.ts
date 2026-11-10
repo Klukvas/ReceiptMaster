@@ -57,3 +57,32 @@ describe("upload size limit in nginx.conf", () => {
     expect(Number(match?.[1])).toBeGreaterThanOrEqual(7);
   });
 });
+
+describe("client address and API rate limit in nginx.conf", () => {
+  it("restores the client address from Cloudflare only for Cloudflare peers", () => {
+    expect(CONFIG).toMatch(/^real_ip_header CF-Connecting-IP;$/m);
+    expect(CONFIG).toMatch(/^real_ip_recursive off;$/m);
+    const trusted = [...CONFIG.matchAll(/^set_real_ip_from (\S+);$/gm)].map(
+      (match) => match[1],
+    );
+    expect(trusted).toEqual(
+      expect.arrayContaining(["173.245.48.0/20", "2606:4700::/32"]),
+    );
+    // Trusting everyone would let a direct hit on the origin pick its own address.
+    expect(trusted).not.toContain("0.0.0.0/0");
+    expect(trusted).not.toContain("::/0");
+  });
+
+  it("limits /api/ per client with a 429 in the API's RATE_LIMITED shape", () => {
+    expect(CONFIG).toMatch(
+      /limit_req_zone \$binary_remote_addr zone=api:\S+ rate=10r\/s;/,
+    );
+    expect(CONFIG).toMatch(/^limit_req_status 429;$/m);
+    expect(apiLocation()).toMatch(/limit_req zone=api burst=\d+ nodelay;/);
+    expect(CONFIG).toMatch(
+      /location @rate_limited \{[^}]*"errorCode":"RATE_LIMITED"/,
+    );
+    // Socket.IO polling and Paddle's few sender addresses stay outside the limit.
+    expect(CONFIG.match(/limit_req zone=/g)).toHaveLength(1);
+  });
+});

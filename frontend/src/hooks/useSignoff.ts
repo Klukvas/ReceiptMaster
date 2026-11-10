@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   settingsApi,
@@ -69,11 +70,19 @@ type LoadedPreview = { assetId: string; url: string };
  * The stored image as an object URL for an <img>. The endpoint needs the bearer token, so a plain
  * src cannot reach it. The URL is revoked when the image changes or the component unmounts.
  */
+/**
+ * The stored image file is gone: 404, or 500 from servers that answered a missing object
+ * that way. New documents are then issued without it.
+ */
+const MISSING_IMAGE_STATUSES: ReadonlySet<number> = new Set([404, 500]);
+
+type PreviewFailure = { assetId: string; isMissing: boolean };
+
 export function useSignoffPreviewUrl(kind: SignoffKind, image: SignoffImage | null) {
   // assetId changes on every upload, so it identifies the bytes to show.
   const assetId = image?.assetId ?? null;
   const [loaded, setLoaded] = useState<LoadedPreview | null>(null);
-  const [failedAssetId, setFailedAssetId] = useState<string | null>(null);
+  const [failure, setFailure] = useState<PreviewFailure | null>(null);
 
   useEffect(() => {
     if (!assetId) return;
@@ -86,8 +95,13 @@ export function useSignoffPreviewUrl(kind: SignoffKind, image: SignoffImage | nu
         objectUrl = URL.createObjectURL(response.data);
         setLoaded({ assetId, url: objectUrl });
       })
-      .catch(() => {
-        if (isCurrent) setFailedAssetId(assetId);
+      .catch((error: unknown) => {
+        if (!isCurrent) return;
+        const status = isAxiosError(error) ? error.response?.status : undefined;
+        setFailure({
+          assetId,
+          isMissing: status !== undefined && MISSING_IMAGE_STATUSES.has(status),
+        });
       });
     return () => {
       isCurrent = false;
@@ -103,6 +117,8 @@ export function useSignoffPreviewUrl(kind: SignoffKind, image: SignoffImage | nu
   // asset instead of being cleared in the effect: the replaced file shows the loading state, not a broken image.
   return {
     url: assetId && loaded?.assetId === assetId ? loaded.url : null,
-    hasFailed: assetId !== null && failedAssetId === assetId,
+    hasFailed: assetId !== null && failure?.assetId === assetId,
+    /** The stored file is missing, not just unreachable this time. */
+    isMissing: assetId !== null && failure?.assetId === assetId && failure.isMissing,
   };
 }

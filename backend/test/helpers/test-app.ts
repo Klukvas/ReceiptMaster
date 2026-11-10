@@ -7,6 +7,7 @@ import * as path from "path";
 import * as dotenv from "dotenv";
 import { AppModule } from "../../src/app.module";
 import { assertDisposableTestDatabase } from "./test-database-guard";
+import { RejectUnsafeInputPipe } from "../../src/common/pipes/reject-unsafe-input.pipe";
 
 // Load .env.test BEFORE anything else — force-override all values
 dotenv.config({
@@ -33,6 +34,7 @@ export async function createTestApp(): Promise<{
   const apiPrefix = configService.get("API_PREFIX");
 
   app.useGlobalPipes(
+    new RejectUnsafeInputPipe(),
     new ValidationPipe({
       transform: true,
       whitelist: true,

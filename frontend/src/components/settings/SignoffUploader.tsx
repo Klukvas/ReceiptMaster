@@ -128,16 +128,22 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
             className="max-h-32 max-w-full object-contain"
           />
         ) : (
-          <p className="rounded bg-white/90 px-2 py-1 text-center text-xs text-neutral-600">
+          <p
+            role={preview.isMissing ? "alert" : undefined}
+            className="rounded bg-white/90 px-2 py-1 text-center text-xs text-neutral-600"
+          >
             {image
-              ? preview.hasFailed
-                ? t("signoff.previewFailed")
-                : t("common.loading")
+              ? preview.isMissing
+                ? t(`signoff.missing.${kind}`)
+                : preview.hasFailed
+                  ? t("signoff.previewFailed")
+                  : t("common.loading")
               : t("signoff.none")}
           </p>
         )}
       </div>
-      {image && (
+      {/* The size of a file that is gone would describe nothing that is printed any more. */}
+      {image && !preview.isMissing && (
         <p className="mt-2 text-xs text-content-tertiary">
           {t("signoff.meta", {
             width: image.width,
@@ -170,6 +176,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
           disabled={isBusy}
           softDisabled
           aria-describedby={error ? errorId : undefined}
+          aria-label={t(`signoff.actions.${kind}.${image ? "replace" : "upload"}`)}
           onClick={() => inputRef.current?.click()}
         >
           <ImageUp className="mr-1.5 h-3.5 w-3.5" aria-hidden />
@@ -182,6 +189,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
             variant="outline"
             disabled={isBusy}
             softDisabled
+            aria-label={t(`signoff.actions.${kind}.delete`)}
             onClick={() => setIsConfirmingDelete(true)}
           >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />

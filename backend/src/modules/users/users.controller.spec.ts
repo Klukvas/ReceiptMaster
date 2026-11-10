@@ -18,7 +18,7 @@ describe("UsersController", () => {
       refreshToken: jest.fn().mockResolvedValue(mockAuthResponse),
       revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
       updateProfile: jest.fn(),
-      changePassword: jest.fn().mockResolvedValue(undefined),
+      changePassword: jest.fn().mockResolvedValue(mockAuthResponse),
     } as any;
 
     controller = new UsersController(usersService);
@@ -57,9 +57,14 @@ describe("UsersController", () => {
 
   describe("logout", () => {
     it("should revoke refresh token and return success message", async () => {
-      const result = await controller.logout({ refresh_token: "token" });
+      const result = await controller.logout({ refresh_token: "token" }, {
+        user: { id: "user-1" },
+      } as any);
 
-      expect(usersService.revokeRefreshToken).toHaveBeenCalledWith("token");
+      expect(usersService.revokeRefreshToken).toHaveBeenCalledWith(
+        "token",
+        "user-1",
+      );
       expect(result).toEqual({ message: "Logged out successfully" });
     });
   });
@@ -104,7 +109,7 @@ describe("UsersController", () => {
   });
 
   describe("changePassword", () => {
-    it("should call usersService.changePassword and return message", async () => {
+    it("returns the message plus the calling session's new token pair", async () => {
       const req = { user: { id: "user-1" } };
       const dto = {
         currentPassword: "old",
@@ -115,7 +120,10 @@ describe("UsersController", () => {
       const result = await controller.changePassword(req, dto);
 
       expect(usersService.changePassword).toHaveBeenCalledWith("user-1", dto);
-      expect(result).toEqual({ message: "Password changed successfully" });
+      expect(result).toEqual({
+        message: "Password changed successfully",
+        ...mockAuthResponse,
+      });
     });
   });
 });

@@ -156,6 +156,62 @@ describe("Auth (e2e)", () => {
       // Login with new password should work
       await loginUser(server, "chpwd@example.com", "newpass123");
     });
+
+    it("signs out every other session and keeps the caller's with a new pair", async () => {
+      const caller = await registerUser(
+        server,
+        "chpwd-session@example.com",
+        "oldpass123",
+      );
+      const otherDevice = await loginUser(
+        server,
+        "chpwd-session@example.com",
+        "oldpass123",
+      );
+
+      const res = await request(server)
+        .post("/api/v1/auth/change-password")
+        .set(authHeader(caller.access_token))
+        .send({
+          currentPassword: "oldpass123",
+          newPassword: "newpass123",
+          confirmPassword: "newpass123",
+        })
+        .expect(201);
+      expect(res.body).toEqual({
+        message: "Password changed successfully",
+        access_token: expect.any(String),
+        refresh_token: expect.stringMatching(/^[a-f0-9]{128}$/),
+        user: { id: caller.user.id, email: "chpwd-session@example.com" },
+      });
+
+      // Access tokens issued before the change are revoked, the caller's too.
+      for (const stale of [caller.access_token, otherDevice.access_token]) {
+        const rejected = await request(server)
+          .get("/api/v1/auth/profile")
+          .set(authHeader(stale))
+          .expect(401);
+        expect(rejected.body).toMatchObject({ errorCode: "UNAUTHORIZED" });
+      }
+      await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: otherDevice.refresh_token })
+        .expect(401);
+
+      // The returned pair works: access now, refresh later.
+      await request(server)
+        .get("/api/v1/auth/profile")
+        .set(authHeader(res.body.access_token))
+        .expect(200);
+      const refreshed = await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: res.body.refresh_token })
+        .expect(201);
+      await request(server)
+        .get("/api/v1/auth/profile")
+        .set(authHeader(refreshed.body.access_token))
+        .expect(200);
+    });
   });
 
   describe("POST /api/v1/auth/refresh", () => {
@@ -230,6 +286,40 @@ describe("Auth (e2e)", () => {
         .post("/api/v1/auth/refresh")
         .send({ refresh_token: auth.refresh_token })
         .expect(401);
+    });
+
+    it("revokes every access token of the user; another device refreshes silently", async () => {
+      const leaving = await registerUser(
+        server,
+        "logout-all@example.com",
+        "password123",
+      );
+      const otherDevice = await loginUser(
+        server,
+        "logout-all@example.com",
+        "password123",
+      );
+
+      await request(server)
+        .post("/api/v1/auth/logout")
+        .set(authHeader(leaving.access_token))
+        .send({ refresh_token: leaving.refresh_token })
+        .expect(201);
+
+      for (const stale of [leaving.access_token, otherDevice.access_token]) {
+        await request(server)
+          .get("/api/v1/auth/profile")
+          .set(authHeader(stale))
+          .expect(401);
+      }
+      const refreshed = await request(server)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: otherDevice.refresh_token })
+        .expect(201);
+      await request(server)
+        .get("/api/v1/auth/profile")
+        .set(authHeader(refreshed.body.access_token))
+        .expect(200);
     });
   });
 });

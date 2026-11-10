@@ -141,8 +141,8 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  ? t("suppliers.editSupplier")
  : t("suppliers.createSupplier")}
  </h2>
- <Button variant="secondary" size="sm" onClick={onClose}>
- <X className="w-4 h-4" />
+ <Button variant="secondary" size="sm" onClick={onClose} aria-label={t("common.close")}>
+ <X className="w-4 h-4" aria-hidden />
  </Button>
  </div>
 
@@ -185,10 +185,11 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  />
 
  <div>
- <label className="block text-sm font-medium text-content-secondary mb-1">
+ <label htmlFor="supplier-address" className="block text-sm font-medium text-content-secondary mb-1">
  {t("suppliers.address")}
  </label>
  <textarea
+ id="supplier-address"
  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200 min-h-[80px] resize-none"
  value={formData.address}
  onChange={(e) =>
@@ -198,10 +199,11 @@ export const SupplierForm = ({ supplier, onClose }: SupplierFormProps) => {
  </div>
 
  <div>
- <label className="block text-sm font-medium text-content-secondary mb-1">
+ <label htmlFor="supplier-notes" className="block text-sm font-medium text-content-secondary mb-1">
  {t("suppliers.notes")}
  </label>
  <textarea
+ id="supplier-notes"
  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200 min-h-[60px] resize-none"
  value={formData.notes}
  onChange={(e) =>

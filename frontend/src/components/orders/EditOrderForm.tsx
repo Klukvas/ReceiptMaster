@@ -209,8 +209,9 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                         size="sm"
                         variant="danger"
                         onClick={() => removeItem(index)}
+                        aria-label={t("orders.removeItem")}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3 h-3" aria-hidden />
                       </Button>
                     )}
                   </div>
@@ -225,6 +226,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                         }
                         required
                         placeholder={t("orders.quantity")}
+                        aria-label={t("orders.quantity")}
                       />
                     </div>
                     {(() => {
@@ -235,6 +237,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                           <Input
                             type="text"
                             inputMode="decimal"
+                            aria-label={t("orders.unitPrice")}
                             value={
                               priceInputs[index] !== undefined
                                 ? priceInputs[index]

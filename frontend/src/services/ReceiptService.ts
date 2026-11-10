@@ -1,5 +1,9 @@
 import toast from "react-hot-toast";
-import { receiptsApi, type DocumentRequestBody, type Receipt } from "../lib/api";
+import {
+  receiptsApi,
+  type DocumentRequestBody,
+  type Receipt,
+} from "../lib/api";
 import {
   isGeneratableType,
   type DocumentType,
@@ -8,12 +12,13 @@ import {
 import { notifyIssueWarnings } from "../lib/issue-warnings";
 import { parseApiError } from "../lib/api-errors";
 import i18n from "../lib/i18n";
-import { downloadPdf } from "../lib/pdf-utils";
-
-export interface PrinterInfo {
-  name: string;
-  isDefault: boolean;
-}
+import {
+  downloadPdf,
+  openPendingPdfTab,
+  type PendingPdfTab,
+} from "../lib/pdf-utils";
+import { showGeneratingToast } from "../lib/generating-toast";
+import { documentPdfFilename } from "../lib/document-filename";
 
 /** The body that repeats a failed document, or null for a type that cannot be repeated blindly. */
 function retryBody(type: GeneratableType): DocumentRequestBody | null {
@@ -38,25 +43,6 @@ function retryBody(type: GeneratableType): DocumentRequestBody | null {
 }
 
 export class ReceiptService {
-  private availablePrinters: string[] = [];
-
-  async loadPrinters(): Promise<string[]> {
-    try {
-      const response = await receiptsApi.getPrinters();
-      this.availablePrinters = response.data.printers;
-      return this.availablePrinters;
-    } catch (error) {
-      const apiError = parseApiError(error);
-      console.error("Error loading printers:", apiError);
-      toast.error(apiError.message);
-      return [];
-    }
-  }
-
-  getAvailablePrinters(): string[] {
-    return [...this.availablePrinters];
-  }
-
   /**
    * Current server-side state of a receipt.
    *
@@ -75,19 +61,19 @@ export class ReceiptService {
     }
   }
 
-  /** `<type>-<number>`, so an invoice and a waybill of one order do not collide on disk. */
-  private async documentFileStem(receiptId: string): Promise<string> {
+  /** The API's file name rule, so an invoice and a waybill of one order do not collide on disk. */
+  private async documentFilename(receiptId: string): Promise<string> {
     const document = await this.fetchReceipt(receiptId);
     return document
-      ? `${document.document_type}-${document.number}`
-      : `receipt-${receiptId}`;
+      ? documentPdfFilename(document.document_type, document.number)
+      : `receipt-${receiptId}.pdf`;
   }
 
   async downloadReceipt(receiptId: string): Promise<void> {
     try {
       const response = await receiptsApi.getPdf(receiptId);
       const blob = new Blob([response.data], { type: "application/pdf" });
-      downloadPdf(blob, `${await this.documentFileStem(receiptId)}.pdf`);
+      downloadPdf(blob, await this.documentFilename(receiptId));
       toast.success(i18n.t("receipts.downloaded"));
     } catch (error) {
       const apiError = parseApiError(error);
@@ -96,18 +82,29 @@ export class ReceiptService {
     }
   }
 
-  async printReceipt(receiptId: string, printer?: string): Promise<void> {
-    try {
-      const response = await receiptsApi.print(receiptId, printer);
+  /**
+   * Prints in the user's browser: the PDF opens in a new tab and the browser's PDF viewer
+   * prints it. The tab is opened before the first `await`, while the click is still being
+   * handled, or popup blockers stop it; when it is blocked anyway, the PDF is downloaded.
+   */
+  openReceiptForPrinting(receiptId: string): Promise<void> {
+    const tab = openPendingPdfTab();
+    return tab
+      ? this.showReceiptInTab(receiptId, tab)
+      : this.downloadReceipt(receiptId);
+  }
 
-      if (response.data.success) {
-        toast.success(response.data.message);
-      } else {
-        toast.error(response.data.message);
-      }
+  private async showReceiptInTab(
+    receiptId: string,
+    tab: PendingPdfTab,
+  ): Promise<void> {
+    try {
+      const response = await receiptsApi.getPdf(receiptId);
+      tab.show(new Blob([response.data], { type: "application/pdf" }));
     } catch (error) {
+      tab.close();
       const apiError = parseApiError(error);
-      console.error("Error printing receipt:", apiError);
+      console.error("Error opening receipt for printing:", apiError);
       toast.error(apiError.message);
     }
   }
@@ -142,7 +139,9 @@ export class ReceiptService {
     const body = retryBody(type);
     if (!body) return false;
     try {
-      notifyIssueWarnings((await receiptsApi.createDocument(orderId, body)).data);
+      notifyIssueWarnings(
+        (await receiptsApi.createDocument(orderId, body)).data,
+      );
       return true;
     } catch (error) {
       console.error(`Error retrying ${type}:`, parseApiError(error));
@@ -156,24 +155,9 @@ export class ReceiptService {
     type: DocumentType,
   ): Promise<void> {
     try {
-      if (await this.retryDocument(orderId, type))
-        // The PDF renders in the background; say so, otherwise nothing seems to happen.
-        toast(i18n.t("receipts.generatingReceipt"));
+      if (await this.retryDocument(orderId, type)) showGeneratingToast();
     } catch (error) {
       toast.error(parseApiError(error).message);
-    }
-  }
-
-  async handlePrintReceipt(receiptId: string): Promise<void> {
-    if (this.availablePrinters.length > 1) {
-      const printer = prompt(
-        i18n.t("receipts.choosePrinter", {
-          printers: this.availablePrinters.join(", "),
-        }),
-      );
-      await this.printReceipt(receiptId, printer || undefined);
-    } else {
-      await this.printReceipt(receiptId);
     }
   }
 }

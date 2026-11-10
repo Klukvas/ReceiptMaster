@@ -1,6 +1,7 @@
 import React from 'react';
 import { Package, AlertTriangle, XCircle } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { LOW_STOCK_THRESHOLD, VERY_LOW_STOCK_THRESHOLD } from '../../lib/product-metrics';
 
 interface ProductStockBadgeProps {
  quantity: number;
@@ -21,7 +22,7 @@ export const ProductStockBadge: React.FC<ProductStockBadgeProps> = ({ quantity }
  );
  }
 
- if (quantity < 5) {
+ if (quantity < VERY_LOW_STOCK_THRESHOLD) {
  return (
  <span
  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums bg-[var(--color-warning-light)] text-warning-base ring-1 ring-inset ring-[var(--color-warning)]/10"
@@ -33,7 +34,7 @@ export const ProductStockBadge: React.FC<ProductStockBadgeProps> = ({ quantity }
  );
  }
 
- if (quantity < 10) {
+ if (quantity < LOW_STOCK_THRESHOLD) {
  return (
  <span
  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums bg-[var(--color-warning-light)] text-warning-base ring-1 ring-inset ring-[var(--color-warning)]/10"

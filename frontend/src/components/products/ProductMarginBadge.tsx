@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { marginPercent, marginTone } from '../../lib/product-metrics';
 
 interface ProductMarginBadgeProps {
  purchasePriceCents: number;
@@ -13,16 +14,15 @@ export const ProductMarginBadge: React.FC<ProductMarginBadgeProps> = ({
 }) => {
  const { t } = useTranslation();
 
- const margin = salePriceCents > 0
- ? ((salePriceCents - purchasePriceCents) / salePriceCents) * 100
- : 0;
+ const margin = marginPercent(purchasePriceCents, salePriceCents);
+ const tone = marginTone(margin);
 
  const tooltipText = t(
  'products.marginTooltip',
  `Margin: (Sale - Purchase) / Sale × 100 = ${margin.toFixed(1)}%`
  );
 
- if (margin >= 30) {
+ if (tone === 'good') {
  return (
  <span
  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums bg-[var(--color-success-light)] text-success-base ring-1 ring-inset ring-[var(--color-success)]/10"
@@ -34,7 +34,7 @@ export const ProductMarginBadge: React.FC<ProductMarginBadgeProps> = ({
  );
  }
 
- if (margin >= 10) {
+ if (tone === 'fair') {
  return (
  <span
  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium tabular-nums bg-[var(--color-warning-light)] text-warning-base ring-1 ring-inset ring-[var(--color-warning)]/10"

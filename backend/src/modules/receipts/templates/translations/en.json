@@ -1,7 +1,7 @@
 {
   "date": "Date:",
-  "invoiceDate": "Invoice Date:",
-  "invoiceNo": "Invoice No:",
+  "invoiceDate": "Document Date:",
+  "invoiceNo": "Document No:",
   "due": "Due",
   "recipient": "Recipient:",
   "email": "Email:",
@@ -26,7 +26,7 @@
   "subTotal": "Sub Total:",
   "total": "Total",
   "grandTotal": "Grand Total",
-  "invoiceTotal": "Invoice Total",
+  "invoiceTotal": "Total Amount",
   "summary": "Summary",
   "discount": "Discount",
   "shipping": "Shipping",

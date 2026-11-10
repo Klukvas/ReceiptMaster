@@ -5,6 +5,7 @@ import toast from"react-hot-toast";
 import { suppliersApi, type Supplier } from"../lib/api";
 import { Button } from"../components/ui/Button";
 import { DataTable } from"../components/ui/DataTable";
+import { dateAddedColumn } from"../components/ui/date-added-column";
 import { ConfirmModal } from"../components/ui/ConfirmModal";
 import { SupplierForm } from"../components/suppliers/SupplierForm";
 import { SupplierDrawer } from"../components/suppliers/SupplierDrawer";
@@ -106,6 +107,7 @@ export const SuppliersPage = () => {
  );
  },
  },
+ dateAddedColumn<Supplier>(t("common.dateAdded")),
  ],
  [t],
  );
@@ -218,7 +220,7 @@ export const SuppliersPage = () => {
  <div className="flex items-start justify-between mb-3">
  <button
  onClick={() => setDrawerSupplier(s)}
- className="flex items-center gap-3 text-left"
+ className="flex items-center gap-3 text-left pointer-coarse:min-h-11"
  >
  <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-accent-base to-accent-base flex items-center justify-center text-white font-semibold text-xs shadow-sm shrink-0">
  {s.name

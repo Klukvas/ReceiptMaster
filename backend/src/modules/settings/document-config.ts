@@ -187,6 +187,49 @@ export function parseConfig<S extends z.ZodTypeAny>(
  */
 export const DEFAULT_DOCUMENT_TIME_ZONE = "Europe/Kyiv";
 
+type DocumentLanguage = DocumentConfig["documentLanguage"];
+
+/** How a document language writes numbers, once the formatting follows that language. */
+const LANGUAGE_NUMBER_LOCALES: Readonly<
+  Record<DocumentLanguage, Formatting["numberLocale"]>
+> = { en: "en-US", ru: "ru-RU", uk: "uk-UA" };
+
+/**
+ * Until 2026-11-11 an account without a saved configuration wrote numbers like this whatever its
+ * language, so an English document printed "1 234,56". Saved configurations may still hold it as
+ * that unchosen default, which `followDocumentLanguage` therefore does not treat as a choice.
+ */
+const LEGACY_NUMBER_LOCALE: Formatting["numberLocale"] = "ru-RU";
+
+const hourCycleFor = (language: DocumentLanguage): Formatting["hourCycle"] =>
+  language === "en" ? "h12" : "h23";
+
+/**
+ * The formatting after the document language changes from `from` to `to`. The hour cycle and
+ * the number locale follow the language unless the user chose them: a value that is what the
+ * old language implies (or the legacy number locale every unsaved account starts with) was never
+ * chosen, so it moves to what the new language implies; anything else is kept. Without this an
+ * account that started in English kept "h12" after switching to Ukrainian and printed "4:28 пп".
+ */
+export function followDocumentLanguage(
+  formatting: Formatting,
+  from: DocumentLanguage,
+  to: DocumentLanguage,
+): Formatting {
+  if (from === to) return formatting;
+  const isLocaleChosen =
+    formatting.numberLocale !== LEGACY_NUMBER_LOCALE &&
+    formatting.numberLocale !== LANGUAGE_NUMBER_LOCALES[from];
+  const isHourCycleChosen = formatting.hourCycle !== hourCycleFor(from);
+  return {
+    ...formatting,
+    numberLocale: isLocaleChosen
+      ? formatting.numberLocale
+      : LANGUAGE_NUMBER_LOCALES[to],
+    hourCycle: isHourCycleChosen ? formatting.hourCycle : hourCycleFor(to),
+  };
+}
+
 export function legacyConfig(settings: UserSettings | null): DocumentConfig {
   const language = ["en", "ru", "uk"].includes(settings?.templateLanguage)
     ? (settings.templateLanguage as DocumentConfig["documentLanguage"])
@@ -211,12 +254,13 @@ export function legacyConfig(settings: UserSettings | null): DocumentConfig {
       CONTACT_FIELDS.map((field) => [field, true]),
     ) as DocumentConfig["visibility"],
     formatting: {
-      numberLocale: "ru-RU",
+      // The language's own: ru-RU and uk-UA print alike, English gets "1,234.56".
+      numberLocale: LANGUAGE_NUMBER_LOCALES[language],
       currencyDisplay: "symbol",
       dateLocale: "document",
       dateStyle: "numeric",
       timeStyle: "medium",
-      hourCycle: language === "en" ? "h12" : "h23",
+      hourCycle: hourCycleFor(language),
       timeZone: DEFAULT_DOCUMENT_TIME_ZONE,
     },
   };

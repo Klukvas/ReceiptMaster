@@ -71,6 +71,7 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
               key={document.id}
               document={document}
               isRetrying={retryingIds.has(document.id)}
+              isOrderCancelled={order.status === "cancelled"}
               actions={{ onDownload, onPrint, onShare, onReplace: setReplacing, onVoid: setVoiding, onRetry: (document) => void retry(document) }}
               footer={
                 <VoidedDocumentHistory

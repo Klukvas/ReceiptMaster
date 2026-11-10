@@ -99,6 +99,8 @@ const menuItems = async (page) =>
 
 const requested = (state, needle) => state.requests.some((line) => line.includes(needle));
 
+const PDF_BYTES = Buffer.from("%PDF-1.4\n%%EOF\n");
+
 const checkWaybillButtons = async (results) => {
   await withPage({ viewport: DESKTOP }, async (page) => {
     const state = createState([orderWith({ waybillStatus: "generated", invoiceStatus: "generated" })]);
@@ -121,14 +123,37 @@ const checkWaybillButtons = async (results) => {
       state.requests.join("\n"),
     );
 
+    // Printing happens in the browser: Print opens the waybill PDF in a new tab, no server print.
+    state.handlers.push(async (route, request) => {
+      if (request.method !== "GET" || request.path !== "/receipts/wb-1/pdf") return false;
+      await route.fulfill({ status: 200, contentType: "application/pdf", body: PDF_BYTES });
+      return true;
+    });
+    const printStart = state.requests.length;
     await openMenu(page);
+    let popup = null;
+    // The PDF URL the new tab got. Headless Chromium has no PDF viewer and saves the blob
+    // instead of showing it, so a download of it counts too. Listeners go on as the tab opens.
+    const pdfInPopup = new Promise((resolve) => {
+      page.context().once("page", (opened) => {
+        popup = opened;
+        opened.once("download", (download) => resolve(download.url()));
+        opened.waitForURL(/^blob:/, { timeout: 5000 }).then(() => resolve(opened.url()), () => {});
+      });
+      setTimeout(() => resolve(null), 8000);
+    });
     await page.getByRole("menuitem", { name: "Print", exact: true }).click();
-    await settle(() => requested(state, "POST /receipts/wb-1/print"));
+    const pdfUrl = await pdfInPopup;
+    const showsPdf = Boolean(pdfUrl?.startsWith("blob:"));
+    const printRequests = state.requests.slice(printStart);
     results.check(
-      "menu print targets the waybill",
-      requested(state, "POST /receipts/wb-1/print") && !requested(state, "inv-1"),
-      state.requests.join("\n"),
+      "menu print opens the waybill pdf in a new tab and asks the server to print nothing",
+      showsPdf &&
+        printRequests.includes("GET /receipts/wb-1/pdf") &&
+        !printRequests.some((line) => line.includes("/print") || line.includes("inv-1")),
+      `popup: ${popup ? (pdfUrl ?? popup.url()) : "none"}; requests: ${printRequests.join(" | ")}`,
     );
+    await popup?.close();
 
     await orderLabel(page).click();
     await page
@@ -327,13 +352,18 @@ const checkCreateGroup = async (results) => {
             "Quote…|Invoice…|Act of Completed Work…|Sales receipt…|Packing list…|Return note…",
         `menu items: ${items.join(" | ")}`,
       );
+      // Real focus moves through the items (roving focus), not just a highlight class.
+      const focusedItemText = () =>
+        page.evaluate(() =>
+          document.activeElement?.getAttribute("role") === "menuitem" ? document.activeElement.textContent : "",
+        );
       await page.keyboard.press("ArrowDown");
-      const focusedBefore = await page.locator('[role="menuitem"].bg-surface-alt').innerText();
+      const focusedBefore = await focusedItemText();
       await page.keyboard.press("ArrowDown");
-      const focusedAfter = await page.locator('[role="menuitem"].bg-surface-alt').innerText();
+      const focusedAfter = await focusedItemText();
       results.check(
         `${label}: arrow keys still walk the flat menu`,
-        focusedBefore.trim() !== focusedAfter.trim(),
+        focusedBefore.trim() !== "" && focusedAfter.trim() !== "" && focusedBefore.trim() !== focusedAfter.trim(),
         `${focusedBefore} -> ${focusedAfter}`,
       );
     });

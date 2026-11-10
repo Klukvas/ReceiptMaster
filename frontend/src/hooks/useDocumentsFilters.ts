@@ -29,6 +29,14 @@ const pageOrFirst = (value: string | null): number => {
   return Number.isInteger(page) && page >= 1 ? page : 1;
 };
 
+/**
+ * Typed text and dates change on every keystroke or picker step, so they replace the current history
+ * entry; a page, type, status, sort or clear is one deliberate step, so Back returns to the list as
+ * it was before it. Dropping ?page= is the reset that follows such a step (or a search), so it
+ * replaces too: one filter change stays one history entry.
+ */
+const REPLACED_PARAMS: ReadonlySet<string> = new Set(["search", "from", "to"]);
+
 const sortOf = (params: URLSearchParams): DocumentSort => {
   const field = params.get("sort");
   if (!isSortField(field)) return DEFAULT_DOCUMENT_SORT;
@@ -71,12 +79,13 @@ export function useDocumentsFilters() {
   }, [searchParams]);
 
   const commit = useCallback(
-    (change: (params: URLSearchParams) => void) => {
+    (change: (params: URLSearchParams) => void, replace = false) => {
       const next = new URLSearchParams(latestParams.current);
       change(next);
+      if (next.toString() === latestParams.current.toString()) return;
       latestParams.current = next;
       inFlight.current = [...inFlight.current, next.toString()];
-      setSearchParams(next, { replace: true });
+      setSearchParams(next, { replace });
     },
     [setSearchParams],
   );
@@ -86,7 +95,7 @@ export function useDocumentsFilters() {
       commit((params) => {
         if (value) params.set(key, value);
         else params.delete(key);
-      }),
+      }, REPLACED_PARAMS.has(key) || (key === "page" && !value)),
     [commit],
   );
 

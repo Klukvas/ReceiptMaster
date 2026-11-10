@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useConfirmOnce } from "../../hooks/useConfirmOnce";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ interface ConfirmModalProps {
   children?: ReactNode;
   /** Failure of the last confirm attempt; the buttons stay usable so it can be retried. */
   errorMessage?: string | null;
+  /** Where focus goes on close when the control that opened the dialog is gone (see Modal). */
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 export const ConfirmModal = ({
@@ -38,8 +41,10 @@ export const ConfirmModal = ({
   confirmDisabled = false,
   children,
   errorMessage,
+  returnFocus,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
+  const confirmOnce = useConfirmOnce(isOpen, isLoading);
 
   const iconColors = {
     danger: "bg-[var(--color-danger-light)] text-danger-base",
@@ -57,7 +62,13 @@ export const ConfirmModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={title} size="sm">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={title}
+      size="sm"
+      returnFocus={returnFocus}
+    >
       <div className="flex gap-4">
         <div
           className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${iconColors[variant]}`}
@@ -88,7 +99,7 @@ export const ConfirmModal = ({
         </Button>
         <Button
           variant={buttonVariant}
-          onClick={onConfirm}
+          onClick={() => confirmOnce(onConfirm)}
           disabled={isLoading || confirmDisabled}
           softDisabled
           className={

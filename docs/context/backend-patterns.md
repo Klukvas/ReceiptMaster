@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-11
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -389,7 +389,13 @@ export class CreateOrderDto {
 - Use class-validator decorators (`@IsUUID()`, `@IsInt()`, etc.) to validate shape and constraints
 - Use `@Type()` from class-transformer to cast types (e.g., string ID to UUID)
 - Use `@ApiProperty()` to document request/response in Swagger
-- The global `ValidationPipe` runs automatically on all controller inputs
+- The global `ValidationPipe` runs automatically on all controller inputs, after
+  `RejectUnsafeInputPipe` (`common/pipes/reject-unsafe-input.pipe.ts`, registered first in `main.ts`
+  and `test/helpers/test-app.ts`): it walks every body, query and route parameter iteratively and
+  answers 400 `VALIDATION_ERROR` for a NUL character in a string or key (Postgres text cannot hold
+  it) or nesting deeper than `MAX_INPUT_DEPTH` (32; the ValidationPipe's recursive
+  `stripProtoKeys` overflowed the stack on a few thousand levels). Integer columns get `@IsInt()`
+  (not `@IsNumber()`) and `@Max(MAX_INT4)`, so a fraction or an overflow is a 400, never a 500
 - Zod-validated bodies (`@Body() body: unknown`) are invisible to Swagger: register the schema in `src/openapi/api-components.ts` and document the route with `src/openapi/api-docs.decorators.ts` (`ApiJsonBody`, `ApiDocumentDraftBody` for the JSON/multipart draft envelope, `ApiDataResponse`, `ApiFailureResponses` for the shared `{ error, errorCode }` body)
 
 ### 5. Entity — Database Schema
@@ -511,12 +517,33 @@ This guard wraps Passport's JWT strategy. Applied to controllers:
 export class OrdersController { ... }
 ```
 
-**JWT Strategy:** Reads Authorization header, validates signature, populates `req.user`.
+**JWT Strategy:** Reads Authorization header, validates signature and expiry, then loads the user
+(one query) and populates `req.user`. 401 `UNAUTHORIZED` when the subject is not a uuid, the user
+is missing or inactive, or the token is **revoked**.
 
-File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but standard Passport pattern)
+File: `backend/src/modules/users/strategies/jwt.strategy.ts` (standard Passport pattern)
+
+**Revocable access tokens (`users.token_version`).** Access JWTs live `JWT_EXPIRES_IN` (24 h), so
+they are made revocable by a version: every token carries `tv`, the user's `token_version` when it
+was signed (`accessTokenClaims` in `users/access-token.ts`; login, register, refresh rotation and
+change-password all sign through `UsersService.signAccessToken`). `findAccessTokenOwner` loads the
+user and compares `(payload.tv ?? 0)` with the column in the same query; a mismatch is the same 401
+as an invalid token. Tokens from before the claim existed count as 0, so they stayed valid across
+the deploy. `bumpTokenVersion(manager, userId)` adds 1 in SQL (`"token_version" + 1 … RETURNING`,
+never read-modify-write, `updatedAt` untouched) and runs on **logout** (before revoking the refresh
+token, users row first) and on **password change** (same transaction as the password update and the
+refresh-token revocation, after which a fresh pair is issued to the caller). The column is
+`select: false` and `@ApiHideProperty`: the strategy reads it as a raw column beside the entity, so
+`req.user` and profile responses never carry it; login and rotation select it explicitly. The
+receipts WebSocket gateway (`receipts.gateway.ts`) calls the same `findAccessTokenOwner` once per
+connection (so `ReceiptsModule` registers `User` in `TypeOrmModule.forFeature`). Migration
+`1794000000000-UserTokenVersion`; `rm_app` writes it through the table-level `UPDATE` grant.
 
 **Related files:**
-- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`.
+- `backend/src/modules/users/access-token.ts` — access-token claims, the version check
+  (`findAccessTokenOwner`, `isCurrentTokenVersion`) and the atomic `bumpTokenVersion`
+- `backend/src/modules/users/users.service.ts` — `register()`, `login()`, `refreshToken()`,
+  `revokeRefreshToken()` (logout), `changePassword()` (returns the caller's new pair).
   Refresh rotation is atomic: inside `refreshTokenRepository.manager.transaction` it finds the token
   by hash, locks the owner `FOR NO KEY UPDATE` (serializes one user's rotations and password
   changes; lock order users → refresh_tokens, shared with `changePassword`), redeems with a conditional QueryBuilder
@@ -529,7 +556,8 @@ File: `backend/src/modules/users/strategies/jwt.strategy.ts` (not shown, but sta
 - `backend/src/modules/users/refresh-tokens.ts` — token hashing (SHA-256), lookup with the
   plaintext fallback for pre-hashing rows, redemption, family revocation, the 30 s replay grace
 - `backend/src/config/trusted-proxy.ts` — `trustReverseProxy(app)` (`trust proxy` = 1 hop, the
-  frontend nginx), called from `main.ts`; per-IP throttles depend on it
+  frontend nginx), called from `main.ts`; per-IP throttles depend on it, and on that nginx restoring
+  the client address from Cloudflare (`set_real_ip_from` + `CF-Connecting-IP` in `frontend/nginx.conf`)
 - `backend/src/config/env.schema.ts` — `JWT_SECRET`, `JWT_EXPIRES_IN`
 - `backend/src/common/guards/user-throttler.guard.ts` — `UserThrottlerGuard`, a `ThrottlerGuard`
   that counts per signed-in user id (`user:<id>`, falling back to `req.ip`) instead of per address,
@@ -590,9 +618,15 @@ app role is a superuser, has `BYPASSRLS`, can create roles or databases, or owns
 
 Cross-tenant background work needs no role of its own. The outbox, storage sweep schedule,
 idempotency keys, Telegram update ids and subscriptions have no RLS and hold identifiers or billing
-state; anything touching tenant rows after them enters `runWithTenant`. `suppliers`,
-`supplier_products`, `user_settings`, `user_subscriptions`, `audit_logs`, `idempotency_keys` and
-`refresh_tokens` are tenant-owned but rely on application scoping only.
+state; anything touching tenant rows after them enters `runWithTenant`. `supplier_products`
+(legacy, no runtime reader), `user_settings`, `user_subscriptions`, `audit_logs`,
+`idempotency_keys` and `refresh_tokens` are tenant-owned but rely on application scoping only, so a
+foreign key into one of them is no tenant fence: logout revokes a refresh token only with
+`user_id = req.user.id`. `suppliers` has row security since `SuppliersRowLevelSecurity1793900000000`
+(ENABLE, not FORCE, `USING` and `WITH CHECK` on `user_id`; the migration first unlinked products
+pointing at another account's supplier). `ProductsService` still checks `products.supplier_id`
+against the user's own suppliers (404 `SUPPLIER_NOT_FOUND`), and a supplier deleted between that
+check and the write fails `FK_products_supplier`, which maps to the same 404.
 
 Public sharing uses SELECT-only capability policies on receipts, orders, order_items and
 recipients. A token grants access to exactly its generated receipt and related graph, not the
@@ -647,7 +681,13 @@ export class AuditLogInterceptor implements NestInterceptor {
 - A multipart document request carries its JSON in one `payload` string field; the interceptor parses it first so the same masking applies inside (a `payload` that is not JSON is stored as `***`, never raw)
 - Personal data is masked too, by where the key sits: a recipient's `name`/`email`/`phone`/`address` (the top level of a `RecipientsController` body, or any object under a `recipient`/`recipients` key), a supplier's `name`/`email`/`phone`/`address`/`contactPerson`/`notes` (the top level of a `SuppliersController` body, or under `supplier`/`suppliers`), `companyEmail`/`companyPhone`/`*swift*` and `recipientName|Email|Phone|Address` anywhere, `reason`/`completionText`/`paymentTerms`/`deliveryTerms` inside `details`, and the top-level `reason` of a void body (any `void*` handler). These personal-data keys are masked whatever the JSON type of the value (string, number, object); only `null`/absent values and booleans stay readable, so the visibility switches of a document configuration still show. A product `name` stays readable
 - Webhook calls (all of `TelegramController` and `PaddleController`, i.e. `/tg/*` and `/paddle/*` outside the API prefix) are recorded without a body (`newValues` empty). Matched by controller class, not by path, because Express routes are case-insensitive (`/TG/webhook` reaches the same handler)
-- Runs after the handler returns (in `tap()`), so it has the response data
+- Runs after the handler returns (in `tap()`), so it has the response data. The change is committed
+  by then, so building the entry is wrapped in try/catch: a failure is logged and the client still
+  gets its success, never a 500 for a write that happened
+- Body keys are client input: scope lookups use a `Map` (`PARENT_KEY_SCOPES`), not an object
+  literal, so keys such as `constructor`, `toString` or `__proto__` cannot resolve to
+  `Object.prototype` members (a top-level `"constructor"` key used to commit the change and then
+  answer 500 with no audit row)
 
 ### Filters (Global Exception Handler)
 
@@ -694,6 +734,14 @@ it, deliberate 5xx such as `RECEIPT_GENERATION_FAILED` included. Every other err
 body above (before 2026-10-30 its raw message was sent, leaking SQL from database errors). Each
 error is logged once with `error`, `errorCode`, `status`, `detail` (the original message) and
 `stack`, so the cause of a generic 500 lives in the log only.
+
+Two non-`HttpException` errors are client errors and mapped before the generic 500:
+- `ThrottlerException` from the stock `ThrottlerGuard` (login, register, refresh, public links,
+  Paddle) becomes `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }`, the seconds read
+  from the `Retry-After` header the guard set (60 if absent), the same body as `UserThrottlerGuard`
+- express body-parser errors (`http-errors` objects with `expose: true` and a 4xx `status`): a body
+  above the size limit (`type: "entity.too.large"`) is `413 PAYLOAD_TOO_LARGE`, any other keeps its
+  status with `HTTP_EXCEPTION`. Malformed JSON is a `SyntaxError` that Nest already maps to 400
 
 **Error Response Shape:**
 
@@ -762,7 +810,7 @@ transaction. `RenderSnapshot.document` (every typed document, i.e. all but the w
 its own line so Handlebars drops it and a waybill's HTML stays byte-identical (guarded by
 `services/waybill-html-golden.spec.ts`; change that digest list only when a waybill's output is meant to change).
 The other 11 styles carry no slot. Wording lives in `templates/translations/document-labels.ts`
-(`DOCUMENT_LABELS`, `STYLE_LABEL_OVERRIDES` for receipt-only labels, `TAX_ID_LABELS`); the render service blanks
+(`DOCUMENT_LABELS`, `STYLE_LABEL_OVERRIDES` for receipt-only labels, `TAX_ID_LABELS`). Every typed document overrides the style's `invoiceNo` / `invoiceDate` labels, so the base `translations/{en,ru,uk}.json` values are the waybill's own: they are type-neutral ("Номер документа:" / "Document No:", "Дата документа:", `invoiceTotal` "Загальна сума"), never "invoice", because a waybill's heading may be a custom title or "Проформа-інвойс"; the render service blanks
 `companyTaxId/Iban/Swift` in the style header for typed documents because the blocks print them.
 `services/document-layout.spec.ts` holds the sha256 goldens for type x style x language. The heading comes from `TemplateData.documentTitle`, which
 wins over every title rule in `renderTemplate()`. Lock order is unchanged (tenant advisory → settings row →
@@ -1030,6 +1078,14 @@ If a required variable is missing, the app fails to start with a clear error.
 (`-c timezone=UTC`, `config/database-session.ts`), so `now()`, `::date` casts and date filters see UTC
 whatever the server's or role's default zone. The deploy script's migration run overrides
 `extra.options` with its own lock/statement timeouts and does not pin the zone (no migration depends on it).
+
+Most date columns are `timestamp without time zone` holding UTC wall time. Loading
+`database-session.ts` also makes node-postgres read them as UTC (`parseUtcTimestamp` for OID 1114)
+and write `Date` parameters as UTC (`defaults.parseInputDatesAsUTC`); by default it used the Node
+process's zone, so a backend not running in UTC (a developer's machine) shifted every time by its
+offset. Production was never affected (the containers run in UTC; `Dockerfile.playwright` now sets
+`TZ=UTC` explicitly). The columns are deliberately not migrated to `timestamptz`: that rewrites
+every table for no visible gain.
 
 ---
 
@@ -1305,6 +1361,8 @@ Both migrations are additive; add the names to `EXPECTED_MIGRATIONS` and `KNOWN_
 
 `templates/document-blocks.ts` exports `SIGNOFF_PARTIALS` (`waybillSignoffStyles`, `waybillSignoff`) **separately** from `DOCUMENT_PARTIALS`; the "five slots exactly once" rule applies to `DOCUMENT_PARTIALS` only. `TemplateService` registers both maps. Only `standard`, `classic`, `minimal` and `corporate` carry `{{#if signoff}}{{> waybillSignoffStyles}}{{/if}}` in the style block and `{{#if signoff}}{{> waybillSignoff}}{{/if}}` before the footer; `getTemplateCapabilities(id).signoff` is true for exactly those. `DocumentRenderService.prepare(..., signoffSource)` ignores the images when `caps.signoff` is false, passes data URIs to `buildDocumentRenderData` for typed documents (`document.signatures.seller.image`, `document.signatures.stampImage` only when `layout.signatures.stamp`, `document.signatures.hasImages` for the CSS) and a `signoff` object (`signatureImage`, `stampImage`, `labels`) to a waybill's template data. Data URIs are built only on the server, from stored normalized PNGs.
 
+**Embedded fonts.** Every style embeds NotoSans-Regular and NotoSans_Condensed-Bold (`src/assets/fonts`, loaded by `TemplateService.loadFonts`) as `url('data:font/ttf;base64,{{{fontRegular}}}')`. The triple stash is required: `{{…}}` HTML-escapes the base64 padding "=" to "&#x3D;", which a `<style>` element never decodes, so the regular font used to be an invalid data URL (ERR_INVALID_URL in previews) and PDFs printed regular text in whatever system font the host had. `renderTemplate` passes only base64 characters (`base64Font`), anything else becomes empty.
+
 **Golden rule for template changes.** Every new optional block must keep the output of a document that does not use it byte-identical: put `{{#if}}`, `{{else}}` and `{{/if}}` each on its own line (Handlebars drops standalone block tags) and keep the `else` branch's indentation equal to the old line. `waybill-html-golden.spec.ts` and `document-layout.spec.ts` (sha256 per type x style x language) must pass **unchanged** after such a change; the new case gets its own digests (`services/document-signoff-render.spec.ts`, recorded for invoice/act/quote/waybill in the four styles). Digests of the image case must not depend on an encoder, so that spec uses fixed PNG bytes.
 
 ### Number format in code
@@ -1346,5 +1404,5 @@ Never index an allowlist literal with `sortBy` (`MAP[sortBy] || default`): `cons
 - A counter is never raised to the integer maximum: `raiseCounterToIssued` and the yearly first-draw lookup accept issued values up to `MAX_ACCEPTED_ISSUED_VALUE` (`MAX_COUNTER_VALUE - 1`, `receipt-number-sql.ts`), so the next draw still fits the `integer` column. A draw that would pass `MAX_COUNTER_VALUE` (SQLSTATE 22003) is refused with 409 `DOCUMENT_NUMBERS_EXHAUSTED` instead of a 500.
 - `ReceiptsService` takes `ReceiptSnapshotService`, `ReceiptArtifactService`, `DocumentConfigService` and `DocumentRenderService` as required dependencies (no `@Optional()`); hand-built instances in specs pass them (or `undefined` where a suite never reaches them). Same-key generations are serialized once, by `generationMutex` in `generateDocument`; there is no second inner lock.
 - `ReceiptsService.runGeneration` releases a drawn number only for failures before the document transaction or inside it, never for a number-index collision (23505) or a failed `COMMIT`; a collision triggers `raiseCounterToIssued` and one retry (`NumberCollisionRepaired`). `nextDocumentNumber(manager, userId, type, { timeZone, now? })` takes the document's time zone; `ReceiptSnapshotService.prepare` hands it the resolved `formatting.timeZone`.
-- The `/r/` headers exist only in `frontend/nginx.conf`; the legacy `nginx/nginx.conf` does not have them.
+- `frontend/nginx.conf` is the only nginx configuration (the legacy `nginx/nginx.conf` was never deployed and is deleted). It restores the client address from Cloudflare's `CF-Connecting-IP` for Cloudflare peers only and rate-limits `/api/`; `public-share-nginx.spec.ts` pins both, the `/r/` headers and the upload size.
 - `GET /receipts` date bounds are `CAST(:date AS date)` converted with `AT TIME ZONE :zone` (zone from `account-time-zone.ts`), never JS `Date` objects.

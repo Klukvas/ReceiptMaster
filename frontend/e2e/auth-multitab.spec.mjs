@@ -38,7 +38,6 @@ const AUTHORIZED_DATA = {
   "/recipients": paginated([]),
   "/orders": paginated([]),
   "/receipts": paginated([]),
-  "/receipts/printers": { printers: [] },
 };
 
 const json = (route, body, status = 200) =>
@@ -457,12 +456,161 @@ const transportFailureKeepsSession = async (browser, results, label, fail) => {
   }
 };
 
+// Signing out in one tab used to reach the others only through their next 401, which then
+// said "session expired". They now follow the sign-out at once and quietly.
+const signOutElsewhereLeavesQuietly = async (browser, results) => {
+  const { context, tabs, pages } = await openTabs(browser, ["A", "B"]);
+  await installSessionApi(context, tabs, {
+    refresh: (route) =>
+      json(route, { access_token: A2, refresh_token: R2, user: USER }, 201),
+    stale: (route) => json(route, UNAUTHORIZED, 401),
+  });
+  try {
+    const [tabA, tabB] = pages;
+    await tabA.goto(`${BASE_URL}/products`);
+    await isSignedIn(tabA);
+    await tabB.goto(`${BASE_URL}/products`);
+    const isBSignedIn = await isSignedIn(tabB);
+    await tabA.evaluate(() => {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("refresh_token");
+    });
+    const hasLeft = await waitFor(() => new URL(tabB.url()).pathname === "/", {
+      timeoutMs: SIGNED_IN_TIMEOUT_MS,
+      label: "tab B to leave its private page",
+    })
+      .then(() => true)
+      .catch(() => false);
+    const expiredNotice = await tabB.evaluate(() =>
+      sessionStorage.getItem("session_expired"),
+    );
+    results.check(
+      "sign-out elsewhere: the other tab leaves its private page",
+      isBSignedIn && hasLeft,
+      tabB.url(),
+    );
+    results.check(
+      "sign-out elsewhere: no 'session expired' notice",
+      expiredNotice === null,
+      String(expiredNotice),
+    );
+  } finally {
+    await context.close();
+  }
+};
+
+// A password change revokes every access token issued before it and answers with a new
+// pair for the tab that asked. That tab stays signed in, and so do the other tabs of the
+// browser: they share storage, so they pick the new pair up instead of signing out.
+const passwordChangeKeepsTabsSignedIn = async (browser, results) => {
+  const { context, tabs, pages, navigations } = await openTabs(browser, [
+    "A",
+    "B",
+  ]);
+  let hasChanged = false;
+  const log = await installSessionApi(context, tabs, {
+    // Refreshing is never needed here; a refresh would mean a token was refused.
+    refresh: (route) => json(route, UNAUTHORIZED, 401),
+    stale: (route, entry) => {
+      if (hasChanged || entry.bearer !== A1)
+        return json(route, UNAUTHORIZED, 401);
+      if (entry.path === "/auth/change-password") {
+        hasChanged = true;
+        return json(
+          route,
+          {
+            message: "Password changed successfully",
+            access_token: A2,
+            refresh_token: R2,
+            user: USER,
+          },
+          201,
+        );
+      }
+      const body =
+        AUTHORIZED_DATA[entry.path] ??
+        (entry.path.startsWith("/settings/") ? {} : null);
+      return body === null ? json(route, {}, 404) : json(route, body);
+    },
+  });
+  try {
+    const [tabA, tabB] = pages;
+    await tabB.goto(`${BASE_URL}/products`);
+    const isBSignedIn = await isSignedIn(tabB);
+    await tabA.goto(`${BASE_URL}/profile`);
+    await tabA.getByRole("button", { name: "Change Password" }).first().click();
+    await tabA.locator("#currentPassword").fill("old-password-1");
+    await tabA.locator("#newPassword").fill("new-password-2");
+    await tabA.locator("#confirmPassword").fill("new-password-2");
+    await tabA.locator("#confirmPassword").press("Enter");
+    const hasNotice = await tabA
+      .getByText("Your other devices and browsers have been signed out")
+      .waitFor()
+      .then(() => true)
+      .catch(() => false);
+
+    const sessions = await Promise.all(pages.map(storedSession));
+    results.check(
+      "password change: both tabs share the returned A2/R2",
+      sessions.every((s) => s.access === A2 && s.refresh === R2),
+      JSON.stringify(sessions),
+    );
+    results.check(
+      "password change: the success notice says other devices were signed out",
+      hasNotice,
+    );
+
+    // Tab B learns nothing but the storage write; its next request must carry A2.
+    await tabB.getByRole("link", { name: "Orders" }).first().click();
+    const isBOnA2 = await waitFor(
+      () =>
+        log.some(
+          (entry) =>
+            entry.tab === "B" && entry.path === "/orders" && entry.bearer === A2,
+        ),
+      { timeoutMs: SIGNED_IN_TIMEOUT_MS, label: "tab B to call /orders with A2" },
+    )
+      .then(() => true)
+      .catch(() => false);
+    results.check(
+      "password change: the other tab continues with the new access token",
+      isBSignedIn && isBOnA2,
+      JSON.stringify(log.filter((entry) => entry.tab === "B")),
+    );
+
+    const refreshes = log.filter((entry) => entry.path === "/auth/refresh");
+    const redirects = [...navigations.values()].flat().filter((p) => p === "/");
+    const expiredNotices = await Promise.all(
+      pages.map((page) =>
+        page.evaluate(() => sessionStorage.getItem("session_expired")),
+      ),
+    );
+    results.check(
+      "password change: no tab refreshed, signed out or saw 'session expired'",
+      refreshes.length === 0 &&
+        redirects.length === 0 &&
+        expiredNotices.every((notice) => notice === null) &&
+        new URL(tabA.url()).pathname === "/profile" &&
+        new URL(tabB.url()).pathname === "/orders",
+      JSON.stringify({
+        refreshes,
+        navigations: Object.fromEntries(navigations),
+        expiredNotices,
+      }),
+    );
+  } finally {
+    await context.close();
+  }
+};
+
 export const run = async () => {
   const results = new Results("auth multi-tab");
   const browser = await launchBrowser();
   try {
     await lateLoserKeepsWinnerSession(browser, results);
     await genuineRejectionSignsOut(browser, results);
+    await signOutElsewhereLeavesQuietly(browser, results);
+    await passwordChangeKeepsTabsSignedIn(browser, results);
     await staleTabAdoptsStoredToken(browser, results);
     await earlyLoserAdoptsWinner(browser, results, "early loser", A2);
     await earlyLoserAdoptsWinner(

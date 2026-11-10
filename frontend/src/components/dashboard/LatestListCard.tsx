@@ -66,7 +66,8 @@ export const LatestListCard = ({
     return (
       <div className="space-y-3">
         {rows}
-        <Link to={viewAll.to}>
+        {/* Block, so the link's own box is the button's full (touch-sized) height. */}
+        <Link to={viewAll.to} className="block">
           <Button variant="outline" className="w-full mt-4">
             {viewAll.label}
           </Button>

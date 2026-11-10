@@ -104,6 +104,12 @@ export const ApiErrors = {
       "RECEIPT_NOT_FOUND",
       404,
     ),
+  RECEIPT_IS_ALREADY_VOIDED: (id: string) =>
+    new ApiErrorResponse(
+      `Receipt ${id} is already voided`,
+      "RECEIPT_IS_ALREADY_VOIDED",
+      400,
+    ),
   RECEIPT_ALREADY_EXISTS: (orderId: string) =>
     new ApiErrorResponse(
       `Receipt for order ${orderId} already exists`,
@@ -174,12 +180,6 @@ export const ApiErrors = {
     new ApiErrorResponse(
       `Failed to generate receipt for order ${orderId}`,
       "RECEIPT_GENERATION_FAILED",
-      500,
-    ),
-  RECEIPT_PRINT_FAILED: (receiptId: string) =>
-    new ApiErrorResponse(
-      `Failed to print receipt ${receiptId}`,
-      "RECEIPT_PRINT_FAILED",
       500,
     ),
 

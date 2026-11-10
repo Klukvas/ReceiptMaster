@@ -138,7 +138,7 @@ ReceiptMaster is a SaaS application for small businesses to manage products, tra
                         ▼                                ▼                                ▼
                  ┌─────────────┐                  ┌─────────────┐                  ┌─────────────┐
                  │  DOWNLOAD   │                  │   PRINT     │                  │ REGENERATE  │
-                 │    PDF      │                  │  (printer)  │                  │    PDF      │
+                 │    PDF      │                  │  (browser)  │                  │    PDF      │
                  └─────────────┘                  └─────────────┘                  └─────────────┘
 ```
 
@@ -838,34 +838,8 @@ Authorization: Bearer <token>
 
 ---
 
-#### Get Available Printers
-```http
-GET /receipts/printers
-Authorization: Bearer <token>
-```
-
-**Response (200):**
-```json
-{
-  "printers": ["HP LaserJet", "EPSON TM-T20"]
-}
-```
-
----
-
-#### Print Receipt
-```http
-POST /receipts/:id/print?printer=HP%20LaserJet
-Authorization: Bearer <token>
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Чек 2024-000001 отправлен на печать (принтер: HP LaserJet)"
-}
-```
+**Printing** has no endpoint: the web app opens `GET /receipts/:id/pdf` in a new tab and the
+user prints it from the browser's PDF viewer.
 
 ---
 
@@ -1232,7 +1206,6 @@ GET /health
 | `RECEIPT_NOT_FOUND` | 404 | Receipt ID not found |
 | `RECEIPT_ALREADY_EXISTS` | 409 | Receipt already generated for order |
 | `RECEIPT_GENERATION_FAILED` | 500 | PDF generation error |
-| `RECEIPT_PRINT_FAILED` | 500 | Printing error |
 | `FILE_NOT_FOUND` | 404 | File doesn't exist |
 | `FILE_UPLOAD_FAILED` | 500 | Upload error |
 | `VALIDATION_ERROR` | 400 | Input validation failed |

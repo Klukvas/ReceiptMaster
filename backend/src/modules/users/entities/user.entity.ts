@@ -36,6 +36,15 @@ export class User {
   @Column({ type: "integer", default: 0, select: false })
   receipt_counter: number;
 
+  /**
+   * Generation of this account's access tokens: each one carries it as the `tv` claim
+   * and stops working once the value moves on (logout, password change). See
+   * `access-token.ts`. Not selected by default, so it never reaches profile responses.
+   */
+  @ApiHideProperty()
+  @Column({ type: "integer", default: 0, select: false })
+  token_version: number;
+
   @ApiHideProperty()
   @OneToMany(() => Product, (product) => product.user)
   products: Product[];

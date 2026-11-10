@@ -21,6 +21,7 @@ import { useReceiptSocket } from "../../hooks/useReceiptSocket";
 import { receiptService } from "../../services/ReceiptService";
 import { useTranslation } from "../../hooks/useTranslation";
 import { documentLabelKey, type DocumentType } from "../../lib/document-types";
+import { setProgressPanelVisible } from "../../lib/generating-toast";
 import type {
   ReceiptProgressPayload,
   ReceiptCompletedPayload,
@@ -346,6 +347,13 @@ export const ReceiptProgressPanel = () => {
 
   useStaleReceiptWatchdog(receipts, markCompleted, markFailed, setReceipts);
   const documentTypes = useDocumentTypes(receipts);
+
+  // The cards say the same and more; on a phone the generic toast would sit on top of them.
+  const isShowingCards = receipts.size > 0;
+  useEffect(() => {
+    setProgressPanelVisible(isShowingCards);
+    return () => setProgressPanelVisible(false);
+  }, [isShowingCards]);
 
   const dismissReceipt = (receiptId: string) => {
     cancelDismiss(receiptId);

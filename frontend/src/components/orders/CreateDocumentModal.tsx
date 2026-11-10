@@ -70,6 +70,17 @@ const SERVER_FIELD_ERRORS: Readonly<Record<string, string>> = {
   dueDate: "documents.errors.dueDateServer",
 };
 
+/** The server's "must be within N days of the issue date" refusal of a due date. */
+const TOO_FAR_REFUSAL = /within \d+ days/;
+
+/** The translated text for a server refusal of one details field, if it has its own. */
+const serverFieldErrorKey = (field: string, error: unknown): string | undefined => {
+  const { code, message } = parseApiError(error);
+  if (field === "dueDate" && code === ErrorCode.VALIDATION_ERROR && TOO_FAR_REFUSAL.test(message))
+    return "documents.errors.dueDateTooFar";
+  return SERVER_FIELD_ERRORS[field];
+};
+
 /** Refusals of the request as a whole (the details do not fit, an unsupported upload). */
 const REJECTED_STATUSES: ReadonlySet<number> = new Set([400, 415, 422]);
 
@@ -211,10 +222,11 @@ export function CreateDocumentModal({
     const field = path?.startsWith("details.") ? formFieldOf(path) : null;
     const { code } = parseApiError(error);
     if (field) {
-      setFieldErrors({ [field]: SERVER_FIELD_ERRORS[field] ?? "documents.errors.invalidField" });
+      const fieldErrorKey = serverFieldErrorKey(field, error);
+      setFieldErrors({ [field]: fieldErrorKey ?? "documents.errors.invalidField" });
       // The server's sentence is English; the field says what is wrong. A generic banner covers
       // a field this dialog does not show (say, one line of a return note).
-      if (!SERVER_FIELD_ERRORS[field]) setSubmitError(t("documents.errors.checkFields"));
+      if (!fieldErrorKey) setSubmitError(t("documents.errors.checkFields"));
     } else {
       setSubmitError(translatedApiError(error) ?? t(fallbackErrorKey(error)));
     }

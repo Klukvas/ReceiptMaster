@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { dateLocale } from "../../lib/api";
 
 interface DateRange {
   startDate: string;
@@ -7,11 +8,11 @@ interface DateRange {
 
 /**
  * Formats a "YYYY-MM-DD" string as that calendar day. `new Date("YYYY-MM-DD")` is UTC
- * midnight, which prints the previous day west of Greenwich.
+ * midnight, which prints the previous day west of Greenwich. Written in the interface language.
  */
 export const formatLocalDay = (value: string): string => {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString();
+  return new Date(year, month - 1, day).toLocaleDateString(dateLocale());
 };
 
 /** One end alone still filters the data, so the label must not say "All time". */

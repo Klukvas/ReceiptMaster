@@ -97,3 +97,93 @@ describe("DocumentConfigService.patchLegacy passthrough", () => {
     expect(row.document_config).toEqual(withoutRequisites);
   });
 });
+
+describe("DocumentConfigService.patchLegacy language switch", () => {
+  let row: Row;
+  let service: DocumentConfigService;
+
+  beforeEach(() => {
+    row = {
+      id: "settings-1",
+      userId: "user-1",
+      templateId: "standard",
+      templateLanguage: "en",
+      companyName: "Old LLC",
+      document_config: null,
+      document_config_revision: 0,
+      logo_asset_id: null,
+    };
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async (entity: unknown) =>
+        entity === UserSettings ? { ...row } : null,
+      ),
+      update: jest.fn(
+        async (_entity: unknown, _where: unknown, values: Partial<Row>) => {
+          row = { ...row, ...values };
+        },
+      ),
+    };
+    service = new DocumentConfigService(
+      {
+        manager,
+        transaction: (work: (m: EntityManager) => Promise<void>) =>
+          work(manager as unknown as EntityManager),
+      } as unknown as DataSource,
+      {
+        stage: jest.fn().mockResolvedValue(null),
+        attach: jest.fn(),
+        release: jest.fn(),
+      } as unknown as DocumentAssetsService,
+      {
+        del: jest.fn().mockResolvedValue(undefined),
+      } as unknown as CacheService,
+    );
+  });
+
+  it("moves the hour cycle and number locale to the new language after company info froze them", async () => {
+    // A new account saves its company info in English first: that freezes h12.
+    await service.patchLegacy("user-1", { companyName: "New LLC" });
+    expect(row.document_config?.formatting.hourCycle).toBe("h12");
+
+    await service.patchLegacy("user-1", { templateLanguage: "uk" });
+
+    expect(row.document_config).toMatchObject({
+      documentLanguage: "uk",
+      formatting: { hourCycle: "h23", numberLocale: "uk-UA" },
+    });
+  });
+
+  it("keeps a formatting the user chose when the language changes", async () => {
+    await service.patchLegacy("user-1", { companyName: "New LLC" });
+    const config = row.document_config;
+    if (!config) throw new Error("company info did not save a configuration");
+    row = {
+      ...row,
+      document_config: {
+        ...config,
+        formatting: {
+          ...config.formatting,
+          hourCycle: "h23",
+          numberLocale: "de-DE",
+        },
+      },
+    };
+
+    await service.patchLegacy("user-1", { templateLanguage: "uk" });
+
+    expect(row.document_config?.formatting).toMatchObject({
+      hourCycle: "h23",
+      numberLocale: "de-DE",
+    });
+  });
+
+  it("leaves the formatting alone when the language does not change", async () => {
+    await service.patchLegacy("user-1", { companyName: "New LLC" });
+    const before = row.document_config?.formatting;
+
+    await service.patchLegacy("user-1", { companyName: "Renamed LLC" });
+
+    expect(row.document_config?.formatting).toEqual(before);
+  });
+});

@@ -85,7 +85,10 @@ export class SettingsController {
       limits: {
         fileSize: 5 * 1024 * 1024,
         files: 1,
-        fields: 0,
+        // One stray text part is tolerated and ignored, so a form without the file gets
+        // REQUIRED_FIELD_MISSING from the handler rather than multer's "Too many fields".
+        fields: 1,
+        fieldSize: 1024,
         parts: 2,
         headerPairs: 40,
       },

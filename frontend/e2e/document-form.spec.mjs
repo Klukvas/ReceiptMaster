@@ -213,9 +213,17 @@ export const run = async () => {
     );
 
     await page.getByRole("radio", { name: "English" }).click();
-    await page
+    const regionLabels = await page
       .getByLabel("Region", { exact: true })
-      .selectOption({ label: "United States" });
+      .locator("option")
+      .allInnerTexts();
+    results.check(
+      "regions are named by a sample of how they write amounts and dates, not by a country",
+      regionLabels.some((label) => label.includes("1,234.56")) &&
+        !regionLabels.some((label) => /Russia|Ukraine|United States/.test(label)),
+      JSON.stringify(regionLabels),
+    );
+    await page.getByLabel("Region", { exact: true }).selectOption("US");
     const example = await page.getByText(/^Example:/).innerText();
     results.check(
       "one Region choice sets how amounts and dates are written, with a live example",

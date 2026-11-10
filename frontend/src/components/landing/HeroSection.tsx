@@ -84,14 +84,20 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
           <div className="landing-fc landing-fc-receipt">
             <div className="landing-frc-head">
               <span className="landing-frc-brand">receiptmaster</span>
-              <span className="landing-frc-status">Generated</span>
+              <span className="landing-frc-status">
+                {t("landing.mock.generated")}
+              </span>
             </div>
-            <div className="landing-frc-num">Receipt #2024-000847</div>
+            <div className="landing-frc-num">
+              {t("landing.mock.receiptNumber", { number: "2024-000847" })}
+            </div>
             <div
               className="landing-frc-row"
               style={{ borderBottom: "none", paddingBottom: 0 }}
             >
-              <span className="landing-frc-item">Billed to</span>
+              <span className="landing-frc-item">
+                {t("landing.mock.billedTo")}
+              </span>
               <span
                 className="landing-frc-price"
                 style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}
@@ -112,17 +118,18 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
               <span className="landing-frc-price">{"\u20B4"} 2 400</span>
             </div>
             <div className="landing-frc-total">
-              <span className="landing-frc-total-l">Total</span>
+              <span className="landing-frc-total-l">
+                {t("landing.mock.total")}
+              </span>
               <span className="landing-frc-total-v">{"\u20B4"} 4 460</span>
-            </div>
-            <div className="landing-frc-hash">
-              SHA256: a3f8e2d1c9b74e62f05a8d3c1b...
             </div>
           </div>
 
           {/* Revenue card */}
           <div className="landing-fc landing-fc-revenue">
-            <div className="landing-frv-label">Revenue {"\u00B7"} 30 days</div>
+            <div className="landing-frv-label">
+              {t("landing.mock.revenue30Days")}
+            </div>
             <div className="landing-frv-value">{"\u20B4"} 86,240</div>
             <div className="landing-frv-change">
               <svg
@@ -173,33 +180,49 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
 
           {/* Orders card */}
           <div className="landing-fc landing-fc-orders">
-            <div className="landing-fo-title">Recent Orders</div>
+            <div className="landing-fo-title">
+              {t("landing.mock.recentOrders")}
+            </div>
             <div className="landing-fo-row">
               <div>
                 <div className="landing-fo-name">Dmytro Koval</div>
-                <div className="landing-fo-date">Today, 14:32</div>
+                <div className="landing-fo-date">
+                  {t("landing.mock.today", { time: "14:32" })}
+                </div>
               </div>
-              <span className="landing-tag landing-tag-indigo">Confirmed</span>
+              <span className="landing-tag landing-tag-indigo">
+                {t("landing.mock.confirmed")}
+              </span>
             </div>
             <div className="landing-fo-row">
               <div>
                 <div className="landing-fo-name">Sofia Bondar</div>
-                <div className="landing-fo-date">Today, 11:08</div>
+                <div className="landing-fo-date">
+                  {t("landing.mock.today", { time: "11:08" })}
+                </div>
               </div>
-              <span className="landing-tag landing-tag-green">Paid</span>
+              <span className="landing-tag landing-tag-green">
+                {t("landing.mock.paid")}
+              </span>
             </div>
             <div className="landing-fo-row">
               <div>
                 <div className="landing-fo-name">Ivan Petrenko</div>
-                <div className="landing-fo-date">Yesterday</div>
+                <div className="landing-fo-date">
+                  {t("landing.mock.yesterday")}
+                </div>
               </div>
-              <span className="landing-tag landing-tag-amber">Draft</span>
+              <span className="landing-tag landing-tag-amber">
+                {t("landing.mock.draft")}
+              </span>
             </div>
           </div>
 
           {/* Products card */}
           <div className="landing-fc landing-fc-products">
-            <div className="landing-fo-title">Top Products</div>
+            <div className="landing-fo-title">
+              {t("landing.mock.topProducts")}
+            </div>
             {[
               { name: "Laptop Stand Pro", qty: 48, badge: "in-stock" },
               { name: "USB-C Hub", qty: 3, badge: "low" },
@@ -208,7 +231,9 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
               <div className="landing-fo-row" key={p.name}>
                 <div>
                   <div className="landing-fo-name">{p.name}</div>
-                  <div className="landing-fo-date">{p.qty} pcs</div>
+                  <div className="landing-fo-date">
+                    {t("landing.mock.pieces", { count: p.qty })}
+                  </div>
                 </div>
                 <span
                   className={`landing-tag ${
@@ -220,10 +245,10 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
                   }`}
                 >
                   {p.badge === "in-stock"
-                    ? "In stock"
+                    ? t("landing.mock.inStock")
                     : p.badge === "low"
-                      ? "Low"
-                      : "Out"}
+                      ? t("landing.mock.lowStock")
+                      : t("landing.mock.outOfStock")}
                 </span>
               </div>
             ))}
@@ -231,7 +256,9 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
 
           {/* Analytics donut card */}
           <div className="landing-fc landing-fc-analytics">
-            <div className="landing-fo-title">Order Status</div>
+            <div className="landing-fo-title">
+              {t("landing.mock.orderStatus")}
+            </div>
             <div
               style={{
                 display: "flex",
@@ -302,9 +329,21 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
               </svg>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                 {[
-                  { label: "Confirmed", color: "var(--l-indigo)", pct: "64%" },
-                  { label: "Paid", color: "var(--l-green)", pct: "25%" },
-                  { label: "Draft", color: "var(--l-amber)", pct: "11%" },
+                  {
+                    label: t("landing.mock.confirmed"),
+                    color: "var(--l-indigo)",
+                    pct: "64%",
+                  },
+                  {
+                    label: t("landing.mock.paid"),
+                    color: "var(--l-green)",
+                    pct: "25%",
+                  },
+                  {
+                    label: t("landing.mock.draft"),
+                    color: "var(--l-amber)",
+                    pct: "11%",
+                  },
                 ].map((s) => (
                   <div
                     key={s.label}

@@ -8,6 +8,10 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import { Download, FileText, AlertCircle, Loader2 } from "lucide-react";
 import { downloadPdf } from "../lib/pdf-utils";
+import {
+  documentPdfFilename,
+  filenameFromDisposition,
+} from "../lib/document-filename";
 import { defaultFormattingFor, displayDocumentNumber } from "../lib/public-receipt-format";
 import i18n from "../lib/i18n";
 import { useTranslation } from "../hooks/useTranslation";
@@ -197,7 +201,13 @@ const PublicReceiptContent = () => {
         responseType: "blob",
       });
       const blob = new Blob([res.data], { type: "application/pdf" });
-      downloadPdf(blob, `receipt-${data?.receipt.number || "download"}.pdf`);
+      const filename =
+        filenameFromDisposition(res.headers["content-disposition"]) ??
+        documentPdfFilename(
+          data?.receipt.document_type,
+          data?.receipt.number || "download",
+        );
+      downloadPdf(blob, filename);
     } catch {
       setDownloadError(true);
     } finally {
@@ -319,7 +329,8 @@ const PublicReceiptContent = () => {
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-content-tertiary">
               <span className="tabular-nums">{documentNumber}</span>
               <span className="tabular-nums">
-                {formatDate(order.created_at || receipt.created_at)}
+                {/* The document's own date: a quote or return note is issued after its order. */}
+                {formatDate(receipt.created_at ?? order.created_at)}
               </span>
             </div>
           </div>

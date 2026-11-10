@@ -1,3 +1,4 @@
+import { UserSettings } from "../../settings/entities/user-settings.entity";
 import { ApiErrorResponse } from "../../../common/errors/ApiError";
 import { amountInWords } from "../../../common/utils/amount-in-words.util";
 import { calculateVatBreakdown } from "../../../common/utils/vat.util";
@@ -14,10 +15,10 @@ import {
   nameWithLegalForm,
 } from "./document-view";
 
-const config: DocumentConfig = {
-  ...legacyConfig(null),
-  documentLanguage: "uk",
-};
+// A Ukrainian account without a saved configuration (its number locale follows the language).
+const config: DocumentConfig = legacyConfig({
+  templateLanguage: "uk",
+} as UserSettings);
 const money = (cents: number) =>
   formatDocumentMoney(cents, "UAH", config.formatting);
 

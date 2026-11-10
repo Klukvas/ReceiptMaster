@@ -3,6 +3,10 @@
 # preinstalled browsers match the locked library (enforced by the check below).
 FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
+# Date columns hold UTC wall time; the app also reads them as UTC (config/database-session.ts),
+# this keeps logs, cron and anything outside the pg driver on the same clock.
+ENV TZ=UTC
+
 # Set working directory
 WORKDIR /app
 

@@ -257,7 +257,8 @@ const periodLabelIsLocalDay = async (results) => {
     const label = await chip.innerText();
     results.check(
       "the period label shows the picked calendar days in a negative-UTC zone",
-      label.includes("3/5/2026") && label.includes("3/7/2026"),
+      // The label follows the interface language (English → en-GB), like every other date.
+      label.includes("05/03/2026") && label.includes("07/03/2026"),
       label,
     );
   } finally {

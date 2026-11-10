@@ -49,7 +49,6 @@ export const installApiMocks = async (page, state) => {
     if (path === "/products") return json(route, paginated(PRODUCTS));
     if (path === "/recipients") return json(route, paginated(RECIPIENTS));
     if (path === "/orders") return json(route, paginated(state.orders));
-    if (path === "/receipts/printers") return json(route, { printers: [] });
     if (path === "/receipts") return json(route, paginated([]));
     if (path.startsWith("/receipts/orders/") && method === "POST") {
       state.generateRequests.push(path);
@@ -93,6 +92,12 @@ export const startReceiptSocketServer = async () => {
 
   return {
     emit: (event, payload) => namespace.emit(event, payload),
+    /** The token each connection handshake carried, oldest first. */
+    handshakeTokens: () => connections.map((socket) => socket.handshake.auth?.token),
+    /** Ends every live socket from the server side, as the API does for a revoked token. */
+    disconnectAll: () => {
+      for (const socket of namespace.sockets.values()) socket.disconnect(true);
+    },
     waitForClient: async (timeoutMs = 10000) => {
       const deadline = Date.now() + timeoutMs;
       while (connections.length === 0) {

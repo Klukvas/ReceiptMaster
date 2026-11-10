@@ -62,9 +62,17 @@ type DocumentCardProps = {
   footer?: ReactNode;
   /** A retry request for this document is in flight. */
   isRetrying?: boolean;
+  /** The order is cancelled, so a voided document cannot be followed by a new one. */
+  isOrderCancelled?: boolean;
 };
 
-export function DocumentCard({ document, actions, footer, isRetrying = false }: DocumentCardProps) {
+export function DocumentCard({
+  document,
+  actions,
+  footer,
+  isRetrying = false,
+  isOrderCancelled = false,
+}: DocumentCardProps) {
   const { t } = useTranslation();
   const timeZone = useDocumentTimeZone();
   return (
@@ -84,11 +92,20 @@ export function DocumentCard({ document, actions, footer, isRetrying = false }: 
       </div>
       {document.status === "generated" && <GeneratedActions document={document} actions={actions} />}
       {document.status === "void" && (
-        <VoidedDocumentNote document_type={document.document_type} void_reason={document.void_reason} />
+        <VoidedDocumentNote
+          document_type={document.document_type}
+          void_reason={document.void_reason}
+          isOrderCancelled={isOrderCancelled}
+        />
       )}
       {document.status === "failed" && (
         <div className="space-y-2">
-          {document.error_message && <DocumentFailureReason message={document.error_message} />}
+          {document.error_message && (
+            <DocumentFailureReason
+              message={document.error_message}
+              canRetry={!isMultiplePerOrder(document.document_type)}
+            />
+          )}
           {isMultiplePerOrder(document.document_type) ? (
             <p className="text-xs text-content-tertiary">{t("documents.createAgain")}</p>
           ) : (

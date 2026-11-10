@@ -68,6 +68,16 @@
               }
             }
           },
+          "404": {
+            "description": "supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
             "content": {
@@ -191,7 +201,7 @@
             "name": "threshold",
             "required": false,
             "in": "query",
-            "description": "Stock threshold (default 10)",
+            "description": "Products with quantity strictly below this are low (default 10)",
             "schema": {
               "type": "string"
             }
@@ -341,7 +351,7 @@
             }
           },
           "404": {
-            "description": "Товар не найден (PRODUCT_NOT_FOUND)",
+            "description": "Товар не найден (PRODUCT_NOT_FOUND), or supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND); supplier_id null unlinks",
             "content": {
               "application/json": {
                 "schema": {
@@ -1775,26 +1785,6 @@
         ]
       }
     },
-    "/receipts/printers": {
-      "get": {
-        "operationId": "ReceiptsController_getPrinters",
-        "summary": "Получить список доступных принтеров",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Список принтеров получен"
-          }
-        },
-        "tags": [
-          "receipts"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/receipts/orders/{orderId}/receipt": {
       "post": {
         "operationId": "ReceiptsController_createReceipt",
@@ -2596,50 +2586,6 @@
         ]
       }
     },
-    "/receipts/{id}/print": {
-      "post": {
-        "operationId": "ReceiptsController_printReceipt",
-        "summary": "Отправить чек на печать",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "printer",
-            "required": false,
-            "in": "query",
-            "description": "Имя принтера (по умолчанию системный)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Чек отправлен на печать"
-          },
-          "404": {
-            "description": "Чек не найден"
-          },
-          "500": {
-            "description": "Ошибка при печати"
-          }
-        },
-        "tags": [
-          "receipts"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/receipts/{id}/void": {
       "post": {
         "operationId": "ReceiptsController_voidReceipt",
@@ -3117,51 +3063,6 @@
         "tags": [
           "public-receipts"
         ]
-      }
-    },
-    "/pdf-test/generate-test-pdf": {
-      "get": {
-        "operationId": "PdfTestController_generateTestPdfGet",
-        "parameters": [
-          {
-            "name": "template",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "logo",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "language",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "PdfTestController_generateTestPdf",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
       }
     },
     "/pdf-test/preview-template": {
@@ -4735,6 +4636,9 @@
           },
           "409": {
             "description": "User with this email already exists"
+          },
+          "429": {
+            "description": "More than 5 attempts a minute from this client IP (RATE_LIMITED, with retryAfterSeconds)"
           }
         },
         "tags": [
@@ -4772,7 +4676,7 @@
             "description": "Invalid credentials"
           },
           "429": {
-            "description": "Too many login attempts"
+            "description": "More than 5 attempts a minute from this client IP (RATE_LIMITED, with retryAfterSeconds)"
           }
         },
         "tags": [
@@ -4827,7 +4731,7 @@
             }
           },
           "429": {
-            "description": "Too many refresh attempts from this client (20 per minute)",
+            "description": "Too many refresh attempts from this client (20 per minute; RATE_LIMITED, with retryAfterSeconds)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4859,7 +4763,7 @@
         },
         "responses": {
           "201": {
-            "description": "Logged out successfully"
+            "description": "Logged out successfully. Every access token of the user stops working (other devices refresh). Only a refresh token of the signed-in user is revoked; any other token gets the same answer and is left alone"
           }
         },
         "tags": [
@@ -4957,7 +4861,14 @@
         },
         "responses": {
           "201": {
-            "description": "Password changed successfully"
+            "description": "Password changed. Every other session is signed out (access and refresh tokens); the response carries a new token pair for the calling session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponseDto"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error"
@@ -6603,6 +6514,10 @@
           "newPassword",
           "confirmPassword"
         ]
+      },
+      "ChangePasswordResponseDto": {
+        "type": "object",
+        "properties": {}
       },
       "CreateSupplierDto": {
         "type": "object",

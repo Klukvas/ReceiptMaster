@@ -3,6 +3,7 @@ import { isAxiosError } from "axios";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
+import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 import { api } from "../lib/api";
 import {
   documentEnvelope,
@@ -50,6 +51,8 @@ export function useDocumentDraft(orderId?: string) {
   const [previewPaused, setPreviewPaused] = useState(false);
   // Why the last render was refused (rate limit with its wait, or another preview still rendering).
   const [previewPauseReason, setPreviewPauseReason] = useState("");
+  // Counts "Discard changes", so a loaded preset knows the editor no longer holds its values.
+  const [discards, setDiscards] = useState(0);
   const version = useRef(0),
     sequence = useRef(0),
     controller = useRef<AbortController | null>(null);
@@ -83,6 +86,7 @@ export function useDocumentDraft(orderId?: string) {
     setDraft(undefined);
     setLogoAction("keep");
     setFile(undefined);
+    setDiscards((count) => count + 1);
   };
   const usePreset = (value: DocumentConfig) => {
     changed();
@@ -110,68 +114,7 @@ export function useDocumentDraft(orderId?: string) {
     },
     [previewUrl],
   );
-  useEffect(() => {
-    if (!dirty) return;
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    const navigation = (event: MouseEvent) => {
-      const link =
-        event.target instanceof Element
-          ? event.target.closest<HTMLAnchorElement>("a[href]")
-          : null;
-      if (
-        !link ||
-        link.target === "_blank" ||
-        link.hasAttribute("download") ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        event.altKey ||
-        event.button !== 0
-      )
-        return;
-      const target = new URL(link.href, window.location.href);
-      if (
-        target.pathname === window.location.pathname &&
-        target.search === window.location.search
-      )
-        return;
-      if (!window.confirm("Discard unsaved document changes?")) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-    const currentIndex: unknown = window.history.state?.idx;
-    let restoring = false;
-    const historyNavigation = (event: PopStateEvent) => {
-      if (restoring) {
-        restoring = false;
-        event.stopImmediatePropagation();
-        return;
-      }
-      const nextIndex: unknown = event.state?.idx;
-      if (
-        typeof currentIndex === "number" &&
-        typeof nextIndex === "number" &&
-        currentIndex !== nextIndex &&
-        !window.confirm("Discard unsaved document changes?")
-      ) {
-        event.stopImmediatePropagation();
-        restoring = true;
-        window.history.go(currentIndex - nextIndex);
-      }
-    };
-    window.addEventListener("popstate", historyNavigation, true);
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", navigation, true);
-    return () => {
-      window.removeEventListener("popstate", historyNavigation, true);
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", navigation, true);
-    };
-  }, [dirty]);
+  useUnsavedChangesGuard(dirty, "document.discardConfirm");
   const payload = (): DocumentDraft => {
     if (!config) throw new Error("Load settings first");
     if (config.title.mode === "custom" && !config.title.text.trim())
@@ -294,6 +237,7 @@ export function useDocumentDraft(orderId?: string) {
     previewPaused,
     previewPauseReason,
     refreshing,
+    discards,
     stale: previewVersion !== version.current,
   };
 }

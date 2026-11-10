@@ -73,7 +73,10 @@ const IssueThrottle = () =>
     Throttle(ISSUE_THROTTLE),
     ThrottleBucket("document-issue"),
   );
-const PREVIEW_THROTTLE = { default: { ttl: 60_000, limit: 10 } } as const;
+/** A sample-data PDF render (Playwright). */
+export const PREVIEW_THROTTLE = {
+  default: { ttl: 60_000, limit: 10 },
+} as const;
 const RATE_LIMITED = "More requests than allowed per minute (RATE_LIMITED)";
 
 function isDocumentType(value: string): value is DocumentType {
@@ -88,13 +91,6 @@ export class ReceiptsController {
   private readonly logger = new Logger(ReceiptsController.name);
 
   constructor(private readonly receiptsService: ReceiptsService) {}
-
-  @Get("printers")
-  @ApiOperation({ summary: "Получить список доступных принтеров" })
-  @ApiResponse({ status: 200, description: "Список принтеров получен" })
-  async getPrinters() {
-    return this.receiptsService.getAvailablePrinters();
-  }
 
   @Post("orders/:orderId/receipt")
   @IssueThrottle()
@@ -325,24 +321,6 @@ export class ReceiptsController {
         throw error;
       res.status(500).json({ error: "Could not read the PDF file" });
     }
-  }
-
-  @Post(":id/print")
-  @ApiOperation({ summary: "Отправить чек на печать" })
-  @ApiQuery({
-    name: "printer",
-    required: false,
-    description: "Имя принтера (по умолчанию системный)",
-  })
-  @ApiResponse({ status: 201, description: "Чек отправлен на печать" })
-  @ApiResponse({ status: 404, description: "Чек не найден" })
-  @ApiResponse({ status: 500, description: "Ошибка при печати" })
-  async printReceipt(
-    @Param("id", ParseUUIDPipe) id: string,
-    @Request() req: { user: User },
-    @Query("printer") printer?: string,
-  ) {
-    return this.receiptsService.printReceipt(id, req.user, printer);
   }
 
   @Post(":id/void")

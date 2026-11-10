@@ -75,6 +75,7 @@ export function InvoiceDetailsFields({
           label={t("documents.dueDate")}
           type="date"
           min={today}
+          max={addDays(today, MAX_PAYMENT_TERM_DAYS)}
           value={form.dueDate}
           onChange={(event) =>
             onChange({ ...form, dueDate: event.target.value })

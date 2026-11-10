@@ -77,6 +77,17 @@ export interface AuthResponse {
   };
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+/** Every other session is signed out; this pair keeps the calling one signed in. */
+export interface ChangePasswordResponse extends AuthResponse {
+  message: string;
+}
+
 export interface User {
   id: string;
   email: string;

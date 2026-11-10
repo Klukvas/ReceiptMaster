@@ -337,6 +337,8 @@ const checkYearlyReset = async (results) => {
       prefixHint.includes("trailing space") && prefixHint.includes("A-000001"),
       prefixHint,
     );
+    await row(page, "quote").getByLabel("Prefix").fill("a/b");
+    results.check("an invalid prefix is not shown as a number example", (await previewOf(page, "quote")) === "—", await previewOf(page, "quote"));
   });
 };
 
@@ -351,7 +353,8 @@ const checkUkrainianExample = async (results) => {
     await page.goto(`${BASE_URL}/settings?tab=documents`, { waitUntil: "domcontentloaded" });
     const hint = row(page, "invoice").locator("#numbering-invoice-prefix-hint");
     await hint.waitFor({ state: "visible" });
-    results.check("uk: the prefix hint uses a Ukrainian example (РН-)", (await hint.innerText()).includes("РН-0001"), await hint.innerText());
+    // The example follows the row's own format (6 digits, with the year), not a fixed "0001".
+    results.check("uk: the prefix hint uses a Ukrainian example (РН-)", (await hint.innerText()).includes(`РН-${YEAR}-000001`), await hint.innerText());
   });
 };
 

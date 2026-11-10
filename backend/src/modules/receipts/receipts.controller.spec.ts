@@ -12,14 +12,12 @@ describe("ReceiptsController", () => {
 
   beforeEach(() => {
     receiptsService = {
-      getAvailablePrinters: jest.fn().mockResolvedValue([]),
       generateReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
       generateCompactReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
       generateStandardReceipt: jest.fn().mockResolvedValue({ id: "r1" }),
       findAll: jest.fn().mockResolvedValue({ data: [], total: 0 }),
       findOne: jest.fn().mockResolvedValue({ id: "r1" }),
       getReceiptPdf: jest.fn(),
-      printReceipt: jest.fn().mockResolvedValue({ success: true }),
       voidReceipt: jest.fn().mockResolvedValue({ status: "void" }),
       generateTestReceipt: jest.fn(),
       regenerateReceiptPdf: jest.fn().mockResolvedValue({ id: "r1" }),
@@ -33,14 +31,6 @@ describe("ReceiptsController", () => {
     };
 
     controller = new ReceiptsController(receiptsService);
-  });
-
-  describe("getPrinters", () => {
-    it("should return list of printers", async () => {
-      const result = await controller.getPrinters();
-      expect(result).toEqual([]);
-      expect(receiptsService.getAvailablePrinters).toHaveBeenCalled();
-    });
   });
 
   describe("createReceipt", () => {
@@ -186,28 +176,6 @@ describe("ReceiptsController", () => {
       await controller.getPdf("r1", mockRes, mockReq);
 
       expect(mockRes.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe("printReceipt", () => {
-    it("should send receipt to printer", async () => {
-      const _result = await controller.printReceipt("r1", mockReq, "HP");
-
-      expect(receiptsService.printReceipt).toHaveBeenCalledWith(
-        "r1",
-        mockUser,
-        "HP",
-      );
-    });
-
-    it("should work without specifying printer", async () => {
-      const _result = await controller.printReceipt("r1", mockReq);
-
-      expect(receiptsService.printReceipt).toHaveBeenCalledWith(
-        "r1",
-        mockUser,
-        undefined,
-      );
     });
   });
 
