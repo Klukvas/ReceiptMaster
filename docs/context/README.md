@@ -64,8 +64,8 @@ market/
 │   ├── src/
 │   │   ├── main.tsx, App.tsx (routing + providers)
 │   │   ├── pages/           # 19 route pages (public + dashboard; DocumentsPage = /documents list)
-│   │   ├── components/      # per-feature UI; documents/ = /documents page, settings/ = numbering + signoff
-│   │   ├── services/        # OrderService, ReceiptService, NotificationService
+│   │   ├── components/      # per-feature UI; documents/ = /documents page, settings/ = document editor, numbering, signoff
+│   │   ├── services/        # OrderService, ReceiptService
 │   │   ├── lib/             # api.ts (Axios client + interceptors), auth-session.ts
 │   │   │                    #   (cross-tab refresh outcome), api-errors.ts, profit.ts
 │   │   │                    #   (unknown/partial profit display helpers), chunk-load.ts

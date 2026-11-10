@@ -43,24 +43,23 @@ async function check(name, operation) {
       .or(page.getByRole("button", { name, exact: true }))
       .click();
   const field = (name) => page.getByLabel(name, { exact: true });
+  // Rarely needed options sit in closed groups (<details>); open one by its summary.
+  const openGroup = (summary) =>
+    page.getByText(summary, { exact: true }).click();
   try {
     await page.goto(origin);
     await field("Company Name").waitFor();
     await check("loads current SettingsPage and saved company", async () =>
       assert.equal(await field("Company Name").inputValue(), "Saved LLC"),
     );
-    await tab("Language");
+    await openGroup("Fine-tune dates, time and currency");
     await check(
       "legacy numeric date remains the default and includes four-digit year",
       async () => {
-        assert.equal(await field("Date style").inputValue(), "numeric");
-        assert.match(
-          await page.locator('p[role="status"]').first().innerText(),
-          /2026/,
-        );
+        assert.equal(await field("Date format").inputValue(), "numeric");
+        assert.match(await page.getByText(/^Example:/).innerText(), /2026/);
       },
     );
-    await tab("Document Design");
     await field("Document Title").fill("");
     await tab("Save changes");
     await check(
@@ -76,7 +75,7 @@ async function check(name, operation) {
       },
     );
     await field("Document Title").fill("   ");
-    await tab("Refresh preview");
+    await tab("Update now");
     await check(
       "whitespace custom title shows friendly validation and retains draft",
       async () => {
@@ -92,8 +91,7 @@ async function check(name, operation) {
       },
     );
     await field("Document Title").fill("Invoice");
-    await tab("Discard");
-    await tab("Company Info");
+    await tab("Discard changes");
     await page.evaluate(() =>
       history.pushState(
         { ...history.state, idx: history.state.idx + 1 },
@@ -111,21 +109,22 @@ async function check(name, operation) {
         assert.equal(await field("Company Name").inputValue(), "History draft");
       },
     );
-    await tab("Discard");
+    await tab("Discard changes");
     await field("Company Name").fill("Unsaved Studio");
-    await tab("Document Design");
     await field("Template").selectOption("branded");
-    await field("Footer Title").fill("Draft footer");
-    await field("Payment Terms").fill("Net 45 retained");
+    await field("Closing line").fill("Draft footer");
+    await openGroup("Payment and delivery terms (not used by this template)");
+    await field("Payment terms").fill("Net 45 retained");
     await check(
       "contextual warning preserves unsupported Proforma terms in Branded",
       async () => {
         assert.match(
-          await page.locator("form").innerText(),
-          /Not used by this template; value retained/,
+          // The design editor; numbering rows below it are forms of their own.
+          await page.locator("form").first().innerText(),
+          /does not print terms/,
         );
         assert.equal(
-          await field("Payment Terms").inputValue(),
+          await field("Payment terms").inputValue(),
           "Net 45 retained",
         );
       },
@@ -135,17 +134,18 @@ async function check(name, operation) {
     })
       .png()
       .toBuffer();
-    await page.locator('input[type="file"]').setInputFiles({
+    // The logo input of the design editor, not the signature/stamp uploads further down.
+    await page.locator("form").first().locator('input[type="file"]').setInputFiles({
       name: "staged-logo.png",
       mimeType: "image/png",
       buffer: png,
     });
     const before = await state();
-    const previewResponse = page.waitForResponse((response) =>
-      response.url().endsWith("/receipts/preview"),
+    // The preview renders by itself shortly after the last change.
+    const preview = await page.waitForResponse(
+      (response) => response.url().endsWith("/receipts/preview"),
+      { timeout: 15000 },
     );
-    await tab("Refresh preview");
-    const preview = await previewResponse;
     await check(
       "actual personalized PDF preview returns PDF bytes without persistence",
       async () => {
@@ -164,49 +164,42 @@ async function check(name, operation) {
       async () => {
         assert.match(
           await page
-            .getByRole("link", { name: "Open PDF preview" })
+            .getByRole("link", { name: "Open the preview in a new tab" })
             .getAttribute("href"),
           /^blob:/,
         );
       },
     );
     await page
-      .getByText("Preview matches your draft.", { exact: true })
+      .getByText("The preview shows your changes.", { exact: true })
       .waitFor();
+    // A render is in flight (the server is slow) when the draft changes again.
     await control({ previewDelay: 1600 });
-    await tab("Refresh preview");
-    await tab("Company Info");
+    await tab("Update now");
+    await page.getByText("Updating the preview…", { exact: true }).waitFor();
     await field("Company Name").fill("Latest draft");
-    await page.waitForTimeout(2200);
-    await control({ previewDelay: 0 });
+    await page.waitForTimeout(1900);
     await check("late preview cannot mark an edited draft current", async () =>
       assert.equal(
         await page
-          .getByText("Preview needs refreshing to show your latest draft.", {
-            exact: true,
-          })
+          .getByText("The preview shows your changes.", { exact: true })
           .count(),
-        1,
+        0,
       ),
     );
-    await tab("Language");
-    await field("Document language").selectOption("uk");
+    await control({ previewDelay: 0 });
+    await page.getByRole("radio", { name: "Ukrainian" }).click();
     await field("Number format").selectOption("de-DE");
-    await field("Time zone (e.g. Europe/Kyiv)").fill("Europe/Kyiv");
+    await field("Time zone").fill("Europe/Kyiv");
     await check(
-      "cross-tab draft retains company, terms and staged logo",
+      "one draft retains company, terms and staged logo",
       async () => {
-        await tab("Company Info");
         assert.equal(await field("Company Name").inputValue(), "Latest draft");
-        await tab("Document Design");
         assert.equal(
-          await field("Payment Terms").inputValue(),
+          await field("Payment terms").inputValue(),
           "Net 45 retained",
         );
-        assert.equal(
-          await page.getByText("staged-logo.png", { exact: true }).count(),
-          1,
-        );
+        assert.equal(await page.getByText(/staged-logo\.png/).count(), 1);
       },
     );
     await tab("Save changes");
@@ -223,32 +216,29 @@ async function check(name, operation) {
         assert.equal(value.revision, 1);
       },
     );
-    await tab("Company Info");
     await field("Company Name").fill("Discard me");
-    await tab("Document Design");
-    await tab("Remove logo in draft");
-    await tab("Reset design in draft");
-    await tab("Discard");
+    await tab("Remove logo");
+    await tab("Reset the look to defaults");
+    await tab("Discard changes");
     await check(
       "Discard reverses company changes, logo removal and design reset",
       async () => {
-        await tab("Company Info");
         assert.equal(await field("Company Name").inputValue(), "Latest draft");
-        await tab("Document Design");
-        assert.equal(await field("Footer Title").inputValue(), "Draft footer");
+        assert.equal(await field("Closing line").inputValue(), "Draft footer");
         assert.equal((await state()).defaults.revision, 1);
       },
     );
-    await field("Preset name").fill("Team preset");
-    await tab("Save as preset");
+    await openGroup("Saved sets of settings");
+    await field("Name for the set").fill("Team preset");
+    await tab("Save as a new set");
     await page
       .getByText("Team preset · 1", { exact: true })
       .waitFor({ state: "attached" });
     await check("Save as preset leaves account defaults unchanged", async () =>
       assert.equal((await state()).defaults.revision, 1),
     );
-    await field("Footer Title").fill("Preset version two");
-    await tab("Update preset");
+    await field("Closing line").fill("Preset version two");
+    await tab("Update the selected set");
     await page
       .getByText("Team preset · 2", { exact: true })
       .waitFor({ state: "attached" });
@@ -260,16 +250,16 @@ async function check(name, operation) {
           "Draft footer",
         ),
     );
-    await tab("Discard");
-    await field("Saved presets").selectOption({ label: "Team preset · 2" });
+    await tab("Discard changes");
+    await field("Saved sets").selectOption({ label: "Team preset · 2" });
     await check(
       "selecting a preset alone does not apply or save it",
       async () => {
-        assert.equal(await field("Footer Title").inputValue(), "Draft footer");
+        assert.equal(await field("Closing line").inputValue(), "Draft footer");
         assert.equal((await state()).defaults.revision, 1);
       },
     );
-    await tab("Use preset");
+    await tab("Apply set");
     await page.waitForFunction(() =>
       Array.from(document.querySelectorAll("textarea")).some(
         (value) => value.value === "Preset version two",
@@ -279,7 +269,7 @@ async function check(name, operation) {
       "Use preset explicitly copies settings into unsaved draft",
       async () => {
         assert.equal(
-          await field("Footer Title").inputValue(),
+          await field("Closing line").inputValue(),
           "Preset version two",
         );
         assert.equal((await state()).defaults.revision, 1);
@@ -292,7 +282,7 @@ async function check(name, operation) {
       "failed DB commit preserves draft and active account defaults",
       async () => {
         assert.equal(
-          await field("Footer Title").inputValue(),
+          await field("Closing line").inputValue(),
           "Preset version two",
         );
         assert.equal((await state()).defaults.revision, 1);
@@ -313,7 +303,7 @@ async function check(name, operation) {
         expectedRevision: stale.defaults.revision,
       }),
     });
-    await field("Footer Title").fill("My conflict draft");
+    await field("Closing line").fill("My conflict draft");
     await tab("Save changes");
     await page.getByRole("alert").waitFor();
     await check(
@@ -321,21 +311,21 @@ async function check(name, operation) {
       async () => {
         assert.match(
           await page.getByRole("alert").innerText(),
-          /Configuration changed/,
+          /changed elsewhere/,
         );
         assert.equal(
-          await field("Footer Title").inputValue(),
+          await field("Closing line").inputValue(),
           "My conflict draft",
         );
       },
     );
-    await tab("Reload saved settings");
-    await tab("Discard");
+    await tab("Load the latest settings");
+    await tab("Discard changes");
     await check(
       "reload then Discard adopts the newly saved version",
       async () =>
         assert.equal(
-          await field("Footer Title").inputValue(),
+          await field("Closing line").inputValue(),
           "Concurrent saved footer",
         ),
     );
@@ -362,14 +352,16 @@ async function check(name, operation) {
     await dialog.waitFor();
     await check(
       "Orders action opens the same editor in document-only scope",
-      async () => assert.match(await dialog.innerText(), /This document only/),
+      async () => assert.match(await dialog.innerText(), /this document only/i),
     );
+    // Every group in the dialog starts closed; only the preview is open.
+    await dialog.getByText("Texts on the document", { exact: true }).click();
     await dialog
-      .getByLabel("Footer Title", { exact: true })
+      .getByLabel("Closing line", { exact: true })
       .fill("Only this document");
     const revision = (await state()).defaults.revision;
     await dialog
-      .getByRole("button", { name: "Create this document", exact: true })
+      .getByRole("button", { name: "Create the document", exact: true })
       .click();
     await dialog.waitFor({ state: "hidden" });
     await check(
@@ -389,17 +381,20 @@ async function check(name, operation) {
     const replacementDialog = page.getByRole("dialog");
     await replacementDialog.waitFor();
     await replacementDialog
-      .getByLabel("Footer Title", { exact: true })
+      .getByText("Texts on the document", { exact: true })
+      .click();
+    await replacementDialog
+      .getByLabel("Closing line", { exact: true })
       .fill("Explicit replacement");
     await replacementDialog
-      .getByRole("button", { name: "Replace document", exact: true })
+      .getByRole("button", { name: "Update document", exact: true })
       .click();
     // Replacing asks first, in the app's own dialog rather than the browser's.
     await page
       .getByRole("dialog")
       .filter({ hasText: "update its existing share links" })
       .last()
-      .getByRole("button", { name: "Replace document", exact: true })
+      .getByRole("button", { name: "Update document", exact: true })
       .click();
     await replacementDialog.waitFor({ state: "hidden" });
     await check(

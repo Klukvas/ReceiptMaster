@@ -61,7 +61,7 @@ const setup = async (page, answerPatch) => {
   });
   await page.goto(`${BASE_URL}/products`);
   await page.getByTitle("Actions").first().click();
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
   await page.getByRole("heading", { name: "Edit Product" }).waitFor();
   return calls;
 };

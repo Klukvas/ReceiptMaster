@@ -23,7 +23,7 @@ export const IDEMPOTENCY_KEY_API_HEADER = {
   required: false,
 } as const;
 
-export type IdempotencyScope = "product" | "recipient";
+export type IdempotencyScope = "product" | "recipient" | "supplier";
 
 export type StoredResponse = Readonly<Record<string, unknown>>;
 
@@ -35,6 +35,8 @@ export type IdempotentCreateRequest = {
   readonly scope: IdempotencyScope;
   readonly key: string;
   readonly userId: string;
+  /** The request body; its fingerprint is stored so a reused key with another body is refused. */
+  readonly payload: unknown;
 };
 
 /**
@@ -75,12 +77,33 @@ export function scopedIdempotencyKey(
   return `${scope}:${createHash("sha256").update(key).digest("hex")}`;
 }
 
+/** JSON with object keys sorted, so equal payloads serialize identically whatever their key order. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, nested: unknown) =>
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? Object.fromEntries(
+          Object.entries(nested).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : nested,
+  );
+}
+
+/** SHA-256 hex of the request body, stable across key order. */
+export function payloadFingerprint(payload: unknown): string {
+  return createHash("sha256")
+    .update(canonicalJson(payload) ?? "")
+    .digest("hex");
+}
+
 /**
  * Runs `create` at most once per (scope, key, user) within 24 hours. Must be
  * called inside the caller's transaction, before any other lock it takes: the
  * key's advisory lock queues same-key requests until the first one commits or
  * rolls back, so a retry — even a concurrent one — finds the stored response
- * instead of creating a second entity. A failed create stores nothing.
+ * instead of creating a second entity (or is refused with 422 when its body
+ * differs from the first one's). A failed create stores nothing.
  */
 export async function createIdempotently<T extends object>(
   manager: EntityManager,
@@ -92,12 +115,17 @@ export async function createIdempotently<T extends object>(
   }
   assertValidIdempotencyKey(request.key);
   const key = scopedIdempotencyKey(request.scope, request.key);
+  const fingerprint = payloadFingerprint(request.payload);
   await manager.query("SELECT pg_advisory_xact_lock(hashtext($1))", [key]);
 
   const stored = await manager.findOne(IdempotencyKey, {
     where: { key, user_id: request.userId },
   });
   if (stored && stored.expires_at > new Date()) {
+    // Rows stored before fingerprints existed have none and replay as before.
+    if (stored.payload_hash && stored.payload_hash !== fingerprint) {
+      throw ApiErrors.IDEMPOTENCY_KEY_REUSED();
+    }
     return { replayed: true, data: stored.response };
   }
   if (stored) {
@@ -114,6 +142,7 @@ export async function createIdempotently<T extends object>(
     user_id: request.userId,
     // order_id stays NULL: only order keys point at an order.
     response,
+    payload_hash: fingerprint,
     status_code: HttpStatus.CREATED,
     expires_at: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
   });

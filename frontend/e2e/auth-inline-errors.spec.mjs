@@ -409,6 +409,8 @@ const dashboardOnPhone = async (results) => {
     await page.addInitScript(() => localStorage.setItem("onboarding_dismissed", "1"));
     await page.goto(`${BASE_URL}/dashboard`);
     await page.getByRole("link", { name: /analytics/i }).last().waitFor();
+    // The page chunk now loads inside the shell, so the sidebar link no longer implies the page.
+    await page.locator("main a[href*='create=1']").first().waitFor();
     const layout = await page.evaluate(() => {
       const tops = [...document.querySelectorAll("main a[href*='create=1']")].map(
         (element) => Math.round(element.getBoundingClientRect().top),

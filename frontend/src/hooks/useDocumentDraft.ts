@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
@@ -43,6 +44,12 @@ export function useDocumentDraft(orderId?: string) {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewVersion, setPreviewVersion] = useState(-1);
   const [refreshing, setRefreshing] = useState(false);
+  // Preview problems belong to the preview panel, not to the page-wide error: with an
+  // auto-updating preview, half-typed input must not flash a red banner over the form.
+  const [previewError, setPreviewError] = useState("");
+  const [previewPaused, setPreviewPaused] = useState(false);
+  // Why the last render was refused (rate limit with its wait, or another preview still rendering).
+  const [previewPauseReason, setPreviewPauseReason] = useState("");
   const version = useRef(0),
     sequence = useRef(0),
     controller = useRef<AbortController | null>(null);
@@ -60,6 +67,7 @@ export function useDocumentDraft(orderId?: string) {
     controller.current?.abort();
     setRefreshing(false);
     setError("");
+    setPreviewError("");
   };
   const update = (value: DocumentConfig) => {
     changed();
@@ -224,7 +232,7 @@ export function useDocumentDraft(orderId?: string) {
     const request = ++sequence.current,
       captured = version.current;
     setRefreshing(true);
-    setError("");
+    setPreviewError("");
     try {
       const response = await api.post(
         "/receipts/preview",
@@ -245,13 +253,18 @@ export function useDocumentDraft(orderId?: string) {
           ),
         );
         setPreviewVersion(captured);
+        setPreviewPaused(false);
+        setPreviewPauseReason("");
       }
     } catch (value) {
-      if (!abort.signal.aborted && request === sequence.current)
-        // A 429 is the rate limit (with its wait) or another preview of this account still rendering.
-        setError(
-          (await previewRateLimitText(value)) ?? (await localizedDocumentError(value, fieldLabel)),
-        );
+      if (!abort.signal.aborted && request === sequence.current) {
+        // A 429 is the rate limit or another preview of this account still rendering: stop
+        // updating on its own until asked again. The paused status says so; it is not an error.
+        if (isAxiosError(value) && value.response?.status === 429) {
+          setPreviewPaused(true);
+          setPreviewPauseReason((await previewRateLimitText(value)) ?? "");
+        } else setPreviewError(await localizedDocumentError(value, fieldLabel));
+      }
     } finally {
       if (request === sequence.current) setRefreshing(false);
     }
@@ -277,6 +290,9 @@ export function useDocumentDraft(orderId?: string) {
     reloadSaved,
     refreshPreview,
     previewUrl,
+    previewError,
+    previewPaused,
+    previewPauseReason,
     refreshing,
     stale: previewVersion !== version.current,
   };

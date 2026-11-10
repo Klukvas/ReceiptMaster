@@ -16,6 +16,8 @@ interface ModalProps {
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   showCloseButton?: boolean;
+  /** Where focus goes on close when the opener is gone or was never focusable (a row click). */
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 const sizeClasses = {
@@ -32,6 +34,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = "md",
   showCloseButton = true,
+  returnFocus,
 }) => {
   const { t } = useTranslation();
   return (
@@ -43,6 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
       // Dialog's wrapper defaults to max-w-lg, so the size has to be set there too or
       // "lg"/"xl" modals stay 512px wide and squeeze their content.
       className={sizeClasses[size]}
+      returnFocus={returnFocus}
     >
       <DialogContent
         className={cn(

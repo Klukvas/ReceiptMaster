@@ -341,12 +341,14 @@ export const suppliersApi = {
 
   getById: (id: string) => api.get<Supplier>(`/suppliers/${id}`),
 
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
   create: (
     data: Omit<
       Supplier,
       "id" | "created_at" | "updated_at" | "products" | "product_count"
     >,
-  ) => api.post<Supplier>("/suppliers", data),
+    options: CreateOptions = {},
+  ) => api.post<Supplier>("/suppliers", data, idempotencyConfig(options)),
 
   update: (
     id: string,
@@ -385,10 +387,14 @@ export const ordersApi = {
 
   getById: (id: string) => api.get<Order>(`/orders/${id}`),
 
-  create: (data: {
-    recipientId: string;
-    items: { productId: string; qty: number; unitPriceCents?: number }[];
-  }) => api.post<Order>("/orders", data),
+  /** With an idempotencyKey, a retried create replays the first one (24 h). */
+  create: (
+    data: {
+      recipientId: string;
+      items: { productId: string; qty: number; unitPriceCents?: number }[];
+    },
+    options: CreateOptions = {},
+  ) => api.post<Order>("/orders", data, idempotencyConfig(options)),
 
   update: (
     id: string,

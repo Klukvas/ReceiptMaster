@@ -146,7 +146,7 @@ export function DocumentsTable({
       emptySearchMessage={t("documentsPage.noMatches")}
       renderActions={(document) => renderActions(document)}
       renderCard={renderCard}
-      compact
+      isCompact
     />
   );
 }

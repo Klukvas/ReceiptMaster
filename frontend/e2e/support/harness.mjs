@@ -7,6 +7,7 @@
 import { chromium } from "playwright";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer } from "node:http";
+import { COMPLETE_COMPANY, NUMBERING_TYPES, numberingSetting } from "./document-mocks.mjs";
 import {
   PRODUCTS,
   RECIPIENTS,
@@ -59,6 +60,14 @@ export const installApiMocks = async (page, state) => {
       const receipt = state.receipts[receiptId];
       return receipt ? json(route, receipt) : json(route, {}, 404);
     }
+    // The Documents tab also shows requisites, numbering and signature/stamp; a spec that does
+    // not mock them gets a filled-in account rather than a load error.
+    if (path === "/settings/company-info" && method === "GET")
+      return json(route, { data: COMPLETE_COMPANY });
+    if (path === "/settings/document-numbering" && method === "GET")
+      return json(route, { types: NUMBERING_TYPES.map((type) => numberingSetting(type)) });
+    if (path === "/settings/signoff" && method === "GET")
+      return json(route, { signature: null, stamp: null });
     if (path.startsWith("/settings/")) return json(route, {});
 
     return json(route, {}, 404);

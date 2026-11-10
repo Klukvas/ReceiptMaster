@@ -58,6 +58,13 @@ export const ApiErrors = {
       401,
     ),
 
+  IDEMPOTENCY_KEY_REUSED: () =>
+    new ApiErrorResponse(
+      "This Idempotency-Key was already used with a different request body",
+      "IDEMPOTENCY_KEY_REUSED",
+      422,
+    ),
+
   // Order errors
   ORDER_NOT_FOUND: (id: string) =>
     new ApiErrorResponse(

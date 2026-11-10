@@ -5,7 +5,6 @@ export { OrderSummary } from "./OrderSummary";
 export { EditOrderForm } from "./EditOrderForm";
 export { OrderDetails } from "./OrderDetails";
 export { OrdersPageHeader } from "./OrdersPageHeader";
-export { OrdersLoadingState } from "./OrdersLoadingState";
 export { OrderRowActions } from "./OrderRowActions";
 export { OrderBulkToolbar } from "./OrderBulkToolbar";
 export { OrderStatusBadge } from "./OrderStatusBadge";

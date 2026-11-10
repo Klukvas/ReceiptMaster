@@ -26,7 +26,7 @@ import { HIGHLIGHT_CLASS, useHighlightedFields } from "../../hooks/useHighlighte
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { selectClass } from "./DocumentFormatting";
+import { selectClass } from "./document-ui";
 
 const VAT_CHOICES: readonly VatPayerChoice[] = ["unknown", "yes", "no"];
 

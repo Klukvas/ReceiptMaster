@@ -92,7 +92,16 @@ const setup = async (page, initialOrders) => {
       });
     }
     if (path.startsWith("/orders") && request.method() !== "GET") {
-      submissions.push({ path, data: request.postDataJSON() });
+      submissions.push({
+        path,
+        data: request.postDataJSON(),
+        key: request.headers()["idempotency-key"] ?? null,
+      });
+      // A lost response: the server may have created the order, the page never heard.
+      if (path === "/orders" && state.abortPosts > 0) {
+        state.abortPosts -= 1;
+        return route.abort("connectionreset");
+      }
       if (request.method() === "PATCH")
         return send(
           {
@@ -186,6 +195,47 @@ export const run = async () => {
         )
       )
         throw Error("No server search");
+    },
+  );
+  const pickProduct = async (page) => {
+    await create(page);
+    await chooseRecipient(page);
+    await page.locator("input[role=combobox]").fill("Catalogue 120");
+    await page
+      .getByRole("option", { name: /Catalogue 120/ })
+      .click({ timeout: 4000 });
+    await page.getByRole("heading", { name: "Catalogue 120" }).waitFor();
+    return page.getByRole("dialog");
+  };
+  await scenario(
+    "create order: a retry after a lost response reuses the Idempotency-Key",
+    async (page) => {
+      const { state, submissions } = await setup(page);
+      state.abortPosts = 1;
+      const dialog = await pickProduct(page);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 1);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 2);
+      if (!submissions[0].key) throw Error("no Idempotency-Key header sent");
+      if (submissions[0].key !== submissions[1].key)
+        throw Error(`key changed on retry: ${submissions[0].key} vs ${submissions[1].key}`);
+    },
+  );
+  await scenario(
+    "create order: changing the order after a failed try starts a new key",
+    async (page) => {
+      const { state, submissions } = await setup(page);
+      state.abortPosts = 1;
+      const dialog = await pickProduct(page);
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 1);
+      await page.getByRole("button", { name: /^custom$/i }).click();
+      await dialog.locator("input[inputmode=decimal]").fill("5");
+      await dialog.locator("button[type=submit]").click();
+      await waitFor(() => submissions.length === 2);
+      if (!submissions[1].key || submissions[0].key === submissions[1].key)
+        throw Error("an edited order reused the previous key");
     },
   );
   await scenario(
@@ -564,25 +614,74 @@ export const run = async () => {
   await scenario(
     "10: page and page-size changes clear selection",
     async (page) => {
-      await setup(
+      const { state } = await setup(
         page,
         Array.from({ length: 12 }, (_, i) => order(`A${i}`, `Alpha ${i}`)),
       );
+      // On a failed wait, say what the table looked like and which list requests were sent.
+      const describeTable = async () =>
+        JSON.stringify({
+          rows: await page.locator("tbody tr").count(),
+          requests: (state.orderQueries || []).map((url) => url.search),
+          pagination: await page
+            .getByText(/showing/i)
+            .first()
+            .innerText()
+            .catch(() => "none"),
+        });
+      const rowsAre = (count, label) =>
+        waitFor(async () => (await page.locator("tbody tr").count()) === count, {
+          label,
+        }).catch(async (error) => {
+          throw Error(`${error.message}: ${await describeTable()}`);
+        });
       await page.locator("tbody tr").first().getByRole("checkbox").check();
       await page.getByRole("button", { name: "2", exact: true }).click();
-      await waitFor(async () => (await page.locator("tbody tr").count()) === 2);
-      if (await page.getByRole("button", { name: /^approve$/i }).count())
+      await rowsAre(2, "page 2 to show its two rows");
+      await waitFor(
+        async () =>
+          (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
+        { label: "the selection to clear after the page change" },
+      ).catch(() => {
         throw Error("Selection survived page change");
+      });
       await page.locator("tbody tr").first().getByRole("checkbox").check();
       await page
         .locator("select")
         .filter({ has: page.locator('option[value="20"]') })
         .selectOption("20");
+      await rowsAre(12, "twelve rows after the page size changed to 20");
       await waitFor(
-        async () => (await page.locator("tbody tr").count()) === 12,
-      );
-      if (await page.getByRole("button", { name: /^approve$/i }).count())
+        async () =>
+          (await page.getByRole("button", { name: /^approve$/i }).count()) === 0,
+        { label: "the selection to clear after the page-size change" },
+      ).catch(() => {
         throw Error("Selection survived page-size change");
+      });
+    },
+  );
+  await scenario(
+    "10: a page picked right after load is not sent back to page 1 by the search debounce",
+    async (page) => {
+      // The debounce timer starts at mount; hold the search debounce back so it fires after the
+      // click on page 2, as it does on a fast machine.
+      await page.addInitScript(() => {
+        const native = window.setTimeout.bind(window);
+        window.setTimeout = (callback, delay, ...args) =>
+          native(callback, delay === 400 ? 1500 : delay, ...args);
+      });
+      await setup(
+        page,
+        Array.from({ length: 12 }, (_, i) => order(`A${i}`, `Alpha ${i}`)),
+      );
+      await page.getByRole("button", { name: "2", exact: true }).click();
+      await waitFor(async () => (await page.locator("tbody tr").count()) === 2, {
+        label: "page 2 to show its two rows",
+      });
+      await page.waitForTimeout(2200);
+      const rows = await page.locator("tbody tr").count();
+      if (rows !== 2)
+        throw Error(`The debounce timer reset the page to 1 (${rows} rows)`);
     },
   );
   await scenario(

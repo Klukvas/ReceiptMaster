@@ -10,6 +10,7 @@ import {
   getTemplateCapabilities,
 } from "../src/modules/receipts/templates/metadata";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
+import { GENERATABLE_TYPES } from "../src/modules/receipts/document-types";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { resolve, join } from "path";
@@ -50,6 +51,25 @@ async function main(): Promise<void> {
         capabilities: getTemplateCapabilities(value.id),
       })),
     }),
+  );
+  // The Documents settings page also shows numbering and signature/stamp. The fixture keeps no
+  // counters or images, so it answers as an account that has not issued a document yet.
+  server.get("/api/v1/settings/document-numbering", (_req, res) =>
+    res.json({
+      types: GENERATABLE_TYPES.map((documentType) => ({
+        documentType,
+        prefix: "",
+        padding: 6,
+        includeYear: true,
+        resetEveryYear: false,
+        nextValue: 1,
+        minStart: 1,
+        nextNumber: `${new Date().getUTCFullYear()}-000001`,
+      })),
+    }),
+  );
+  server.get("/api/v1/settings/signoff", (_req, res) =>
+    res.json({ signature: null, stamp: null }),
   );
   server.get("/api/v1/subscription/status", (_req, res) =>
     res.json({

@@ -245,7 +245,7 @@ const checkRecreateRetention = async (results) => {
     await confirm.getByRole("button", { name: "Create", exact: true }).click();
     await settle(() => (state.created ?? []).length === 1);
     results.check("confirming sends the retry", state.created?.[0]?.type === "quote", JSON.stringify(state.created));
-    const toast = page.getByRole("status").filter({ hasText: "Generating the document" });
+    const toast = page.getByRole("status").filter({ hasText: "Generating document" });
     results.check("a success toast confirms it", await settle(() => toast.first().isVisible()), "no toast");
   });
   await withDocuments(DESKTOP, "/documents", [failedQuote()], { retentionError: true }, async (page, state) => {

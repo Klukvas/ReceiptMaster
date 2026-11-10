@@ -95,19 +95,29 @@ describeIsolatedPostgres(
       currency: Currency.UAH,
     });
 
-    const createProduct = (key: string, owner = user, name?: string) =>
-      runWithTenant(owner.id, () =>
-        products.createWithIdempotencyKey(productBody(name), owner, key),
-      );
+    // A retry of one request carries the same body; the server rejects a key reused with another
+    // body, so the helpers hand out one body per key.
+    const productBodies = new Map<string, ReturnType<typeof productBody>>();
+    const recipientBodies = new Map<string, { name: string; email?: string }>();
 
-    const createRecipient = (key: string, owner = user, email?: string) =>
-      runWithTenant(owner.id, () =>
-        recipients.createWithIdempotencyKey(
-          { name: `recipient-${randomUUID()}`, email },
-          owner,
-          key,
-        ),
+    const createProduct = (key: string, owner = user, name?: string) => {
+      const body = productBodies.get(key) ?? productBody(name);
+      productBodies.set(key, body);
+      return runWithTenant(owner.id, () =>
+        products.createWithIdempotencyKey(body, owner, key),
       );
+    };
+
+    const createRecipient = (key: string, owner = user, email?: string) => {
+      const body = recipientBodies.get(key) ?? {
+        name: `recipient-${randomUUID()}`,
+        email,
+      };
+      recipientBodies.set(key, body);
+      return runWithTenant(owner.id, () =>
+        recipients.createWithIdempotencyKey(body, owner, key),
+      );
+    };
 
     const productCount = (owner = user) =>
       db.admin.getRepository(Product).count({ where: { user_id: owner.id } });

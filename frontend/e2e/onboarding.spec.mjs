@@ -186,9 +186,18 @@ const revisitReusesEntities = async (results) => {
 
     await button(page, "Back").click();
     await heading(page, 2).waitFor();
+    // The form fills from the saved step a moment after the heading renders.
+    let restored = false;
+    let lastSeen = "";
+    for (let attempt = 0; attempt < 20 && !restored; attempt += 1) {
+      lastSeen = await page.getByLabel("Product Name").inputValue();
+      restored = lastSeen === "Arabica beans";
+      if (!restored) await page.waitForTimeout(100);
+    }
     results.check(
       "revisit: going back shows the saved product's values",
-      (await page.getByLabel("Product Name").inputValue()) === "Arabica beans",
+      restored,
+      `Product Name showed "${lastSeen}"`,
     );
     await button(page, "Continue").click();
     const advancedUnchanged = await atStep(page, 3);
@@ -327,12 +336,19 @@ const failedSaveKeepsInput = async (results) => {
     await page.getByTestId("onboarding-notice").waitFor();
 
     const text = await noticeText(page);
+    const shown = {
+      onStep: await heading(page, 2).isVisible(),
+      name: await page.getByLabel("Product Name").inputValue(),
+      price: await page.getByLabel("Sale Price (UAH)").inputValue(),
+      quantity: await page.getByLabel("Quantity").inputValue(),
+    };
     results.check(
       "500: the step and every typed value stay",
-      (await heading(page, 2).isVisible()) &&
-        (await page.getByLabel("Product Name").inputValue()) === "Arabica beans" &&
-        (await page.getByLabel("Sale Price (UAH)").inputValue()) === "26" &&
-        (await page.getByLabel("Quantity").inputValue()) === "10",
+      shown.onStep &&
+        shown.name === "Arabica beans" &&
+        shown.price === "26" &&
+        shown.quantity === "10",
+      JSON.stringify(shown),
     );
     results.check(
       "500: a friendly message, without database text",
@@ -517,8 +533,30 @@ const footerStaysVisible = async (results) => {
   }
 };
 
+// The first field takes focus a frame after a step opens. When that frame is late, it must not
+// pull focus back from a field the person has already moved to (typed text went into the name).
+const focusIsNotStolen = async (results) => {
+  await withPage({ viewport: VIEWPORT }, async (page) => {
+    page.setDefaultTimeout(5000);
+    await page.addInitScript(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) =>
+        raf(() => setTimeout(() => callback(performance.now()), 600));
+    });
+    await installBackend(page, {});
+    await openAtProductStep(page);
+    await page.getByLabel("Sale Price (UAH)").focus();
+    await page.waitForTimeout(900);
+    results.check(
+      "a late first-field focus does not take focus from the field being used",
+      (await page.evaluate(() => document.activeElement?.getAttribute("placeholder"))) === "0.00",
+    );
+  });
+};
+
 export const run = async () => {
   const results = new Results("onboarding");
+  await focusIsNotStolen(results);
   await footerStaysVisible(results);
   finishCopyInEveryLocale(results);
   await scenario(results, "revisit", revisitReusesEntities);

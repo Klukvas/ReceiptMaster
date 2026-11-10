@@ -1,46 +1,37 @@
 import { useState } from "react";
 import {
-  companyFields,
-  contactFields,
   type DocumentConfig,
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
-import { templateDisplayName } from "../../lib/template-name";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { CompanyRequisitesCard } from "./CompanyRequisitesCard";
-import { CompanyFieldNote } from "./CompanyFieldNote";
-import { HIGHLIGHT_CLASS, useHighlightedFields } from "../../hooks/useHighlightedFields";
-import { requisiteFieldId } from "../../lib/document-requisites";
 import type { GeneratableType } from "../../lib/document-types";
-import { DocumentFormatting, selectClass } from "./DocumentFormatting";
+import { DocumentCompanySection } from "./DocumentCompanySection";
+import { DocumentFormatSection } from "./DocumentFormatSection";
+import {
+  DocumentBrandSection,
+  DocumentTemplateSection,
+} from "./DocumentLookSections";
+import { DocumentPreviewPanel } from "./DocumentPreviewPanel";
 import { DocumentPresets } from "./DocumentPresets";
+import { DocumentTextSection } from "./DocumentTextSection";
+import { DocumentLayoutContext } from "./document-layout";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 
-const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
-const LOGO_MAX_BYTES = 5 * 1024 * 1024;
-export type EditorSection = "company" | "receipt" | "language";
-/** Company inputs that double as seller requisites of invoices and acts. */
-const SELLER_FIELD_KEY: Partial<Record<(typeof companyFields)[number], string>> = {
-  companyName: "seller.name",
-  companyTaxId: "seller.taxId",
-  companyIban: "seller.iban",
-};
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
+
 export function DocumentEditor({
   model,
-  section,
   documentOnly = false,
   documentType,
   onCommit,
   commitLabel,
 }: {
   model: DocumentDraftModel;
-  section: EditorSection;
+  /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
   documentOnly?: boolean;
   /** The type being customized; designs that cannot carry it are not offered. */
   documentType?: GeneratableType;
@@ -54,7 +45,6 @@ export function DocumentEditor({
     !documentType || template.capabilities.documentTypes.includes(documentType);
   // The preview endpoint renders the waybill layout only, so it would mislead for the other types.
   const canPreview = !documentType || documentType === "waybill";
-  const highlighted = useHighlightedFields(Boolean(model.config));
   const config = model.config;
   if (!config)
     return (
@@ -71,508 +61,177 @@ export function DocumentEditor({
         )}
       </div>
     );
-  const caps = templates.data?.find(
+  const template = templates.data?.find(
     (value) => value.id === config.templateId,
-  )?.capabilities;
-  const retained = (
-    <span className="block text-xs text-content-tertiary">
-      {t("document.retained")}
-    </span>
   );
-  const patch = (value: Partial<typeof config>) =>
-    model.update({ ...config, ...value });
-  const text = (
-    field: "footerTitle" | "footerSubtitle" | "paymentTerms" | "deliveryTerms",
-  ) => (
-    <label className="block text-sm text-content-secondary">
-      {t(
-        `settings.${field === "paymentTerms" || field === "deliveryTerms" ? `${field}Label` : field}`,
-      )}
-      {(field === "paymentTerms" || field === "deliveryTerms") &&
-        !caps?.terms &&
-        retained}
-      <textarea
-        aria-label={t(
-          `settings.${field === "paymentTerms" || field === "deliveryTerms" ? `${field}Label` : field}`,
-        )}
-        className={selectClass}
-        rows={3}
-        maxLength={500}
-        value={config[field]}
-        onChange={(event) => patch({ [field]: event.target.value })}
-      />
-    </label>
+  const templateGroup = (
+    <DocumentTemplateSection
+      key="template"
+      model={model}
+      config={config}
+      templates={templates}
+      onBrowseTemplates={() => setGallery(true)}
+      fitsType={fitsType}
+    />
   );
+  const brandGroup = (
+    <DocumentBrandSection
+      key="brand"
+      model={model}
+      config={config}
+      template={template}
+    />
+  );
+  const textGroup = (
+    <DocumentTextSection
+      key="text"
+      config={config}
+      onChange={model.update}
+      template={template}
+    />
+  );
+  const formatGroup = (
+    <DocumentFormatSection
+      key="format"
+      config={config}
+      onChange={model.update}
+    />
+  );
+  const businessGroup = (
+    <DocumentCompanySection
+      key="business"
+      config={config}
+      onChange={model.update}
+      template={template}
+    />
+  );
+  const presetsGroup = <DocumentPresets key="presets" model={model} />;
+  // On the settings page the order is how a document reads, top to bottom. In the dialog for one
+  // order every group starts closed and only the preview is open: the first thing to see is the
+  // document itself, and each group opens with one click. Template, language and texts lead.
+  const groups = documentOnly
+    ? [
+        templateGroup,
+        formatGroup,
+        textGroup,
+        brandGroup,
+        businessGroup,
+        presetsGroup,
+      ]
+    : [
+        businessGroup,
+        templateGroup,
+        brandGroup,
+        textGroup,
+        formatGroup,
+        presetsGroup,
+      ];
   return (
-    <>
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void (onCommit ? onCommit() : model.save());
-      }}
-      className="space-y-5"
-    >
-      <p className="text-sm text-content-secondary">
-        {t(
-          documentOnly
-            ? "document.thisDocumentOnly"
-            : "document.accountDefaults",
-        )}
-      </p>
-      {model.error && model.isConflict && (
-        <div
-          role="alert"
-          className="rounded-lg border border-[var(--color-danger-light)] p-4 text-danger-base"
-        >
-          <p>{model.error}</p>
-          <details className="my-3 text-content-secondary">
-            <summary>
-              {t("document.compareSaved", "Compare with saved values")}
-            </summary>
-            <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              {Object.entries(model.saved?.config.company || {}).map(
-                ([field, value]) => (
-                  <div key={field}>
-                    <dt>{t(`settings.${field}`)}</dt>
-                    <dd>{value || "—"}</dd>
-                  </div>
-                ),
-              )}
-              <div>
-                <dt>{t("document.template")}</dt>
-                <dd>{model.saved?.config.templateId}</dd>
-              </div>
-              <div>
-                <dt>{t("settings.footerTitle")}</dt>
-                <dd>{model.saved?.config.footerTitle || "—"}</dd>
-              </div>
-            </dl>
-          </details>
-          <Button type="button" variant="outline" onClick={model.reloadSaved}>
-            {t("document.reloadSaved")}
-          </Button>
-          <p className="text-sm">{t("document.conflictHelp")}</p>
-        </div>
-      )}
-      <fieldset
-        disabled={model.busy}
-        className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
-      >
-        <div className="space-y-5 min-w-0">
-          <section className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4">
-            {section === "company" && (
-              <>
-                <h3 className="font-semibold text-content">
-                  {t("settings.tabCompany")}
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {companyFields.map((field) => (
-                    <div key={field}>
-                      <Input
-                        id={SELLER_FIELD_KEY[field] && requisiteFieldId(SELLER_FIELD_KEY[field])}
-                        className={
-                          SELLER_FIELD_KEY[field] && highlighted.has(SELLER_FIELD_KEY[field])
-                            ? HIGHLIGHT_CLASS
-                            : undefined
-                        }
-                        label={t(`settings.${field}`)}
-                        value={config.company[field]}
-                        type={field === "companyEmail" ? "email" : "text"}
-                        maxLength={
-                          field === "companyName"
-                            ? 200
-                            : field === "companyEmail"
-                              ? 254
-                              : [
-                                    "companyAddress",
-                                    "companyWebsite",
-                                    "companyTagline",
-                                  ].includes(field)
-                                ? 500
-                                : 100
-                        }
-                        onChange={(event) =>
-                          patch({
-                            company: {
-                              ...config.company,
-                              [field]: event.target.value,
-                            },
-                          })
-                        }
-                      />
-                      <CompanyFieldNote field={field} value={config.company[field]} />
-                      {caps && !caps.companyFields.includes(field) && retained}
-                    </div>
-                  ))}
-                </div>
-                <h4 className="font-medium">{t("document.contacts")}</h4>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {contactFields.map((field) => (
-                    <label
-                      key={field}
-                      className="text-sm text-content-secondary"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={config.visibility[field]}
-                        onChange={(event) =>
-                          patch({
-                            visibility: {
-                              ...config.visibility,
-                              [field]: event.target.checked,
-                            },
-                          })
-                        }
-                      />{" "}
-                      {t(`document.${field}`, t(`settings.${field}`, field))}
-                      {caps &&
-                        ![
-                          ...caps.companyFields,
-                          ...caps.recipientFields,
-                        ].includes(field) &&
-                        retained}
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-            {section === "receipt" && (
-              <>
-                <h3 className="font-semibold text-content">
-                  {t("settings.tabReceipt")}
-                </h3>
-                {templates.isError && (
-                  <button type="button" onClick={() => templates.refetch()}>
-                    {t("common.retry")}
-                  </button>
-                )}
-                <label className="block text-sm">
-                  {t("document.template")}
-                  <select
-                    aria-label={t("document.template")}
-                    className={selectClass}
-                    value={config.templateId}
-                    onChange={(event) =>
-                      patch({ templateId: event.target.value as TemplateId })
-                    }
-                  >
-                    {templates.data?.map((value) => (
-                      <option
-                        key={value.id}
-                        value={value.id}
-                        disabled={value.locked || !fitsType(value)}
-                      >
-                        {templateDisplayName(t, value)}
-                        {value.locked ? " 🔒" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setGallery(true)}
-                  disabled={!templates.data?.length}
-                >
-                  {t("document.browseTemplates")}
-                </Button>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.title.mode === "automatic"}
-                    onChange={(event) =>
-                      patch({
-                        title: event.target.checked
-                          ? { mode: "automatic" }
-                          : { mode: "custom", text: "" },
-                      })
-                    }
-                  />{" "}
-                  {t("document.automaticTitle")}
-                </label>
-                {config.title.mode === "custom" && (
-                  <Input
-                    label={t("settings.receiptTitle")}
-                    value={config.title.text}
-                    required
-                    pattern={".*\\S.*"}
-                    title={t("document.titleRequired")}
-                    maxLength={200}
-                    onChange={(event) =>
-                      patch({
-                        title: { mode: "custom", text: event.target.value },
-                      })
-                    }
-                  />
-                )}
-                {text("footerTitle")}
-                {text("footerSubtitle")}
-                <label className="block text-sm">
-                  {t("document.accent")}
-                  {!caps?.accent && retained}
-                  <input
-                    aria-label={t("document.accent")}
-                    type="color"
-                    value={config.primaryColor}
-                    onChange={(event) =>
-                      patch({ primaryColor: event.target.value })
-                    }
-                  />
-                </label>
-                {text("paymentTerms")}
-                {text("deliveryTerms")}
-                <h4 className="font-medium">{t("document.logo")}</h4>
-                <label className="block text-sm">
-                  {t("document.replaceLogo")}
-                  <input
-                    type="file"
-                    accept={LOGO_TYPES.join(",")}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      // accept= only filters the picker; a dragged or renamed file still arrives here.
-                      if (file && !LOGO_TYPES.includes(file.type))
-                        model.setError(t("document.logoWrongType"));
-                      else if (file && file.size <= LOGO_MAX_BYTES)
-                        model.stageLogo("replace", file);
-                      else if (file) model.setError(t("document.logoTooLarge"));
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-                <p className="text-sm text-content-tertiary" role="status">
-                  {model.file?.name ||
-                    t(
-                      model.logoAction === "remove"
-                        ? "document.logoRemoved"
-                        : config.logo.assetId
-                          ? "document.logoSaved"
-                          : "document.logoAutomatic",
-                    )}
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => model.stageLogo("remove")}
-                >
-                  {t("document.removeLogo")}
-                </Button>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.logo.visible}
-                    onChange={(event) =>
-                      patch({
-                        logo: { ...config.logo, visible: event.target.checked },
-                      })
-                    }
-                  />{" "}
-                  {t("document.showLogo")}
-                </label>
-                <label className="block text-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.logo.size === "auto"}
-                    onChange={(event) =>
-                      patch({
-                        logo: {
-                          ...config.logo,
-                          size: event.target.checked
-                            ? "auto"
-                            : Math.min(100, caps?.logo.maxWidth || 200),
-                        },
-                      })
-                    }
-                  />{" "}
-                  {t("document.automaticSize")}
-                </label>
-                {config.logo.size !== "auto" && (
-                  <>
-                    <Input
-                      type="number"
-                      label={t("document.logoWidth")}
-                      min={24}
-                      max={200}
-                      value={String(config.logo.size)}
-                      onChange={(event) =>
-                        patch({
-                          logo: {
-                            ...config.logo,
-                            size: Number(event.target.value),
-                          },
-                        })
-                      }
-                    />
-                    {caps && config.logo.size > caps.logo.maxWidth && (
-                      <p className="text-xs">
-                        {t(
-                          "document.logoClamped",
-                          "This template uses a smaller logo; the saved width is retained.",
-                        )}
-                      </p>
-                    )}
-                  </>
-                )}
-                <label className="block text-sm">
-                  {t("document.logoAlignment")}
-                  <select
-                    aria-label={t("document.logoAlignment")}
-                    className={selectClass}
-                    value={config.logo.alignment}
-                    onChange={(event) =>
-                      patch({
-                        logo: {
-                          ...config.logo,
-                          alignment: event.target
-                            .value as typeof config.logo.alignment,
-                        },
-                      })
-                    }
-                  >
-                    {(caps?.logo.alignments || ["auto"]).map((value) => (
-                      <option key={value} value={value}>
-                        {t(`document.option_${value}`, value)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    patch({
-                      title: { mode: "automatic" },
-                      footerTitle: "",
-                      footerSubtitle: "",
-                      primaryColor: "#3B82F6",
-                      logo: {
-                        ...config.logo,
-                        visible: true,
-                        size: "auto",
-                        alignment: "auto",
-                      },
-                      visibility: Object.fromEntries(
-                        contactFields.map((field) => [field, true]),
-                      ) as typeof config.visibility,
-                    })
-                  }
-                >
-                  {t("document.resetDesign")}
-                </Button>
-              </>
-            )}
-            {section === "language" && (
-              <DocumentFormatting config={config} onChange={model.update} />
-            )}
-          </section>
-          <DocumentPresets model={model} />
-        </div>
-        <section className="rounded-xl border border-[var(--color-border)] bg-elevated p-4 min-w-0 self-start lg:sticky lg:top-4">
-          {canPreview ? (
-            <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold">{t("document.pdfPreview")}</h3>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={model.refreshing}
-              onClick={model.refreshPreview}
-            >
-              {t(
-                model.refreshing
-                  ? "document.refreshing"
-                  : "document.refreshPreview",
-              )}
-            </Button>
-          </div>
-          <p role="status" className="my-3 text-sm text-content-tertiary">
-            {t(
-              model.stale ? "document.previewStale" : "document.previewCurrent",
-            )}
-          </p>
-          {model.previewUrl ? (
-            <>
-              <iframe
-                title={t("document.pdfPreview")}
-                src={model.previewUrl}
-                className="h-[620px] w-full rounded-lg border border-[var(--color-border)]"
-              />
-              <a
-                href={model.previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-accent-base"
-              >
-                {t("document.openPreview")}
-              </a>
-            </>
-          ) : (
-            <div className="flex h-80 items-center justify-center rounded-lg bg-surface-alt p-6 text-sm text-content-tertiary">
-              {t("document.previewHelp")}
-            </div>
-          )}
-            </>
-          ) : (
-            <>
-              <h3 className="font-semibold">{t("document.pdfPreview")}</h3>
-              <p role="status" className="my-3 text-sm text-content-tertiary">
-                {t("document.previewUnavailableForType")}
-              </p>
-            </>
-          )}
-        </section>
-      </fieldset>
-      {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
-      {(documentOnly || model.dirty || model.busy || model.error) && (
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
-          {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
-          {model.error && !model.isConflict ? (
-            <span role="alert" className="text-sm text-danger-base">
-              {model.error}
-            </span>
-          ) : (
-            <span role="status" className="text-sm text-content-secondary">
-              {t(model.dirty ? "document.unsaved" : "document.saved")}
-            </span>
-          )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={model.discard}
-              disabled={model.busy || !model.dirty}
-            >
-              {t("document.discard")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={model.busy || (!documentOnly && !model.dirty)}
-            >
-              {!model.busy && commitLabel
-                ? commitLabel
-                : t(
-                    model.busy
-                      ? "common.saving"
-                      : documentOnly
-                        ? "document.generateDocument"
-                        : "document.saveChanges",
-                  )}
-            </Button>
-          </div>
-        </div>
-      )}
-      <TemplateCarouselModal
-        isOpen={gallery}
-        language={config.documentLanguage}
-        onClose={() => setGallery(false)}
-        templates={templates.data?.filter((value) => !value.locked && fitsType(value)) || []}
-        initialTemplateId={config.templateId}
-        onSelectTemplate={(templateId) => {
-          patch({ templateId: templateId as TemplateId });
-          setGallery(false);
+    <DocumentLayoutContext.Provider value={documentOnly ? "dialog" : "page"}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void (onCommit ? onCommit() : model.save());
         }}
-      />
-    </form>
-    {section === "company" && !documentOnly && <CompanyRequisitesCard />}
-    </>
+        className="space-y-5"
+      >
+        <p className="text-sm text-content-secondary">
+          {t(
+            documentOnly
+              ? "document.thisDocumentOnly"
+              : "document.accountDefaults",
+          )}
+        </p>
+        {model.error && model.isConflict && (
+          <div
+            role="alert"
+            className="space-y-2 rounded-lg border border-[var(--color-danger-light)] p-4 text-sm text-danger-base"
+          >
+            <p className="font-medium">{t("document.conflictTitle")}</p>
+            <p>{t("document.conflictHelp")}</p>
+            <Button type="button" variant="outline" onClick={model.reloadSaved}>
+              {t("document.reloadSaved")}
+            </Button>
+          </div>
+        )}
+        <fieldset
+          disabled={model.busy}
+          className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
+        >
+          <div className="min-w-0 space-y-3 lg:space-y-5">{groups}</div>
+          {/* On a phone the preview comes first, collapsed, so it is found without scrolling past the form. */}
+          <div className="order-first min-w-0 lg:order-none">
+            <DocumentPreviewPanel
+              model={model}
+              defaultOpen={documentOnly}
+              isAvailable={canPreview}
+              title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
+            />
+          </div>
+        </fieldset>
+        {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
+        {(documentOnly || model.dirty || model.busy || model.error) && (
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+            {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
+            {model.error && !model.isConflict ? (
+              <span role="alert" className="text-sm text-danger-base">
+                {model.error}
+              </span>
+            ) : (
+              <span role="status" className="text-sm text-content-secondary">
+                {t(
+                  model.dirty
+                    ? "document.unsaved"
+                    : documentOnly
+                      ? "document.readyToCreate"
+                      : "document.saved",
+                )}
+              </span>
+            )}
+            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={model.discard}
+                disabled={model.busy || !model.dirty}
+              >
+                {t("document.discard")}
+              </Button>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={model.busy || (!documentOnly && !model.dirty)}
+              >
+                {!model.busy && commitLabel
+                  ? commitLabel
+                  : t(
+                      model.busy
+                        ? "common.saving"
+                        : documentOnly
+                          ? "document.generateDocument"
+                          : "document.saveChanges",
+                    )}
+              </Button>
+            </div>
+          </div>
+        )}
+        <TemplateCarouselModal
+          isOpen={gallery}
+          language={config.documentLanguage}
+          onClose={() => setGallery(false)}
+          templates={
+            templates.data?.filter(
+              (value) => !value.locked && fitsType(value),
+            ) || []
+          }
+          initialTemplateId={config.templateId}
+          onSelectTemplate={(templateId) => {
+            model.update({ ...config, templateId: templateId as TemplateId });
+            setGallery(false);
+          }}
+        />
+      </form>
+    </DocumentLayoutContext.Provider>
   );
 }

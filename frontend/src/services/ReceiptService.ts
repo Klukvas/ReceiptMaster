@@ -1,7 +1,11 @@
+import toast from "react-hot-toast";
 import { receiptsApi, type DocumentRequestBody, type Receipt } from "../lib/api";
-import { isGeneratableType, type DocumentType, type GeneratableType } from "../lib/document-types";
+import {
+  isGeneratableType,
+  type DocumentType,
+  type GeneratableType,
+} from "../lib/document-types";
 import { notifyIssueWarnings } from "../lib/issue-warnings";
-import { notificationService } from "./NotificationService";
 import { parseApiError } from "../lib/api-errors";
 import i18n from "../lib/i18n";
 import { downloadPdf } from "../lib/pdf-utils";
@@ -44,7 +48,7 @@ export class ReceiptService {
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error loading printers:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
       return [];
     }
   }
@@ -84,11 +88,11 @@ export class ReceiptService {
       const response = await receiptsApi.getPdf(receiptId);
       const blob = new Blob([response.data], { type: "application/pdf" });
       downloadPdf(blob, `${await this.documentFileStem(receiptId)}.pdf`);
-      notificationService.success(i18n.t("receipts.downloaded"));
+      toast.success(i18n.t("receipts.downloaded"));
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error downloading receipt:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
     }
   }
 
@@ -97,53 +101,73 @@ export class ReceiptService {
       const response = await receiptsApi.print(receiptId, printer);
 
       if (response.data.success) {
-        notificationService.success(response.data.message);
+        toast.success(response.data.message);
       } else {
-        notificationService.error(response.data.message);
+        toast.error(response.data.message);
       }
     } catch (error) {
       const apiError = parseApiError(error);
       console.error("Error printing receipt:", apiError);
-      notificationService.error(apiError.message);
+      toast.error(apiError.message);
     }
   }
 
+  /**
+   * Starts generation. The PDF renders in the background, so resolving only
+   * means the request was accepted; a failed request rejects and the caller
+   * decides how to tell the user.
+   */
   async generateReceipt(orderId: string): Promise<void> {
     try {
       notifyIssueWarnings((await receiptsApi.create(orderId)).data);
-      notificationService.success(i18n.t("receipts.generateStarted"));
     } catch (error) {
-      const apiError = parseApiError(error);
-      console.error("Error generating receipt:", apiError);
-      notificationService.error(apiError.message);
+      console.error("Error generating receipt:", parseApiError(error));
+      throw error;
     }
   }
 
   /**
    * Starts generation again for a failed document of the given type. The waybill
    * keeps its own endpoint; an empty `details` makes the server repeat the
-   * frozen candidate of the failed attempt.
+   * frozen candidate of the failed attempt. Like `generateReceipt`, a refused
+   * request rejects and the caller tells the user.
    */
-  async retryDocument(orderId: string, type: DocumentType): Promise<void> {
-    if (type === "waybill") return this.generateReceipt(orderId);
+  async retryDocument(orderId: string, type: DocumentType): Promise<boolean> {
+    if (type === "waybill") {
+      await this.generateReceipt(orderId);
+      return true;
+    }
     // A type the server cannot generate must never be retried as some other document.
-    if (!isGeneratableType(type)) return;
+    if (!isGeneratableType(type)) return false;
     const body = retryBody(type);
-    if (!body) return;
+    if (!body) return false;
     try {
       notifyIssueWarnings((await receiptsApi.createDocument(orderId, body)).data);
-      notificationService.success(i18n.t("receipts.generateStarted"));
+      return true;
     } catch (error) {
-      const apiError = parseApiError(error);
-      console.error(`Error retrying ${type}:`, apiError);
-      notificationService.error(apiError.message);
+      console.error(`Error retrying ${type}:`, parseApiError(error));
+      throw error;
+    }
+  }
+
+  /** `retryDocument` for a button: says that the document is being made, or why it was refused. */
+  async retryDocumentWithFeedback(
+    orderId: string,
+    type: DocumentType,
+  ): Promise<void> {
+    try {
+      if (await this.retryDocument(orderId, type))
+        // The PDF renders in the background; say so, otherwise nothing seems to happen.
+        toast(i18n.t("receipts.generatingReceipt"));
+    } catch (error) {
+      toast.error(parseApiError(error).message);
     }
   }
 
   async handlePrintReceipt(receiptId: string): Promise<void> {
     if (this.availablePrinters.length > 1) {
       const printer = prompt(
-        i18n.t("receipts.printerPrompt", {
+        i18n.t("receipts.choosePrinter", {
           printers: this.availablePrinters.join(", "),
         }),
       );

@@ -15,15 +15,16 @@ export const ThemeToggle = ({ compact = false }: ThemeToggleProps) => {
  <button
  onClick={toggleTheme}
  className={clsx(
- 'relative inline-flex items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2',
+ 'relative inline-flex items-center rounded-full transition-colors duration-300 motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:ring-offset-2',
  compact ? 'h-7 w-12 pointer-coarse:h-11' : 'h-9 w-16 pointer-coarse:h-11',
  theme === 'dark' ? 'bg-accent-base' : 'bg-surface-alt'
  )}
  aria-label={t('common.toggleTheme')}
+ aria-pressed={theme === 'dark'}
  >
  <span
  className={clsx(
- 'inline-flex transform items-center justify-center rounded-full bg-elevated transition-transform duration-300 shadow-lg',
+ 'inline-flex transform items-center justify-center rounded-full bg-elevated transition-transform duration-300 motion-reduce:transition-none shadow-lg',
  compact ? 'h-5 w-5' : 'h-7 w-7',
  theme === 'dark'
  ? compact ? 'translate-x-6' : 'translate-x-8'

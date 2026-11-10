@@ -11,7 +11,7 @@ import {
   type RequisitesErrors,
 } from "../../lib/recipient-requisites";
 import { TAX_ID_KINDS } from "../../lib/ua-requisites";
-import { selectClass } from "../settings/DocumentFormatting";
+import { selectClass } from "../settings/document-ui";
 import { TaxIdChecksumHint } from "../settings/TaxIdChecksumHint";
 import { Input } from "../ui/Input";
 

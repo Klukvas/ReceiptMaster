@@ -893,7 +893,7 @@ Files:
    - No cross-tenant data leakage
 
 6. **Idempotency:**
-   - Same `Idempotency-Key` within 24 hours returns same response (orders, products, recipients)
+   - Same `Idempotency-Key` within 24 hours returns same response (orders, products, recipients, suppliers); for all but orders a different body under the same key is refused with 422 `IDEMPOTENCY_KEY_REUSED`
    - Prevents duplicate orders, products and recipients if the client retries, also concurrently
    - Keys are per user and per kind: an order, a product and a recipient key of the same value are
      independent

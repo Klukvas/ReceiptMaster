@@ -9,7 +9,6 @@ import { useDocumentColumns } from "../components/documents/useDocumentColumns";
 import { ShareReceiptModal } from "../components/receipts/ShareReceiptModal";
 import { VoidDocumentModal } from "../components/orders/VoidDocumentModal";
 import { RetentionConfirmModal } from "../components/documents/RetentionConfirmModal";
-import { NotificationToast } from "../components/common";
 import { Button } from "../components/ui/Button";
 import { useDocumentsFilters } from "../hooks/useDocumentsFilters";
 import { useMirroredUrlParam } from "../hooks/useMirroredUrlParam";
@@ -17,7 +16,6 @@ import { useDocumentsList } from "../hooks/useDocumentsList";
 import { useDocumentRetry } from "../hooks/useDocumentRetry";
 import { useRetentionLimit } from "../hooks/useRetentionLimit";
 import { useDocumentTimeZone } from "../hooks/useDocumentTimeZone";
-import { useNotifications } from "../hooks/useNotifications";
 import { useTranslation } from "../hooks/useTranslation";
 
 // The page heading. Focus lands here when an action removes the button that had it (a voided row
@@ -26,7 +24,6 @@ const PAGE_HEADING_ID = "documents-page-heading";
 
 export const DocumentsPage = () => {
   const { t } = useTranslation();
-  const { notifications } = useNotifications();
   const timeZone = useDocumentTimeZone();
   const { filters, urlSearch, urlPage, sort, setParam, setSort, clearFilters } = useDocumentsFilters();
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -78,8 +75,6 @@ export const DocumentsPage = () => {
 
   return (
     <div className="space-y-5">
-      <NotificationToast notifications={notifications} />
-
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-light)]">
           <FileText className="h-5 w-5 text-accent-base" aria-hidden />

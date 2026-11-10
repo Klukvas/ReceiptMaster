@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from"react";
+import { useState, useRef, useEffect, useCallback, useId } from"react";
 import { createPortal } from"react-dom";
 import { MoreHorizontal } from"lucide-react";
 
@@ -6,6 +6,11 @@ interface PortalDropdownProps {
  children: React.ReactNode | ((close: () => void) => React.ReactNode);
  buttonTitle?: string;
 }
+
+const getEnabledItems = (menu: HTMLElement | null) =>
+ Array.from(
+ menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? [],
+ );
 
 export const PortalDropdown = ({
  children,
@@ -15,6 +20,8 @@ export const PortalDropdown = ({
  const [position, setPosition] = useState({ top: 0, left: 0 });
  const buttonRef = useRef<HTMLButtonElement>(null);
  const menuRef = useRef<HTMLDivElement>(null);
+
+ const menuId = useId();
 
  const close = useCallback(() => setIsOpen(false), []);
 
@@ -34,6 +41,36 @@ export const PortalDropdown = ({
  setIsOpen((prev) => !prev);
  }, [isOpen, updatePosition]);
 
+ // Keyboard users get focus inside the menu as soon as it opens.
+ useEffect(() => {
+ if (isOpen) getEnabledItems(menuRef.current)[0]?.focus();
+ }, [isOpen]);
+
+ const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+ const items = getEnabledItems(menuRef.current);
+ if (items.length === 0) return;
+ const current = items.indexOf(document.activeElement as HTMLElement);
+ const targets: Record<string, number> = {
+ ArrowDown: (current + 1) % items.length,
+ ArrowUp: (current - 1 + items.length) % items.length,
+ Home: 0,
+ End: items.length - 1,
+ };
+ if (e.key in targets) {
+ e.preventDefault();
+ items[targets[e.key]].focus();
+ } else if (e.key ==="Tab") {
+ close();
+ }
+ };
+
+ const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
+ if (e.key !=="ArrowDown" || isOpen) return;
+ e.preventDefault();
+ updatePosition();
+ setIsOpen(true);
+ };
+
  useEffect(() => {
  if (!isOpen) return;
 
@@ -48,7 +85,9 @@ export const PortalDropdown = ({
  }
  };
  const handleEscape = (e: KeyboardEvent) => {
- if (e.key ==="Escape") close();
+ if (e.key !=="Escape") return;
+ close();
+ buttonRef.current?.focus();
  };
  const handleScroll = () => close();
 
@@ -67,10 +106,13 @@ export const PortalDropdown = ({
  <button
  ref={buttonRef}
  onClick={toggle}
+ onKeyDown={handleTriggerKeyDown}
  className="p-1.5 pointer-coarse:p-3.5 rounded-lg text-content-tertiary hover:text-content-secondary hover:bg-surface-alt transition-colors duration-150"
  title={buttonTitle}
  aria-label={buttonTitle}
  aria-haspopup="menu"
+ aria-expanded={isOpen}
+ aria-controls={isOpen ? menuId : undefined}
  >
  <MoreHorizontal className="w-4 h-4" />
  </button>
@@ -79,6 +121,10 @@ export const PortalDropdown = ({
  createPortal(
  <div
  ref={menuRef}
+ id={menuId}
+ role="menu"
+ aria-label={buttonTitle}
+ onKeyDown={handleMenuKeyDown}
  style={{ top: position.top, left: position.left }}
  className="fixed w-48 bg-elevated rounded-xl shadow-lg border border-[var(--color-border)] z-[9999] py-1 animate-modal-content origin-top-right"
  >
@@ -108,9 +154,11 @@ export const DropdownItem = ({
  disabled = false,
 }: DropdownItemProps) => (
  <button
+ role="menuitem"
+ tabIndex={-1}
  onClick={onClick}
  disabled={disabled}
- className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors duration-150 disabled:opacity-50 ${
+ className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors duration-150 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] ${
  variant ==="danger"
  ?"text-danger-base hover:bg-[var(--color-danger-light)]"
  :"text-content-secondary hover:bg-surface-alt"

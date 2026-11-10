@@ -33,8 +33,9 @@ export const SidebarUser = ({
 }: SidebarUserProps) => {
  const initials = email?.[0]?.toUpperCase() ||"U";
  const { status } = useSubscription();
- const plan = status?.plan ??"free";
- const planStyle = PLAN_STYLES[plan] || PLAN_STYLES.free;
+ // While the status is unknown (loading or failed) no plan badge is shown: "Free" would be a guess.
+ const plan = status?.plan;
+ const planStyle = plan ? (PLAN_STYLES[plan] ?? PLAN_STYLES.free) : undefined;
 
  return (
  <div className={clsx("px-3 py-3", isCollapsed ?"px-2" :"")}>
@@ -60,17 +61,19 @@ export const SidebarUser = ({
  {email}
  </p>
  <div className="flex items-center gap-1 mt-0.5">
- {plan !=="free" && (
+ {plan && plan !=="free" && (
  <Crown className="h-3 w-3 flex-shrink-0 text-warning-base" />
  )}
+ {planStyle && (
  <span
- className={clsx(
+  className={clsx(
 "text-[10px] font-medium px-1.5 py-0.5 rounded-md",
- planStyle.className,
+  planStyle.className,
+  )}
+  >
+  {planStyle.label}
+  </span>
  )}
- >
- {planStyle.label}
- </span>
  </div>
  </div>
  )}

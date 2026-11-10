@@ -23,6 +23,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useHighlightedFields } from "../../hooks/useHighlightedFields";
 import { RecipientRequisitesFields } from "./RecipientRequisitesFields";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 
 interface RecipientFormProps {
   recipient?: Recipient | null;
@@ -49,6 +50,7 @@ const FIELD_IDS = {
 export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   const { t } = useTranslation();
   const isSubmittingRef = useRef(false);
+  const keyFor = useIdempotencyKey();
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [formData, setFormData] = useState({
     name: "",
@@ -124,7 +126,8 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   }, [recipient]);
 
   const createMutation = useMutation({
-    mutationFn: recipientsApi.create,
+    mutationFn: (data: Parameters<typeof recipientsApi.create>[0]) =>
+      recipientsApi.create(data, { idempotencyKey: keyFor(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
       toast.success(t("recipients.recipientCreated"));

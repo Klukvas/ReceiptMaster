@@ -14,6 +14,7 @@ import {
  type ColumnDef,
 } from"../hooks/useServerPagination";
 import { useTranslation } from"../hooks/useTranslation";
+import { parseApiError } from"../lib/api-errors";
 
 export const SuppliersPage = () => {
  const [showForm, setShowForm] = useState(false);
@@ -125,8 +126,8 @@ export const SuppliersPage = () => {
  queryClient.invalidateQueries({ queryKey: ["suppliers"] });
  setDeleteTarget(null);
  },
- onError: () => {
- toast.error(t("errors.badRequest"));
+ onError: (error: unknown) => {
+ toast.error(parseApiError(error).message);
  },
  });
 
@@ -290,7 +291,13 @@ export const SuppliersPage = () => {
  onClose={() => setDeleteTarget(null)}
  onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
  title={t("suppliers.deleteSupplier","Delete Supplier")}
- message={t("suppliers.deleteSupplierMessage")}
+ message={
+ deleteTarget?.product_count
+ ? t("suppliers.deleteSupplierWithProductsMessage", {
+ count: deleteTarget.product_count,
+ })
+ : t("suppliers.deleteSupplierMessage")
+ }
  itemName={deleteTarget?.name}
  isLoading={deleteMutation.isPending}
  />

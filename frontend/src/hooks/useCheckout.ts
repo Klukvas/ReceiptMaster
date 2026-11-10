@@ -52,7 +52,9 @@ export const useCheckout = () => {
     setLoading("manage");
     try {
       const { url } = await subscriptionApi.portal();
-      window.open(url, "_blank");
+      // window.open after an await is treated as an unrequested popup and blocked, so
+      // the portal replaces this tab; the portal's return link brings the user back.
+      window.location.assign(url);
     } catch {
       toast.error(
         t("subscription.portalError", "Failed to open billing portal"),

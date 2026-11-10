@@ -2,6 +2,7 @@ import { EntityManager } from "typeorm";
 import {
   createIdempotently,
   idempotencyKeyOf,
+  payloadFingerprint,
   scopedIdempotencyKey,
 } from "./idempotent-create";
 import { IdempotencyKey } from "../../modules/orders/entities/idempotency-key.entity";
@@ -32,7 +33,13 @@ const fakeManager = (
   return { manager, query, findOne, delete: remove, insert };
 };
 
-const request = { scope: "product", key: "key-1", userId: "user-1" } as const;
+const payload = { name: "Coffee", price: 5 };
+const request = {
+  scope: "product",
+  key: "key-1",
+  userId: "user-1",
+  payload,
+} as const;
 const HOUR_MS = 3600 * 1000;
 
 describe("createIdempotently", () => {
@@ -63,6 +70,7 @@ describe("createIdempotently", () => {
       user_id: "user-1",
       response: { id: "p-1", createdAt: "2026-10-29T10:00:00.000Z" },
       status_code: 201,
+      payload_hash: payloadFingerprint(payload),
     });
     expect(row.order_id).toBeUndefined();
     const ttl = row.expires_at.getTime() - Date.now();
@@ -102,6 +110,55 @@ describe("createIdempotently", () => {
     expect(create).not.toHaveBeenCalled();
     expect(fake.insert).not.toHaveBeenCalled();
     expect(fake.delete).not.toHaveBeenCalled();
+  });
+
+  it("replays when the same payload arrives with its keys in another order", async () => {
+    const fake = fakeManager({
+      id: "row-1",
+      response: { id: "p-1" },
+      payload_hash: payloadFingerprint({ price: 5, name: "Coffee" }),
+      expires_at: new Date(Date.now() + HOUR_MS),
+    });
+    const create = jest.fn();
+
+    const result = await createIdempotently(fake.manager, request, create);
+
+    expect(result).toMatchObject({ replayed: true, data: { id: "p-1" } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reused key with a different payload (422) and creates nothing", async () => {
+    const fake = fakeManager({
+      id: "row-1",
+      response: { id: "p-1" },
+      payload_hash: payloadFingerprint({ name: "Tea", price: 5 }),
+      expires_at: new Date(Date.now() + HOUR_MS),
+    });
+    const create = jest.fn();
+
+    await expect(
+      createIdempotently(fake.manager, request, create),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      errorCode: "IDEMPOTENCY_KEY_REUSED",
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(fake.insert).not.toHaveBeenCalled();
+  });
+
+  it("replays a legacy row that has no stored fingerprint", async () => {
+    const fake = fakeManager({
+      id: "row-1",
+      response: { id: "p-old" },
+      payload_hash: null,
+      expires_at: new Date(Date.now() + HOUR_MS),
+    });
+    const create = jest.fn();
+
+    const result = await createIdempotently(fake.manager, request, create);
+
+    expect(result).toEqual({ replayed: true, data: { id: "p-old" } });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("an expired stored response is dropped and the create runs again", async () => {
@@ -171,6 +228,17 @@ describe("scopedIdempotencyKey", () => {
     expect(product).toMatch(/^product:[0-9a-f]{64}$/);
     expect(recipient.length).toBeLessThanOrEqual(255);
     expect(scopedIdempotencyKey("product", "abc")).not.toBe("abc");
+  });
+});
+
+describe("payloadFingerprint", () => {
+  it("ignores key order and differs for different values", () => {
+    expect(payloadFingerprint({ a: 1, b: { c: 2, d: 3 } })).toBe(
+      payloadFingerprint({ b: { d: 3, c: 2 }, a: 1 }),
+    );
+    expect(payloadFingerprint({ a: 1 })).not.toBe(payloadFingerprint({ a: 2 }));
+    expect(payloadFingerprint([1, 2])).not.toBe(payloadFingerprint([2, 1]));
+    expect(payloadFingerprint(undefined)).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

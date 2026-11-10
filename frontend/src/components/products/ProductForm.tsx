@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
@@ -16,6 +16,7 @@ import { Combobox } from "../ui/Combobox";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useSimilarProducts } from "../../hooks/useSimilarProducts";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import {
   buildProductUpdate,
   toProductFields,
@@ -57,6 +58,9 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
+  const keyFor = useIdempotencyKey();
+  // A fast double click fires twice before the button re-renders as disabled.
+  const isCreatingRef = useRef(false);
 
   const purchasePrice = parseFloat(formData.purchase_price_cents);
   const salePrice = parseFloat(formData.sale_price_cents);
@@ -68,7 +72,11 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
 
   const similarProducts = useSimilarProducts(formData.name, !product);
 
-  const { data: suppliersData } = useQuery({
+  const {
+    data: suppliersData,
+    isError: isSuppliersError,
+    refetch: refetchSuppliers,
+  } = useQuery({
     queryKey: ["suppliers"],
     queryFn: () => suppliersApi.getAll({ limit: 100 }),
   });
@@ -109,7 +117,11 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   };
 
   const createMutation = useMutation({
-    mutationFn: productsApi.create,
+    mutationFn: (data: Parameters<typeof productsApi.create>[0]) =>
+      productsApi.create(data, { idempotencyKey: keyFor(data) }),
+    onSettled: () => {
+      isCreatingRef.current = false;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       // The header counter ("3/10") comes from the plan usage, not from the product list.
@@ -190,6 +202,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     if (!validateForm()) return;
 
     if (!product) {
+      if (isCreatingRef.current) return;
+      isCreatingRef.current = true;
       createMutation.mutate(toProductFields(formData));
       return;
     }
@@ -218,7 +232,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       tabIndex={-1}
       className="fixed inset-0 backdrop-blur-sm bg-[var(--color-overlay)] flex items-center justify-center z-50 outline-none"
     >
-      <Card className="w-full max-w-md mx-4">
+      <Card className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-content">
             {product ? t("products.editProduct") : t("products.createProduct")}
@@ -386,7 +400,23 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               placeholder={t("products.selectSupplier", "Select supplier")}
               searchPlaceholder={t("common.search", "Search...")}
               noResultsText={t("common.noResults", "Nothing found")}
+              ariaLabel={t("products.supplier", "Supplier")}
             />
+            {isSuppliersError && (
+              <p
+                role="alert"
+                className="mt-1 flex items-center gap-2 text-xs text-danger-base"
+              >
+                {t("products.suppliersLoadError")}
+                <button
+                  type="button"
+                  onClick={() => void refetchSuppliers()}
+                  className="font-medium underline pointer-coarse:min-h-11 pointer-coarse:px-2"
+                >
+                  {t("common.retry")}
+                </button>
+              </p>
+            )}
           </div>
 
           <div className="flex space-x-3 pt-4">

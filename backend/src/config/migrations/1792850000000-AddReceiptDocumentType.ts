@@ -10,8 +10,8 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * never a moment without one. `order_id` was already unique, so it cannot fail on
  * existing data.
  */
-export class AddReceiptDocumentType1792800000000 implements MigrationInterface {
-  name = "AddReceiptDocumentType1792800000000";
+export class AddReceiptDocumentType1792850000000 implements MigrationInterface {
+  name = "AddReceiptDocumentType1792850000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Row-level security would hide rows from the duplicate check below.

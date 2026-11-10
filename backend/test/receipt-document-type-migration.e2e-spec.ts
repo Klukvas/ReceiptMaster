@@ -13,8 +13,8 @@ import {
 } from "./helpers/isolated-postgres";
 
 const MIGRATIONS_DIR = join(__dirname, "../src/config/migrations");
-const NEW_MIGRATION_FILE = "1792800000000-AddReceiptDocumentType.ts";
-const NEW_MIGRATION = "AddReceiptDocumentType1792800000000";
+const NEW_MIGRATION_FILE = "1792850000000-AddReceiptDocumentType.ts";
+const NEW_MIGRATION = "AddReceiptDocumentType1792850000000";
 const TYPE_INDEX = "IDX_receipts_order_document_type";
 const ENTITIES = [join(__dirname, "../src/**/*.entity.ts")];
 

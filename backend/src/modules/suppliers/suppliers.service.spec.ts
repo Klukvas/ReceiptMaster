@@ -9,6 +9,7 @@ import { SortOrder } from "../../common/dto/pagination.dto";
 describe("SuppliersService", () => {
   let service: SuppliersService;
   let suppliersRepo: any;
+  let txManager: any;
   const mockUser = { id: "user-1" } as User;
 
   const mockSupplier: Partial<Supplier> = {
@@ -47,6 +48,19 @@ describe("SuppliersService", () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
+    txManager = {
+      queryRunner: { isTransactionActive: true },
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      delete: jest.fn(),
+      insert: jest.fn().mockResolvedValue({}),
+      getRepository: jest.fn().mockReturnValue(suppliersRepo),
+      save: jest.fn((data) => Promise.resolve({ id: "sup-1", ...data })),
+    };
+    suppliersRepo.manager = {
+      transaction: jest.fn((work) => work(txManager)),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SuppliersService,
@@ -77,6 +91,69 @@ describe("SuppliersService", () => {
       expect(suppliersRepo.save).toHaveBeenCalledWith(
         expect.not.objectContaining({ products: expect.anything() }),
       );
+    });
+  });
+
+  describe("createWithIdempotencyKey", () => {
+    const dto = { name: "New Supplier", contactPerson: "Ann" } as any;
+
+    it("creates once under a supplier-scoped key and stores the fingerprint", async () => {
+      const result = await service.createWithIdempotencyKey(
+        dto,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toMatchObject({
+        replayed: false,
+        data: { id: "sup-1", name: "New Supplier", contact_person: "Ann" },
+      });
+      expect(txManager.query.mock.calls[0][1][0]).toMatch(/^supplier:/);
+      expect(txManager.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          user_id: "user-1",
+          payload_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        }),
+      );
+    });
+
+    it("replays the stored response without saving", async () => {
+      txManager.findOne.mockResolvedValue({
+        id: "row-1",
+        response: { id: "sup-1", name: "New Supplier" },
+        payload_hash: null,
+        expires_at: new Date(Date.now() + 60_000),
+      });
+
+      const result = await service.createWithIdempotencyKey(
+        dto,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result).toEqual({
+        replayed: true,
+        data: { id: "sup-1", name: "New Supplier" },
+      });
+      expect(txManager.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses the key when the body differs from the first request", async () => {
+      txManager.findOne.mockResolvedValue({
+        id: "row-1",
+        response: { id: "sup-1" },
+        payload_hash: "0".repeat(64),
+        expires_at: new Date(Date.now() + 60_000),
+      });
+
+      await expect(
+        service.createWithIdempotencyKey(dto, mockUser, "key-1"),
+      ).rejects.toMatchObject({
+        statusCode: 422,
+        errorCode: "IDEMPOTENCY_KEY_REUSED",
+      });
+      expect(txManager.save).not.toHaveBeenCalled();
     });
   });
 

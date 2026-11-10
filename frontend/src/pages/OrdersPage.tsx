@@ -15,7 +15,6 @@ import {
   OrdersFilterBar,
   OrderActionsMenu,
 } from "../components/orders";
-import { NotificationToast } from "../components/common";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { ShareReceiptModal } from "../components/receipts/ShareReceiptModal";
 import { useOrders, useReceiptGenerationPolling } from "../hooks/useOrders";
@@ -91,9 +90,9 @@ export const OrdersPage = () => {
     selectedOrder: viewedOrder,
     setSelectedOrder,
     confirmAction,
+    actionError,
     handleConfirmAction,
     handleCloseConfirm,
-    notifications,
     handleConfirm,
     handleCancel,
     handleDeleteOrder,
@@ -140,6 +139,10 @@ export const OrdersPage = () => {
       params.maxAmount = String(Math.round(parseFloat(maxAmount) * 100));
     return params;
   }, [statusFilter, startDate, endDate, minAmount, maxAmount]);
+
+  const hasActiveFilters = Boolean(
+    statusFilter || startDate || endDate || minAmount || maxAmount,
+  );
 
   const clearAllFilters = useCallback(() => {
     setStatusFilter("");
@@ -458,6 +461,14 @@ export const OrdersPage = () => {
     ],
   );
 
+  // DataTable hides its empty-state action while a search is active, so the way out of a
+  // zero-result search is offered right under it.
+  const isSearchWithoutResults =
+    pagination.searchQuery.trim() !== "" &&
+    !pagination.isLoading &&
+    !pagination.error &&
+    pagination.items.length === 0;
+
   // Filter bar rendered above the DataTable
   const filterBar = (
     <OrdersFilterBar
@@ -495,8 +506,6 @@ export const OrdersPage = () => {
 
   return (
     <div className="space-y-5">
-      <NotificationToast notifications={notifications} />
-
       <OrdersPageHeader onCreateOrder={() => openCreateOrder()} />
       {subscriptionStatus && (
         <UsageBar
@@ -571,36 +580,79 @@ export const OrdersPage = () => {
         emptyIcon={
           <ShoppingCart className="h-12 w-12 text-content-tertiary mx-auto mb-2" />
         }
-        emptyMessage={t("orders.noOrders")}
-        emptyAction={
-          <div className="flex flex-col items-center gap-3">
-            <p className="max-w-xs text-xs text-content-tertiary">
-              {t("orders.emptyPrerequisites")}
-            </p>
-            <div className="flex gap-3 text-sm">
-              <Link
-                className="text-accent-base hover:underline"
-                to="/products?create=1"
-              >
-                {t("home.addProduct")}
-              </Link>
-              <Link
-                className="text-accent-base hover:underline"
-                to="/recipients?create=1"
-              >
-                {t("home.addRecipient")}
-              </Link>
-            </div>
-            <Button onClick={() => openCreateOrder()}>
-              {t("orders.createFirstOrder")}
-            </Button>
-          </div>
+        emptyMessage={
+          hasActiveFilters
+            ? t("orders.noOrdersMatchFilters")
+            : t("orders.noOrders")
         }
-        emptySearchMessage={t("orders.noOrdersFound")}
+        emptyAction={
+          hasActiveFilters ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                clearAllFilters();
+                pagination.setCurrentPage(1);
+              }}
+            >
+              {t("orders.clearAll")}
+            </Button>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <p className="max-w-xs text-xs text-content-tertiary">
+                {t("orders.emptyPrerequisites")}
+              </p>
+              <div className="flex gap-3 text-sm">
+                <Link
+                  className="text-accent-base hover:underline"
+                  to="/products?create=1"
+                >
+                  {t("home.addProduct")}
+                </Link>
+                <Link
+                  className="text-accent-base hover:underline"
+                  to="/recipients?create=1"
+                >
+                  {t("home.addRecipient")}
+                </Link>
+              </div>
+              <Button onClick={() => openCreateOrder()}>
+                {t("orders.createFirstOrder")}
+              </Button>
+            </div>
+          )
+        }
+        emptySearchMessage={
+          hasActiveFilters
+            ? t("orders.noOrdersMatchFilters")
+            : t("orders.noOrdersFound")
+        }
         renderActions={renderOrderActions}
         renderCard={renderOrderCard}
         onRowClick={setSelectedOrder}
       />
+
+      {isSearchWithoutResults && (
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => pagination.setSearchQuery("")}
+          >
+            {t("orders.clearSearch")}
+          </Button>
+          {hasActiveFilters && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                pagination.setSearchQuery("");
+                clearAllFilters();
+                pagination.setCurrentPage(1);
+              }}
+            >
+              {t("orders.clearAll")}
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Floating bulk toolbar */}
       {bulkCount > 0 && (
@@ -673,6 +725,7 @@ export const OrdersPage = () => {
         }
         onClose={handleCloseConfirm}
         onConfirm={() => handleConfirmAction(bulkIds)}
+        errorMessage={actionError}
         title={
           confirmAction.type === "cancel"
             ? t("orders.cancelOrder", "Cancel Order")

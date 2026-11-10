@@ -49,6 +49,9 @@ export const ErrorCode = {
 
   // Settings errors
   SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
+
+  // Idempotency
+  IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
   INVALID_SETTINGS: "INVALID_SETTINGS",
 
   // File errors
@@ -112,6 +115,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "The starting number cannot be lower than the next number to be issued",
 
   // Product errors
+  [ErrorCode.IDEMPOTENCY_KEY_REUSED]:
+    "This request was already sent with different details. Please try again",
   [ErrorCode.PRODUCT_NOT_FOUND]: "Product not found",
   [ErrorCode.PRODUCT_ALREADY_EXISTS]: "Product with this name already exists",
   [ErrorCode.PRODUCT_QUANTITY_CONFLICT]:
@@ -146,6 +151,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.HTTP_EXCEPTION]: "Server error",
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error occurred",
 };
+
+const HTTP_TOO_MANY_REQUESTS = 429;
 
 // Codes that say nothing specific on their own; the server's detail is the useful part.
 const GENERIC_ERROR_CODES: ReadonlySet<string> = new Set([
@@ -187,6 +194,22 @@ export function parseApiError(error: unknown): {
     return {
       message: "Неизвестная ошибка",
       code: ErrorCode.UNKNOWN_ERROR,
+    };
+  }
+
+  // Throttled (login/register allow 5 per minute): the body is a raw English exception. A
+  // RATE_LIMITED body carries the server's wait instead and is read below.
+  if (
+    isAxiosError(error) &&
+    error.response?.status === HTTP_TOO_MANY_REQUESTS &&
+    (error.response.data as Partial<ApiErrorResponse> | undefined)?.errorCode !==
+      ErrorCode.RATE_LIMITED
+  ) {
+    return {
+      message: i18n.t("errors.tooManyRequests", {
+        defaultValue: "Too many attempts. Wait a minute and try again.",
+      }),
+      code: ErrorCode.HTTP_EXCEPTION,
     };
   }
 

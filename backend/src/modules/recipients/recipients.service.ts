@@ -184,7 +184,12 @@ export class RecipientsService {
       this.recipientsRepository.manager.transaction((manager) =>
         createIdempotently(
           manager,
-          { scope: "recipient", key: idempotencyKey, userId: user.id },
+          {
+            scope: "recipient",
+            key: idempotencyKey,
+            userId: user.id,
+            payload: createRecipientDto,
+          },
           async () => {
             await this.assertEmailAvailable(
               manager,

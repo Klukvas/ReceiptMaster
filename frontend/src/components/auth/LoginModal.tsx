@@ -1,13 +1,15 @@
-import React, { useState } from "react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { Mail, Lock } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useFieldErrors } from "../../hooks/useFieldErrors";
+import { useFocusFirstField } from "../../hooks/useFocusFirstField";
 import { useTranslation } from "../../hooks/useTranslation";
 import { parseApiError } from "../../lib/api-errors";
 import { validateLogin, type AuthField } from "../../lib/auth-validation";
 import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 import { Modal } from "../ui/Modal";
+import { PasswordToggleButton } from "./PasswordToggleButton";
 import toast from "react-hot-toast";
 
 interface LoginModalProps {
@@ -27,6 +29,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const { login } = useAuth();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  // Synchronous guard: state updates land after a second click in the same task.
+  const inFlight = useRef(false);
+  const formRef = useFocusFirstField<HTMLFormElement>(isOpen);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -52,8 +57,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
+    if (inFlight.current) return;
     if (!showErrors(validateLogin(formData))) return;
 
+    inFlight.current = true;
     setIsLoading(true);
     try {
       await login(formData.email.trim(), formData.password);
@@ -63,6 +70,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } catch (error: unknown) {
       setErrorMessage(parseApiError(error).message);
     } finally {
+      inFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -89,7 +97,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           {errorMessage}
         </div>
       )}
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <form
+        ref={formRef}
+        onSubmit={handleSubmit}
+        noValidate
+        className="space-y-6"
+      >
         {/* Email */}
         <div>
           <label
@@ -140,21 +153,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               placeholder={t("auth.password")}
               required
             />
-            <button
-              type="button"
-              aria-label={
-                showPassword ? t("auth.hidePassword") : t("auth.showPassword")
-              }
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-            >
-              {showPassword ? (
-                <EyeOff className="h-5 w-5" />
-              ) : (
-                <Eye className="h-5 w-5" />
-              )}
-            </button>
+            <PasswordToggleButton
+              isVisible={showPassword}
+              onToggle={() => setShowPassword(!showPassword)}
+            />
           </div>
           <FieldError id="password-error" message={messageFor("password")} />
         </div>

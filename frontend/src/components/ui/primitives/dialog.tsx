@@ -2,6 +2,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./cn";
 import { useBackClosesDialog } from "../../../hooks/useBackClosesDialog";
+import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock";
 
 /* ------------------------------------------------------------------ */
 /*  Dialog Context                                                      */
@@ -83,6 +84,7 @@ function Dialog({
   }, [onOpenChange, returnFocus]);
 
   useBackClosesDialog(open, () => onOpenChangeRef.current(false));
+  useBodyScrollLock(open);
 
   React.useEffect(() => {
     if (!open) return;
@@ -97,11 +99,12 @@ function Dialog({
     const isTopmost = () =>
       openDialogStack[openDialogStack.length - 1] === entry;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     requestAnimationFrame(() => {
       if (!dialogRef.current) return;
+      // A late frame must not pull focus back from a field that already has it.
+      const active = document.activeElement;
+      if (active !== dialogRef.current && dialogRef.current.contains(active))
+        return;
       // A field marked data-autofocus wins; otherwise the first control that is not the header's
       // Close button, so a form opens on its first field and a screen reader does not start on "Close".
       const preferred =
@@ -160,7 +163,6 @@ function Dialog({
       if (wasTopmost)
         setBackground(openDialogStack[openDialogStack.length - 1], false);
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
       const previous = previousFocusRef.current;
       const canRestore =
         previous && previous.isConnected && previous !== document.body;
@@ -170,8 +172,10 @@ function Dialog({
 
   if (!open) return null;
 
-  // Portalled to <body>: inside an animated ancestor (transform/filter) "fixed" would be
-  // positioned against that ancestor, and stacked dialogs become siblings that can be made inert.
+  // Rendered under <body>, not where it is declared: a dialog opened from a table row would
+  // otherwise inherit that cell's styles, inside an animated ancestor (transform/filter) "fixed"
+  // would be positioned against that ancestor, and stacked dialogs become siblings that can be
+  // made inert.
   return createPortal(
     <DialogContext.Provider
       value={{ titleId, descriptionId, setTitleId, setDescriptionId }}

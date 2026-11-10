@@ -1,6 +1,7 @@
 import React, { useId } from "react";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useAuth } from "../../hooks/useAuth";
+import { getScrollBehavior } from "../../lib/scroll-behavior";
 
 interface HeroSectionProps {
   onOpenRegister: () => void;
@@ -67,7 +68,7 @@ export const HeroSection: React.FC<HeroSectionProps> = React.memo(
                   onClick={() =>
                     document
                       .getElementById("features")
-                      ?.scrollIntoView({ behavior: "smooth" })
+                      ?.scrollIntoView({ behavior: getScrollBehavior() })
                   }
                 >
                   {t("landing.hero.seeDemo")}

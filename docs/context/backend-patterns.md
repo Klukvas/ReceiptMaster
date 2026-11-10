@@ -283,25 +283,32 @@ stays with the writers (`OrdersService` above, and `TelegramService` for bot-cre
 - Use `.createQueryBuilder()` for complex queries; load relations with `leftJoinAndSelect`
 - Use allowlist (e.g., `ORDER_SORTABLE_COLUMNS`) for sort column names to prevent SQL injection
 - Cache expensive queries, invalidate on write (read side in `OrdersDashboardService`, invalidation in the writing service)
+- A check-then-insert on a unique column (register by email) still needs the unique index to decide
+  the race: catch `isUniqueViolationOf` / `isUniqueViolationOnColumn` (`common/utils/unique-violation.util.ts`,
+  SQLSTATE 23505) around the insert and throw the same `ApiErrors` the pre-check throws — see
+  `UsersService.register`
 - Throw `ApiErrorResponse` from `common/errors/ApiError` — the global filter catches and returns it (an optional 4th constructor argument `details` is spread into the body, e.g. `DOCUMENT_REQUISITES_MISSING` adds `fields`/`warnings`)
 - Never `save()` a whole entity loaded without a lock: write only the changed columns with a
   conditional `UPDATE` (QueryBuilder sets `updated_at`), and make counters such as product stock a
   precondition (`AND quantity = :expectedQuantity`, 409 on mismatch) — see `ProductsService.update`
 - Check a quota and insert in **one** transaction, after taking the tenant's quota lock
 - Idempotent creates go through `common/idempotency/idempotent-create.ts` (`createIdempotently`,
-  used by `POST /products` and `POST /recipients`; orders keep their own older implementation).
+  used by `POST /products`, `POST /recipients` and `POST /suppliers`; orders keep their own older implementation).
   Inside the caller's transaction and before any other lock it validates the key (1–255 visible
   ASCII, else 400 `VALIDATION_ERROR`), takes `pg_advisory_xact_lock(hashtext(scopedKey))`, replays an
   unexpired `idempotency_keys` row for (scoped key, user) or deletes an expired one, runs the create
-  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (no migration: the
-  existing table, `order_id` NULL). `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
+  and stores its JSON response with `status_code` 201 and a 24-hour `expires_at` (`order_id` NULL).
+  The caller passes the request body as `payload`; its SHA-256 over key-sorted JSON
+  (`payloadFingerprint`) is stored in the nullable `idempotency_keys.payload_hash` (migration
+  `AddIdempotencyPayloadHash1792800000000`), and a replay whose fingerprint differs throws 422
+  `IDEMPOTENCY_KEY_REUSED` (`ApiErrors.IDEMPOTENCY_KEY_REUSED`). A row with NULL `payload_hash`
+  (written before the column existed) replays unchecked. `scopedKey` is `<scope>:` + SHA-256 hex of the client key: it
   fits `varchar(255)` for every accepted key and never equals an order key, which is stored raw in
   the same `(key, user_id)`-unique column. The controller sets `X-Idempotency-Replayed: true` on a
   replay (`@Res({ passthrough: true })`, so interceptors still see the body); without the header the
   original create path runs unchanged. Guarantee: within 24 h, retries with one key — concurrent
   ones too — create at most one entity and get the first response. Not covered: a failed create
-  stores nothing (a retry runs it again), a repeated key with a different body replays the first
-  response, and the client must keep its key (the onboarding keeps it only in memory)
+  stores nothing (a retry runs it again), and the client must keep its key (the onboarding keeps it only in memory)
 
 #### Tenant advisory locks and lock ordering
 
@@ -310,7 +317,7 @@ Transaction-scoped (`pg_advisory_xact_lock`) keys in use:
 | Key | Taken by | Serializes |
 |---|---|---|
 | `hashtext(idempotencyKey)` | `OrdersService.create` with an `Idempotency-Key` | replay of one key (key-scoped, not a tenant lock) |
-| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
+| `hashtext('product:' \|\| sha256(key))` / `hashtext('recipient:' \|\| sha256(key))` / `hashtext('supplier:' \|\| sha256(key))` | `createIdempotently` (`POST /products`, `POST /recipients`, `POST /suppliers` with an `Idempotency-Key`) | replay of one key (key-scoped, not a tenant lock) |
 | `(hashtext('order-monthly-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateOrderInTx` | monthly order quota |
 | `(hashtext('product-quota'), hashtext(userId))` | `SubscriptionService.assertCanCreateProductInTx` (product create) | product quota |
 | `hashtextextended(userId, 1)` | receipt generation/promotion, document-config writes, order cancel, batch order delete | receipts and document configuration |
@@ -578,7 +585,8 @@ connection; normal database defaults are never used by the opt-in audit suite (p
 *Tests* below). `test/db-roles.e2e-spec.ts` runs the production role scripts, with suite-owned role
 names, and CI repeats `test/e2e` as `rm_app` on a database converted with them. Neither is
 evidence of what is deployed; `scripts/deploy-production.sh` reports that from the backend's own
-connection on every release.
+connection on every release. `REQUIRE_RESTRICTED_APP_ROLE` is `True`, so a release is blocked if the
+app role is a superuser, has `BYPASSRLS`, can create roles or databases, or owns objects in `public`.
 
 Cross-tenant background work needs no role of its own. The outbox, storage sweep schedule,
 idempotency keys, Telegram update ids and subscriptions have no RLS and hold identifiers or billing
@@ -784,7 +792,7 @@ export interface ReceiptGenerationJobData {
 
 `ReceiptArtifactService` renders only stored HTML and complete PDF options, then uploads to an immutable attempt key. Promotion checks tenant, generation, pending identity, expected active revision, an order status the receipt's own type allows (`specFor(type).allowedOrderStatuses`, so a quotation promotes on a DRAFT order) and, for locking types, a locked order and non-void lifecycle, switching all active artifact/config/template/public metadata together. It never writes public-token fields. A generated document stays generated and publicly downloadable during replacement, with separate `replacement_status`/`replacement_error`. Failed candidates remain retryable; explicit new config on a failed generation replaces its design, while a plain retry reuses the frozen candidate. The outbox recognizes replacements and reconciles exhausted jobs without destroying active PDFs.
 
-`receipts.document_type` (enum `receipts_document_type_enum`, default `waybill`, migration `AddReceiptDocumentType1792800000000`) replaced the unique `order_id` with the partial unique index `(order_id, document_type) WHERE document_type <> 'return_note'`. Today's predicate also excludes VOID invoice, act and quote rows (`ReissueVoidedDocuments1793100000000` added invoice and act, `ReissueVoidedQuotes1793200000000` added quote: `WHERE document_type <> 'return_note' AND (status <> 'void' OR document_type NOT IN ('invoice','act','quote'))`), so a voided reissuable document frees its slot while a voided waybill, sales receipt or packing list keeps it. Any code that looks a receipt up by `order_id` must also say which type; `voidForCancellation` and file cleanup intentionally act on all types of an order. `orders.service` loads `order.receipts` (all types), so consumers that take `receipts[0]` must filter by `waybill` once other types exist.
+`receipts.document_type` (enum `receipts_document_type_enum`, default `waybill`, migration `AddReceiptDocumentType1792850000000`) replaced the unique `order_id` with the partial unique index `(order_id, document_type) WHERE document_type <> 'return_note'`. Today's predicate also excludes VOID invoice, act and quote rows (`ReissueVoidedDocuments1793100000000` added invoice and act, `ReissueVoidedQuotes1793200000000` added quote: `WHERE document_type <> 'return_note' AND (status <> 'void' OR document_type NOT IN ('invoice','act','quote'))`), so a voided reissuable document frees its slot while a voided waybill, sales receipt or packing list keeps it. Any code that looks a receipt up by `order_id` must also say which type; `voidForCancellation` and file cleanup intentionally act on all types of an order. `orders.service` loads `order.receipts` (all types), so consumers that take `receipts[0]` must filter by `waybill` once other types exist.
 
 `document_counters(user_id, document_type, value)` (entity `DocumentCounter`, migration `DocumentCounters1792900000000`) holds the per-account, per-type number counter. It has FORCE RLS with the usual `tenant_isolation` policy, so `nextDocumentNumber` must run with the tenant context set (it does: generation is behind the tenant interceptor). The migration backfilled before enabling RLS because `rm_owner` has no `BYPASSRLS`; `down()` refuses while non-waybill documents exist and runs `NO FORCE` before reading the table back into `users.receipt_counter`. `db/roles/04-verify.sql` lists the table among the RLS/FORCE tables.
 
@@ -1268,7 +1276,7 @@ never deleted to make it pass). After the first reissue of a quotation an order 
 
 ## Goods return note migration and deploy lists
 
-`AddOrderItemReturnedQty1793300000000` adds `order_items.returned_qty integer NOT NULL DEFAULT 0` with `CHK_order_items_returned_qty_range` (`0 <= returned_qty <= qty`), so existing rows are valid without a backfill and the old image simply ignores the column. Add the name to both `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` in `scripts/deploy-production.sh` (done; `KNOWN_MIGRATIONS` stays sorted). The deploy script's rollback notice warns that once a return note has been issued, `returned_qty` is the only record of the returned quantities, so reverting this migration refuses while any line has returned goods. The unique index of `receipts` already excludes `return_note` (since `AddReceiptDocumentType1792800000000`), so the type needs no index change, and `DocumentType.RETURN_NOTE` was already a value of the enum.
+`AddOrderItemReturnedQty1793300000000` adds `order_items.returned_qty integer NOT NULL DEFAULT 0` with `CHK_order_items_returned_qty_range` (`0 <= returned_qty <= qty`), so existing rows are valid without a backfill and the old image simply ignores the column. Add the name to both `EXPECTED_MIGRATIONS` and `KNOWN_MIGRATIONS` in `scripts/deploy-production.sh` (done; `KNOWN_MIGRATIONS` stays sorted). The deploy script's rollback notice warns that once a return note has been issued, `returned_qty` is the only record of the returned quantities, so reverting this migration refuses while any line has returned goods. The unique index of `receipts` already excludes `return_note` (since `AddReceiptDocumentType1792850000000`), so the type needs no index change, and `DocumentType.RETURN_NOTE` was already a value of the enum.
 
 ## Numbering format and signature/stamp migrations and deploy lists
 

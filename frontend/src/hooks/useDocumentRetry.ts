@@ -20,7 +20,7 @@ export function useDocumentRetry() {
 
   const send = useCallback(
     async (document: RetryTarget) => {
-      await receiptService.retryDocument(document.order_id, document.document_type);
+      await receiptService.retryDocumentWithFeedback(document.order_id, document.document_type);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["receipts"] }),
         queryClient.invalidateQueries({ queryKey: ["orders"] }),

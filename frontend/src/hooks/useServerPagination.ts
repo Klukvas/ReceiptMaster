@@ -11,6 +11,8 @@ export interface ColumnDef<T> {
   sortKey?: string;
   visible?: boolean;
   hideable?: boolean;
+  /** Numbers read best flush right; the cell also gets tabular figures. */
+  align?: 'right';
   render: (item: T) => React.ReactNode;
   renderCard?: (item: T) => React.ReactNode;
 }
@@ -25,6 +27,12 @@ export interface UseServerPaginationOptions<T> {
   extraParams?: Record<string, string>;
   debounceMs?: number;
   storageKeyPrefix?: string;
+  /**
+   * Bump when column defaults change (a column hidden or shown by default): saved choices
+   * made under an older version are then ignored once. Keys keep the `_columns` suffix so
+   * clearing preferences on logout still finds them.
+   */
+  columnsVersion?: number;
   /** Search text to start with, e.g. from a deep link. */
   initialSearch?: string;
   /** Page to start on, e.g. from a deep link (1-based). */
@@ -50,11 +58,15 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     extraParams = {},
     debounceMs = 400,
     storageKeyPrefix,
+    columnsVersion = 1,
     initialSearch = '',
     initialPage = 1,
     enabled = true,
     sort: controlledSort,
   } = options;
+  const columnsStorageKey = storageKeyPrefix
+    ? `${storageKeyPrefix}${columnsVersion > 1 ? `_v${columnsVersion}` : ''}_columns`
+    : null;
 
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
@@ -71,29 +83,32 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
   const sortBy = controlledSort ? controlledSort.sortBy : ownSortBy;
   const sortOrder = controlledSort ? controlledSort.sortOrder : ownSortOrder;
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
-    if (storageKeyPrefix) {
-      const saved = localStorage.getItem(`${storageKeyPrefix}_columns`);
+    const defaults = Object.fromEntries(
+      initialColumns.map((col) => [col.key, col.visible !== false])
+    );
+    if (columnsStorageKey) {
+      const saved = localStorage.getItem(columnsStorageKey);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          // Defaults first so a column added after the choice was saved still appears.
+          return { ...defaults, ...JSON.parse(saved) };
         } catch {
           // ignore invalid JSON
         }
       }
     }
-    return Object.fromEntries(
-      initialColumns.map((col) => [col.key, col.visible !== false])
-    );
+    return defaults;
   });
 
-  // Debounce search. The page goes back to 1 only when the text really changed, so a deep link
-  // to page 3 is not thrown to page 1 by the first debounce tick.
-  const settledSearch = useRef(initialSearch);
+  // Debounce search. The page goes back to 1 only when the applied search really changes: the
+  // timer also fires once after mount, and resetting then would undo a page the user already
+  // picked in the first moments.
+  const appliedSearchRef = useRef(initialSearch);
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      if (searchQuery !== settledSearch.current) {
-        settledSearch.current = searchQuery;
+      if (appliedSearchRef.current !== searchQuery) {
+        appliedSearchRef.current = searchQuery;
         setCurrentPage(1);
       }
     }, debounceMs);
@@ -109,10 +124,10 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
 
   // Persist column visibility
   useEffect(() => {
-    if (storageKeyPrefix) {
-      localStorage.setItem(`${storageKeyPrefix}_columns`, JSON.stringify(columnVisibility));
+    if (columnsStorageKey) {
+      localStorage.setItem(columnsStorageKey, JSON.stringify(columnVisibility));
     }
-  }, [columnVisibility, storageKeyPrefix]);
+  }, [columnVisibility, columnsStorageKey]);
 
   // Build query params
   const offset = (currentPage - 1) * itemsPerPage;
@@ -196,6 +211,8 @@ export function useServerPagination<T>(options: UseServerPaginationOptions<T>) {
     isFetching: queryResult.isFetching,
     /** True while the rows on screen belong to the previous query (page, sort or filter just changed). */
     isShowingPreviousQuery: queryResult.isPlaceholderData,
+    // React Query pauses (does not fail) a fetch while the browser is offline.
+    isOffline: queryResult.fetchStatus === 'paused',
     isSearchPending: searchQuery.trim() !== debouncedSearch.trim(),
     error: queryResult.error,
     currentPage,

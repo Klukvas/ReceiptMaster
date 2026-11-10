@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { Link } from "react-router-dom";
 import { parseApiError } from "../../lib/api-errors";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useFieldErrors } from "../../hooks/useFieldErrors";
+import { useFocusFirstField } from "../../hooks/useFocusFirstField";
 import { validateLogin, type AuthField } from "../../lib/auth-validation";
+import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
+import { PasswordToggleButton } from "./PasswordToggleButton";
 import {
   clearSessionExpired,
   hasSessionExpired,
@@ -15,6 +18,10 @@ export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  // Synchronous guard: state updates land after a second click in the same task.
+  const inFlight = useRef(false);
+  const formRef = useFocusFirstField<HTMLFormElement>(true);
   const [error, setError] = useState("");
   const [isSessionExpired] = useState(hasSessionExpired);
 
@@ -28,7 +35,9 @@ export const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (inFlight.current) return;
     if (!showErrors(validateLogin({ email, password }))) return;
+    inFlight.current = true;
     setIsLoading(true);
 
     try {
@@ -38,6 +47,7 @@ export const LoginForm: React.FC = () => {
       const apiError = parseApiError(err);
       setError(apiError.message);
     } finally {
+      inFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -61,7 +71,12 @@ export const LoginForm: React.FC = () => {
             {t("auth.sessionExpired")}
           </div>
         )}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
+        <form
+          ref={formRef}
+          className="mt-8 space-y-6"
+          onSubmit={handleSubmit}
+          noValidate
+        >
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -90,25 +105,31 @@ export const LoginForm: React.FC = () => {
               <label htmlFor="password" className="sr-only">
                 {t("auth.password")}
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                aria-invalid={errors.password ? true : undefined}
-                aria-describedby={
-                  errors.password ? "password-error" : undefined
-                }
-                className={`appearance-none relative block w-full px-3 py-2 border ${borderFor("password")} placeholder-content-tertiary text-content bg-elevated rounded-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base sm:text-sm transition-colors duration-200`}
-                placeholder={t("auth.password")}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  clearField("password");
-                  setError("");
-                }}
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  aria-invalid={errors.password ? true : undefined}
+                  aria-describedby={
+                    errors.password ? "password-error" : undefined
+                  }
+                  className={`appearance-none relative block w-full px-3 py-2 border ${borderFor("password")} placeholder-content-tertiary text-content bg-elevated rounded-md focus:outline-none focus:ring-[var(--color-ring)] focus:border-accent-base sm:text-sm transition-colors duration-200 pr-11`}
+                  placeholder={t("auth.password")}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    clearField("password");
+                    setError("");
+                  }}
+                />
+                <PasswordToggleButton
+                  isVisible={showPassword}
+                  onToggle={() => setShowPassword(!showPassword)}
+                />
+              </div>
               <FieldError
                 id="password-error"
                 message={messageFor("password")}
@@ -126,13 +147,9 @@ export const LoginForm: React.FC = () => {
           )}
 
           <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-accent-base hover:bg-accent-base-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-            >
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? t("common.loading") : t("auth.login")}
-            </button>
+            </Button>
           </div>
 
           <div className="text-center">

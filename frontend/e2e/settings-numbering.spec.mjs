@@ -123,7 +123,7 @@ const checkDraftSurvivesTabSwitch = async (results) => {
     const invoice = row(page, "invoice");
     await invoice.waitFor({ state: "visible" });
     await invoice.getByLabel("Prefix").fill("DRAFT-");
-    await page.getByRole("tab").first().click();
+    await page.locator("#settings-tab-advanced").click();
     await invoice.waitFor({ state: "hidden" });
     await page.locator("#settings-tab-documents").click();
     await invoice.waitFor({ state: "visible" });

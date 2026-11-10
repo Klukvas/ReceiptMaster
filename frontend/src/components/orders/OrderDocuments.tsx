@@ -38,7 +38,7 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
   const { inFlightIds: retryingIds, runOnce } = useInFlightIds();
   const retry = (document: Receipt) =>
     runOnce(document.id, async () => {
-      await receiptService.retryDocument(order.id, document.document_type);
+      await receiptService.retryDocumentWithFeedback(order.id, document.document_type);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["orders"] }),
         queryClient.invalidateQueries({ queryKey: ["receipts"] }),

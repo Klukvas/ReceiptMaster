@@ -3,7 +3,8 @@ import { AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { productsApi } from "../../lib/api";
 import { Card } from "../ui/Card";
-import { StatCardSkeleton } from "../ui/Skeleton";
+import { LowStockSkeleton } from "./DashboardSkeletons";
+import { QueryErrorState } from "./QueryErrorState";
 import { useTranslation } from "../../hooks/useTranslation";
 
 const stockBadge = (qty: number) => {
@@ -15,7 +16,7 @@ const stockBadge = (qty: number) => {
 export const LowStockWidget = () => {
   const { t } = useTranslation();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["lowStockProducts"],
     queryFn: () => productsApi.getLowStock(10),
   });
@@ -26,7 +27,7 @@ export const LowStockWidget = () => {
     queryFn: () => productsApi.getAll({ limit: 1 }),
   });
 
-  if (isLoading || countLoading) return <StatCardSkeleton />;
+  if (isLoading || countLoading) return <LowStockSkeleton />;
 
   const products = data?.data || [];
   const hasNoProducts = (countData?.data?.total ?? 1) === 0;
@@ -39,7 +40,12 @@ export const LowStockWidget = () => {
           {t("dashboard.lowStock", "Low Stock")}
         </h3>
       </div>
-      {products.length === 0 ? (
+      {isError ? (
+        <QueryErrorState
+          message={t("dashboard.widgetLoadError", "Could not load this section")}
+          onRetry={() => void refetch()}
+        />
+      ) : products.length === 0 ? (
         <div className="text-center py-6 text-sm text-content-tertiary">
           {hasNoProducts ? (
             <>
@@ -66,7 +72,7 @@ export const LowStockWidget = () => {
                 {p.name}
               </span>
               <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${stockBadge(p.quantity)}`}
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap tabular-nums ${stockBadge(p.quantity)}`}
               >
                 {p.quantity} {t("dashboard.pcs", "pcs")}
               </span>

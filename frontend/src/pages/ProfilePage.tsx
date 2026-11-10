@@ -1,18 +1,18 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Mail,
   Lock,
   Save,
   Edit3,
   X,
-  Eye,
-  EyeOff,
   Crown,
   Package,
   ShoppingCart,
   FileText,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { Button } from "../components/ui/Button";
+import { PasswordToggleButton } from "../components/auth/PasswordToggleButton";
 import { useAuth } from "../hooks/useAuth";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
@@ -30,6 +30,8 @@ export const ProfilePage: React.FC = () => {
   const { status: subscription, isLoading: subLoading } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Synchronous guard: state updates land after a second click in the same task.
+  const inFlight = useRef(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showPasswords, setShowPasswords] = useState({
     current: false,
@@ -59,6 +61,8 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
+    if (inFlight.current) return;
+    inFlight.current = true;
     setIsLoading(true);
     try {
       await authApi.updateProfile(formData);
@@ -68,6 +72,7 @@ export const ProfilePage: React.FC = () => {
     } catch (error: unknown) {
       toast.error(parseApiError(error).message || t("profile.updateFailed"));
     } finally {
+      inFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -113,6 +118,8 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
+    if (inFlight.current) return;
+    inFlight.current = true;
     setIsLoading(true);
     try {
       await authApi.changePassword(passwordData);
@@ -128,6 +135,7 @@ export const ProfilePage: React.FC = () => {
         parseApiError(error).message || t("profile.passwordChangeFailed"),
       );
     } finally {
+      inFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -169,28 +177,30 @@ export const ProfilePage: React.FC = () => {
               </div>
 
               <div className="mt-6 space-y-4">
-                <button
+                <Button
+                  variant="outline"
+                  className="w-full"
                   onClick={() => {
                     // One form at a time: editing the profile closes the password form.
                     handleCancelPasswordChange();
                     setIsEditing(true);
                   }}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
-                  <Edit3 className="w-4 h-4 mr-2" />
+                  <Edit3 className="w-4 h-4" />
                   {t("profile.editProfile")}
-                </button>
+                </Button>
 
-                <button
+                <Button
+                  variant="outline"
+                  className="w-full"
                   onClick={() => {
                     handleCancel();
                     setIsChangingPassword(true);
                   }}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt transition-colors"
                 >
-                  <Lock className="w-4 h-4 mr-2" />
+                  <Lock className="w-4 h-4" />
                   {t("profile.changePassword")}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -296,6 +306,7 @@ export const ProfilePage: React.FC = () => {
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-content-tertiary" />
                       <input
                         type="email"
+                        autoComplete="email"
                         id="email"
                         name="email"
                         value={formData.email}
@@ -314,24 +325,23 @@ export const ProfilePage: React.FC = () => {
                   {/* Action Buttons */}
                   {isEditing && (
                     <div className="flex justify-end space-x-3 pt-6 border-t border-[var(--color-border)]">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={handleCancel}
                         disabled={isLoading}
-                        className="px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <X className="w-4 h-4 mr-2 inline" />
+                        <X className="w-4 h-4" />
                         {t("common.cancel")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onClick={handleSave}
                         disabled={isLoading}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent-base hover:bg-accent-base-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <Save className="w-4 h-4 mr-2 inline" />
+                        <Save className="w-4 h-4" />
                         {isLoading ? t("common.loading") : t("common.save")}
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </form>
@@ -375,24 +385,15 @@ export const ProfilePage: React.FC = () => {
                           placeholder={t("profile.currentPassword")}
                           required
                         />
-                        <button
-                          type="button"
-                          aria-label={showPasswords.current ? t("auth.hidePassword") : t("auth.showPassword")}
-                          aria-pressed={showPasswords.current}
-                          onClick={() =>
+                        <PasswordToggleButton
+                          isVisible={showPasswords.current}
+                          onToggle={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
                               current: !prev.current,
                             }))
                           }
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-                        >
-                          {showPasswords.current ? (
-                            <EyeOff className="h-5 w-5" />
-                          ) : (
-                            <Eye className="h-5 w-5" />
-                          )}
-                        </button>
+                        />
                       </div>
                     </div>
 
@@ -420,24 +421,15 @@ export const ProfilePage: React.FC = () => {
                           minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
-                        <button
-                          type="button"
-                          aria-label={showPasswords.new ? t("auth.hidePassword") : t("auth.showPassword")}
-                          aria-pressed={showPasswords.new}
-                          onClick={() =>
+                        <PasswordToggleButton
+                          isVisible={showPasswords.new}
+                          onToggle={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
                               new: !prev.new,
                             }))
                           }
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-                        >
-                          {showPasswords.new ? (
-                            <EyeOff className="h-5 w-5" />
-                          ) : (
-                            <Eye className="h-5 w-5" />
-                          )}
-                        </button>
+                        />
                       </div>
                       <PasswordBytesHint
                         id="new-password-rule"
@@ -468,48 +460,35 @@ export const ProfilePage: React.FC = () => {
                           minLength={MIN_PASSWORD_LENGTH}
                           required
                         />
-                        <button
-                          type="button"
-                          aria-label={showPasswords.confirm ? t("auth.hidePassword") : t("auth.showPassword")}
-                          aria-pressed={showPasswords.confirm}
-                          onClick={() =>
+                        <PasswordToggleButton
+                          isVisible={showPasswords.confirm}
+                          onToggle={() =>
                             setShowPasswords((prev) => ({
                               ...prev,
                               confirm: !prev.confirm,
                             }))
                           }
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-                        >
-                          {showPasswords.confirm ? (
-                            <EyeOff className="h-5 w-5" />
-                          ) : (
-                            <Eye className="h-5 w-5" />
-                          )}
-                        </button>
+                        />
                       </div>
                     </div>
 
                     {/* Action Buttons */}
                     <div className="flex justify-end space-x-3 pt-6 border-t border-[var(--color-border)]">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={handleCancelPasswordChange}
                         disabled={isLoading}
-                        className="px-4 py-2 border border-[var(--color-border)] rounded-md shadow-sm text-sm font-medium text-content-secondary bg-elevated hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <X className="w-4 h-4 mr-2 inline" />
+                        <X className="w-4 h-4" />
                         {t("common.cancel")}
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent-base hover:bg-accent-base-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-ring)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Lock className="w-4 h-4 mr-2 inline" />
+                      </Button>
+                      <Button type="submit" disabled={isLoading}>
+                        <Lock className="w-4 h-4" />
                         {isLoading
                           ? t("common.loading")
                           : t("profile.changePassword")}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 </div>
@@ -537,7 +516,7 @@ export const ProfilePage: React.FC = () => {
                     {/* Self-service deletion does not exist yet; the privacy policy promises a reply within 30 days. */}
                     <a
                       href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t("profile.deleteAccountEmailSubject"))}`}
-                      className="px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0 text-center"
+                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2 border border-[var(--color-danger-light)] rounded-md shadow-sm text-sm font-medium text-danger-base bg-elevated hover:bg-[var(--color-danger-light)] transition-colors shrink-0 text-center pointer-coarse:min-h-11"
                     >
                       {t("profile.requestAccountDeletion")}
                     </a>
@@ -591,9 +570,9 @@ const LimitRow = ({
         <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden">
           <div
             className={clsx(
-              "h-full rounded-full transition-all duration-300",
+              "h-full rounded-full transition-all duration-300 motion-reduce:transition-none",
               percentage >= 100
-                ? "bg-[var(--color-danger-light)]"
+                ? "bg-danger-base"
                 : percentage >= 80
                   ? "bg-warning-base"
                   : "bg-success-base",

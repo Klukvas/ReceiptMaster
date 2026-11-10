@@ -14,6 +14,7 @@ import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 
+import { isUniqueViolationOnColumn } from "../../common/utils/unique-violation.util";
 import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
 import {
   familyOf,
@@ -80,7 +81,17 @@ export class UsersService {
       password: _hashedPassword,
     });
 
-    const savedUser = await this.userRepository.save(user);
+    let savedUser: User;
+    try {
+      savedUser = await this.userRepository.save(user);
+    } catch (error) {
+      // Two registrations can both pass the pre-check above; the unique email
+      // index settles the race and the loser gets the same 409.
+      if (isUniqueViolationOnColumn(error, "email")) {
+        throw ApiErrors.USER_ALREADY_EXISTS(registerDto.email);
+      }
+      throw error;
+    }
 
     const payload = { sub: savedUser.id, email: savedUser.email };
     const access_token = this.jwtService.sign(payload);

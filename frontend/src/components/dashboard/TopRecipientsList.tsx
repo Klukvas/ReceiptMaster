@@ -3,6 +3,8 @@ import { ArrowUpDown, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '../../lib/api';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Skeleton } from '../ui/Skeleton';
+import { useAfterDelay } from '../../hooks/useAfterDelay';
+import { QueryErrorState } from './QueryErrorState';
 
 interface Recipient {
  recipient_id: string;
@@ -18,6 +20,9 @@ interface Recipient {
 interface TopRecipientsListProps {
  recipients: Recipient[];
  isLoading: boolean;
+ /** Shows a retryable error instead of the empty message when the query failed. */
+ isError?: boolean;
+ onRetry?: () => void;
  emptyMessage?: string;
  accentColor: 'green' | 'purple';
 }
@@ -46,12 +51,15 @@ const INITIAL_LIMIT = 10;
 export const TopRecipientsList = ({
  recipients,
  isLoading,
+ isError,
+ onRetry,
  emptyMessage,
  accentColor,
 }: TopRecipientsListProps) => {
  const { t } = useTranslation();
  const [sortBy, setSortBy] = useState<'revenue' | 'orders'>('revenue');
  const [showAll, setShowAll] = useState(false);
+ const isSkeletonVisible = useAfterDelay(200);
 
  // Unknown amounts sort after every known one, like the API's NULLS LAST.
  const byAmount = (a: Recipient, b: Recipient) =>
@@ -88,18 +96,23 @@ export const TopRecipientsList = ({
 
  {/* Loading */}
  {isLoading ? (
- <div className="space-y-3">
- {Array.from({ length: 5 }).map((_, i) => (
- <div key={i} className="flex items-center gap-3 py-2">
- <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+ <div
+ className={`divide-y divide-transparent ${isSkeletonVisible ? '' : 'invisible'}`}
+ aria-hidden="true"
+ >
+ {Array.from({ length: INITIAL_LIMIT }).map((_, i) => (
+ <div key={i} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+ <Skeleton className="h-9 w-9 rounded-full shrink-0 motion-reduce:animate-none" />
  <div className="flex-1">
- <Skeleton className="h-3.5 w-28 mb-1.5" />
- <Skeleton className="h-3 w-16" />
+ <Skeleton className="h-3.5 w-28 mb-1.5 motion-reduce:animate-none" />
+ <Skeleton className="h-3 w-16 motion-reduce:animate-none" />
  </div>
- <Skeleton className="h-4 w-20" />
+ <Skeleton className="h-4 w-20 motion-reduce:animate-none" />
  </div>
  ))}
  </div>
+ ) : isError ? (
+ <QueryErrorState className="py-10" onRetry={() => onRetry?.()} />
  ) : visible.length === 0 ? (
  <div className="text-center py-10 text-sm text-content-tertiary">
  {emptyMessage || t('dashboard.noData')}

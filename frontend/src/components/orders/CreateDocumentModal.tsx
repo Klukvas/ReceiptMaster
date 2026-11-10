@@ -45,7 +45,7 @@ import { useOnReturnToTab } from "../../hooks/useOnReturnToTab";
 import { useSignoff } from "../../hooks/useSignoff";
 import { useTemplateChoice } from "../../hooks/useTemplateChoice";
 import { useTranslation } from "../../hooks/useTranslation";
-import { selectClass } from "../settings/DocumentFormatting";
+import { selectClass } from "../settings/document-ui";
 import { Button } from "../ui/Button";
 import { RetentionConfirmModal } from "../documents/RetentionConfirmModal";
 import { Modal } from "../ui/Modal";

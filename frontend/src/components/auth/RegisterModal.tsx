@@ -1,13 +1,15 @@
-import React, { useState } from "react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { Mail, Lock } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useFieldErrors } from "../../hooks/useFieldErrors";
+import { useFocusFirstField } from "../../hooks/useFocusFirstField";
 import { useTranslation } from "../../hooks/useTranslation";
 import { ErrorCode, parseApiError } from "../../lib/api-errors";
 import { validateRegister, type AuthField } from "../../lib/auth-validation";
 import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 import { Modal } from "../ui/Modal";
+import { PasswordToggleButton } from "./PasswordToggleButton";
 import toast from "react-hot-toast";
 import { PasswordBytesHint } from "./PasswordBytesHint";
 
@@ -30,6 +32,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const { register } = useAuth();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  // Synchronous guard: state updates land after a second click in the same task.
+  const inFlight = useRef(false);
+  const formRef = useFocusFirstField<HTMLFormElement>(isOpen);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -52,8 +57,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (inFlight.current) return;
     if (!showErrors(validateRegister(formData))) return;
 
+    inFlight.current = true;
     setIsLoading(true);
     try {
       await register(formData.email.trim(), formData.password, "", "");
@@ -68,6 +75,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         toast.error(message);
       }
     } finally {
+      inFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -85,7 +93,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       title={t("auth.registerTitle")}
       size="sm"
     >
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <form
+        ref={formRef}
+        onSubmit={handleSubmit}
+        noValidate
+        className="space-y-6"
+      >
         {/* Email */}
         <div>
           <label
@@ -140,21 +153,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               placeholder={t("auth.password")}
               required
             />
-            <button
-              type="button"
-              aria-label={
-                showPassword ? t("auth.hidePassword") : t("auth.showPassword")
-              }
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-            >
-              {showPassword ? (
-                <EyeOff className="h-5 w-5" />
-              ) : (
-                <Eye className="h-5 w-5" />
-              )}
-            </button>
+            <PasswordToggleButton
+              isVisible={showPassword}
+              onToggle={() => setShowPassword(!showPassword)}
+            />
           </div>
           <FieldError id="password-error" message={messageFor("password")} />
           <PasswordBytesHint id="password-rule" password={formData.password} className="text-content-secondary" />
@@ -185,23 +187,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               placeholder={t("auth.confirmPassword")}
               required
             />
-            <button
-              type="button"
-              aria-label={
-                showConfirmPassword
-                  ? t("auth.hidePassword")
-                  : t("auth.showPassword")
-              }
-              aria-pressed={showConfirmPassword}
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-content-tertiary hover:text-content-secondary"
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-5 w-5" />
-              ) : (
-                <Eye className="h-5 w-5" />
-              )}
-            </button>
+            <PasswordToggleButton
+              isVisible={showConfirmPassword}
+              onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
+            />
           </div>
           <FieldError
             id="confirmPassword-error"

@@ -1284,7 +1284,7 @@ const checkPreviewBusy = async (results) => {
     await openDetails(page);
     await page.locator('[data-document-type="waybill"]').getByRole("button", { name: "Replace" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    await dialog.getByRole("button", { name: "Update now" }).click();
     const shown = await settle(async () => (await dialog.getByText("A preview is already being prepared").count()) > 0);
     results.check(
       "a 429 from the live preview says a preview is already being prepared, not the server's text",
@@ -1392,6 +1392,8 @@ const checkReplaceDesign = async (results) => {
       await openDetails(page);
       await page.locator('[data-document-type="invoice"]').getByRole("button", { name: "Replace" }).click();
       const dialog = page.getByRole("dialog");
+      // In the per-document dialog every section starts folded; only the preview is open.
+      await dialog.locator("summary", { hasText: "Template and title" }).click();
       const select = dialog.getByLabel("Template", { exact: true });
       await select.waitFor({ state: "visible" });
       await settle(async () => (await select.inputValue()) !== "thermal");
@@ -1408,7 +1410,7 @@ const checkReplaceDesign = async (results) => {
       results.check(
         `${label}: the waybill-only preview is replaced by an explanation`,
         (await dialog.getByText("The preview only renders the waybill layout").count()) === 1 &&
-          (await dialog.getByRole("button", { name: "Refresh preview" }).count()) === 0,
+          (await dialog.getByRole("button", { name: "Update now" }).count()) === 0,
         "preview offered",
       );
     });
