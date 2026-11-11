@@ -406,12 +406,20 @@ export const OrdersPage = () => {
                 {order.is_locked && (
                   <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
                 )}
-                <h3 className="text-base font-semibold text-content truncate">
-                  <span className="tabular-nums text-content-tertiary">
-                    {formatOrderNumber(order)}
-                  </span>
-                  <span className="text-content-tertiary">{" · "}</span>
-                  {order.recipient?.name || "-"}
+                {/* The name is what a thumb goes for first: it opens the details like the
+                    View button below and a row click on a desktop. */}
+                <h3 className="min-w-0 text-base font-semibold text-content">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrder(order)}
+                    className="block w-full truncate text-left pointer-coarse:min-h-11"
+                  >
+                    <span className="tabular-nums text-content-tertiary">
+                      {formatOrderNumber(order)}
+                    </span>
+                    <span className="text-content-tertiary">{" · "}</span>
+                    {order.recipient?.name || "-"}
+                  </button>
                 </h3>
               </div>
               <p className="text-xs text-content-tertiary mt-0.5">

@@ -115,6 +115,21 @@ const homeErrors = async (results) => {
   });
 };
 
+const homeErrorRetryTarget = async (results) => {
+  await withPage(PHONE, async (page) => {
+    const state = newState({ fail: true });
+    await open(page, state, "/dashboard");
+    const banner = page.getByRole("alert").filter({ hasText: "Some data could not be loaded" });
+    await banner.waitFor({ timeout: 10000 });
+    const box = await banner.getByRole("button", { name: "Retry" }).boundingBox();
+    results.check(
+      "home on a phone: the banner's Retry is a 44px target, like each widget's",
+      (box?.height ?? 0) >= 44,
+      JSON.stringify(box),
+    );
+  });
+};
+
 const homeLoading = async (results, name, config) => {
   await withPage(config, async (page) => {
     const state = newState({ listDelayMs: 1500 });
@@ -272,6 +287,7 @@ export const run = async () => {
   await analyticsErrors(results, "desktop", DESKTOP);
   await analyticsErrors(results, "mobile", PHONE);
   await homeErrors(results);
+  await homeErrorRetryTarget(results);
   await homeLoading(results, "desktop", DESKTOP);
   await homeLoading(results, "mobile", PHONE);
   await rangeChangeKeepsContent(results);

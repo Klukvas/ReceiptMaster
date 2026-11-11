@@ -127,11 +127,11 @@ export function DocumentTemplateSection({
           {t("document.titleHeading")}
         </legend>
         <div className="space-y-2">
-          <label className="flex items-start gap-2 text-sm text-content">
+          <label className="flex items-start gap-2 text-sm text-content pointer-coarse:min-h-11">
             <input
               type="radio"
               name="document-title-mode"
-              className="mt-0.5 h-4 w-4"
+              className="mt-0.5 h-4 w-4 shrink-0"
               checked={config.title.mode === "automatic"}
               onChange={() => patch({ title: { mode: "automatic" } })}
             />
@@ -140,11 +140,11 @@ export function DocumentTemplateSection({
               <FieldHint>{t("document.titleAutomaticHelp")}</FieldHint>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-content">
+          <label className="flex items-start gap-2 text-sm text-content pointer-coarse:min-h-11 pointer-coarse:items-center">
             <input
               type="radio"
               name="document-title-mode"
-              className="mt-0.5 h-4 w-4"
+              className="mt-0.5 h-4 w-4 shrink-0 pointer-coarse:mt-0"
               checked={config.title.mode === "custom"}
               onChange={() =>
                 patch({

@@ -110,17 +110,22 @@ const PDF = Buffer.from(
   "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
 );
 
-/** previews: how the mocked server answers each POST /receipts/preview, in order (default 200). */
-const install = async (page, state, { previewStatuses = [] } = {}) => {
+/**
+ * previews: how the mocked server answers each POST /receipts/preview, in order (default 200).
+ * configDelayMs holds the saved configuration back, as a slow network would.
+ */
+const install = async (page, state, { previewStatuses = [], configDelayMs = 0 } = {}) => {
   const previews = { count: 0 };
   await installApiMocks(page, state);
   await page.addInitScript(() =>
     localStorage.setItem("onboarding_dismissed", "1"),
   );
-  await page.route("**/api/v1/settings/**", (route) => {
+  await page.route("**/api/v1/settings/**", async (route) => {
     const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
-    if (path === "/settings/document-config")
+    if (path === "/settings/document-config") {
+      if (configDelayMs) await new Promise((resolve) => setTimeout(resolve, configDelayMs));
       return json(route, { data: { config: CONFIG, revision: 3 } });
+    }
     if (path === "/settings/templates") return json(route, { data: TEMPLATES });
     if (path === "/settings/document-presets") return json(route, { data: [] });
     return route.fallback();
@@ -140,6 +145,9 @@ const install = async (page, state, { previewStatuses = [] } = {}) => {
 };
 
 const desktop = { viewport: { width: 1280, height: 900 } };
+// The editor's height depends on the account's settings; the skeleton sits between a sparse and a
+// filled-in one.
+const SKELETON_HEIGHT_TOLERANCE = 0.08;
 
 export const run = async () => {
   const results = new Results("document form");
@@ -270,6 +278,19 @@ export const run = async () => {
     await page.goto(`${BASE_URL}/settings`);
     await page.getByLabel("Company Name", { exact: true }).waitFor();
     await page.waitForTimeout(800);
+    const titleOptions = await page
+      .locator('input[name="document-title-mode"]')
+      .evaluateAll((inputs) =>
+        inputs.map((input) => {
+          const own = input.getBoundingClientRect();
+          return { radio: Math.round(own.width), row: Math.round(input.closest("label").getBoundingClientRect().height) };
+        }),
+      );
+    results.check(
+      "on a phone both document title options are 44px rows with an unsquashed radio",
+      titleOptions.length === 2 && titleOptions.every(({ radio, row }) => radio === 16 && row >= 44),
+      JSON.stringify(titleOptions),
+    );
     const toggle = page.getByRole("button", { name: "Show preview" });
     results.check(
       "on a phone the preview comes first, collapsed, and nothing is rendered until it is opened",
@@ -335,6 +356,24 @@ export const run = async () => {
           .count()) >= 1,
     );
   });
+
+  for (const viewport of [desktop.viewport, { width: 375, height: 812 }]) {
+    await withPage({ viewport }, async (page) => {
+      page.setDefaultTimeout(8000);
+      await install(page, createState(), { configDelayMs: 2000 });
+      await page.goto(`${BASE_URL}/settings`, { waitUntil: "domcontentloaded" });
+      const skeleton = page.locator('[role="status"] > [aria-hidden]');
+      await skeleton.waitFor();
+      const skeletonHeight = (await skeleton.boundingBox())?.height ?? 0;
+      await page.getByLabel("Company Name", { exact: true }).waitFor();
+      const formHeight = (await page.locator("form").first().boundingBox())?.height ?? 0;
+      results.check(
+        `${viewport.width}px: a slow configuration shows a skeleton of the editor, not a "Loading" line, and nothing jumps when it lands`,
+        skeletonHeight > 0 && Math.abs(skeletonHeight - formHeight) <= formHeight * SKELETON_HEIGHT_TOLERANCE,
+        `skeleton=${skeletonHeight} form=${formHeight}`,
+      );
+    });
+  }
 
   return results;
 };

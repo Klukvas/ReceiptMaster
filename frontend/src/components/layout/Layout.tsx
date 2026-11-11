@@ -8,6 +8,10 @@ import { Sidebar } from "./Sidebar";
 import { OfflineBanner } from "./OfflineBanner";
 import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
 
+// 16 px of text wraps to two rows on a phone; 44 px rows keep the links apart for a thumb.
+const FOOTER_LINK_CLASS =
+  "inline-flex items-center text-xs text-content-tertiary hover:text-content-secondary transition-colors pointer-coarse:min-h-11";
+
 interface LayoutProps {
   children: ReactNode;
 }
@@ -147,31 +151,31 @@ export const Layout = ({ children }: LayoutProps) => {
               <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
                 <Link
                   to="/terms"
-                  className="text-xs text-content-tertiary hover:text-content-secondary transition-colors"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.terms")}
                 </Link>
                 <Link
                   to="/privacy"
-                  className="text-xs text-content-tertiary hover:text-content-secondary transition-colors"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.privacy")}
                 </Link>
                 <Link
                   to="/refund-policy"
-                  className="text-xs text-content-tertiary hover:text-content-secondary transition-colors"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.refundPolicy")}
                 </Link>
                 <Link
                   to="/cookie-policy"
-                  className="text-xs text-content-tertiary hover:text-content-secondary transition-colors"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.cookiePolicy")}
                 </Link>
                 <a
                   href="mailto:fluxlab@flux-lab.dev"
-                  className="text-xs text-content-tertiary hover:text-content-secondary transition-colors"
+                  className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.contact")}
                 </a>

@@ -314,7 +314,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
                         </div>
                       );
                     })()}
-                    <div className="ml-auto text-sm font-medium text-content">
+                    <div className="ml-auto text-sm font-medium text-content tabular-nums">
                       {formatCurrency(
                         calculateItemTotal(item),
                         getProduct(item.productId)?.currency ?? order.currency,
@@ -327,7 +327,7 @@ export const EditOrderForm = ({ order, onClose }: EditOrderFormProps) => {
           </div>
 
           <div className="border-t border-[var(--color-border)] pt-4">
-            <div className="flex justify-between items-center text-lg font-semibold text-content">
+            <div className="flex justify-between items-center text-lg font-semibold text-content tabular-nums">
               <span>{t("orders.total")}:</span>
               <span>
                 {hasMixedCurrencies
