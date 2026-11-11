@@ -79,7 +79,7 @@ export const FooterSection: React.FC = React.memo(() => {
 
   return (
     <footer className="landing-footer">
-      <a href="/" className="landing-logo">
+      <a href="/" className="landing-logo" aria-label="ReceiptMaster">
         <img src="/logo-icon.svg" alt="" className="landing-logo-icon" />
         <span className="landing-logo-name">
           receipt<em>master</em>

@@ -48,7 +48,7 @@ export const SidebarUser = ({
  isCollapsed ?"justify-center p-2" :"gap-3 p-2.5",
  )}
  >
- <div className="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center text-sm font-semibold text-primary-600 flex-shrink-0">
+ <div className="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center text-sm font-semibold text-accent-base flex-shrink-0">
  {initials}
  </div>
 

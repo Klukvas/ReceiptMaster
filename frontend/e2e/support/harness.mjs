@@ -4,7 +4,7 @@
 // WebSocket are mocked, so the components, hooks and services under test are the
 // production ones.
 
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer } from "node:http";
 import { COMPLETE_COMPANY, NUMBERING_TYPES, numberingSetting } from "./document-mocks.mjs";
@@ -112,8 +112,17 @@ export const startReceiptSocketServer = async () => {
   };
 };
 
-export const launchBrowser = () => chromium.launch(
-  process.env.E2E_CHROME_PATH ? { executablePath: process.env.E2E_CHROME_PATH } : {},
+// E2E_BROWSER=webkit runs the suite in Safari's engine (`playwright install webkit` first).
+const BROWSER_TYPES = { chromium, webkit };
+const browserType = BROWSER_TYPES[process.env.E2E_BROWSER || "chromium"];
+if (!browserType) {
+  throw new Error(`E2E_BROWSER must be one of ${Object.keys(BROWSER_TYPES).join(", ")}`);
+}
+
+export const launchBrowser = () => browserType.launch(
+  process.env.E2E_CHROME_PATH && browserType === chromium
+    ? { executablePath: process.env.E2E_CHROME_PATH }
+    : {},
 );
 
 export const withPage = async ({ viewport }, run) => {

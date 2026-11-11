@@ -26,7 +26,10 @@ node frontend/e2e/run.mjs proxy-audit
 ```
 
 `E2E_CHROME_PATH` is optional; by default the harness uses Playwright's bundled
-Chromium (`npx playwright install chromium` once). `proxy-audit` requires a local `nginx` and `openssl` (override the binary
+Chromium (`npx playwright install chromium` once). `E2E_BROWSER=webkit` runs the
+specs in Safari's engine instead (`npx playwright install webkit` once); CI runs
+Chromium only. In Playwright's WebKit `boundingBox()` of an SVG `<text>` answers
+the whole chart's box, so specs measure chart labels with `getBoundingClientRect`. `proxy-audit` requires a local `nginx` and `openssl` (override the binary
 with `E2E_NGINX_BINARY`), validates the actual proxy configuration, then sends
 synthetic signed webhook bytes and receipt events through polling and WebSocket.
 All generated proxy certificates/logs live under `frontend/e2e/.cache` and its

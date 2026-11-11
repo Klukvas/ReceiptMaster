@@ -167,6 +167,7 @@ const guardAndWording = async (results) => {
           "Failed to fetch dynamically imported module: https://x.test/assets/a.js",
           "error loading dynamically imported module: https://x.test/assets/a.js",
           "Importing a module script failed.",
+          "'text/html' is not a valid JavaScript MIME type.",
           "Unable to preload CSS for /assets/a.css",
         ].map((message) => isChunkLoadError(new TypeError(message))),
         unrelated: [

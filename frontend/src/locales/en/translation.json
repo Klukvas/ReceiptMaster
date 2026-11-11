@@ -87,6 +87,8 @@
     "passwordBytes": "{{used}}/{{max}} bytes"
   },
   "navigation": {
+    "mainNavigation": "Main navigation",
+    "legalLinks": "Legal",
     "dashboard": "Dashboard",
     "orders": "Orders",
     "products": "Products",

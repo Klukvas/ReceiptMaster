@@ -126,7 +126,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
         className={`landing-nav ${scrolled ? "scrolled" : ""}`}
         aria-label={t("landing.nav.mainNavigation")}
       >
-        <a href="/" className="landing-logo">
+        <a href="/" className="landing-logo" aria-label="ReceiptMaster">
           <img src="/logo-icon.svg" alt="" className="landing-logo-icon" />
           <span className="landing-logo-name">
             receipt<em>master</em>

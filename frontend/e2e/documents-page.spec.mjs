@@ -164,7 +164,10 @@ const checkFilters = async (results) => {
         lastQuery(state).get("type") === "invoice" && urlOf(page).searchParams.get("type") === "invoice",
         `${state.listQueries?.at(-1)} ${page.url()}`,
       );
-      const rows = await page.locator("main").innerText();
+      // The request leaves before its answer is drawn; the previous page stays on screen meanwhile.
+      const main = page.locator("main");
+      await settle(async () => !(await main.innerText()).includes("WAY-a2"));
+      const rows = await main.innerText();
       results.check(`${label}: other types disappear`, !rows.includes("WAY-a2") && rows.includes("INV-a1"), rows.slice(0, 300));
 
       await page.getByLabel("Status", { exact: true }).selectOption("generated");
@@ -444,7 +447,8 @@ const checkTimeZone = async (results) => {
     const body = await page.locator("main").innerText();
     results.check(
       "table dates use the document time zone (UTC+14 moves 23:30Z to the next day)",
-      body.includes("11 Mar 2026, 13:30") && body.includes("Kiritimati (GMT+14)") && !body.includes("Pacific/Kiritimati"),
+      // WebKit's ICU joins the date and time with " at ", Chromium's with a comma.
+      /11 Mar 2026(,| at) 13:30/.test(body) && body.includes("Kiritimati (GMT+14)") && !body.includes("Pacific/Kiritimati"),
       body.slice(0, 500),
     );
   });

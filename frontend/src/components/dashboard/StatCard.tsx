@@ -18,11 +18,12 @@ interface StatCardProps {
 export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, description, footer }: StatCardProps) => {
  const content = (
  <Card className={href ? 'hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
- <div className="flex items-center">
+ {/* Below 360 px two cards share a row and the label no longer fits beside the icon. */}
+ <div className="flex flex-col items-start min-[360px]:flex-row min-[360px]:items-center">
  <div className={`p-3 rounded-lg ${bgColor}`}>
  <Icon className={`h-6 w-6 ${color}`} />
  </div>
- <div className="ml-4">
+ <div className="mt-3 min-w-0 min-[360px]:mt-0 min-[360px]:ml-4">
  <p className="text-sm font-medium text-content-secondary">{name}</p>
  <p className="text-2xl font-bold text-content tabular-nums">{value}</p>
  {description && (

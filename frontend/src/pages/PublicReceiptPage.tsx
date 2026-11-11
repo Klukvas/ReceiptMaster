@@ -465,6 +465,8 @@ const PublicReceiptContent = () => {
 export const PublicReceiptPage = () => (
   <>
     <SEO noindex />
-    <PublicReceiptContent />
+    <main>
+      <PublicReceiptContent />
+    </main>
   </>
 );

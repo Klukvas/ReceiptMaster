@@ -37,9 +37,9 @@ const Bone = ({ className }: { className: string }) => (
 export const EntityStatCardSkeleton = () => (
   <DelayedSkeleton>
     <Card>
-      <div className="flex items-center">
+      <div className="flex flex-col items-start min-[360px]:flex-row min-[360px]:items-center">
         <Bone className="h-12 w-12 shrink-0 rounded-lg" />
-        <div className="ml-4">
+        <div className="mt-3 min-[360px]:mt-0 min-[360px]:ml-4">
           <Bone className="h-5 w-20" />
           <Bone className="h-8 w-14" />
         </div>
@@ -52,9 +52,9 @@ export const EntityStatCardSkeleton = () => (
 export const FinancialStatCardSkeleton = () => (
   <DelayedSkeleton>
     <Card>
-      <div className="flex items-center">
+      <div className="flex flex-col items-start min-[360px]:flex-row min-[360px]:items-center">
         <Bone className="h-12 w-12 shrink-0 rounded-lg" />
-        <div className="ml-4">
+        <div className="mt-3 min-[360px]:mt-0 min-[360px]:ml-4">
           <Bone className="h-5 w-28" />
           <Bone className="h-8 w-36" />
           <Bone className="mt-0.5 h-4 w-40" />
