@@ -452,7 +452,7 @@ export const OrdersPage = () => {
             </span>
             <button
               onClick={() => setSelectedOrder(order)}
-              className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors pointer-coarse:py-3 pointer-coarse:px-2"
+              className="text-sm font-medium text-accent-base hover:underline transition-colors pointer-coarse:py-3 pointer-coarse:px-2"
             >
               {t("orders.view")}
             </button>

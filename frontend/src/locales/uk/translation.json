@@ -87,6 +87,8 @@
     "passwordBytes": "{{used}}/{{max}} байтів"
   },
   "navigation": {
+    "mainNavigation": "Основна навігація",
+    "legalLinks": "Правова інформація",
     "dashboard": "Панель керування",
     "orders": "Замовлення",
     "products": "Товари",

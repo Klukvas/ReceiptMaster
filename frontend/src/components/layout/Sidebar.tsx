@@ -169,6 +169,7 @@ export const Sidebar = ({
 
         {/* Navigation groups */}
         <nav
+          aria-label={t("navigation.mainNavigation")}
           className={clsx(
             "flex-1 min-h-0 py-2",
             isCollapsed ? "" : "overflow-y-auto",

@@ -30,7 +30,7 @@ export const SidebarItem = ({
           "flex items-center rounded-lg text-sm font-medium transition-all duration-150 motion-reduce:transition-none relative motion-safe:active:scale-[0.98] pointer-coarse:min-h-11",
           isCollapsed ? "justify-center mx-1 px-0 py-2.5" : "mx-2 px-3 py-2.5",
           isActive
-            ? "bg-primary-500/10 text-primary-600"
+            ? "bg-primary-500/10 text-accent-base"
             : "text-content-secondary hover:text-content hover:bg-surface-alt",
         )}
       >

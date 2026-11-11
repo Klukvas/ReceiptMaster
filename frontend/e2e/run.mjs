@@ -36,6 +36,7 @@ const SPECS = [
   { name: "auth-inline-errors", load: () => import("./auth-inline-errors.spec.mjs") },
   { name: "orders-select-all", load: () => import("./orders-select-all.spec.mjs") },
   { name: "uiq-public", load: () => import("./uiq-public.spec.mjs") },
+  { name: "a11y-names", load: () => import("./a11y-names.spec.mjs") },
   { name: "uiq-auth", load: () => import("./uiq-auth.spec.mjs") },
   { name: "uiq-dashboard", load: () => import("./uiq-dashboard.spec.mjs") },
   { name: "uiq-receipts", load: () => import("./uiq-receipts.spec.mjs") },

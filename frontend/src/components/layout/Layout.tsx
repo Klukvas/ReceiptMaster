@@ -82,7 +82,7 @@ export const Layout = ({ children }: LayoutProps) => {
         {t("common.skipToContent")}
       </a>
       {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-elevated/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg border-b border-[var(--color-border)] transition-colors duration-200 motion-reduce:transition-none">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-elevated/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg border-b border-[var(--color-border)] transition-colors duration-200 motion-reduce:transition-none">
         <div className="flex h-14 items-center justify-between px-4">
           <button
             type="button"
@@ -114,7 +114,7 @@ export const Layout = ({ children }: LayoutProps) => {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Sidebar */}
       <Sidebar
@@ -148,7 +148,7 @@ export const Layout = ({ children }: LayoutProps) => {
               <p className="text-xs text-content-tertiary">
                 &copy; {new Date().getFullYear()} receiptmaster.org
               </p>
-              <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <nav aria-label={t("navigation.legalLinks")} className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
                 <Link
                   to="/terms"
                   className={FOOTER_LINK_CLASS}
