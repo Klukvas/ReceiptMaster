@@ -1,6 +1,7 @@
-// The wording differs per browser: Chromium, Firefox, Safari, then Vite's preload helper.
+// The wording differs per browser: Chromium, Firefox, Safari, then Vite's preload helper. Safari
+// names the MIME type instead when a host answers the missing chunk with the SPA's index.html.
 const CHUNK_LOAD_ERROR =
-  /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|unable to preload css/i;
+  /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|is not a valid javascript mime type|unable to preload css/i;
 
 const LAST_RELOAD_KEY = "chunk-reload-at";
 

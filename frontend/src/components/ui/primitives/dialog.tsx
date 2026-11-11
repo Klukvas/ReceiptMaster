@@ -124,32 +124,21 @@ function Dialog({
       }
 
       if (e.key === "Tab" && dialogRef.current) {
-        const focusable = getFocusableElements(dialogRef.current);
-        if (focusable.length === 0) {
-          e.preventDefault();
-          return;
-        }
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (e.shiftKey) {
-          if (
-            document.activeElement === first ||
-            document.activeElement === dialogRef.current
-          ) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (
-            document.activeElement === last ||
-            document.activeElement === dialogRef.current
-          ) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
+        // Move focus ourselves instead of leaving it to the browser: Safari's default Tab skips
+        // buttons and links, and from the last field it leaves the page for the browser's own UI.
+        e.preventDefault();
+        const stops = getTabStops(getFocusableElements(dialogRef.current));
+        if (stops.length === 0) return;
+        const focused = tabStopOf(document.activeElement, stops);
+        const current = stops.findIndex((stop) => stop === focused);
+        const step = e.shiftKey ? -1 : 1;
+        const next =
+          current === -1
+            ? e.shiftKey
+              ? stops.length - 1
+              : 0
+            : (current + step + stops.length) % stops.length;
+        stops[next].focus();
       }
     };
 
@@ -218,6 +207,41 @@ function Dialog({
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
+
+const isRadio = (element: Element | null): element is HTMLInputElement =>
+  element instanceof HTMLInputElement &&
+  element.type === "radio" &&
+  element.name !== "";
+
+const radioGroupOf = (radio: HTMLInputElement, elements: HTMLElement[]) =>
+  elements.filter(
+    (other): other is HTMLInputElement =>
+      isRadio(other) && other.name === radio.name && other.form === radio.form,
+  );
+
+/** What Tab visits, as a browser does: a radio group is one stop, its checked radio or its first. */
+function getTabStops(elements: HTMLElement[]): HTMLElement[] {
+  return elements.filter((element) => {
+    if (!isRadio(element)) return true;
+    const group = radioGroupOf(element, elements);
+    const checked = group.find((radio) => radio.checked);
+    return element === (checked ?? group[0]);
+  });
+}
+
+/** The stop that stands for the focused element: a radio's group is represented by one radio. */
+function tabStopOf(
+  active: Element | null,
+  stops: HTMLElement[],
+): Element | null {
+  if (!isRadio(active)) return active;
+  return (
+    stops.find(
+      (stop) =>
+        isRadio(stop) && stop.name === active.name && stop.form === active.form,
+    ) ?? active
+  );
+}
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(

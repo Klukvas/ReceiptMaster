@@ -94,6 +94,24 @@ const checkOrderDetailsDialog = async (results) => {
       if (!(await activeIn(page, '[role="dialog"]'))) escaped = true;
     }
     results.check("Tab and Shift+Tab stay inside the dialog", !escaped, "focus left the dialog");
+    // Safari's default Tab skips buttons and can leave the page, so the dialog moves focus itself.
+    // A synthetic Tab gets no browser default: only the dialog's own handling can move focus.
+    const synthetic = await page.evaluate(() => {
+      const before = document.activeElement;
+      const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+      before?.dispatchEvent(event);
+      const after = document.activeElement;
+      return {
+        prevented: event.defaultPrevented,
+        moved: after !== before,
+        inside: Boolean(after?.closest('[role="dialog"]')),
+      };
+    });
+    results.check(
+      "the dialog moves focus on Tab itself instead of leaving it to the browser",
+      synthetic.prevented && synthetic.moved && synthetic.inside,
+      JSON.stringify(synthetic),
+    );
     results.check(
       "the close X has an accessible name",
       (await dialog.getByRole("button", { name: "Close", exact: true }).count()) >= 1,

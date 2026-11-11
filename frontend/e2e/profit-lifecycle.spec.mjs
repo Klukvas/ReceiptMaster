@@ -131,9 +131,23 @@ const analytics = async (page, total, byProduct = BY_PRODUCT) => {
 const chartCard = (page, title) =>
   page.getByRole("heading", { name: title }).locator("xpath=..");
 
+/** A bar's axis label; the tooltip may show the same name as HTML text. */
+const barLabel = (card, name) => card.locator("svg text").getByText(name, { exact: true });
+
+/**
+ * The on-screen box of an SVG element. Playwright's WebKit answers `boundingBox()` for SVG
+ * <text> with the whole chart's box, so read the browser's own rect instead.
+ */
+const svgBox = (locator) =>
+  locator.evaluate((element) => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+
 /**
  * Moves the mouse onto a bar row or a day of a chart and reads its tooltip once
- * it shows `expected`: a previous hover's text may still be in place.
+ * it shows `expected`: a previous hover's text may still be in place. `position` runs after
+ * the chart is scrolled into view, so boxes it measures are current.
  */
 const tooltipAt = async (page, card, position, expected) => {
   await card.locator(".recharts-wrapper").scrollIntoViewIfNeeded();
@@ -195,14 +209,13 @@ const unknownBarHasATooltip = async (results) => {
   await withPage(VIEWPORT, async (page) => {
     await analytics(page, PARTIAL_TOTAL);
     const card = chartCard(page, "Profit by Product");
-    const label = await card.getByText("Cups", { exact: true }).boundingBox();
     const unknown = await tooltipAt(
       page,
       card,
-      async (plot) => ({
-        x: plot.x + plot.width / 2,
-        y: label.y + label.height / 2,
-      }),
+      async (plot) => {
+        const label = await svgBox(barLabel(card, "Cups"));
+        return { x: plot.x + plot.width / 2, y: label.y + label.height / 2 };
+      },
       "Cups",
     );
     results.check(
@@ -214,14 +227,13 @@ const unknownBarHasATooltip = async (results) => {
         !/0[,.]00/.test(unknown.replace(/52[,.]00/, "")),
       JSON.stringify(unknown),
     );
-    const known = await card.getByText("Beans", { exact: true }).boundingBox();
     const amount = await tooltipAt(
       page,
       card,
-      async (plot) => ({
-        x: plot.x + plot.width / 2,
-        y: known.y + known.height / 2,
-      }),
+      async (plot) => {
+        const known = await svgBox(barLabel(card, "Beans"));
+        return { x: plot.x + plot.width / 2, y: known.y + known.height / 2 };
+      },
       "Beans",
     );
     results.check(
@@ -331,17 +343,13 @@ const homeShowsPartialAndGaps = async (results) => {
       String(profitPath),
     );
     // The middle day has no profit point; the axis label marks where it is.
-    const day = await card
-      .locator(".recharts-xAxis-tick-labels text")
-      .nth(1)
-      .boundingBox();
     const tooltip = await tooltipAt(
       page,
       card,
-      async (plot) => ({
-        x: day.x + day.width / 2,
-        y: plot.y + 60,
-      }),
+      async (plot) => {
+        const day = await svgBox(card.locator(".recharts-xAxis-tick-labels text").nth(1));
+        return { x: day.x + day.width / 2, y: plot.y + 60 };
+      },
       "Turnover",
     );
     results.check(

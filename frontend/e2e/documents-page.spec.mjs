@@ -444,7 +444,8 @@ const checkTimeZone = async (results) => {
     const body = await page.locator("main").innerText();
     results.check(
       "table dates use the document time zone (UTC+14 moves 23:30Z to the next day)",
-      body.includes("11 Mar 2026, 13:30") && body.includes("Kiritimati (GMT+14)") && !body.includes("Pacific/Kiritimati"),
+      // WebKit's ICU joins the date and time with " at ", Chromium's with a comma.
+      /11 Mar 2026(,| at) 13:30/.test(body) && body.includes("Kiritimati (GMT+14)") && !body.includes("Pacific/Kiritimati"),
       body.slice(0, 500),
     );
   });
