@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { SignoffSource } from "../../../common/services/signoff-image";
 import { legacyConfig } from "../../settings/document-config";
+import { UserSettings } from "../../settings/entities/user-settings.entity";
 import type { DocumentConfig } from "../../settings/document-config";
 import { buildBuyer, buildSeller } from "../document-requisites";
 import { DocumentType } from "../entities/receipt.entity";
@@ -60,11 +61,11 @@ const order: FrozenOrder = {
 };
 
 const configFor = (templateId: string): DocumentConfig => {
-  const base = legacyConfig(null);
+  // A Ukrainian account without a saved configuration (number locale and hour cycle follow it).
+  const base = legacyConfig({ templateLanguage: "uk" } as UserSettings);
   return {
     ...base,
     templateId,
-    documentLanguage: "uk",
     company: {
       ...base.company,
       companyName: "Продавець",
@@ -384,7 +385,7 @@ const SIGNED_SHA256: Record<string, string> = {
   "act.minimal":
     "4c3de4687cc6d57975ff240d30bb2f0208f14296dc30cabc9132871c1a6eb7c5",
   "act.standard":
-    "af50c8dc3e247ffdcd515ec859e91ed7bb5586a44057e5536fdba36b91bebe23",
+    "9f9cd8d4dac8d135485738b99b0833676b87240ae0a666b9c2191ebe7a2ce077",
   "invoice.classic":
     "442f6ed1736c3f028391bc6a6c2f847a12cc68a92be63dab2ee1dd763e181c80",
   "invoice.corporate":
@@ -392,7 +393,7 @@ const SIGNED_SHA256: Record<string, string> = {
   "invoice.minimal":
     "f8109bffb8884c6a77d4518ec504e0341ec6ff317fcbce40c24f5073af2ee431",
   "invoice.standard":
-    "b1592b0ad5a6b3670a23038d7d01c0a128c3fdb96db0b2b2e261980e2c960c2e",
+    "2796f233d5e5a011fd96f8e594f9bfdc957890e56a0b59fef54579f6190fbbfc",
   "quote.classic":
     "d008d25ac5016e6f12c986c1b2f93d405b7ad2dfcd79b63b997ac1c77f6dea11",
   "quote.corporate":
@@ -400,13 +401,13 @@ const SIGNED_SHA256: Record<string, string> = {
   "quote.minimal":
     "3a44d2fa67e419f320243aaffec5127150a50acd1e0dc60b7e58e6e3554ea4cb",
   "quote.standard":
-    "63475c6aeb291ac224073ba9d0b10fccc9b4cae4c415d525156ffd76ec2095ed",
+    "bd7e2d42735e3454a6ea807231ead9bd40555a3df892c53f73c3e43393ab4013",
   "waybill.classic":
-    "8fe0c061ffabd5d269ba18b4de41c899d37f649f2f39c45f9cae64ae77fc4e6c",
+    "b4c501a2268489d79926e6d7743f0eb24956b0e1330615d843a20265144828f9",
   "waybill.corporate":
-    "0789f407d70b4198297bd452ac5af650c2170b9641f104fe4a9b24b5e92645af",
+    "2d2b88401d7e353c15a6cbeffe0d2d74779858cf04ca47ac1ab350d87d66b49d",
   "waybill.minimal":
-    "17060b601461ee11b886d01533955b7c054def1d4745670f059ffef49554f5b8",
+    "4363f6d2d27d850e784bcff66dc45e7d20b74f019d2b925af3c1739cb7194eb9",
   "waybill.standard":
-    "c4160094ea91245cf8999bf188f9d024f95767fca42b049535f7403dacc50392",
+    "13871fe143f133679271ca7282f3f988f8c5653040919dbf0b12dc871ff33b5c",
 };

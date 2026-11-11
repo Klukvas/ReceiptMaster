@@ -214,9 +214,13 @@ describeIsolatedPostgres(
       const redeemedAt = (await tokenRow(db, spent)).redeemed_at;
       const warn = jest.spyOn(Logger.prototype, "warn");
 
-      await users.revokeRefreshToken(active);
-      await users.revokeRefreshToken(legacy);
-      await users.revokeRefreshToken(spent);
+      // Another account presenting this user's token revokes nothing.
+      await users.revokeRefreshToken(active, randomUUID());
+      expect((await tokenRow(db, active)).revoked).toBe(false);
+
+      await users.revokeRefreshToken(active, user.id);
+      await users.revokeRefreshToken(legacy, user.id);
+      await users.revokeRefreshToken(spent, user.id);
 
       expect(await tokenRow(db, active)).toMatchObject({
         revoked: true,
@@ -247,7 +251,11 @@ describeIsolatedPostgres(
         ]);
         expect(refreshed.status).toBe("fulfilled");
         expect(changed.status).toBe("fulfilled");
-        expect(await live()).toEqual([]);
+        // Only the pair the password change issued to its caller survives.
+        if (changed.status !== "fulfilled") throw changed.reason;
+        expect(await live()).toEqual([
+          hashRefreshToken(changed.value.refresh_token),
+        ]);
       } finally {
         await parked.dispose();
       }
@@ -257,12 +265,12 @@ describeIsolatedPostgres(
       const original = await issueToken(db, user.id);
       const warn = jest.spyOn(Logger.prototype, "warn");
 
-      await changePassword();
+      const { refresh_token: callerSession } = await changePassword();
 
       await expect(users.refreshToken(original)).rejects.toMatchObject(
         UNAUTHORIZED,
       );
-      expect(await live()).toEqual([]);
+      expect(await live()).toEqual([hashRefreshToken(callerSession)]);
       expect(warn).not.toHaveBeenCalled();
     });
   },

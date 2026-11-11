@@ -18,15 +18,23 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
-import { parseApiError } from "../lib/api-errors";
+import { translatedApiError } from "../lib/api-errors";
+import { profileError } from "../lib/profile-errors";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, exceedsPasswordBytes } from "../lib/password-policy";
 import { PasswordBytesHint } from "../components/auth/PasswordBytesHint";
 
 const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
 export const ProfilePage: React.FC = () => {
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, changePassword } = useAuth();
   const { t } = useTranslation();
+  // The server words these refusals in English only; a known one gets the interface language.
+  const refusalText = (error: unknown, fallbackKey: string): string => {
+    const known = profileError(error);
+    return known
+      ? t(known.key, known.options)
+      : (translatedApiError(error) ?? t(fallbackKey));
+  };
   const { status: subscription, isLoading: subLoading } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +78,7 @@ export const ProfilePage: React.FC = () => {
       toast.success(t("profile.profileUpdated"));
       setIsEditing(false);
     } catch (error: unknown) {
-      toast.error(parseApiError(error).message || t("profile.updateFailed"));
+      toast.error(refusalText(error, "profile.updateFailed"));
     } finally {
       inFlight.current = false;
       setIsLoading(false);
@@ -122,7 +130,7 @@ export const ProfilePage: React.FC = () => {
     inFlight.current = true;
     setIsLoading(true);
     try {
-      await authApi.changePassword(passwordData);
+      await changePassword(passwordData);
       toast.success(t("profile.passwordChanged"));
       setIsChangingPassword(false);
       setPasswordData({
@@ -131,9 +139,7 @@ export const ProfilePage: React.FC = () => {
         confirmPassword: "",
       });
     } catch (error: unknown) {
-      toast.error(
-        parseApiError(error).message || t("profile.passwordChangeFailed"),
-      );
+      toast.error(refusalText(error, "profile.passwordChangeFailed"));
     } finally {
       inFlight.current = false;
       setIsLoading(false);
@@ -293,7 +299,15 @@ export const ProfilePage: React.FC = () => {
               </div>
 
               <div className="p-6">
-                <form className="space-y-6">
+                <form
+                  className="space-y-6"
+                  noValidate
+                  // Enter in the email field saves, instead of a native GET to /profile?email=…
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (isEditing) void handleSave();
+                  }}
+                >
                   {/* Email */}
                   <div>
                     <label

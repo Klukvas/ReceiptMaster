@@ -1,3 +1,4 @@
+import { NotFoundException } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { LogoStorageService } from "../../../common/services/logo-storage.service";
 import { DocumentAsset } from "../entities/document-asset.entity";
@@ -66,5 +67,48 @@ describe("DocumentAssetsService.release", () => {
 
     expect(manager.update).not.toHaveBeenCalled();
     expect(manager.query).not.toHaveBeenCalled();
+  });
+});
+
+describe("DocumentAssetsService.readSignoff", () => {
+  const asset = {
+    id: "asset-1",
+    kind: "signature",
+    state: "ready",
+    object_key: "signoffs/user-1/a.png",
+    sha256: "unused",
+  };
+  const serviceReading = (readImmutable: jest.Mock) =>
+    new DocumentAssetsService(
+      { manager: { findOne: jest.fn().mockResolvedValue(asset) } } as never,
+      { readImmutable } as unknown as LogoStorageService,
+    );
+
+  it("answers a stored image whose object is gone with 404 FILE_NOT_FOUND", async () => {
+    const noSuchKey = Object.assign(
+      new Error("The specified key does not exist."),
+      { code: "NoSuchKey", statusCode: 404 },
+    );
+    const service = serviceReading(jest.fn().mockRejectedValue(noSuchKey));
+
+    const error = await service
+      .readSignoff("user-1", "asset-1", "signature")
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).getResponse()).toMatchObject({
+      errorCode: "FILE_NOT_FOUND",
+    });
+  });
+
+  it("lets any other storage failure through unchanged", async () => {
+    const outage = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+    const service = serviceReading(jest.fn().mockRejectedValue(outage));
+
+    await expect(
+      service.readSignoff("user-1", "asset-1", "signature"),
+    ).rejects.toBe(outage);
   });
 });

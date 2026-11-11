@@ -1,4 +1,13 @@
+import { INestApplication } from "@nestjs/common";
+import { Test } from "@nestjs/testing";
+import { ThrottlerModule } from "@nestjs/throttler";
+import * as request from "supertest";
 import { PublicReceiptsController } from "./public-receipts.controller";
+import { ReceiptsService } from "./receipts.service";
+import { ApiErrors } from "../../common/errors/ApiError";
+import { GlobalExceptionFilter } from "../../common/filters/GlobalExceptionFilter";
+
+const receiptsHttp = { getPublicReceiptPdf: jest.fn() };
 
 describe("PublicReceiptsController", () => {
   let controller: PublicReceiptsController;
@@ -97,8 +106,8 @@ describe("PublicReceiptsController", () => {
       expect(mockRes.send).toHaveBeenCalledWith(pdfBuffer);
     });
 
-    it("should return error status when PDF not found", async () => {
-      const error = { statusCode: 404, message: "Receipt not found" };
+    it("passes a refusal on to the global filter with the noindex headers already set", async () => {
+      const error = ApiErrors.NOT_FOUND("Receipt");
       receiptsService.getPublicReceiptPdf.mockRejectedValue(error);
 
       const mockRes = {
@@ -108,37 +117,65 @@ describe("PublicReceiptsController", () => {
         json: jest.fn(),
       } as any;
 
-      await controller.getPublicReceiptPdf("bad-token", mockRes);
+      await expect(
+        controller.getPublicReceiptPdf("bad-token", mockRes),
+      ).rejects.toBe(error);
 
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Receipt not found" }),
-      );
+      expect(mockRes.send).not.toHaveBeenCalled();
       expect(mockRes.set).toHaveBeenCalledWith({
         "X-Robots-Tag": "noindex, nofollow",
         "Cache-Control": "private, no-store",
       });
     });
+  });
 
-    it("should return 500 for unknown errors", async () => {
-      receiptsService.getPublicReceiptPdf.mockRejectedValue(
-        new Error("Unexpected"),
+  describe("PDF errors over HTTP", () => {
+    let app: INestApplication;
+
+    beforeAll(async () => {
+      const module = await Test.createTestingModule({
+        imports: [ThrottlerModule.forRoot([{ ttl: 60000, limit: 1000 }])],
+        controllers: [PublicReceiptsController],
+        providers: [{ provide: ReceiptsService, useValue: receiptsHttp }],
+      }).compile();
+      app = module.createNestApplication({ logger: false });
+      app.useGlobalFilters(new GlobalExceptionFilter());
+      await app.init();
+    });
+
+    afterAll(async () => app.close());
+
+    it("answers a revoked link with 404, an errorCode and the noindex headers", async () => {
+      receiptsHttp.getPublicReceiptPdf.mockRejectedValueOnce(
+        ApiErrors.NOT_FOUND("Receipt"),
       );
 
-      const mockRes = {
-        set: jest.fn(),
-        send: jest.fn(),
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      } as any;
+      const res = await request(app.getHttpServer())
+        .get(`/public/receipts/${"a".repeat(64)}/pdf`)
+        .expect(404);
 
-      await controller.getPublicReceiptPdf("token", mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.set).toHaveBeenCalledWith({
-        "X-Robots-Tag": "noindex, nofollow",
-        "Cache-Control": "private, no-store",
+      expect(res.body).toEqual({
+        error: expect.any(String),
+        errorCode: "NOT_FOUND",
       });
+      expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
+      expect(res.headers["cache-control"]).toBe("private, no-store");
+    });
+
+    it("answers an unexpected failure with a generic 500 and an errorCode", async () => {
+      receiptsHttp.getPublicReceiptPdf.mockRejectedValueOnce(
+        new Error("s3://secret-bucket/key unreachable"),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get(`/public/receipts/${"a".repeat(64)}/pdf`)
+        .expect(500);
+
+      expect(res.body).toEqual({
+        error: "Internal server error",
+        errorCode: "INTERNAL_SERVER_ERROR",
+      });
+      expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
     });
   });
 });

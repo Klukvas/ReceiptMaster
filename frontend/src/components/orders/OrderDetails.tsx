@@ -9,10 +9,7 @@ import {
  Edit,
  CheckCircle,
  FileText,
- Download,
- Printer,
  XCircle,
- Share2,
 } from"lucide-react";
 import { formatCurrency, formatDate, type Order } from"../../lib/api";
 import { Button } from"../ui/Button";
@@ -20,7 +17,7 @@ import { Modal } from"../ui/Modal";
 import { OrderStatusBadge } from"./OrderStatusBadge";
 import { useTranslation } from"../../hooks/useTranslation";
 import { formatOrderNumber } from"../../lib/order-number";
-import { canCreate, waybillOf } from"../../lib/document-types";
+import { canCreate } from"../../lib/document-types";
 import { OrderDocuments } from"./OrderDocuments";
 
 interface OrderDetailsProps {
@@ -28,7 +25,7 @@ interface OrderDetailsProps {
  onClose: () => void;
  onEdit?: (order: Order) => void;
  onConfirm?: (id: string) => void;
- onCancel?: (id: string) => void;
+ onCancel?: (order: Order) => void;
  onGenerateReceipt?: (orderId: string) => void;
  onDownloadReceipt?: (receiptId: string) => void;
  onPrintReceipt?: (receiptId: string) => void;
@@ -61,9 +58,6 @@ export const OrderDetails = ({
  setTimeout(() => setIdCopied(false), 2000);
  };
 
- // The buttons below act on the waybill; invoices and acts have their own entry points.
- const receipt = waybillOf(order);
- const hasGeneratedReceipt = receipt?.status ==="generated";
  // A voided waybill is final in the backend, so only "none" or "failed" may be generated.
  const canGenerateWaybill = canCreate(order,"waybill");
 
@@ -320,42 +314,6 @@ export const OrderDetails = ({
  </Button>
  )}
 
- {/* Confirmed — with receipt */}
- {order.status ==="confirmed" && hasGeneratedReceipt && (
- <>
- {onDownloadReceipt && (
- <Button
- size="sm"
- variant="primary"
- onClick={() => onDownloadReceipt(receipt!.id)}
- >
- <Download className="w-3.5 h-3.5 mr-1.5" />
- {t("orders.downloadReceipt")}
- </Button>
- )}
- {onPrintReceipt && (
- <Button
- size="sm"
- variant="outline"
- onClick={() => onPrintReceipt(receipt!.id)}
- >
- <Printer className="w-3.5 h-3.5 mr-1.5" />
- {t("orders.print")}
- </Button>
- )}
- {onShareReceipt && (
- <Button
- size="sm"
- variant="outline"
- onClick={() => onShareReceipt(receipt!.id)}
- >
- <Share2 className="w-3.5 h-3.5 mr-1.5" />
- {t("receipts.share")}
- </Button>
- )}
- </>
- )}
-
  {/* Confirmed — cancel action */}
  {order.status ==="confirmed" && onCancel && (
  <Button
@@ -363,7 +321,7 @@ export const OrderDetails = ({
  variant="outline"
  onClick={() => {
  onClose();
- onCancel(order.id);
+ onCancel(order);
  }}
  className="text-warning-base border-[var(--color-warning-light)] hover:bg-[var(--color-warning-light)]"
  >

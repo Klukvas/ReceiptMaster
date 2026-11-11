@@ -43,7 +43,7 @@ Go to **Recipients** and add your customers. Each recipient has a name, phone nu
 
 ## Step 5: Create Your First Order
 
-Click **Orders → Create Order**. Select a recipient, add line items from your product catalog, and set quantities. The order starts in **Draft** status. Review the total, then click **Confirm** to move it to **Confirmed**.
+Click **Orders → Create Order**. Select a recipient, add line items from your product catalog, and set quantities. The order starts in **Draft** status. Review the total, then click **Confirm Order** to move it to **Confirmed**.
 
 ## Step 6: Issue Documents
 
@@ -62,7 +62,7 @@ Want a waybill for every order without clicking? Turn on **Automatic waybills** 
 
 ## Step 7: Share and Keep Track
 
-Each document has **Download**, **Print** and **Share** buttons. **Share** gives you a link your customer can open without an account. If something needs fixing, **Replace** the document with a corrected version, or **Void** it with a reason.
+In the order details, each document has **Download**, **Print** and **Share** buttons. **Share** gives you a link your customer can open without an account. If something needs fixing, **Replace** the document with a corrected version, or **Void** it with a reason.
 
 The **Documents** page in the sidebar lists every document across all your orders, with filters by type, status and date.
 
@@ -70,6 +70,6 @@ receiptmaster keeps the 10 most recent documents of each type and asks before th
 
 ## What's Next?
 
-- **Fine-tune your design** — Go to Settings → Documents to switch templates, upload your logo, set your brand color, and save favourite setups as presets
+- **Fine-tune your design** — Go to Settings → Documents to switch templates, upload your logo, set your brand color, and keep favourite setups as saved sets of settings
 - **Track your revenue** — The Analytics dashboard shows revenue and turnover charts, filterable by date range
 - **Go Pro** — Upgrade to Pro for up to 100 products, 500 orders/month, and all 15 templates

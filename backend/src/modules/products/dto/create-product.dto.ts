@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsString,
   IsNotEmpty,
-  IsNumber,
+  IsInt,
   IsEnum,
   IsOptional,
   IsUUID,
@@ -22,19 +22,19 @@ export class CreateProductDto {
   name: string;
 
   @ApiProperty({ description: "Цена покупки в копейках", example: 80000 })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(MAX_INT4)
   purchase_price_cents: number;
 
   @ApiProperty({ description: "Цена продажи в копейках", example: 99900 })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(MAX_INT4)
   sale_price_cents: number;
 
   @ApiProperty({ description: "Количество товара на складе", example: 50 })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(MAX_INT4)
   quantity: number;

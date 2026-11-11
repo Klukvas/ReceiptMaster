@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useId } from"react";
 import { createPortal } from"react-dom";
 import { MoreHorizontal } from"lucide-react";
+import { useMenuPosition } from"../../hooks/useMenuPosition";
 
 interface PortalDropdownProps {
  children: React.ReactNode | ((close: () => void) => React.ReactNode);
@@ -17,29 +18,16 @@ export const PortalDropdown = ({
  buttonTitle,
 }: PortalDropdownProps) => {
  const [isOpen, setIsOpen] = useState(false);
- const [position, setPosition] = useState({ top: 0, left: 0 });
  const buttonRef = useRef<HTMLButtonElement>(null);
  const menuRef = useRef<HTMLDivElement>(null);
+ // Opens below the trigger, flips above near the bottom edge, and scrolls when nothing fits.
+ const position = useMenuPosition(isOpen, buttonRef, menuRef);
 
  const menuId = useId();
 
  const close = useCallback(() => setIsOpen(false), []);
 
- const updatePosition = useCallback(() => {
- if (!buttonRef.current) return;
- const rect = buttonRef.current.getBoundingClientRect();
- const menuWidth = 192; // w-48 = 12rem = 192px
-
- setPosition({
- top: rect.bottom + 4,
- left: Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8),
- });
- }, []);
-
- const toggle = useCallback(() => {
- if (!isOpen) updatePosition();
- setIsOpen((prev) => !prev);
- }, [isOpen, updatePosition]);
+ const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
 
  // Keyboard users get focus inside the menu as soon as it opens.
  useEffect(() => {
@@ -67,7 +55,6 @@ export const PortalDropdown = ({
  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
  if (e.key !=="ArrowDown" || isOpen) return;
  e.preventDefault();
- updatePosition();
  setIsOpen(true);
  };
 
@@ -89,7 +76,11 @@ export const PortalDropdown = ({
  close();
  buttonRef.current?.focus();
  };
- const handleScroll = () => close();
+ // Scrolling inside a menu that had to cap its height must not close it.
+ const handleScroll = (e: Event) => {
+ if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
+ close();
+ };
 
  document.addEventListener("mousedown", handleClick);
  document.addEventListener("keydown", handleEscape);
@@ -125,7 +116,7 @@ export const PortalDropdown = ({
  role="menu"
  aria-label={buttonTitle}
  onKeyDown={handleMenuKeyDown}
- style={{ top: position.top, left: position.left }}
+ style={position}
  className="fixed w-48 bg-elevated rounded-xl shadow-lg border border-[var(--color-border)] z-[9999] py-1 animate-modal-content origin-top-right"
  >
  {typeof children ==="function"

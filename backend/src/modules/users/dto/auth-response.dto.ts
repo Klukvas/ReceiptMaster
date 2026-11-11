@@ -6,3 +6,8 @@ export class AuthResponseDto {
     email: string;
   };
 }
+
+/** A password change keeps the calling session: it answers with that session's new pair. */
+export class ChangePasswordResponseDto extends AuthResponseDto {
+  message: string;
+}

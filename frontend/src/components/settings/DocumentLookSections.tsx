@@ -6,6 +6,7 @@ import {
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { useSavedLogoUrl } from "../../hooks/useSavedLogoUrl";
 import { useTranslation } from "../../hooks/useTranslation";
 import { templateDisplayName } from "../../lib/template-name";
 import { Button } from "../ui/Button";
@@ -46,6 +47,18 @@ export function DocumentTemplateSection({
   const { t } = useTranslation();
   const patch = (value: Partial<DocumentConfig>) =>
     model.update({ ...config, ...value });
+  // A template saved on a higher plan stays selected after a downgrade, but saving it is refused.
+  const lockedTemplate = templates.data?.find(
+    (template) => template.id === config.templateId && template.locked,
+  );
+  const hasUnfitTemplates = templates.data?.some((template) => !fitsType(template));
+  // A disabled option says why: a higher plan, or a design that cannot carry this document type.
+  const optionNote = (template: DocumentTemplate): string =>
+    template.locked
+      ? ` 🔒 ${t("document.templateLocked")}`
+      : !fitsType(template)
+        ? ` (${t("document.templateNotForType")})`
+        : "";
 
   return (
     <DocumentSection
@@ -80,12 +93,25 @@ export function DocumentTemplateSection({
                   disabled={value.locked || !fitsType(value)}
                 >
                   {templateDisplayName(t, value)}
-                  {value.locked ? ` 🔒 ${t("document.templateLocked")}` : ""}
+                  {optionNote(value)}
                 </option>
               ))}
             </select>
           )}
         </LabelledField>
+        {hasUnfitTemplates && (
+          <FieldHint>{t("document.templateNotForTypeHint")}</FieldHint>
+        )}
+        {lockedTemplate && (
+          <p
+            data-testid="template-plan-notice"
+            className="text-sm text-[var(--color-danger)]"
+          >
+            {t("document.templateNotInPlan", {
+              name: templateDisplayName(t, lockedTemplate),
+            })}
+          </p>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -101,11 +127,11 @@ export function DocumentTemplateSection({
           {t("document.titleHeading")}
         </legend>
         <div className="space-y-2">
-          <label className="flex items-start gap-2 text-sm text-content">
+          <label className="flex items-start gap-2 text-sm text-content pointer-coarse:min-h-11">
             <input
               type="radio"
               name="document-title-mode"
-              className="mt-0.5 h-4 w-4"
+              className="mt-0.5 h-4 w-4 shrink-0"
               checked={config.title.mode === "automatic"}
               onChange={() => patch({ title: { mode: "automatic" } })}
             />
@@ -114,11 +140,11 @@ export function DocumentTemplateSection({
               <FieldHint>{t("document.titleAutomaticHelp")}</FieldHint>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-content">
+          <label className="flex items-start gap-2 text-sm text-content pointer-coarse:min-h-11 pointer-coarse:items-center">
             <input
               type="radio"
               name="document-title-mode"
-              className="mt-0.5 h-4 w-4"
+              className="mt-0.5 h-4 w-4 shrink-0 pointer-coarse:mt-0"
               checked={config.title.mode === "custom"}
               onChange={() =>
                 patch({
@@ -142,6 +168,17 @@ export function DocumentTemplateSection({
               pattern={".*\\S.*"}
               title={t("document.titleRequired")}
               maxLength={200}
+              // Spaces only is as empty as nothing: said inline, and in the browser's own bubble
+              // the app's sentence replaces "Please match the requested format".
+              error={
+                config.title.text !== "" && !config.title.text.trim()
+                  ? t("document.titleRequired")
+                  : undefined
+              }
+              onInvalid={(event) =>
+                event.currentTarget.setCustomValidity(t("document.titleRequired"))
+              }
+              onInput={(event) => event.currentTarget.setCustomValidity("")}
               onChange={(event) =>
                 patch({ title: { mode: "custom", text: event.target.value } })
               }
@@ -184,6 +221,13 @@ export function DocumentBrandSection({
   );
   const hasSavedLogo =
     Boolean(config.logo.assetId) && model.logoAction !== "remove";
+  // GET /settings/logo serves the saved configuration's logo, so it is shown only while the
+  // draft still points at that one (a preset may carry another).
+  const savedAssetId = model.saved?.config.logo.assetId;
+  const savedLogoUrl = useSavedLogoUrl(savedAssetId);
+  const thumbnailUrl =
+    stagedUrl ||
+    (hasSavedLogo && config.logo.assetId === savedAssetId ? savedLogoUrl : "");
   const hasLogo = Boolean(model.file) || hasSavedLogo;
   const logoStatus = model.file
     ? t("document.logoStaged", { name: model.file.name })
@@ -204,7 +248,7 @@ export function DocumentBrandSection({
         hint={
           caps && !caps.accent
             ? t("document.notShownByTemplateColour", {
-                template: template?.name ?? "",
+                template: template ? templateDisplayName(t, template) : "",
               })
             : t("document.accentHelp")
         }
@@ -231,9 +275,9 @@ export function DocumentBrandSection({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-lg border border-[var(--color-border)] bg-surface-alt text-content-tertiary">
-            {stagedUrl ? (
+            {thumbnailUrl ? (
               <img
-                src={stagedUrl}
+                src={thumbnailUrl}
                 alt=""
                 className="max-h-full max-w-full object-contain"
               />

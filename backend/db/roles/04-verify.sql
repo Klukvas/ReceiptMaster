@@ -91,7 +91,7 @@ BEGIN
   END IF;
 
   SELECT string_agg(t.name, ', ') INTO found
-    FROM unnest(ARRAY['orders', 'order_items', 'products', 'recipients', 'receipts',
+    FROM unnest(ARRAY['orders', 'order_items', 'products', 'recipients', 'receipts', 'suppliers',
                       'document_assets', 'document_presets', 'document_artifacts',
                       'document_counters', 'document_year_counters']) AS t(name)
    WHERE NOT EXISTS (SELECT FROM pg_class c

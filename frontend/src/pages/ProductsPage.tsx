@@ -5,6 +5,7 @@ import { Package } from "lucide-react";
 import { productsApi, formatCurrency, type Product } from "../lib/api";
 import { Button } from "../components/ui/Button";
 import { DataTable } from "../components/ui/DataTable";
+import { dateAddedColumn } from "../components/ui/date-added-column";
 import { ProductForm } from "../components/products/ProductForm";
 import { ProductStockBadge } from "../components/products/ProductStockBadge";
 import { ProductMarginBadge } from "../components/products/ProductMarginBadge";
@@ -108,6 +109,7 @@ export const ProductsPage = () => {
           <div className="text-sm text-content-tertiary">{p.currency}</div>
         ),
       },
+      dateAddedColumn<Product>(t("common.dateAdded")),
     ],
     [t],
   );
@@ -286,15 +288,18 @@ export const ProductsPage = () => {
           <div className="w-16 h-16 rounded-2xl bg-surface-alt flex items-center justify-center mb-5">
             <Package className="w-8 h-8 text-content-tertiary" />
           </div>
-          <h3 className="text-lg font-medium text-content mb-1.5">
-            {t("products.noProducts")}
-          </h3>
-          <p className="text-sm text-content-tertiary mb-6 text-center max-w-sm">
-            {t(
-              "products.emptyDescription",
-              "Create your first product to start managing orders and generating receipts.",
-            )}
-          </p>
+          {/* Announced like the other lists' empty states. */}
+          <div role="status" className="flex flex-col items-center">
+            <h3 className="text-lg font-medium text-content mb-1.5">
+              {t("products.noProducts")}
+            </h3>
+            <p className="text-sm text-content-tertiary mb-6 text-center max-w-sm">
+              {t(
+                "products.emptyDescription",
+                "Create your first product to start managing orders and generating receipts.",
+              )}
+            </p>
+          </div>
           <Button onClick={handleCreateProduct}>
             {t("products.createProduct")}
           </Button>

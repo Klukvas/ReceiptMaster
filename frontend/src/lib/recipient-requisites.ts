@@ -68,15 +68,22 @@ function taxIdError(taxId: string, kind: TaxIdKind | ""): string | undefined {
     : undefined;
 }
 
+// The shape alone (UA + 27 digits); isValidUaIban adds the mod-97 check digits on top.
+const UA_IBAN_SHAPE = /^UA\d{27}$/;
+
+/** A well-shaped IBAN with wrong check digits is a typo, not the wrong format: say which. */
+function ibanError(iban: string): string | undefined {
+  if (iban === "" || isValidUaIban(iban)) return undefined;
+  return UA_IBAN_SHAPE.test(iban)
+    ? "recipients.requisites.errors.ibanChecksum"
+    : "recipients.requisites.errors.iban";
+}
+
 export function validateRequisites(draft: RequisitesDraft): RequisitesErrors {
   const taxId = draft.tax_id.trim();
-  const iban = compactIban(draft.iban);
   const found: RequisitesErrors = {
     tax_id: taxIdError(taxId, draft.tax_id_kind),
-    iban:
-      iban !== "" && !isValidUaIban(iban)
-        ? "recipients.requisites.errors.iban"
-        : undefined,
+    iban: ibanError(compactIban(draft.iban)),
   };
   return Object.fromEntries(
     Object.entries(found).filter(([, problem]) => problem !== undefined),

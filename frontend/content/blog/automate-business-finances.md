@@ -30,7 +30,7 @@ Every customer interaction — orders, receipts, spending totals — should live
 
 ## 5. Use Digital Integrity Verification
 
-Paper receipts get lost. PDFs can be tampered with. But a receipt with a **SHA256 hash** can be verified at any time — proving the document hasn't been modified since generation. This can help in disputes and when you need to show a file has not changed; it is not an electronic signature and does not by itself make a document compliant with tax or EU rules.
+Paper receipts get lost. PDFs can be tampered with. receiptmaster freezes the content of every issued document and keeps a **SHA256 hash** of it, so a document is never rebuilt from content that changed after it was issued. The hash stays on our side: it is not printed on the document, it is not an electronic signature, and it does not by itself make a document compliant with tax or EU rules.
 
 ## The Bottom Line
 

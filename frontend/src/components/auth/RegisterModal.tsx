@@ -64,9 +64,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsLoading(true);
     try {
       await register(formData.email.trim(), formData.password, "", "");
+      // register() is already loading the dashboard; the dialog stays busy until the page unloads.
       toast.success(t("auth.registerSuccess"));
-      onClose();
-      setFormData(EMPTY_FORM);
     } catch (error: unknown) {
       const { code, message } = parseApiError(error);
       if (code === ErrorCode.USER_ALREADY_EXISTS) {
@@ -74,7 +73,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       } else {
         toast.error(message);
       }
-    } finally {
       inFlight.current = false;
       setIsLoading(false);
     }

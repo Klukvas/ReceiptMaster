@@ -4,11 +4,13 @@ import {
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import type { GeneratableType } from "../../lib/document-types";
 import { DocumentCompanySection } from "./DocumentCompanySection";
+import { DocumentEditorSkeleton } from "./DocumentEditorSkeleton";
 import { DocumentFormatSection } from "./DocumentFormatSection";
 import {
   DocumentBrandSection,
@@ -23,14 +25,20 @@ import { TemplateCarouselModal } from "./TemplateCarouselModal";
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
 
+/** As in DataTable: a configuration that arrives this fast never flashes the skeleton. */
+const LOADING_CUE_DELAY_MS = 200;
+
 export function DocumentEditor({
   model,
   documentOnly = false,
   documentType,
   onCommit,
   commitLabel,
+  isVisible = true,
 }: {
   model: DocumentDraftModel;
+  /** False while the editor is mounted but hidden behind another tab; the preview then stays idle. */
+  isVisible?: boolean;
   /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
   documentOnly?: boolean;
   /** The type being customized; designs that cannot carry it are not offered. */
@@ -46,19 +54,21 @@ export function DocumentEditor({
   // The preview endpoint renders the waybill layout only, so it would mislead for the other types.
   const canPreview = !documentType || documentType === "waybill";
   const config = model.config;
+  const isLoading = !config && !model.query.isError;
+  const showSkeleton = useDelayedFlag(isLoading, LOADING_CUE_DELAY_MS);
   if (!config)
-    return (
+    return model.query.isError ? (
       <div role="status" className="rounded-xl bg-elevated p-6">
-        {model.query.isError ? (
-          <>
-            <p>{t("document.loadFailed")}</p>
-            <Button onClick={() => model.query.refetch()}>
-              {t("common.retry")}
-            </Button>
-          </>
-        ) : (
-          t("common.loading")
-        )}
+        <p>{t("document.loadFailed")}</p>
+        <Button onClick={() => model.query.refetch()}>{t("common.retry")}</Button>
+      </div>
+    ) : (
+      <div role="status">
+        {/* The skeleton has the Documents page's layout; the per-document dialog keeps the line. */}
+        <span className={documentOnly ? "text-sm text-content-secondary" : "sr-only"}>
+          {t("common.loading")}
+        </span>
+        {showSkeleton && !documentOnly && <DocumentEditorSkeleton />}
       </div>
     );
   const template = templates.data?.find(
@@ -165,6 +175,7 @@ export function DocumentEditor({
               model={model}
               defaultOpen={documentOnly}
               isAvailable={canPreview}
+              isVisible={isVisible}
               title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
             />
           </div>

@@ -466,4 +466,82 @@ describe("AuditLogInterceptor", () => {
       });
     });
   });
+
+  describe("keys named after Object.prototype members", () => {
+    const PROTOTYPE_KEYS = [
+      "constructor",
+      "__proto__",
+      "toString",
+      "hasOwnProperty",
+    ];
+
+    // JSON.parse makes `__proto__` an own data property, as express.json does.
+    const bodyWith = (json: string) => JSON.parse(json) as Record<string, any>;
+
+    it.each(PROTOTYPE_KEYS)("logs a body with a top-level %s key", (key) => {
+      const body = bodyWith(`{"name":"x","${key}":{"a":1}}`);
+      const context = createMockContext(
+        "POST",
+        "RecipientsController",
+        "create",
+        { id: "u1" },
+        {},
+        body,
+      );
+      const received: unknown[] = [];
+
+      interceptor
+        .intercept(context, createMockNext({ id: "r-1" }))
+        .subscribe((value) => received.push(value));
+
+      expect(received).toEqual([{ id: "r-1" }]);
+      const entry = auditLogService.log.mock.calls[0][0];
+      expect(entry.newValues?.name).toBe("***");
+      expect(
+        Object.getOwnPropertyDescriptor(entry.newValues, key)?.value,
+      ).toEqual({ a: 1 });
+    });
+
+    it.each(PROTOTYPE_KEYS)("logs a body with a nested %s key", (key) => {
+      const body = bodyWith(
+        `{"recipient":{"${key}":{"email":"a@b.c"}},"items":[{"${key}":1}]}`,
+      );
+      const context = createMockContext(
+        "POST",
+        "OrdersController",
+        "create",
+        { id: "u1" },
+        {},
+        body,
+      );
+
+      interceptor.intercept(context, createMockNext()).subscribe();
+
+      expect(auditLogService.log).toHaveBeenCalledTimes(1);
+    });
+
+    it("still answers with the handler's result when the audit entry cannot be built", () => {
+      auditLogService.log.mockImplementation(() => {
+        throw new Error("boom");
+      });
+      const context = createMockContext(
+        "PATCH",
+        "OrdersController",
+        "cancel",
+        { id: "u1" },
+        { id: "o-1" },
+        {},
+      );
+      const received: unknown[] = [];
+      const errors: unknown[] = [];
+
+      interceptor.intercept(context, createMockNext({ ok: true })).subscribe({
+        next: (value) => received.push(value),
+        error: (error) => errors.push(error),
+      });
+
+      expect(received).toEqual([{ ok: true }]);
+      expect(errors).toEqual([]);
+    });
+  });
 });

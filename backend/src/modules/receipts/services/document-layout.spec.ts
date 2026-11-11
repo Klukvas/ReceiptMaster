@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { legacyConfig } from "../../settings/document-config";
+import { UserSettings } from "../../settings/entities/user-settings.entity";
 import type { DocumentConfig } from "../../settings/document-config";
 import { buildBuyer, buildSeller } from "../document-requisites";
 import { assertTemplateSupportsDocument } from "../document-template-support";
@@ -54,81 +55,81 @@ const XSS = '<script>alert("x")</script>';
 // Digests of the rendered HTML; a change here is a visible change to the document.
 const GOLDEN_SHA256: Record<string, string> = {
   "invoice.standard.uk":
-    "72a48d5569d9df9103bd8e8c25176ae25339c41455c791e183f848b9db4c19a9",
+    "18c300bd7958f266b35766cfb4c7d5a2fd5b609ec1f6bdad48316127037b31be",
   "invoice.standard.ru":
-    "8585aa5cd8043e89cb5b044137c843b847a2baec364fb790e682ed7add1fdf45",
+    "7561a92bcdb734895e06aa8b59ca01b48d13b7f186d8c42b50208e4eeca95891",
   "invoice.standard.en":
-    "5c8b8592203aa554e80e177a34dce6ed345b803b17e71f843067df55b7721a89",
+    "c4793d809911e9f21d7d50e178f76756f739c8feb9dbc5922abef5f8dbb5cae1",
   "invoice.classic.uk":
     "006e7a8c17f2c6ff9c89d8b8ea9acad5fc1f933d6671cda0e927d6cb73fda118",
   "invoice.classic.ru":
     "45352f887156c7bbb0263cee0e5924db01adc3965b6477df4693e227483b5b24",
   "invoice.classic.en":
-    "900678a65ddebd5b73d200545d1af73d2844eb9538711927d65ba96daff551f3",
+    "682aa21f5d40c9b79d215b5f393731976e08cf15a43ab232b077a81a3bd6dc54",
   "invoice.minimal.uk":
     "c486f61aff8f9aeb461f030376f2cab73b7483457b4a57f8119e086af1627dd0",
   "invoice.minimal.ru":
     "1f8664d7120e55d21fe3ea2e5a13a4575c977c68fe009427582e35aa99b151e4",
   "invoice.minimal.en":
-    "c385c46d37126caa8492b028470ff724b8b9b93937908328aa4649689cb2254d",
+    "861901af2a01e0e2e9e6704641c470519a93918cc4c204e32ba93f732206022f",
   "invoice.corporate.uk":
     "0a97701d9c4952ef8fbf85b65f3c47205c5e7d1103ee7bea4b79542a8b6c90cf",
   "invoice.corporate.ru":
     "69f1fcdfeb36d8c0097452eebe05b918ecadf3224a385db54f6eeefde628cd2b",
   "invoice.corporate.en":
-    "073bc5887d1e4487bb2f303f41e4858f128e066f57545135d9f2a63db7ba75bd",
+    "beb798dba4f6365991816ac64421cfbcfa40f1ff8999a0dea90e716a294c1d93",
   "act.standard.uk":
-    "943404607324f0b4d7905e02474e1f697f177dbe108ca2d6ebd796a14e91d3fa",
+    "994e26432c3cd5e1eb50cc2318d9aa4b92135654112d02937e4520c0569f62e3",
   "act.standard.ru":
-    "b3e64fef5d3c666dda570ca1c50663ee1cc0ff96ca5c0886ab8fc1bef9907421",
+    "782d337daab8100cc939a09e94eab8b55697d7f40af144082186cef59e47ba4a",
   "act.standard.en":
-    "ebcbaf3931a1b35febb71a5ed09d36648a9968b86c81e5f17f713fe1d95a49d7",
+    "6871c142525b9f4ea5fa9b2061ecfb20365b7bed2cdb5ac58b9b1a1c6d2c35ae",
   "act.classic.uk":
     "853047c213630e88ebc94253c57f8bc9a46c2e667dfb4dfff100c579e0f4ddcb",
   "act.classic.ru":
     "e8360ef6ba876a0b647fb533b0b1c39293e3b10a7c898d47465f7d88ebcce69c",
   "act.classic.en":
-    "4df67dd9db717a929e4c6e12e845a632df7437a7bc30a0ad40f0c57843c11acd",
+    "143eaa961be14b0ed4376a568e398b7c1ff4563502e49e0bf9af9231f753adb9",
   "act.minimal.uk":
     "0cedde9f9452f3ca0db26a2ecaa6619ce41d55b219dab3ed19fd679ea02ff70b",
   "act.minimal.ru":
     "05eeffe27e023a07f5a6d258d9d9c74f8697db4a49b2971c62bdd5a0554bbc47",
   "act.minimal.en":
-    "cc2e901f651412ec96b849944930c45577b9429737980618d1ccb5e2b34f64e7",
+    "dc5bc9b6e70014bd01b50e8b3c42f434c6b57e5dc7bf6d314dcee452445e72be",
   "act.corporate.uk":
     "3ef89d1f592b5e84e215f88bd200dbce2342e6429df9e8bbf3ffde4bba5953af",
   "act.corporate.ru":
     "e65677c3ed203347c2693693e823fcd769970d4218d256e1b7ded1e53cf00eda",
   "act.corporate.en":
-    "2cd30ef611646a70c3ef07312492508fc09892e1f81c30f684373f1000ff58ec",
+    "56ca6416b94e531e16de4116c1d94c1066a3e0237d64b87e13a4dc15f157fca2",
   "sales_receipt.standard.uk":
-    "73a58fabe7f85d45ca8f158b5a08c373c1fbdccd824421c09d38b09ee67fece6",
+    "caadec37b40f4b7602aec474b429a5f1817ab6c060d3afe73f53fa41355cbad0",
   "sales_receipt.standard.ru":
-    "43ebc1365486d943a23a3a099734491b7fe609018ff5e9a96e11f62640767e61",
+    "e4d4c4618936619b81919921f87c086d8223fd28005e5e37dcb1d1f7ff184605",
   "sales_receipt.standard.en":
-    "500d470defab15e1461f36c0eca842f716c52c25f8a5821993a53150cfe1ceba",
+    "a801e34228ced45881113c80ec8213efab99db98493efb64d2fcc539da67063b",
   "sales_receipt.classic.uk":
     "c32b532901072889c863f393e43144f752e45f4c4a765be3c5de5640e60c4608",
   "sales_receipt.classic.ru":
     "762131de53f8db0d675e27654b18d788bc794c2f779eeabe40b1d1e84c5558ac",
   "sales_receipt.classic.en":
-    "4e45a884bf41bd7b0c3558f944e9b141a5db6eeed773aab96873b6525b1983a1",
+    "4af29b33b456814395fe1094f8afa97b47a66342a2fd66d0bbddab487bd3b01f",
   "sales_receipt.minimal.uk":
     "033b7b54ff83f1bdd2d496571cbeba70842c415c06a5250acdc2ebe4e88e083d",
   "sales_receipt.minimal.ru":
     "56d8d0a0e25a4c2cfe7b621f4f8d3cbc0c69e7d5fbd7bf0ec46e4f7e223e6384",
   "sales_receipt.minimal.en":
-    "c228609e786f32c1502977795e9a4b4b2500b6af921351c9de216f4f08077e3f",
+    "d74297c34a7ca7b876bc6a7144b719c2fd4da26812af66e58ef05a46ac3bf3a2",
   "sales_receipt.corporate.uk":
     "f19fbe99ed375565b7e16715892e9d827f2a33140634f36bb39ac6544ce0a306",
   "sales_receipt.corporate.ru":
     "af263c5cfda0b0b5f99e1eeee2bcb51ed46e760f975c1dba8c4f217ed19c01b9",
   "sales_receipt.corporate.en":
-    "f1d02f72508ec5204cdb06ec6d636d4cbc3c1b34e5f0d7e79072b02d1655a916",
+    "ce2fa27757ac04c02a420c22355d5db72dddd827b20f699f918410c163e13760",
   "packing_list.standard.uk":
-    "8fd42cd1286f9d5ed4f92314469cf3aba9afaece88e6ed99724b1b212c2e41ec",
+    "d3c5b822cb1ac24846870bafbb55e660f366b09558c10f52205514ddfef7e1cb",
   "packing_list.standard.ru":
-    "a06d648ef4b986cff20dd9287a8293f3ef5e81f99aa603dd6a326c258d2b5c6f",
+    "80e305722347b5509b9372fae6a726e53d6bc096eee281ae50b698a10be3f3e5",
   "packing_list.standard.en":
     "36f84e87e43cb9e7cab9162e2acfcee2bcb81b9222bd00a00c2b007c1be68baa",
   "packing_list.classic.uk":
@@ -179,11 +180,11 @@ const configFor = (
   templateId: string,
   language: DocumentLanguage,
 ): DocumentConfig => {
-  const base = legacyConfig(null);
+  // An account without a saved configuration in this language (its number locale follows it).
+  const base = legacyConfig({ templateLanguage: language } as UserSettings);
   return {
     ...base,
     templateId,
-    documentLanguage: language,
     company: {
       ...base.company,
       companyName: "Продавець",

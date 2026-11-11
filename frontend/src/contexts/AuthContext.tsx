@@ -1,9 +1,11 @@
-import { postLoginPath } from '../lib/session-expiry';
+import { isProtectedPath, postLoginPath } from '../lib/session-expiry';
+import { navigateOutOfDialogs } from '../hooks/useBackClosesDialog';
 import { clearTablePreferences } from '../lib/table-preferences';
 import { isAxiosError } from 'axios';
 import React, { useState, useEffect, type ReactNode } from 'react';
-import { authApi, type User } from '../lib/api';
+import { authApi, type ChangePasswordRequest, type User } from '../lib/api';
 import {
+ ACCESS_TOKEN_KEY,
  clearStoredSession,
  readStoredSession,
  storeSession,
@@ -24,6 +26,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  const [token, setToken] = useState<string | null>(null);
  const [isLoading, setIsLoading] = useState(true);
  const [hasProfileLoadError, setHasProfileLoadError] = useState(false);
+
+ // Signing out in another tab removes the shared tokens. Follow it quietly, as that tab did,
+ // instead of waiting for this tab's next request to fail and report an expired session.
+ useEffect(() => {
+ const onStorage = (event: StorageEvent) => {
+ if (event.storageArea !== localStorage) return;
+ // `key` is null when the other tab cleared all of storage.
+ if (event.key !== null && event.key !== ACCESS_TOKEN_KEY) return;
+ const { accessToken } = readStoredSession();
+ // Replaced, not removed (a refresh, or a password change that kept that tab signed in):
+ // stay signed in with the new token; the API client reads storage on every request.
+ if (accessToken) {
+ setToken(accessToken);
+ return;
+ }
+ setToken(null);
+ setUser(null);
+ // A full load also drops this tab's cached data of the signed-out account.
+ if (isProtectedPath(window.location.pathname)) window.location.replace('/');
+ };
+ window.addEventListener('storage', onStorage);
+ return () => window.removeEventListener('storage', onStorage);
+ }, []);
 
  // Check for existing token on mount
  useEffect(() => {
@@ -76,7 +101,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  setToken(access_token);
  setUser(userData);
 
- window.location.href = postLoginPath(window.location);
+ // Signing in from the landing page's dialog: closing the dialog would step Back over its
+ // history marker and cancel this navigation, leaving the user on "/".
+ navigateOutOfDialogs(postLoginPath(window.location));
  };
 
  const register = async (email: string, password: string) => {
@@ -87,7 +114,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  setToken(access_token);
  setUser(userData);
 
- window.location.href = '/dashboard';
+ navigateOutOfDialogs('/dashboard');
+ };
+
+ // The server signs out every session, this one included, and answers with a new pair
+ // for this one: store it like a login does, so this tab (and the others of this
+ // browser, which share storage) stay signed in.
+ const changePassword = async (passwords: ChangePasswordRequest) => {
+ const response = await authApi.changePassword(passwords);
+ const { access_token, refresh_token } = response.data;
+ storeSession({ accessToken: access_token, refreshToken: refresh_token });
+ setToken(access_token);
  };
 
  const logout = async () => {
@@ -111,6 +148,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  token,
  login,
  register,
+ changePassword,
  logout,
  isLoading,
  isAuthenticated: !!user && !!token,

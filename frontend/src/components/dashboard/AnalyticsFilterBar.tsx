@@ -58,6 +58,7 @@ export const AnalyticsFilterBar = ({
       <div className="flex items-center gap-2">
         <input
           type="date"
+          aria-label={t("dashboard.startDate")}
           value={startDate}
           max={endDate || undefined}
           onChange={(e) => onStartDateChange(e.target.value)}
@@ -66,6 +67,7 @@ export const AnalyticsFilterBar = ({
         <span className="text-xs text-content-tertiary">&mdash;</span>
         <input
           type="date"
+          aria-label={t("dashboard.endDate")}
           value={endDate}
           min={startDate || undefined}
           onChange={(e) => onEndDateChange(e.target.value)}

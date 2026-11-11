@@ -74,16 +74,11 @@ import { PdfStorageService } from "../../common/services/pdf-storage.service";
 import { User } from "../users/entities/user.entity";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
-import * as path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { ConfigService } from "@nestjs/config";
 
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { ReceiptOutboxService } from "./receipt-outbox.service";
 import { runWithPublicToken } from "../../common/tenancy/tenant-context";
-
-const execFileAsync = promisify(execFile);
 
 /**
  * A number ends in one digit run that is exactly its counter value (prefixes never end in
@@ -99,9 +94,6 @@ const DOCUMENT_SORTABLE_COLUMNS: Readonly<Record<string, string>> = {
   document_type: "r.document_type",
   status: "r.status",
 };
-
-/** Only allow alphanumeric, hyphens, underscores, dots, and spaces in printer names */
-const SAFE_PRINTER_NAME = /^[a-zA-Z0-9_\-. ]+$/;
 
 /** Recorded on documents voided because their order was cancelled. */
 export const ORDER_CANCELLED_VOID_REASON = "order_cancelled";
@@ -676,7 +668,7 @@ export class ReceiptsService {
       }
 
       if (receipt.status === ReceiptStatus.VOID) {
-        throw ApiErrors.BAD_REQUEST(`Receipt ${id} is already voided`);
+        throw ApiErrors.RECEIPT_IS_ALREADY_VOIDED(id);
       }
       assertVoidable(receipt);
 
@@ -1160,198 +1152,11 @@ export class ReceiptsService {
     };
   }
 
-  async getAvailablePrinters(): Promise<{ printers: string[] }> {
-    try {
-      const platform = process.platform;
-      let stdout: string;
-
-      if (platform === "darwin" || platform === "linux") {
-        const result = await execFileAsync("lpstat", ["-p"]);
-        stdout = result.stdout;
-        // Parse "printer <name> ..." lines
-        const printers = stdout
-          .split("\n")
-          .filter((line) => line.includes("printer"))
-          .map((line) => line.split(/\s+/)[1])
-          .filter((name) => name && name.length > 0);
-        return { printers };
-      } else if (platform === "win32") {
-        const result = await execFileAsync("powershell", [
-          "-Command",
-          "Get-Printer | Select-Object -ExpandProperty Name",
-        ]);
-        stdout = result.stdout;
-        const printers = stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-        return { printers };
-      }
-
-      return { printers: [] };
-    } catch (error) {
-      this.logger.error("Error getting printers:", error);
-      return { printers: [] };
-    }
-  }
-
-  async printReceipt(
-    receiptId: string,
-    user: User,
-    printerName?: string,
-  ): Promise<{ success: boolean; message: string }> {
-    let tempFilePath: string | null = null;
-
-    try {
-      const receipt = await this.findOne(receiptId, user);
-
-      if (!receipt.pdf_path) {
-        throw ApiErrors.FILE_NOT_FOUND(receiptId);
-      }
-
-      // Проверяем существование файла
-      try {
-        if (receipt.pdf_path.startsWith("object-storage://")) {
-          const parsed = this.pdfStorageService.parseObjectStoragePath(
-            receipt.pdf_path,
-          );
-          if (!parsed) {
-            throw ApiErrors.VALIDATION_ERROR(
-              "pdf_path",
-              `Invalid object storage path: ${receipt.pdf_path}`,
-            );
-          }
-          const exists = await this.pdfStorageService.fileExists(
-            parsed.bucket,
-            parsed.key,
-          );
-          if (!exists) {
-            throw this.pdfFileMissing(receipt);
-          }
-        } else {
-          await fs.access(receipt.pdf_path);
-        }
-      } catch {
-        throw this.pdfFileMissing(receipt);
-      }
-
-      let filePathToPrint = receipt.pdf_path;
-
-      if (receipt.pdf_path.startsWith("object-storage://")) {
-        const parsed = this.pdfStorageService.parseObjectStoragePath(
-          receipt.pdf_path,
-        );
-        if (!parsed) {
-          throw ApiErrors.VALIDATION_ERROR(
-            "pdf_path",
-            `Invalid object storage path: ${receipt.pdf_path}`,
-          );
-        }
-
-        const fileBuffer = await this.pdfStorageService.downloadFile(
-          parsed.bucket,
-          parsed.key,
-        );
-        tempFilePath = path.join(
-          process.cwd(),
-          "temp",
-          `receipt-${receipt.number}-${Date.now()}.pdf`,
-        );
-
-        await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
-        await fs.writeFile(tempFilePath, fileBuffer);
-        filePathToPrint = tempFilePath;
-      }
-
-      // Validate printer name to prevent injection
-      if (printerName && !SAFE_PRINTER_NAME.test(printerName)) {
-        throw ApiErrors.VALIDATION_ERROR(
-          "printer",
-          "Invalid printer name. Only alphanumeric characters, hyphens, underscores, dots, and spaces are allowed.",
-        );
-      }
-
-      const platform = process.platform;
-      let cmd: string;
-      let args: string[];
-
-      if (platform === "darwin") {
-        cmd = "lpr";
-        args = printerName
-          ? ["-P", printerName, filePathToPrint]
-          : [filePathToPrint];
-      } else if (platform === "linux") {
-        cmd = "lp";
-        args = printerName
-          ? ["-d", printerName, filePathToPrint]
-          : [filePathToPrint];
-      } else if (platform === "win32") {
-        cmd = "powershell";
-        args = [
-          "-Command",
-          `Start-Process -FilePath '${filePathToPrint.replace(/'/g, "''")}' -Verb Print -WindowStyle Hidden`,
-        ];
-      } else {
-        throw ApiErrors.BAD_REQUEST(
-          `Unsupported operating system: ${platform}`,
-        );
-      }
-
-      this.logger.log(
-        `Printing receipt ${receipt.number} via ${cmd} ${args.join(" ")}`,
-      );
-      const { stderr } = await execFileAsync(cmd, args);
-
-      if (stderr && !stderr.includes("warning")) {
-        this.logger.error("Print command stderr:", stderr);
-        throw ApiErrors.RECEIPT_PRINT_FAILED(receiptId);
-      }
-
-      this.logger.log(`Receipt ${receipt.number} sent to printer successfully`);
-      return {
-        success: true,
-        message: `Чек ${receipt.number} отправлен на печать${printerName ? ` (принтер: ${printerName})` : ""}`,
-      };
-    } catch (error) {
-      this.logger.error("Error printing receipt:", error);
-      return {
-        success: false,
-        message: "Ошибка при печати чека. Попробуйте ещё раз.",
-      };
-    } finally {
-      // Always clean up temp file, even on error
-      if (tempFilePath) {
-        fs.unlink(tempFilePath).catch((err) => {
-          this.logger.warn(
-            `Failed to delete temporary file ${tempFilePath}: ${err.message}`,
-          );
-        });
-      }
-    }
-  }
-
   async generatePublicToken(
     receiptId: string,
     user: User,
   ): Promise<{ token: string; url: string }> {
-    // A document of a deleted order is gone for the user, so it cannot get a public link.
-    const receipt = await this.receiptsRepository.findOne({
-      where: {
-        id: receiptId,
-        user_id: user.id,
-        order: { deleted_at: IsNull() },
-      },
-    });
-
-    if (!receipt) {
-      throw ApiErrors.RECEIPT_NOT_FOUND(receiptId);
-    }
-
-    if (receipt.status !== ReceiptStatus.GENERATED) {
-      throw ApiErrors.BAD_REQUEST(
-        "Only generated receipts can be shared publicly",
-      );
-    }
+    const receipt = await this.findShareable(receiptId, user);
 
     const frontendUrl = this.configService.get<string>(
       "FRONTEND_URL",
@@ -1384,19 +1189,38 @@ export class ReceiptsService {
       )
       .execute();
     if (updated.affected) return { token, url: `${frontendUrl}/r/${token}` };
-    const current = await this.receiptsRepository.findOne({
-      where: {
-        id: receipt.id,
-        user_id: user.id,
-        status: ReceiptStatus.GENERATED,
-      },
-    });
-    if (!current?.public_token)
+    // Lost a race: another share won (return its token), or the order was deleted or
+    // the document voided meanwhile (the same 404/400 as if that had happened first).
+    const current = await this.findShareable(receipt.id, user);
+    if (!current.public_token) {
       throw ApiErrors.BAD_REQUEST("Receipt changed while creating share link");
+    }
     return {
       token: current.public_token,
       url: `${frontendUrl}/r/${current.public_token}`,
     };
+  }
+
+  /**
+   * A document of a deleted order is gone for the user, so it cannot get a public link.
+   * The order is loaded rather than filtered with `order: { deleted_at: IsNull() }`: that
+   * filter is a LEFT JOIN whose ON clause already drops a soft-deleted order, so the
+   * missing row matched `deleted_at IS NULL` and a deleted order's document got through.
+   */
+  private async findShareable(receiptId: string, user: User): Promise<Receipt> {
+    const receipt = await this.receiptsRepository.findOne({
+      where: { id: receiptId, user_id: user.id },
+      relations: { order: true },
+    });
+    if (!receipt?.order) {
+      throw ApiErrors.RECEIPT_NOT_FOUND(receiptId);
+    }
+    if (receipt.status !== ReceiptStatus.GENERATED) {
+      throw ApiErrors.BAD_REQUEST(
+        "Only generated receipts can be shared publicly",
+      );
+    }
+    return receipt;
   }
 
   async revokePublicToken(receiptId: string, user: User): Promise<Receipt> {
@@ -1440,6 +1264,8 @@ export class ReceiptsService {
       receipt: {
         id: receipt.id,
         number: receipt.number,
+        // The share page names the downloaded PDF and its heading after the type.
+        document_type: receipt.document_type,
         status: receipt.status,
         created_at: receipt.created_at,
         order: projection?.order || null,

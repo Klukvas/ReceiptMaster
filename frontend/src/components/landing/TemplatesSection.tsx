@@ -284,18 +284,6 @@ const ReceiptMockup: React.FC<{
               {"\u20B4"} 4,460
             </span>
           </div>
-
-          {/* Footer hash */}
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 5.5,
-              color: mutedColor,
-              fontFamily: "'DM Mono', monospace",
-            }}
-          >
-            SHA256: a3f8e2...
-          </div>
         </div>
       </div>
       <div className="landing-tpl-name">{name}</div>

@@ -22,7 +22,7 @@ The standard recommends that electronic invoices include integrity verification 
 - **EDI with agreed procedures**
 - **Cryptographic hashing** (such as SHA256)
 
-receiptmaster records a SHA256 hash for every generated document, so you can check later that a file has not changed. This is not a qualified electronic signature and does not make a document legally compliant by itself; check what your jurisdiction requires.
+receiptmaster records a SHA256 hash of every generated document's content and checks it before the document is ever rendered again. The hash is kept internally and is not printed on the document. This is not a qualified electronic signature and does not make a document legally compliant by itself; check what your jurisdiction requires.
 
 ## Storage Requirements
 
@@ -32,7 +32,7 @@ EU regulations require businesses to store invoices for a minimum period (typica
 - **Integrity** — The stored document must match the original
 - **Authenticity** — The origin of the invoice must be verifiable
 
-receiptmaster stores both the rendered PDF and the original HTML snapshot, with a SHA256 hash linking them. This helps you show that a stored file has not changed, but it does not by itself make your archive compliant with any retention or authenticity rule; check what your jurisdiction requires.
+receiptmaster stores both the rendered PDF and the original HTML snapshot, with a SHA256 hash of the snapshot. This keeps issued documents from being rebuilt from altered content, but it does not by itself make your archive compliant with any retention or authenticity rule; check what your jurisdiction requires.
 
 ## GDPR Considerations
 

@@ -79,10 +79,19 @@ async function check(name, operation) {
     await check(
       "whitespace custom title shows friendly validation and retains draft",
       async () => {
+        // Said under the field itself and again by the preview it blocks.
         await page
           .getByRole("alert")
           .filter({ hasText: "Enter a title" })
+          .first()
           .waitFor();
+        assert.equal(
+          await page
+            .getByRole("alert")
+            .filter({ hasText: "Enter a title" })
+            .count(),
+          2,
+        );
         assert.equal(await field("Document Title").inputValue(), "   ");
         assert.equal(
           (await state()).defaults.config.title.text,
@@ -231,17 +240,23 @@ async function check(name, operation) {
     await openGroup("Saved sets of settings");
     await field("Name for the set").fill("Team preset");
     await tab("Save as a new set");
+    // Set names are listed without their internal revision.
     await page
-      .getByText("Team preset · 1", { exact: true })
+      .getByText("Team preset", { exact: true })
       .waitFor({ state: "attached" });
     await check("Save as preset leaves account defaults unchanged", async () =>
       assert.equal((await state()).defaults.revision, 1),
     );
     await field("Closing line").fill("Preset version two");
-    await tab("Update the selected set");
-    await page
-      .getByText("Team preset · 2", { exact: true })
-      .waitFor({ state: "attached" });
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/settings/document-presets/") &&
+          response.request().method() === "PUT" &&
+          response.ok(),
+      ),
+      tab("Update the selected set"),
+    ]);
     await check(
       "Update preset preserves its revision and keeps account defaults unchanged",
       async () =>
@@ -251,7 +266,7 @@ async function check(name, operation) {
         ),
     );
     await tab("Discard changes");
-    await field("Saved sets").selectOption({ label: "Team preset · 2" });
+    await field("Saved sets").selectOption({ label: "Team preset" });
     await check(
       "selecting a preset alone does not apply or save it",
       async () => {

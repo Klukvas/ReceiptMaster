@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useConfirmOnce } from '../../hooks/useConfirmOnce';
 
 interface DeleteConfirmationProps {
  isOpen: boolean;
@@ -24,6 +25,7 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
  isLoading = false,
 }) => {
  const { t } = useTranslation();
+ const confirmOnce = useConfirmOnce(isOpen, isLoading);
 
  // X, Escape, backdrop and Back must not abandon a delete that is already running.
  const handleClose = () => {
@@ -49,7 +51,7 @@ export const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
  <Button variant="secondary" onClick={onClose} disabled={isLoading}>
  {t('common.cancel')}
  </Button>
- <Button variant="danger" onClick={onConfirm} disabled={isLoading}>
+ <Button variant="danger" onClick={() => confirmOnce(onConfirm)} disabled={isLoading}>
  {isLoading ? t('common.deleting') : t('common.delete')}
  </Button>
  </div>

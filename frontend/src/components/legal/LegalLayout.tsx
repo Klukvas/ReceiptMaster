@@ -7,6 +7,7 @@ import { ThemeToggle } from "../ui/ThemeToggle";
 
 interface LegalLayoutProps {
   title: string;
+  /** A calendar date: `new Date("YYYY-MM-DD")`, i.e. midnight UTC of that day. */
   lastUpdated: Date;
   children: React.ReactNode;
 }
@@ -34,6 +35,8 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
         year: "numeric",
         month: "long",
         day: "numeric",
+        // The date is midnight UTC; read in the visitor's zone it is the day before west of UTC.
+        timeZone: "UTC",
       }).format(lastUpdated),
     [lastUpdated, currentLanguage],
   );

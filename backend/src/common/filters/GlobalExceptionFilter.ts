@@ -7,11 +7,62 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Response } from "express";
+import { ThrottlerException } from "@nestjs/throttler";
 import { ApiError, ApiErrorResponse } from "../errors/ApiError";
 
 // The text of an unexpected error (SQL, driver detail, file paths) stays in the
 // log; the client only ever gets this.
 const INTERNAL_ERROR_MESSAGE = "Internal server error";
+
+const BODY_TOO_LARGE = "entity.too.large";
+
+/**
+ * express's body-parser rejects a request before any handler runs with an `http-errors`
+ * object, not an HttpException: a body above the size limit, an unsupported charset or
+ * encoding. Its status is the client's fault and its message is meant to be shown
+ * (`expose`), so it must not become a 500.
+ */
+type BodyParserClientError = Error & {
+  status: number;
+  type: string;
+  expose: true;
+};
+
+function isBodyParserClientError(
+  exception: unknown,
+): exception is BodyParserClientError {
+  if (!(exception instanceof Error)) return false;
+  const candidate = exception as Partial<BodyParserClientError>;
+  return (
+    candidate.expose === true &&
+    typeof candidate.type === "string" &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status < 500
+  );
+}
+
+/** Every throttle in this app counts per minute; used only if the guard set no header. */
+const DEFAULT_RETRY_AFTER_SECONDS = 60;
+
+/**
+ * The stock ThrottlerGuard (login, register, refresh, public links, Paddle) throws a bare
+ * ThrottlerException after setting `Retry-After`. Answer it in the same shape as
+ * UserThrottlerGuard, so every 429 reads `{ error, errorCode: "RATE_LIMITED",
+ * retryAfterSeconds }`.
+ */
+function rateLimitedBody(response: Response): ApiError {
+  const header = Number(response.getHeader("Retry-After"));
+  const retryAfterSeconds =
+    Number.isFinite(header) && header > 0
+      ? Math.ceil(header)
+      : DEFAULT_RETRY_AFTER_SECONDS;
+  return {
+    error: `Too many requests. Try again in ${retryAfterSeconds} seconds.`,
+    errorCode: "RATE_LIMITED",
+    retryAfterSeconds,
+  };
+}
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -28,6 +79,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // Наши кастомные ошибки
       status = exception.statusCode;
       errorResponse = exception.toJSON();
+    } else if (exception instanceof ThrottlerException) {
+      status = HttpStatus.TOO_MANY_REQUESTS;
+      errorResponse = rateLimitedBody(response);
     } else if (exception instanceof HttpException) {
       // NestJS HTTP исключения
       status = exception.getStatus();
@@ -53,6 +107,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           errorCode: "HTTP_EXCEPTION",
         };
       }
+    } else if (isBodyParserClientError(exception)) {
+      status = exception.status;
+      errorResponse =
+        exception.type === BODY_TOO_LARGE
+          ? {
+              error: "Request body is too large",
+              errorCode: "PAYLOAD_TOO_LARGE",
+            }
+          : { error: exception.message, errorCode: "HTTP_EXCEPTION" };
     } else if (exception instanceof Error) {
       // Обычные JavaScript ошибки
       errorResponse = {

@@ -34,6 +34,7 @@ import {
 import { ReceiptOutboxService } from "./receipt-outbox.service";
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { ReceiptsGateway } from "./receipts.gateway";
+import { User } from "../users/entities/user.entity";
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReceiptsGateway } from "./receipts.gateway";
       Order,
       ReceiptGenerationOutbox,
       DocumentArtifact,
+      User,
     ]),
     BullModule.registerQueue({ name: RECEIPT_GENERATION_QUEUE }),
     JwtModule.registerAsync({

@@ -34,6 +34,16 @@ import { UpgradeModal } from "../components/subscription/UpgradeModal";
 
 const ORDER_STATUSES = ["draft", "confirmed", "cancelled"] as const;
 
+/** The order's "More actions" button that is on screen (the table row's or the phone card's). */
+const orderActionsTrigger = (orderId: string | undefined) =>
+  orderId === undefined
+    ? null
+    : (Array.from(
+        document.querySelectorAll<HTMLElement>(
+          `[data-order-actions="${CSS.escape(orderId)}"]`,
+        ),
+      ).find((element) => element.getClientRects().length > 0) ?? null);
+
 export const OrdersPage = () => {
   const { t } = useTranslation();
   const { status: subscriptionStatus } = useSubscription();
@@ -340,14 +350,9 @@ export const OrdersPage = () => {
       ),
     );
   };
-  // The cancel dialog only has the id; a confirmed order (or one not on this
-  // page) gets the warning that its document is voided and stock stays out.
+  // A confirmed order gets the warning that its document is voided and stock stays out.
   const cancelTargetIsDraft =
-    confirmAction.type === "cancel" &&
-    pagination.items.some(
-      (order) =>
-        order.id === confirmAction.order?.id && order.status === "draft",
-    );
+    confirmAction.type === "cancel" && confirmAction.order?.status === "draft";
   // Ids chosen through "select all" carry no status, so only a drafts-only filter proves they can be approved.
   const allSelectedAreDraft = allMatching
     ? statusFilter === "draft"
@@ -401,12 +406,20 @@ export const OrdersPage = () => {
                 {order.is_locked && (
                   <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
                 )}
-                <h3 className="text-base font-semibold text-content truncate">
-                  <span className="tabular-nums text-content-tertiary">
-                    {formatOrderNumber(order)}
-                  </span>
-                  <span className="text-content-tertiary">{" · "}</span>
-                  {order.recipient?.name || "-"}
+                {/* The name is what a thumb goes for first: it opens the details like the
+                    View button below and a row click on a desktop. */}
+                <h3 className="min-w-0 flex-1 text-base font-semibold text-content">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrder(order)}
+                    className="block w-full truncate text-left pointer-coarse:min-h-11"
+                  >
+                    <span className="tabular-nums text-content-tertiary">
+                      {formatOrderNumber(order)}
+                    </span>
+                    <span className="text-content-tertiary">{" · "}</span>
+                    {order.recipient?.name || "-"}
+                  </button>
                 </h3>
               </div>
               <p className="text-xs text-content-tertiary mt-0.5">
@@ -629,6 +642,7 @@ export const OrdersPage = () => {
         renderActions={renderOrderActions}
         renderCard={renderOrderCard}
         onRowClick={setSelectedOrder}
+        isCompact
       />
 
       {isSearchWithoutResults && (
@@ -726,6 +740,8 @@ export const OrdersPage = () => {
         onClose={handleCloseConfirm}
         onConfirm={() => handleConfirmAction(bulkIds)}
         errorMessage={actionError}
+        // Opened from the order details, whose button is gone by then: back to the row's menu.
+        returnFocus={() => orderActionsTrigger(confirmAction.order?.id)}
         title={
           confirmAction.type === "cancel"
             ? t("orders.cancelOrder", "Cancel Order")

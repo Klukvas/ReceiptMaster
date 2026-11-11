@@ -52,6 +52,8 @@ export type {
   LoginRequest,
   RegisterRequest,
   AuthResponse,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
   User,
 } from "./api-types";
 
@@ -75,6 +77,8 @@ import type {
   LoginRequest,
   RegisterRequest,
   AuthResponse,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
   User,
 } from "./api-types";
 
@@ -261,7 +265,8 @@ const idempotencyConfig = ({ idempotencyKey }: CreateOptions) =>
   idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {};
 
 /** Changed fields only; `null` clears email, phone or address (UpdateRecipientDto). */
-export type UpdateRecipientRequest = components["schemas"]["UpdateRecipientDto"];
+export type UpdateRecipientRequest =
+  components["schemas"]["UpdateRecipientDto"];
 
 // API methods
 export const authApi = {
@@ -281,11 +286,8 @@ export const authApi = {
   updateProfile: (data: { email: string }) =>
     api.patch<User>("/auth/profile", data),
 
-  changePassword: (data: {
-    currentPassword: string;
-    newPassword: string;
-    confirmPassword: string;
-  }) => api.post<{ message: string }>("/auth/change-password", data),
+  changePassword: (data: ChangePasswordRequest) =>
+    api.post<ChangePasswordResponse>("/auth/change-password", data),
 };
 
 export const productsApi = {
@@ -498,13 +500,6 @@ export const receiptsApi = {
   getPdf: (id: string) =>
     api.get(`/receipts/${id}/pdf`, { responseType: "blob" }),
 
-  getPrinters: () => api.get<{ printers: string[] }>("/receipts/printers"),
-
-  print: (id: string, printer?: string) =>
-    api.post<{ success: boolean; message: string }>(
-      `/receipts/${id}/print${printer ? `?printer=${encodeURIComponent(printer)}` : ""}`,
-    ),
-
   regenerate: (id: string) => api.post<Receipt>(`/receipts/${id}/regenerate`),
 
   void: (id: string, reason: string) =>
@@ -557,8 +552,15 @@ export type CompanyInfoUpdate = Partial<
   >
 >;
 export type ReceiptDesignSettings = {
-  receiptTitle: string; hasCustomReceiptTitle?: boolean; templateId: string; templateLanguage: string;
-  footerTitle: string; footerSubtitle: string; primaryColor: string; paymentTerms: string; deliveryTerms: string;
+  receiptTitle: string;
+  hasCustomReceiptTitle?: boolean;
+  templateId: string;
+  templateLanguage: string;
+  footerTitle: string;
+  footerSubtitle: string;
+  primaryColor: string;
+  paymentTerms: string;
+  deliveryTerms: string;
 };
 
 export const settingsApi = {
@@ -576,7 +578,8 @@ export const settingsApi = {
 
   deleteLogo: () => api.post("/settings/logo/delete"),
 
-  getReceiptDesign: () => api.get<{ data: ReceiptDesignSettings }>("/settings/receipt-design"),
+  getReceiptDesign: () =>
+    api.get<{ data: ReceiptDesignSettings }>("/settings/receipt-design"),
 
   getAutoReceipt: () =>
     api.get<{ data: { enabled: boolean } }>("/settings/auto-receipt"),
@@ -631,9 +634,11 @@ export const settingsApi = {
   updateReceiptTitle: (title: string) =>
     api.post("/settings/receipt-title", { title }),
 
-  getCompanyInfo: () => api.get<{ data: CompanyInfo }>("/settings/company-info"),
+  getCompanyInfo: () =>
+    api.get<{ data: CompanyInfo }>("/settings/company-info"),
 
-  updateFooter: (footer: { footerTitle: string; footerSubtitle: string }) => api.post("/settings/footer", footer),
+  updateFooter: (footer: { footerTitle: string; footerSubtitle: string }) =>
+    api.post("/settings/footer", footer),
 
   getPrimaryColor: () =>
     api.get<{ primaryColor: string }>("/settings/primary-color"),
@@ -664,8 +669,10 @@ export const settingsApi = {
   getNumbering: () =>
     api.get<{ types: NumberingSetting[] }>("/settings/document-numbering"),
 
-  updateNumbering: (type: NumberingSetting["documentType"], body: NumberingUpdate) =>
-    api.put<NumberingSetting>(`/settings/document-numbering/${type}`, body),
+  updateNumbering: (
+    type: NumberingSetting["documentType"],
+    body: NumberingUpdate,
+  ) => api.put<NumberingSetting>(`/settings/document-numbering/${type}`, body),
 
   getSignoff: () => api.get<SignoffState>("/settings/signoff"),
 
@@ -706,7 +713,10 @@ export const dateLocale = (): string =>
 
 /** `timeZone` shows the moment on that zone's clock (the document zone) instead of the viewer's. */
 export const formatDate = (dateString: string, timeZone?: string) =>
-  new Date(dateString).toLocaleString(dateLocale(), timeZone ? { timeZone } : undefined);
+  new Date(dateString).toLocaleString(
+    dateLocale(),
+    timeZone ? { timeZone } : undefined,
+  );
 
 export const formatDateOnly = (dateString: string | number | Date) =>
   new Date(dateString).toLocaleDateString(dateLocale());

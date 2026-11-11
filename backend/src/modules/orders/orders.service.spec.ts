@@ -529,6 +529,69 @@ describe("OrdersService", () => {
       // The mocked numbering hands out 7; it must end up on the stored order.
       expect(result.data.order_number).toBe(7);
     });
+
+    const createManager = (product: Record<string, unknown>) => ({
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce({ id: "rec-1", user_id: "user-1" })
+        .mockResolvedValueOnce(null),
+      find: jest.fn().mockResolvedValue([product]),
+      create: jest.fn((entity, data) => ({ ...data })),
+      save: jest.fn((entity, data) => Promise.resolve({ id: "o-1", ...data })),
+      query: jest.fn(),
+    });
+
+    it("rejects a total above the int4 column with 400 before any write", async () => {
+      const manager = createManager({
+        id: "prod-1",
+        user_id: "user-1",
+        sale_price_cents: 2_000_000_000,
+        quantity: 50,
+        currency: "UAH",
+        name: "Gold",
+      });
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await expect(
+        service.create(
+          { recipientId: "rec-1", items: [{ productId: "prod-1", qty: 2 }] },
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: "VALIDATION_ERROR",
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it("names the missing product in PRODUCT_NOT_FOUND", async () => {
+      const manager = createManager({
+        id: "prod-1",
+        user_id: "user-1",
+        sale_price_cents: 100,
+        quantity: 5,
+        currency: "UAH",
+        name: "Widget",
+      });
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await expect(
+        service.create(
+          {
+            recipientId: "rec-1",
+            items: [
+              { productId: "prod-1", qty: 1 },
+              { productId: "prod-gone", qty: 1 },
+            ],
+          },
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "PRODUCT_NOT_FOUND",
+        error: "Product with id prod-gone not found",
+      });
+    });
   });
 
   describe("approveBatch", () => {
@@ -767,7 +830,54 @@ describe("OrdersService", () => {
           { items: [{ productId: "prod-other", qty: 1 }] } as any,
           mockUser,
         ),
-      ).rejects.toThrow(ApiErrorResponse);
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "PRODUCT_NOT_FOUND",
+        error: "Product with id prod-other not found",
+      });
+    });
+
+    it("rejects a total above the int4 column with 400 before any write", async () => {
+      const manager = {
+        findOne: jest.fn().mockResolvedValue({
+          ...mockOrder,
+          status: OrderStatus.DRAFT,
+          is_locked: false,
+        }),
+        find: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              id: "prod-1",
+              user_id: "user-1",
+              name: "Product",
+              quantity: 10,
+              sale_price_cents: 1000,
+              currency: "UAH",
+            },
+          ]),
+        delete: jest.fn(),
+        save: jest.fn(),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(manager));
+
+      await expect(
+        service.update(
+          "order-1",
+          {
+            items: [
+              { productId: "prod-1", qty: 2, unitPriceCents: 2_000_000_000 },
+            ],
+          },
+          mockUser,
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: "VALIDATION_ERROR",
+      });
+      expect(manager.delete).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it("should throw if insufficient quantity during update", async () => {

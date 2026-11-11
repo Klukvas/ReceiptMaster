@@ -56,6 +56,7 @@ export class ProductsController {
     400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
     422: "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
     402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+    404: "supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND)",
     409: "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
   })
   @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
@@ -98,7 +99,8 @@ export class ProductsController {
   @ApiQuery({
     name: "threshold",
     required: false,
-    description: "Stock threshold (default 10)",
+    description:
+      "Products with quantity strictly below this are low (default 10)",
   })
   @ApiQuery({
     name: "limit",
@@ -152,7 +154,7 @@ export class ProductsController {
   })
   @ApiFailureResponses({
     400: "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
-    404: "Товар не найден (PRODUCT_NOT_FOUND)",
+    404: "Товар не найден (PRODUCT_NOT_FOUND), or supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND); supplier_id null unlinks",
     409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT), or another live product already has the new name (PRODUCT_ALREADY_EXISTS)",
   })
   update(

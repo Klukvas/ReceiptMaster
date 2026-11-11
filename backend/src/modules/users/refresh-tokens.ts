@@ -119,15 +119,21 @@ export async function revokeRefreshTokenFamily(
   return ((result.raw ?? []) as unknown[]).length;
 }
 
+/**
+ * Revokes the token only when it belongs to `userId`. Someone else's token is left
+ * alone without a sign, so logout neither revokes nor reveals another user's session.
+ */
 export async function revokePresentedToken(
   manager: EntityManager,
   token: string,
+  userId: string,
 ): Promise<void> {
   await manager
     .createQueryBuilder()
     .update(RefreshToken)
     .set({ revoked: true })
     .where(PRESENTED_TOKEN, presentedTokenParams(token))
+    .andWhere("user_id = :userId", { userId })
     .andWhere("revoked = false")
     .execute();
 }

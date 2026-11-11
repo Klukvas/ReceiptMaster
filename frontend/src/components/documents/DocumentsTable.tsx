@@ -77,6 +77,7 @@ export function DocumentsTable({
           <VoidedDocumentNote
             document_type={document.document_type}
             void_reason={document.void_reason}
+            isOrderCancelled={document.order?.status === "cancelled"}
           />
         </div>
       )}

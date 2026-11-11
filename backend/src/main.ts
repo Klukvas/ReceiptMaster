@@ -8,6 +8,7 @@ import { AppModule } from "./app.module";
 import { EnvConfig } from "./config/env.schema";
 import { trustReverseProxy } from "./config/trusted-proxy";
 import { createOpenApiDocument } from "./openapi/openapi-document";
+import { RejectUnsafeInputPipe } from "./common/pipes/reject-unsafe-input.pipe";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -22,11 +23,14 @@ async function bootstrap() {
   const apiPrefix = configService.get("API_PREFIX");
   const port = configService.get("PORT");
 
+  // NUL characters and absurdly deep JSON are refused first (RejectUnsafeInputPipe),
+  // before the ValidationPipe's recursive walk or the database could fail on them.
   // Global validation — whitelist strips unknown properties silently.
   // forbidNonWhitelisted is NOT used because multiple @Query() DTOs
   // (e.g. PaginationDto + DateRangeDto) each receive all query params
   // and would reject each other's fields.
   app.useGlobalPipes(
+    new RejectUnsafeInputPipe(),
     new ValidationPipe({
       transform: true,
       whitelist: true,

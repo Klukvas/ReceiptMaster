@@ -196,6 +196,24 @@ const drawerAndConfirm = async (results, viewport, label) => {
   });
 };
 
+/** The app footer's legal links wrap to two rows on a phone; each row must be a thumb-sized target. */
+const footerLinkTargets = async (results) => {
+  await withPage(PHONE, async (page) => {
+    await setup(page);
+    await page.goto(`${BASE_URL}/orders`);
+    const links = page.locator("footer nav a").locator("visible=true");
+    await links.first().waitFor();
+    const boxes = await links.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect()).map(({ y, height }) => ({ y, height })),
+    );
+    results.check(
+      "375: footer legal links are at least 44px tall",
+      boxes.length >= 4 && Math.min(...boxes.map((box) => box.height)) >= 44,
+      JSON.stringify(boxes),
+    );
+  });
+};
+
 export const run = async () => {
   const results = new Results("uiq-shell");
   await phoneDrawer(results);
@@ -203,5 +221,6 @@ export const run = async () => {
   await subscriptionTab(results);
   await drawerAndConfirm(results, DESKTOP, "1280");
   await drawerAndConfirm(results, PHONE, "375");
+  await footerLinkTargets(results);
   return results;
 };

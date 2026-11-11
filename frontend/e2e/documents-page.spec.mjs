@@ -199,6 +199,16 @@ const checkFilters = async (results) => {
         lastQuery(state).get("search") === "Borys" && urlOf(page).searchParams.get("search") === "Borys",
         `${state.listQueries?.at(-1)} ${page.url()}`,
       );
+
+      // Typing replaced the cleared entry; Clear was a step of its own, so Back undoes it.
+      await page.goBack();
+      await settle(() => lastQuery(state).get("type") === "invoice");
+      const restored = urlOf(page).searchParams;
+      results.check(
+        `${label}: Back returns to the filters before Clear, not out of the page`,
+        restored.get("type") === "invoice" && restored.get("status") === "generated" && restored.get("to") === "2026-03-31",
+        page.url(),
+      );
     });
   }
 

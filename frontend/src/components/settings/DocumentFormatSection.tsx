@@ -5,6 +5,10 @@ import {
   type DocumentConfig,
   type DocumentLocale,
 } from "../../lib/document-config";
+import {
+  followDocumentLanguage,
+  LANGUAGE_LOCALES,
+} from "../../lib/document-language-formatting";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Disclosure } from "../ui/Disclosure";
 import { DocumentSection, LabelledField, selectClass } from "./document-ui";
@@ -33,10 +37,10 @@ const LANGUAGES = ["en", "ru", "uk"] as const;
 const SAMPLE_DATE = "2026-10-25T13:30:05Z";
 const SAMPLE_CENTS = 123456;
 
-/** "uk" -> "Ukrainian", "en-GB" -> "English (United Kingdom)", "UA" -> "Ukraine", in the interface language. */
+/** "uk" -> "Ukrainian", "en-GB" -> "English (United Kingdom)", in the interface language. */
 const displayName = (
   code: string,
-  type: "language" | "region",
+  type: "language",
   interfaceLanguage: string,
 ): string => {
   try {
@@ -48,13 +52,29 @@ const displayName = (
   }
 };
 
-const regionOf = (formatting: Formatting): string =>
-  REGIONS.find(
-    (region) =>
-      region.locale === formatting.numberLocale &&
-      (formatting.dateLocale === "document" ||
-        formatting.dateLocale === region.locale),
-  )?.code ?? CUSTOM_REGION;
+/**
+ * The region whose conventions the formatting matches in full: numbers, dates ("document"
+ * dates are written in the document language's locale) and the hour cycle. A mix, such as
+ * Russian numbers with US dates, is "custom", so the region never claims what the example
+ * below it contradicts.
+ */
+const regionOf = (
+  formatting: Formatting,
+  language: DocumentConfig["documentLanguage"],
+): string => {
+  const dateLocale =
+    formatting.dateLocale === "document"
+      ? LANGUAGE_LOCALES[language]
+      : formatting.dateLocale;
+  return (
+    REGIONS.find(
+      (region) =>
+        region.locale === formatting.numberLocale &&
+        region.locale === dateLocale &&
+        region.hourCycle === formatting.hourCycle,
+    )?.code ?? CUSTOM_REGION
+  );
+};
 
 const isValidTimeZone = (value: string): boolean => {
   try {
@@ -113,7 +133,18 @@ export function DocumentFormatSection({
   const example = zoneIsValid
     ? t("document.formatExample", { money: money({}), date: show({}) })
     : t("document.invalidFormatting");
-  const region = regionOf(formatting);
+  const region = regionOf(formatting, language);
+  // Regions and number formats are named by how they write a sample, not by a country:
+  // what the user picks is a way of writing amounts and dates.
+  const regionSample = (value: (typeof REGIONS)[number]): string =>
+    [
+      money({ numberLocale: value.locale }),
+      zoneIsValid
+        ? show({ dateLocale: value.locale, hourCycle: value.hourCycle })
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || value.locale;
 
   return (
     <DocumentSection
@@ -132,7 +163,13 @@ export function DocumentFormatSection({
               type="button"
               role="radio"
               aria-checked={language === value}
-              onClick={() => onChange({ ...config, documentLanguage: value })}
+              onClick={() =>
+                onChange({
+                  ...config,
+                  documentLanguage: value,
+                  formatting: followDocumentLanguage(formatting, language, value),
+                })
+              }
               className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                 language === value
                   ? "border-accent-base bg-[var(--color-accent-light)] text-accent-base"
@@ -176,7 +213,7 @@ export function DocumentFormatSection({
             )}
             {REGIONS.map((value) => (
               <option key={value.code} value={value.code}>
-                {displayName(value.code, "region", currentLanguage)}
+                {regionSample(value)}
               </option>
             ))}
           </select>
@@ -209,7 +246,7 @@ export function DocumentFormatSection({
               >
                 {documentLocales.map((value) => (
                   <option key={value} value={value}>
-                    {displayName(value, "language", currentLanguage)}
+                    {money({ numberLocale: value }) || value}
                   </option>
                 ))}
               </select>

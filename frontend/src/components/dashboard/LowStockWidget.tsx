@@ -2,6 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { productsApi } from "../../lib/api";
+import {
+  LOW_STOCK_THRESHOLD,
+  VERY_LOW_STOCK_THRESHOLD,
+} from "../../lib/product-metrics";
 import { Card } from "../ui/Card";
 import { LowStockSkeleton } from "./DashboardSkeletons";
 import { QueryErrorState } from "./QueryErrorState";
@@ -9,7 +13,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 
 const stockBadge = (qty: number) => {
   if (qty === 0) return "bg-[var(--color-danger-light)] text-danger-base";
-  if (qty <= 5) return "bg-[var(--color-warning-light)] text-warning-base";
+  if (qty < VERY_LOW_STOCK_THRESHOLD) return "bg-[var(--color-warning-light)] text-warning-base";
   return "bg-[var(--color-warning-light)] text-warning-base";
 };
 
@@ -18,7 +22,8 @@ export const LowStockWidget = () => {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["lowStockProducts"],
-    queryFn: () => productsApi.getLowStock(10),
+    // Same rule as the product badges: fewer units than the threshold.
+    queryFn: () => productsApi.getLowStock(LOW_STOCK_THRESHOLD),
   });
 
   // "All well-stocked" is only true when there are products; a new account has none.
@@ -81,7 +86,7 @@ export const LowStockWidget = () => {
           {products.length > 5 && (
             <Link
               to="/products"
-              className="block text-center text-xs text-accent-base hover:underline pt-1"
+              className="block text-center text-xs text-accent-base hover:underline pt-1 pointer-coarse:flex pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:justify-center pointer-coarse:pt-0"
             >
               {t("dashboard.viewAll", "View all")} ({products.length})
             </Link>

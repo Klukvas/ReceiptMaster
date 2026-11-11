@@ -1,8 +1,6 @@
 import {
   Controller,
-  Post,
   Get,
-  Body,
   Res,
   Query,
   UseGuards,
@@ -51,25 +49,6 @@ export class PdfTestController {
     private templateService: TemplateService,
     private playwrightPdfGenerator: PlaywrightPdfGenerator,
   ) {}
-
-  @Get("generate-test-pdf")
-  async generateTestPdfGet(
-    @Query("template") template: string,
-    @Query("logo") withLogo: string,
-    @Query("language") language: string,
-    @Res() res: Response,
-  ) {
-    const validatedTemplate = validateTemplate(template);
-    const validatedLanguage = validateLanguage(language);
-    return this.generateTestPdf(
-      {
-        template: validatedTemplate,
-        withLogo: withLogo === "true",
-        language: validatedLanguage,
-      },
-      res,
-    );
-  }
 
   @Get("preview-template")
   async previewTemplate(
@@ -144,10 +123,13 @@ export class PdfTestController {
     );
   }
 
-  @Post("generate-test-pdf")
+  /**
+   * A sample-data PDF of one template. Not routed: an HTTP route let any signed-in user start
+   * Playwright renders that no page uses. `test/verify-receipt-templates.ts` calls it directly.
+   */
   async generateTestPdf(
-    @Body() body: { template?: string; withLogo?: boolean; language?: string },
-    @Res() res: Response,
+    body: { template?: string; withLogo?: boolean; language?: string },
+    res: Response,
   ) {
     try {
       const validatedTemplate = validateTemplate(body.template);

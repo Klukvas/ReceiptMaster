@@ -110,7 +110,7 @@ export function ReturnNoteFields({ items, form, errors, onChange }: ReturnNoteFi
                     {t("documents.returnNote.maxHint", { max: remaining })}
                   </p>
                   {qtyError && (
-                    <p id={qtyErrorId} role="alert" className="mt-1 text-xs text-[var(--color-danger)]">
+                    <p id={qtyErrorId} role="alert" className="mt-1 text-xs text-danger-base">
                       {t(qtyError, { max: remaining })}
                     </p>
                   )}
@@ -120,7 +120,7 @@ export function ReturnNoteFields({ items, form, errors, onChange }: ReturnNoteFi
           })}
         </ul>
         {errors.lines && (
-          <p id="return-lines-error" role="alert" className="text-sm text-[var(--color-danger)]">{t(errors.lines)}</p>
+          <p id="return-lines-error" role="alert" className="text-sm text-danger-base">{t(errors.lines)}</p>
         )}
       </fieldset>
 
@@ -140,7 +140,7 @@ export function ReturnNoteFields({ items, form, errors, onChange }: ReturnNoteFi
           onChange={(event) => onChange({ ...form, reason: event.target.value })}
         />
         {errors.reason && (
-          <p id="document-return-reason-error" role="alert" className="text-sm text-[var(--color-danger)]">{t(errors.reason)}</p>
+          <p id="document-return-reason-error" role="alert" className="text-sm text-danger-base">{t(errors.reason)}</p>
         )}
       </div>
     </div>

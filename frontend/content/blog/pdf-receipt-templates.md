@@ -52,7 +52,7 @@ First impressions matter, even on a receipt. receiptmaster ships with 15 profess
 
 - **3 languages**: English, Ukrainian, Russian
 - **Custom branding**: Your logo, company name, and contact info
-- **SHA256 verification**: a SHA256 hash is recorded for every document, so you can check later that a file has not changed (this is not an electronic signature)
+- **SHA256 integrity check**: a SHA256 hash of every document's content is kept internally, so an issued document is never rebuilt from altered content (it is not printed on the document and is not an electronic signature)
 - **PDF generation**: Background processing via queue — no page blocking
 
 Head to **Settings → Receipt Design** to preview all templates with your own data.

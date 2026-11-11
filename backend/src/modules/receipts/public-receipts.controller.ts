@@ -1,13 +1,5 @@
 import { pdfDisposition } from "./content-disposition";
-import {
-  Controller,
-  Get,
-  Header,
-  Param,
-  Res,
-  Logger,
-  UseGuards,
-} from "@nestjs/common";
+import { Controller, Get, Header, Param, Res, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { ThrottlerGuard, Throttle } from "@nestjs/throttler";
 import { Response } from "express";
@@ -23,8 +15,6 @@ const NO_STORE = "private, no-store";
 @UseGuards(ThrottlerGuard)
 @Throttle({ default: { limit: 20, ttl: 60000 } })
 export class PublicReceiptsController {
-  private readonly logger = new Logger(PublicReceiptsController.name);
-
   constructor(private readonly receiptsService: ReceiptsService) {}
 
   @Get(":token")
@@ -46,28 +36,18 @@ export class PublicReceiptsController {
     @Res() res: Response,
   ) {
     // Set before the lookup: with @Res() Nest does not apply @Header, and error
-    // responses must carry it too.
+    // responses must carry it too. Errors go to GlobalExceptionFilter, which keeps
+    // these headers and answers `{ error, errorCode }` like every other route.
     res.set({ "X-Robots-Tag": ROBOTS_NOINDEX, "Cache-Control": NO_STORE });
-    try {
-      const { buffer, filename } =
-        await this.receiptsService.getPublicReceiptPdf(token);
+    const { buffer, filename } =
+      await this.receiptsService.getPublicReceiptPdf(token);
 
-      res.set({
-        "Content-Type": "application/pdf",
-        "Content-Disposition": pdfDisposition(filename),
-        "Content-Length": buffer.length.toString(),
-      });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": pdfDisposition(filename),
+      "Content-Length": buffer.length.toString(),
+    });
 
-      res.send(buffer);
-    } catch (error) {
-      this.logger.error("Error serving public PDF:", error);
-      const statusCode = error?.statusCode ?? error?.status ?? 500;
-      const isClientError = statusCode >= 400 && statusCode < 500;
-      res.status(statusCode).json({
-        error: isClientError
-          ? (error?.message ?? "Not found")
-          : "Error retrieving PDF",
-      });
-    }
+    res.send(buffer);
   }
 }

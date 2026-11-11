@@ -108,10 +108,11 @@ export const CheckField = ({
   const hintId = hint ? `${id}-hint` : undefined;
   return (
     <div>
-      <label className="flex items-start gap-2 text-sm text-content">
+      {/* The whole row is the hit area; a thumb needs 44px of it. */}
+      <label className="flex items-start gap-2 text-sm text-content pointer-coarse:min-h-11 pointer-coarse:items-center">
         <input
           type="checkbox"
-          className="mt-0.5 h-4 w-4"
+          className="mt-0.5 h-4 w-4 pointer-coarse:mt-0"
           checked={checked}
           disabled={disabled}
           aria-label={ariaLabel}

@@ -69,8 +69,10 @@ services:
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data
       - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    # Host-local only: Docker's published ports bypass the host firewall (ufw), and the
+    # app, migrations and the release gate reach Postgres over the compose network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks:
       - market_network
 

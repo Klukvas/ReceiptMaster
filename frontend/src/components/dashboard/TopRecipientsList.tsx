@@ -83,7 +83,7 @@ export const TopRecipientsList = ({
  <h3 className="text-sm font-semibold text-content">{title}</h3>
  <button
  onClick={() => setSortBy(sortBy === 'revenue' ? 'orders' : 'revenue')}
- className="inline-flex items-center gap-1.5 text-xs font-medium text-content-tertiary hover:text-content transition-colors"
+ className="inline-flex items-center gap-1.5 text-xs font-medium text-content-tertiary hover:text-content transition-colors pointer-coarse:min-h-11 pointer-coarse:px-2 pointer-coarse:-mr-2"
  >
  <ArrowUpDown className="h-3 w-3" />
  {sortBy === 'revenue'
@@ -138,7 +138,7 @@ export const TopRecipientsList = ({
  {recipient.recipient_name}
  </p>
  <p className="text-xs text-content-tertiary">
- {recipient.total_orders} {recipient.total_orders === 1 ? 'order' : 'orders'}
+ {t('dashboard.ordersCount', { count: recipient.total_orders })}
  </p>
  </div>
 
@@ -159,7 +159,7 @@ export const TopRecipientsList = ({
  {hasMore && !showAll && (
  <button
  onClick={() => setShowAll(true)}
- className="mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-content-tertiary hover:text-content transition-colors"
+ className="mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-content-tertiary hover:text-content transition-colors pointer-coarse:min-h-11"
  >
  {t('dashboard.viewAll')}
  <ChevronDown className="h-3 w-3" />

@@ -7,6 +7,7 @@ import { UsersController } from "./users.controller";
 import { UsersService } from "./users.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { trustReverseProxy } from "../../config/trusted-proxy";
+import { GlobalExceptionFilter } from "../../common/filters/GlobalExceptionFilter";
 
 const REFRESH_LIMIT_PER_MINUTE = 20;
 
@@ -74,4 +75,47 @@ describe("POST /auth/refresh throttling behind the reverse proxy", () => {
 
     expect(spoofed.status).toBe(429);
   });
+});
+
+// The login form reads errorCode RATE_LIMITED and retryAfterSeconds (frontend api-errors.ts).
+describe("login and register 429 body", () => {
+  let app: NestExpressApplication;
+  const service = { login: jest.fn(), register: jest.fn() };
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])],
+      controllers: [UsersController],
+      providers: [{ provide: UsersService, useValue: service }],
+    }).compile();
+    app = module.createNestApplication<NestExpressApplication>({
+      logger: false,
+    });
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    await app.init();
+  });
+
+  afterAll(async () => app.close());
+
+  it.each(["login", "register"])(
+    "answers the 6th %s within a minute with RATE_LIMITED and retryAfterSeconds",
+    async (endpoint) => {
+      const attempt = () =>
+        request(app.getHttpServer()).post(`/auth/${endpoint}`).send({});
+      for (let i = 0; i < 5; i++) expect((await attempt()).status).toBe(201);
+
+      const response = await attempt();
+
+      expect(response.status).toBe(429);
+      expect(response.body).toEqual({
+        error: expect.stringContaining("Too many requests"),
+        errorCode: "RATE_LIMITED",
+        retryAfterSeconds: expect.any(Number),
+      });
+      expect(response.body.retryAfterSeconds).toBeGreaterThan(0);
+      expect(Number(response.headers["retry-after"])).toBe(
+        response.body.retryAfterSeconds,
+      );
+    },
+  );
 });

@@ -5,7 +5,9 @@ import { useTranslation } from "../../hooks/useTranslation";
 const STATUS_STYLE: Record<Receipt["status"], string> = {
   generated: "bg-[var(--color-success-light)] text-success-base",
   processing: "bg-[var(--color-accent-light)] text-accent-base",
-  void: "bg-[var(--color-danger-light)] text-danger-base",
+  // A voided document is settled, not a problem: neutral, like the order chip. The border keeps
+  // the badge visible on the order card, which has the same surface-alt background.
+  void: "border border-[var(--color-border)] bg-surface-alt text-content-secondary",
   failed: "bg-[var(--color-danger-light)] text-danger-base",
 };
 

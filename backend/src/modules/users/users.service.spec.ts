@@ -12,6 +12,23 @@ import { hashRefreshToken } from "./refresh-tokens";
 
 jest.mock("bcrypt");
 
+/** A mocked TypeORM UpdateQueryBuilder chain answering `execute` with `result`. */
+const updateBuilder = (result: unknown) => ({
+  update: jest.fn().mockReturnThis(),
+  set: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
+  andWhere: jest.fn().mockReturnThis(),
+  returning: jest.fn().mockReturnThis(),
+  execute: jest.fn().mockResolvedValue(result),
+});
+
+/** The bump is `token_version + 1` evaluated by PostgreSQL, never read-modify-write. */
+const expectAtomicBump = (bump: ReturnType<typeof updateBuilder>) => {
+  const [[values]] = bump.set.mock.calls;
+  expect(values.token_version()).toBe(`"token_version" + 1`);
+  expect(bump.returning).toHaveBeenCalledWith(["token_version"]);
+};
+
 // Token persistence and rotation run against PostgreSQL in
 // test/refresh-rotation.e2e-spec.ts and test/refresh-token-security.e2e-spec.ts;
 // these mocks only cover the service's own validation and wiring.
@@ -22,7 +39,7 @@ describe("UsersService", () => {
   let tokenStore: any;
   let txTokenRepo: any;
   let txManager: any;
-  let _jwtService: jest.Mocked<JwtService>;
+  let jwtService: jest.Mocked<JwtService>;
 
   const mockUser: Partial<User> = {
     id: "user-1",
@@ -32,10 +49,11 @@ describe("UsersService", () => {
   };
 
   beforeEach(async () => {
-    txTokenRepo = { update: jest.fn() };
+    txTokenRepo = { update: jest.fn(), insert: jest.fn() };
     txManager = {
       update: jest.fn(),
       getRepository: jest.fn().mockReturnValue(txTokenRepo),
+      createQueryBuilder: jest.fn(),
     };
     userRepo = {
       findOne: jest.fn(),
@@ -74,7 +92,7 @@ describe("UsersService", () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    _jwtService = module.get(JwtService);
+    jwtService = module.get(JwtService);
   });
 
   describe("register", () => {
@@ -88,6 +106,11 @@ describe("UsersService", () => {
       });
 
       expect(result.access_token).toBe("jwt-token");
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: "user-1",
+        email: "new@test.com",
+        tv: 0,
+      });
       expect(result.refresh_token).toMatch(/^[a-f0-9]{128}$/);
       expect(result.user.email).toBe("new@test.com");
       expect(userRepo.create).toHaveBeenCalled();
@@ -162,6 +185,25 @@ describe("UsersService", () => {
       expect(result.user.id).toBe("user-1");
     });
 
+    it("signs the access token with the account's current token version", async () => {
+      userRepo.findOne.mockResolvedValue({ ...mockUser, token_version: 7 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await service.login({ email: "test@test.com", password: "correct-pw" });
+
+      // token_version is not selected by default; login must ask for it.
+      expect(userRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({ token_version: true }),
+        }),
+      );
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: "user-1",
+        email: "test@test.com",
+        tv: 7,
+      });
+    });
+
     it("should throw if user not found", async () => {
       userRepo.findOne.mockResolvedValue(null);
 
@@ -202,12 +244,54 @@ describe("UsersService", () => {
 
   describe("revokeRefreshToken", () => {
     it("rejects a malformed token before querying", async () => {
-      await expect(service.revokeRefreshToken("x".repeat(128))).rejects.toThrow(
-        ApiErrorResponse,
-      );
+      await expect(
+        service.revokeRefreshToken("x".repeat(128), "user-1"),
+      ).rejects.toThrow(ApiErrorResponse);
       expect(
         refreshTokenRepo.manager.createQueryBuilder,
       ).not.toHaveBeenCalled();
+    });
+
+    const logoutManager = () => {
+      const bump = updateBuilder({ raw: [{ token_version: 4 }] });
+      const revoke = updateBuilder({ affected: 0, raw: [] });
+      const manager = {
+        createQueryBuilder: jest
+          .fn()
+          .mockReturnValueOnce(bump)
+          .mockReturnValueOnce(revoke),
+      };
+      refreshTokenRepo.manager.transaction.mockImplementation((work) =>
+        work(manager),
+      );
+      return { bump, revoke, manager };
+    };
+
+    it("revokes only a token of the signed-in user, so a foreign one is a no-op", async () => {
+      const { revoke } = logoutManager();
+
+      await expect(
+        service.revokeRefreshToken("a".repeat(128), "user-1"),
+      ).resolves.toBeUndefined();
+
+      expect(revoke.set).toHaveBeenCalledWith({ revoked: true });
+      expect(revoke.andWhere).toHaveBeenCalledWith("user_id = :userId", {
+        userId: "user-1",
+      });
+    });
+
+    it("bumps the user's token version in SQL, before revoking (users row first)", async () => {
+      const { bump, revoke } = logoutManager();
+
+      await service.revokeRefreshToken("a".repeat(128), "user-1");
+
+      expect(refreshTokenRepo.manager.transaction).toHaveBeenCalledTimes(1);
+      expect(bump.update).toHaveBeenCalledWith(User);
+      expectAtomicBump(bump);
+      expect(bump.where).toHaveBeenCalledWith("id = :id", { id: "user-1" });
+      expect(bump.execute.mock.invocationCallOrder[0]).toBeLessThan(
+        revoke.execute.mock.invocationCallOrder[0],
+      );
     });
   });
 
@@ -289,18 +373,27 @@ describe("UsersService", () => {
   });
 
   describe("changePassword", () => {
-    it("should change password successfully", async () => {
+    const changeValidPassword = () => {
       userRepo.findOne.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock)
         .mockResolvedValueOnce(true) // current password is valid
         .mockResolvedValueOnce(false); // new password is different
       (bcrypt.hash as jest.Mock).mockResolvedValue("new-hashed-pw");
+      const bump = updateBuilder({ raw: [{ token_version: 3 }] });
+      txManager.createQueryBuilder.mockReturnValue(bump);
+      return bump;
+    };
 
-      await service.changePassword("user-1", {
-        currentPassword: "old-pw",
-        newPassword: "new-pw",
-        confirmPassword: "new-pw",
-      });
+    const validChange = {
+      currentPassword: "old-pw",
+      newPassword: "new-pw",
+      confirmPassword: "new-pw",
+    };
+
+    it("should change password successfully", async () => {
+      changeValidPassword();
+
+      await service.changePassword("user-1", validChange);
 
       expect(userRepo.manager.transaction).toHaveBeenCalledTimes(1);
       expect(txManager.update).toHaveBeenCalledWith(User, "user-1", {
@@ -312,6 +405,43 @@ describe("UsersService", () => {
         { revoked: true },
       );
       expect(userRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("bumps the token version atomically in the same transaction", async () => {
+      const bump = changeValidPassword();
+
+      await service.changePassword("user-1", validChange);
+
+      expect(bump.update).toHaveBeenCalledWith(User);
+      expectAtomicBump(bump);
+      expect(bump.where).toHaveBeenCalledWith("id = :id", { id: "user-1" });
+    });
+
+    it("returns a new pair for the calling session, signed with the bumped version", async () => {
+      changeValidPassword();
+
+      const result = await service.changePassword("user-1", validChange);
+
+      expect(result).toEqual({
+        access_token: "jwt-token",
+        refresh_token: expect.stringMatching(/^[a-f0-9]{128}$/),
+        user: { id: "user-1", email: "test@test.com" },
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: "user-1",
+        email: "test@test.com",
+        tv: 3,
+      });
+      // The new refresh token is stored after the revocation, so it survives it.
+      expect(txTokenRepo.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          token_hash: hashRefreshToken(result.refresh_token),
+        }),
+      );
+      expect(txTokenRepo.update.mock.invocationCallOrder[0]).toBeLessThan(
+        txTokenRepo.insert.mock.invocationCallOrder[0],
+      );
     });
 
     it("should throw if passwords do not match", async () => {

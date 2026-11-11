@@ -89,6 +89,7 @@ export function useDocumentColumns(): ColumnDef<DocumentListItem>[] {
                 <VoidedDocumentNote
                   document_type={doc.document_type}
                   void_reason={doc.void_reason}
+                  isOrderCancelled={doc.order?.status === "cancelled"}
                 />
               </div>
             )}

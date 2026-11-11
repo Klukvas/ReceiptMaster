@@ -17,6 +17,7 @@ export function DocumentPreviewPanel({
   title,
   defaultOpen = false,
   isAvailable = true,
+  isVisible = true,
 }: {
   model: DocumentDraftModel;
   title?: string;
@@ -24,6 +25,8 @@ export function DocumentPreviewPanel({
   defaultOpen?: boolean;
   /** False when the preview cannot show this document type and would mislead. */
   isAvailable?: boolean;
+  /** False while the editor is kept mounted but hidden (another settings tab): no PDF is rendered. */
+  isVisible?: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(
@@ -31,7 +34,7 @@ export function DocumentPreviewPanel({
       defaultOpen ||
       (typeof window !== "undefined" && window.matchMedia(WIDE_SCREEN).matches),
   );
-  useAutoPreview(model, open && isAvailable);
+  useAutoPreview(model, open && isAvailable && isVisible);
 
   if (!isAvailable)
     return (

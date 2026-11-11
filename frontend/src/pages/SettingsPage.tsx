@@ -485,7 +485,10 @@ export const SettingsPage = () => {
         className="space-y-5"
       >
         <div hidden={activeTab !== "documents"}>
-          <DocumentEditor model={documentDraft} />
+          <DocumentEditor
+            model={documentDraft}
+            isVisible={activeTab === "documents"}
+          />
         </div>
 
         {/* Mounted on first visit and then only hidden, so a numbering draft survives a trip to another tab. */}

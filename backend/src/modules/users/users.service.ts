@@ -17,6 +17,11 @@ import { AuthResponseDto } from "./dto/auth-response.dto";
 import { isUniqueViolationOnColumn } from "../../common/utils/unique-violation.util";
 import { REFRESH_TOKEN_PATTERN } from "./dto/refresh-token.dto";
 import {
+  INITIAL_TOKEN_VERSION,
+  accessTokenClaims,
+  bumpTokenVersion,
+} from "./access-token";
+import {
   familyOf,
   findPresentedToken,
   isReplay,
@@ -93,8 +98,8 @@ export class UsersService {
       throw error;
     }
 
-    const payload = { sub: savedUser.id, email: savedUser.email };
-    const access_token = this.jwtService.sign(payload);
+    // A new row starts at the column default.
+    const access_token = this.signAccessToken(savedUser, INITIAL_TOKEN_VERSION);
     const refresh_token = await this.createRefreshToken(savedUser.id);
 
     return {
@@ -112,6 +117,13 @@ export class UsersService {
 
     const user = await this.userRepository.findOne({
       where: { email: emailEquals(email) },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        isActive: true,
+        token_version: true,
+      },
     });
 
     if (!user || !user.isActive) {
@@ -123,8 +135,7 @@ export class UsersService {
       throw ApiErrors.INVALID_CREDENTIALS();
     }
 
-    const payload = { sub: user.id, email: user.email };
-    const access_token = this.jwtService.sign(payload);
+    const access_token = this.signAccessToken(user, user.token_version);
     const refresh_token = await this.createRefreshToken(user.id);
 
     return {
@@ -176,6 +187,7 @@ export class UsersService {
     // Unlike FOR UPDATE it leaves the FK checks of inserts referencing the user free.
     const user = await manager.findOne(User, {
       where: { id: presented.user_id },
+      select: { id: true, email: true, isActive: true, token_version: true },
       lock: { mode: "for_no_key_update" },
     });
     if (!user?.isActive) {
@@ -201,14 +213,14 @@ export class UsersService {
     return { kind: "replayed", userId: user.id, familyId, revokedCount };
   }
 
+  /** `familyId` omitted starts a new rotation family, as a login does. */
   private async issueSuccessor(
     manager: EntityManager,
-    user: User,
-    familyId: string,
+    user: Pick<User, "id" | "email" | "token_version">,
+    familyId?: string,
   ): Promise<AuthResponseDto> {
-    const payload = { sub: user.id, email: user.email };
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.signAccessToken(user, user.token_version),
       refresh_token: await issueRefreshToken(manager, user.id, familyId),
       user: {
         id: user.id,
@@ -217,9 +229,25 @@ export class UsersService {
     };
   }
 
-  async revokeRefreshToken(token: string): Promise<void> {
+  private signAccessToken(
+    user: Pick<User, "id" | "email">,
+    tokenVersion: number,
+  ): string {
+    return this.jwtService.sign(accessTokenClaims(user, tokenVersion));
+  }
+
+  /**
+   * Logout: ends every access token of `userId` (other devices refresh silently, their
+   * refresh tokens stay valid) and revokes the presented refresh token if it is
+   * `userId`'s own; any other token is a silent no-op.
+   */
+  async revokeRefreshToken(token: string, userId: string): Promise<void> {
     this.assertRefreshToken(token);
-    await revokePresentedToken(this.refreshTokenRepository.manager, token);
+    // Users row first: the lock order rotation and changePassword use.
+    await this.refreshTokenRepository.manager.transaction(async (manager) => {
+      await bumpTokenVersion(manager, userId);
+      await revokePresentedToken(manager, token, userId);
+    });
   }
 
   private assertRefreshToken(token: unknown): asserts token is string {
@@ -281,10 +309,15 @@ export class UsersService {
     return userWithoutPassword;
   }
 
+  /**
+   * Ends every session of the account (access tokens through the version bump, refresh
+   * tokens by revocation) and returns a fresh pair, in a new rotation family, for the
+   * session that asked, so it stays signed in.
+   */
   async changePassword(
     userId: string,
     changePasswordDto: ChangePasswordDto,
-  ): Promise<void> {
+  ): Promise<AuthResponseDto> {
     const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
 
     if (newPassword !== confirmPassword) {
@@ -327,9 +360,18 @@ export class UsersService {
     // One transaction, users row first (the lock order rotation uses): an
     // in-flight rotation holds that row FOR NO KEY UPDATE, so this UPDATE waits
     // for its successor to commit and the revocation, a later statement, sees it.
-    await this.userRepository.manager.transaction(async (manager) => {
+    // The caller's new refresh token is inserted after the revocation, so it survives.
+    return this.userRepository.manager.transaction(async (manager) => {
       await manager.update(User, userId, { password: hashedPassword });
+      const tokenVersion = await bumpTokenVersion(manager, userId);
+      // The account was read above; gone now means deleted mid-request.
+      if (tokenVersion === null) throw ApiErrors.USER_NOT_FOUND(userId);
       await this.revokeAllUserTokens(userId, manager);
+      return this.issueSuccessor(manager, {
+        id: user.id,
+        email: user.email,
+        token_version: tokenVersion,
+      });
     });
   }
 }

@@ -123,12 +123,18 @@ export const Combobox = ({
  }
  };
 
- // Обработка выбора опции
- const selectOption = (option: ComboboxOption) => {
- onChange(option.value);
+ // The search field that had focus unmounts with the list; keep focus on the combobox.
+ const closeAndRefocus = () => {
  setIsOpen(false);
  setSearchTerm('');
  setHighlightedIndex(-1);
+ inputRef.current?.focus();
+ };
+
+ // Обработка выбора опции
+ const selectOption = (option: ComboboxOption) => {
+ onChange(option.value);
+ closeAndRefocus();
  };
 
 
@@ -210,9 +216,7 @@ export const Combobox = ({
  case 'Escape':
  // Only swallow the key while a list is open, so a second Esc can close the dialog around it.
  if (isOpen) e.preventDefault();
- setIsOpen(false);
- setSearchTerm('');
- setHighlightedIndex(-1);
+ closeAndRefocus();
  break;
  }
  };
@@ -252,7 +256,7 @@ export const Combobox = ({
  <div
  ref={inputRef}
  className={`
- w-full h-11 px-3.5 border rounded-xl bg-elevated text-content focus:outline-none transition-all duration-200 flex items-center justify-between cursor-pointer
+ w-full h-11 px-3.5 border rounded-xl bg-elevated text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 transition-all duration-200 flex items-center justify-between cursor-pointer
  ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
  ${isOpen ? 'border-accent-base ring-2 ring-[var(--color-ring)] shadow-sm' : 'border-[var(--color-border)] hover:border-[var(--color-border)]'}
  `}
@@ -351,6 +355,8 @@ export const Combobox = ({
  onChange={() => {}}
  className="sr-only"
  tabIndex={-1}
+ // Only carries native validation; the combobox above is what assistive tech should see.
+ aria-hidden="true"
  required
  />
  )}

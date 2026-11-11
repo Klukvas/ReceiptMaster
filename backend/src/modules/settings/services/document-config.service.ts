@@ -17,6 +17,7 @@ import {
   DocumentConfig,
   DocumentDraft,
   documentConfigSchema,
+  followDocumentLanguage,
   legacyColumns,
   legacyConfig,
   mergeConfig,
@@ -164,7 +165,13 @@ export class DocumentConfigService {
         ...mapped,
         logo: base.logo,
         visibility: base.visibility,
-        formatting: base.formatting,
+        // A language switch (POST /settings/template-language) carries the formatting that
+        // follows the language along; the rest of the saved formatting stays as it is.
+        formatting: followDocumentLanguage(
+          base.formatting,
+          base.documentLanguage,
+          mapped.documentLanguage,
+        ),
       });
       await this.assertTemplate(userId, config.templateId, manager);
       await this.commit(

@@ -190,7 +190,7 @@ export const DashboardHomePage = () => {
           <button
             type="button"
             onClick={retryFailedQueries}
-            className="font-medium underline hover:no-underline"
+            className="font-medium underline hover:no-underline text-left pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           >
             {t("common.retry")}
           </button>

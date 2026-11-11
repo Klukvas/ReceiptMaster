@@ -412,7 +412,7 @@ export class OrdersDashboardService {
       const results = await this.dataSource.query(
         `
       SELECT
-        d.date::text as date,
+        d.date::date::text as date,
         (CASE WHEN COUNT(oi.id) = 0 THEN 0
           ELSE ${KNOWN_COST_PROFIT_SQL} END)::integer as revenue_cents,
         COALESCE(SUM(oi.line_total_cents), 0)::integer as turnover_cents,${UNKNOWN_COST_COLUMNS_SQL}

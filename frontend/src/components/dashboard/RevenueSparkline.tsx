@@ -8,7 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { dashboardApi, formatCurrency } from "../../lib/api";
+import { dashboardApi, dateLocale, formatCurrency } from "../../lib/api";
 import {
   combineCompleteness,
   combineProfit,
@@ -56,6 +56,16 @@ interface RevenueSparklineProps {
   currency?: string;
 }
 
+
+/**
+ * The API sends the day as "YYYY-MM-DD". `new Date("YYYY-MM-DD")` would be UTC midnight, the
+ * previous day west of Greenwich, so the calendar day is built in local time instead.
+ */
+const calendarDay = (day: string): Date => {
+  const [year, month, date] = day.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, date);
+};
+
 export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
   const { t } = useTranslation();
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -91,7 +101,8 @@ export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
 
   const chartData =
     data?.data?.map((d) => ({
-      date: new Date(d.date).toLocaleDateString(undefined, {
+      // The interface language, not the browser's.
+      date: calendarDay(d.date).toLocaleDateString(dateLocale(), {
         month: "short",
         day: "numeric",
       }),

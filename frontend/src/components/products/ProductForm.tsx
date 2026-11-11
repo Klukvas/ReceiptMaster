@@ -3,11 +3,18 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { X, Search, Package, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import {
+  dateLocale,
+  formatCurrency,
   productsApi,
   suppliersApi,
   type Product,
   type UpdateProductRequest,
 } from "../../lib/api";
+import {
+  exceedsMaxPrice,
+  MAX_PRICE_CENTS,
+  MAX_QUANTITY,
+} from "../../lib/product-metrics";
 import { ErrorCode, parseApiError } from "../../lib/api-errors";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -173,18 +180,30 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       newErrors.name = t("products.productNameRequired");
     }
     const purchasePrice = parseFloat(formData.purchase_price_cents);
+    // The server's limit, said in words instead of its raw "must not be greater than" message.
+    const priceTooHigh = t("products.priceTooHigh", {
+      max: formatCurrency(MAX_PRICE_CENTS, formData.currency),
+    });
     if (isNaN(purchasePrice) || purchasePrice < 0) {
       newErrors.purchase_price_cents = t(
         "products.purchasePriceMustBePositive",
       );
+    } else if (exceedsMaxPrice(purchasePrice)) {
+      newErrors.purchase_price_cents = priceTooHigh;
     }
     const salePrice = parseFloat(formData.sale_price_cents);
     if (isNaN(salePrice) || salePrice < 0) {
       newErrors.sale_price_cents = t("products.salePriceMustBePositive");
+    } else if (exceedsMaxPrice(salePrice)) {
+      newErrors.sale_price_cents = priceTooHigh;
     }
     // parseInt("1.5") is 1: reject fractions instead of silently storing a different number.
     if (!/^\d+$/.test(formData.quantity.trim())) {
       newErrors.quantity = t("products.quantityMustBeWhole");
+    } else if (Number(formData.quantity.trim()) > MAX_QUANTITY) {
+      newErrors.quantity = t("products.quantityTooHigh", {
+        max: MAX_QUANTITY.toLocaleString(dateLocale()),
+      });
     }
     setErrors(newErrors);
     const firstInvalid = (
@@ -237,8 +256,13 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
           <h2 className="text-lg font-semibold text-content">
             {product ? t("products.editProduct") : t("products.createProduct")}
           </h2>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
+            <X className="w-4 h-4" aria-hidden />
           </Button>
         </div>
 
@@ -368,10 +392,14 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-content-secondary mb-1">
+            <label
+              htmlFor="product-currency"
+              className="block text-sm font-medium text-content-secondary mb-1"
+            >
               {t("products.currency")}
             </label>
             <select
+              id="product-currency"
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)] focus:border-transparent transition-colors duration-200"
               value={formData.currency}
               onChange={(e) =>

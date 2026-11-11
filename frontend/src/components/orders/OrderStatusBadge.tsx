@@ -22,7 +22,7 @@ const INDICATOR_TEXT_KEY: Record<Indicator['kind'], string> = {
  processing: 'orders.receiptProcessing',
  failed: 'documents.status.failed',
  replacementFailed: 'documentsPage.replacementFailed',
- void: 'orders.receiptVoided',
+ void: 'documents.status.void',
 };
 
 /** What the list should flag about the order's documents, the same states the order card shows. */

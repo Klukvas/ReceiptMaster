@@ -64,12 +64,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsLoading(true);
     try {
       await login(formData.email.trim(), formData.password);
+      // login() is already loading the dashboard. The dialog stays open and busy until the page
+      // unloads, so focus stays on its submit button instead of falling back to the landing page.
       toast.success(t("auth.loginSuccess"));
-      onClose();
-      setFormData({ email: "", password: "" });
     } catch (error: unknown) {
       setErrorMessage(parseApiError(error).message);
-    } finally {
       inFlight.current = false;
       setIsLoading(false);
     }

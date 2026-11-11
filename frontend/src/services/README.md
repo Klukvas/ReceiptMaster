@@ -39,19 +39,17 @@ src/
 ## Сервисы
 
 ### ReceiptService
-Работа с чеками и принтерами.
+Работа с чеками.
 
 ```typescript
 import { receiptService } from '../services';
 
-// Загрузить принтеры
-await receiptService.loadPrinters();
-
 // Скачать чек
 await receiptService.downloadReceipt(receiptId);
 
-// Печать чека
-await receiptService.printReceipt(receiptId, printerName);
+// Печать: PDF открывается в новой вкладке, печатает браузер.
+// Вызывать прямо из обработчика клика, иначе вкладку заблокирует popup blocker.
+receiptService.openReceiptForPrinting(receiptId);
 ```
 
 ### OrderService

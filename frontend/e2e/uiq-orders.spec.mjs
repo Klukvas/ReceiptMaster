@@ -246,6 +246,28 @@ const rowMenuTouchTargets = async (results) => {
   });
 };
 
+const cardOpensDetails = async (results) => {
+  await withPage(PHONE, async (page) => {
+    page.setDefaultTimeout(6000);
+    await setup(page);
+    await page.goto(`${BASE_URL}/orders`);
+    await waitForRows(page);
+    // The card's heading block is its way into the details, like the table row on a desktop.
+    const opener = page.getByRole("button", { name: /Buyer 1/ }).locator("visible=true").first();
+    const height = (await opener.boundingBox())?.height ?? 0;
+    await opener.click();
+    const opened = await page
+      .getByRole("dialog", { name: /Order Details/ })
+      .waitFor()
+      .then(() => true, () => false);
+    results.check(
+      "tapping an order card opens its details on a phone, with a 44px target",
+      opened && height >= MIN_TOUCH_TARGET,
+      `opened=${opened} height=${height}`,
+    );
+  });
+};
+
 /** Resolves any CSS color (including oklch / color-mix) to sRGB through a canvas pixel. */
 const readColors = (button) => button.evaluate((element) => {
   const toRgb = (cssColor) => {
@@ -327,6 +349,7 @@ export const run = async () => {
   await editFormInlineError(results);
   await lineItemTouchTargets(results);
   await rowMenuTouchTargets(results);
+  await cardOpensDetails(results);
   await bulkApproveContrast(results);
   await bulkDisabledReasonVisible(results);
   return results;

@@ -111,7 +111,7 @@
 - SHA256 hash for receipt integrity
 - **Receipt voiding** — `POST /receipts/:id/void` marks receipt as VOID and unlocks the order
 - **Test receipt preview** — generate a sample PDF without saving
-- Download PDF, open in new tab, or send to system printer
+- Download PDF, or open it in a new tab to print from the browser's PDF viewer
 - Regenerate receipts on demand
 - Unique receipt numbering (YYYY-NNNNNN)
 - Frontend polling: auto-refreshes every 3s while receipts are processing
@@ -383,11 +383,9 @@ All support optional `startDate` and `endDate` query params (validated as ISO da
 | `GET` | `/receipts` | Yes | List all receipts |
 | `GET` | `/receipts/:id` | Yes | Get receipt metadata |
 | `GET` | `/receipts/:id/pdf` | Yes | Download receipt PDF |
-| `POST` | `/receipts/:id/print` | Yes | Print receipt (optional `printer` param) |
 | `POST` | `/receipts/:id/void` | Yes | Void receipt and unlock order (`{ reason }`) |
 | `POST` | `/receipts/:id/regenerate` | Yes | Force regenerate receipt PDF |
 | `POST` | `/receipts/test-preview` | Yes | Generate test receipt (not saved) |
-| `GET` | `/receipts/printers` | Yes | List available printers |
 
 ### Settings (`/settings`)
 

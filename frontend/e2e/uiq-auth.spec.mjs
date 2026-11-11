@@ -115,6 +115,36 @@ const doubleSubmit = async (results) => {
   });
 };
 
+// The dialog's Back marker used to be popped when the dialog closed after sign-in, and that
+// history step cancelled the navigation: the user stayed on "/".
+const modalLoginLandsOnDashboard = async (results) => {
+  await withPage(DESKTOP, async (page) => {
+    page.setDefaultTimeout(8000);
+    await installApiMocks(page, createState());
+    await page.route("**/api/v1/auth/login", (route) =>
+      json(route, 200, {
+        access_token: "e2e-token",
+        refresh_token: "e2e-refresh",
+        user: { id: "user-1", email: "e2e@example.com", role: "user" },
+      }),
+    );
+    await page.goto(`${BASE_URL}/?auth=login`);
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("#email").fill("e2e@example.com");
+    await dialog.locator("#password").fill("whatever-password");
+    await dialog.locator("button[type=submit]").click();
+    let landed = true;
+    await page.waitForURL("**/dashboard").catch(() => {
+      landed = false;
+    });
+    results.check(
+      "login from the landing dialog lands on /dashboard",
+      landed,
+      new URL(page.url()).pathname,
+    );
+  });
+};
+
 const modalOpensOnEmail = async (results) => {
   await withPage(DESKTOP, async (page) => {
     page.setDefaultTimeout(6000);
@@ -239,6 +269,7 @@ export const run = async () => {
   const results = new Results("auth and onboarding touch quality");
   await passwordToggle(results);
   await modalOpensOnEmail(results);
+  await modalLoginLandsOnDashboard(results);
   await throttledLogin(results);
   await doubleSubmit(results);
   await inPlaceLogin(results);

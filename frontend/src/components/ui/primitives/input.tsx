@@ -63,7 +63,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {error && (
           <p
             id={errorId}
-            className="text-sm text-[var(--color-danger)]"
+            className="text-sm text-danger-base"
             role="alert"
           >
             {error}

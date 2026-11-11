@@ -172,7 +172,12 @@ const clipboardFailure = async (results) => {
     });
     await page.goto(`${BASE_URL}/orders`);
     await page.getByText("Buyer").first().click();
-    // The waybill card in the order details; the footer repeats its actions.
+    // The waybill card in the order details; its actions are the only Share button there.
+    await page.getByTestId("document-card").first().waitFor();
+    results.check(
+      "order details offer one Share per document, not a second set in the footer",
+      (await page.getByRole("dialog").getByRole("button", { name: "Share", exact: true }).count()) === 1,
+    );
     await page.getByTestId("document-card").first().getByRole("button", { name: "Share" }).click();
     const dialog = page.getByRole("dialog").last();
     await dialog.getByRole("button", { name: /Copy/ }).click();
