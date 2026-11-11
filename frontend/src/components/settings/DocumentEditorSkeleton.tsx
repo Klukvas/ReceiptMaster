@@ -23,9 +23,11 @@ const FIELD_ROWS = 3;
 export function DocumentEditorSkeleton() {
   return (
     <div aria-hidden className="space-y-5">
-      {/* The intro sentence wraps to two lines on a phone. */}
-      <div className="h-10 lg:h-5">
-        <Skeleton className="h-4 w-3/4 max-w-md" />
+      {/* The intro sentence wraps to two lines on a phone. It sits on the page background, where
+          the card tone of a skeleton block would not show. */}
+      <div className="h-10 space-y-2 lg:h-5">
+        <Skeleton className="h-4 w-full max-w-xl bg-[var(--color-border)]" />
+        <Skeleton className="h-4 w-1/2 bg-[var(--color-border)] lg:hidden" />
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
         <div className="min-w-0 space-y-3 lg:space-y-5">
@@ -51,7 +53,8 @@ export function DocumentEditorSkeleton() {
         {/* On a phone the preview is a collapsed bar above the form, as in the editor. */}
         <div className="order-first min-h-[78px] min-w-0 self-start rounded-xl border border-[var(--color-border)] bg-elevated p-4 lg:order-none lg:min-h-0">
           <Skeleton className="h-5 w-32" />
-          <Skeleton className="mt-4 hidden aspect-[1/1.414] w-full lg:block" />
+          {/* The preview area as it waits for the first render, not a full A4 page. */}
+          <Skeleton className="mt-4 hidden h-[390px] w-full lg:block" />
         </div>
       </div>
     </div>
