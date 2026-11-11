@@ -157,6 +157,22 @@ const checkListChips = async (results) => {
       voidClass !== null && !voidClass.includes("danger") && voidClass.includes("surface-alt"),
       String(voidClass),
     );
+    results.check(
+      "the void chip uses the card's wording (Voided)",
+      text.includes("Quote · Voided"),
+      text,
+    );
+  });
+  await withOrders(DESKTOP, orderWith([doc("wb-1", "waybill", "void")]), {}, async (page) => {
+    await page.getByText("Aurora Coffee Bar").locator("visible=true").first().click();
+    const card = page.locator('[data-testid="document-card"][data-document-type="waybill"]');
+    await card.waitFor({ state: "visible" });
+    const badgeClass = await card.getByText("Voided", { exact: true }).getAttribute("class");
+    results.check(
+      "the order card's Voided badge is neutral like the chip, not a danger",
+      badgeClass !== null && !badgeClass.includes("danger") && badgeClass.includes("surface-alt"),
+      String(badgeClass),
+    );
   });
   await withOrders(DESKTOP, orderWith([doc("wb-1", "waybill", "generated", { replacement_status: "processing" })]), {}, async (page) => {
     await page.getByText("Aurora Coffee Bar").locator("visible=true").first().click();

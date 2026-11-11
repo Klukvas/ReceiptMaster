@@ -149,7 +149,7 @@ export function ActDetailsFields({
           </button>
         )}
         {completionError && (
-          <p id="document-completion-error" role="alert" className="text-sm text-[var(--color-danger)]">
+          <p id="document-completion-error" role="alert" className="text-sm text-danger-base">
             {completionError}
           </p>
         )}
