@@ -25,6 +25,12 @@ const mockStatus = (page, status, body) =>
 
 const setup = async (page, status) => {
   page.setDefaultTimeout(8000);
+  await page.route("**/*", (route) => {
+    const { hostname } = new URL(route.request().url());
+    return ["127.0.0.1", "localhost", "[::1]"].includes(hostname)
+      ? route.fallback()
+      : route.abort();
+  });
   await installApiMocks(page, createState());
   if (status) await mockStatus(page, status.code, status.body);
 };
@@ -104,6 +110,93 @@ const collapsedSidebar = async (results) => {
       JSON.stringify(info),
     );
   });
+};
+
+const mainFocus = async (results) => {
+  await withPage(DESKTOP, async (page) => {
+    await setup(page);
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${BASE_URL}/orders`);
+    const main = page.locator("#main-content");
+    await main.waitFor();
+    const skip = page.getByRole("link", { name: "Skip to content" });
+    await skip.focus();
+    await page.keyboard.press("Enter");
+    results.check(
+      "1280: Enter on Skip to content focuses main without a stack overflow",
+      (await main.evaluate((el) => document.activeElement === el)) &&
+        (await main.getAttribute("tabindex")) === "-1" && errors.length === 0,
+      JSON.stringify(errors),
+    );
+
+    const products = page.locator('#app-sidebar a[href="/products"]');
+    await products.focus();
+    results.check(
+      "1280: leaving main removes its temporary tabindex",
+      (await main.getAttribute("tabindex")) === null,
+    );
+    // A fresh document prevents a broken skip handler's leftover tabindex masking this path.
+    await page.reload();
+    await main.waitFor();
+    await products.focus();
+    await page.keyboard.press("Enter");
+    await page.waitForURL("**/products");
+    await page.getByRole("heading", { name: "Products", exact: true }).waitFor();
+    results.check(
+      "1280: sidebar navigation from Orders to Products focuses main temporarily",
+      (await main.evaluate((el) => document.activeElement === el)) &&
+        (await main.getAttribute("tabindex")) === "-1",
+    );
+
+    const create = page.getByRole("button", { name: "Create Product", exact: true });
+    await create.click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    const field = dialog.getByRole("textbox").first();
+    await field.focus();
+    results.check(
+      "1280: opening a product dialog leaves field focus inside it and main unfocusable",
+      (await field.evaluate((el) => document.activeElement === el)) &&
+        (await main.getAttribute("tabindex")) === null,
+    );
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    results.check(
+      "1280: closing a product dialog returns focus to its opener",
+      await create.evaluate((el) => document.activeElement === el),
+    );
+    results.check("1280: keyboard navigation produces no browser errors", errors.length === 0, JSON.stringify(errors));
+  });
+
+  // Keep a focused target mounted across a real pathname change, isolating Layout's guards
+  // from the lazy destination page's own rendering and autofocus timing.
+  for (const target of ["page field", "dialog"]) {
+    await withPage(DESKTOP, async (page) => {
+      await setup(page);
+      await page.goto(`${BASE_URL}/orders`);
+      await page.locator("#main-content").waitFor();
+      await page.evaluate((kind) => {
+        const container = document.createElement("div");
+        container.id = "focus-guard-fixture";
+        if (kind === "dialog") {
+          container.setAttribute("role", "dialog");
+          container.setAttribute("aria-modal", "true");
+        }
+        const field = document.createElement("input");
+        container.append(field);
+        (kind === "dialog" ? document.body : document.querySelector("#main-content")).append(container);
+        field.focus();
+        document.querySelector('#app-sidebar a[href="/products"]').click();
+      }, target);
+      await page.waitForURL("**/products");
+      await page.getByRole("heading", { name: "Products", exact: true }).waitFor();
+      results.check(
+        `1280: a pathname change preserves focus already held by a ${target}`,
+        await page.locator("#focus-guard-fixture input").evaluate((el) => el === document.activeElement),
+      );
+    });
+  }
 };
 
 const subscriptionTab = async (results) => {
@@ -216,6 +309,7 @@ const footerLinkTargets = async (results) => {
 
 export const run = async () => {
   const results = new Results("uiq-shell");
+  await mainFocus(results);
   await phoneDrawer(results);
   await collapsedSidebar(results);
   await subscriptionTab(results);

@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-12
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -104,6 +104,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 - Header with user email + logout
 - Receipt progress panel for real-time updates (WebSocket); while it shows cards, the generic "Generating document…" toast (`lib/generating-toast.ts`, one toast id) is dismissed and not shown, so on a phone it never covers the card's Download button
 - "Skip to content" link (`common.skipToContent`, visible on focus) moves focus to `<main id="main-content">` (made `tabindex="-1"` only while it is focused, so a click on page text never focuses `<main>` and a dialog opened by that click still returns focus to its control); after a route change focus moves to `<main>` too, unless a dialog (or a field the page focused itself) already holds it. The first page load keeps the browser's focus
+- Both skip-link activation and route navigation use the same temporary-tabindex focus helper with `preventScroll`; `uiq-shell` covers Enter activation without browser errors, Orders → Products keyboard navigation, tabindex removal on blur, and preservation of existing field/dialog focus
 - Tailwind `lg:` breakpoints for responsive design
 - `OfflineBanner` (`layout/OfflineBanner.tsx`, `hooks/useOnlineStatus.ts`): a sticky `role="status"` notice (`common.offlineNotice`) below the mobile header while `navigator.onLine` is false; loaded data stays readable, changes cannot be saved. The live region stays mounted
 - Collapsed desktop sidebar keeps the theme and language switchers as icon buttons (`layout/SidebarCompactControls.tsx`; labelled, with a tooltip; the language button cycles en, ru, uk)

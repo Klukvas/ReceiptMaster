@@ -34,7 +34,7 @@ const focusMain = (main: HTMLElement) => {
   main.addEventListener("blur", () => main.removeAttribute("tabindex"), {
     once: true,
   });
-  focusMain(main);
+  main.focus({ preventScroll: true });
 };
 
 /**
@@ -49,7 +49,7 @@ const focusMainAfterNavigation = (main: HTMLElement | null) => {
   const isInPage = active !== main && main.contains(active);
   if (isInDialog || isInPage || document.querySelector('[aria-modal="true"]'))
     return;
-  main.focus({ preventScroll: true });
+  focusMain(main);
 };
 
 export const Layout = ({ children }: LayoutProps) => {

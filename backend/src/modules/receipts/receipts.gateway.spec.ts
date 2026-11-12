@@ -363,27 +363,59 @@ describe("ReceiptsGateway", () => {
       );
     });
 
-    it("still emits, in order, when the recheck fails", async () => {
-      roomSockets = [socket("tab", 0)];
-      queryBuilder.getRawOne
-        .mockImplementationOnce(
-          () =>
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("db down")), 20),
-            ),
-        )
-        .mockResolvedValue({ token_version: 0 });
+    it.each(["database", "socket lookup"])(
+      "suppresses completed payloads when the %s recheck fails, then recovers in order",
+      async (failure) => {
+        const stale = socket("revoked-tab", 0);
+        const current = socket("current-tab", 1);
+        roomSockets = [stale, current];
+        queryBuilder.getRawOne.mockResolvedValue({ token_version: 1 });
+        let rejectRecheck: (error: Error) => void = () => undefined;
+        let startRecheck: () => void = () => undefined;
+        const recheckStarted = new Promise<void>((resolve) => {
+          startRecheck = resolve;
+        });
+        const failedRecheck = () => {
+          startRecheck();
+          return new Promise<never>((_, reject) => {
+            rejectRecheck = reject;
+          });
+        };
+        if (failure === "database") {
+          queryBuilder.getRawOne.mockImplementationOnce(failedRecheck);
+        } else {
+          mockServer
+            .in(`user:${USER_1}`)
+            .fetchSockets.mockImplementationOnce(failedRecheck);
+        }
+        const completed = {
+          receiptId: "r1",
+          orderId: "o1",
+          pdfUrl: "https://storage.example/receipt.pdf?signature=sensitive",
+          receiptNumber: "2026-000001",
+        };
 
-      const first = gateway.emitProgress(USER_1, { ...progress, progress: 10 });
-      const second = gateway.emitProgress(USER_1, {
-        ...progress,
-        progress: 90,
-      });
-      await Promise.all([first, second]);
+        const failed = gateway.emitCompleted(USER_1, completed);
+        const laterProgress = gateway.emitProgress(USER_1, progress);
+        const laterCompleted = gateway.emitCompleted(USER_1, completed);
+        await recheckStarted;
+        expect(mockServer.emit).not.toHaveBeenCalled();
+        rejectRecheck(new Error("recheck unavailable"));
 
-      expect(
-        mockServer.emit.mock.calls.map(([, sent]) => sent.progress),
-      ).toEqual([10, 90]);
-    });
+        await expect(
+          Promise.all([failed, laterProgress, laterCompleted]),
+        ).resolves.toEqual([undefined, undefined, undefined]);
+
+        expect(mockServer.emit.mock.calls).toEqual([
+          ["receipt.progress", progress],
+          ["receipt.completed", completed],
+        ]);
+        expect(stale.disconnect).toHaveBeenCalledWith(true);
+        expect(current.disconnect).not.toHaveBeenCalled();
+        expect(stale.disconnect.mock.invocationCallOrder[0]).toBeLessThan(
+          mockServer.emit.mock.invocationCallOrder[0],
+        );
+      },
+    );
   });
 });

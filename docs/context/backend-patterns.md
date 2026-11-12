@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-12
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -538,6 +538,13 @@ refresh-token revocation, after which a fresh pair is issued to the caller). The
 receipts WebSocket gateway (`receipts.gateway.ts`) calls the same `findAccessTokenOwner` once per
 connection (so `ReceiptsModule` registers `User` in `TypeOrmModule.forFeature`). Migration
 `1794000000000-UserTokenVersion`; `rm_app` writes it through the table-level `UPDATE` grant.
+
+Before every receipt event, the gateway fetches the room's sockets and rechecks the account's
+current token version, disconnecting stale sockets before delivery. If either the socket lookup
+or the database recheck fails, it logs the error and suppresses that event (including completed
+payloads with a PDF URL). Sends remain serialized per user; a suppressed event resolves normally
+so later events can recheck and resume delivery in order. There is no replay of suppressed events;
+the frontend's HTTP refetch/polling remains the source of truth.
 
 **Related files:**
 - `backend/src/modules/users/access-token.ts` — access-token claims, the version check
