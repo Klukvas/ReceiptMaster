@@ -20,11 +20,14 @@ import {
   SkeletonCards,
   SkeletonRows,
 } from "./DataTableSkeletons";
+import {
+  CHECKBOX_CLASS,
+  CardSelectCheckbox,
+  type CardSelection,
+} from "./CardSelectCheckbox";
 
 // A load shorter than this never flashes a skeleton or an overlay.
 const LOADING_CUE_DELAY_MS = 200;
-const CHECKBOX_CLASS =
-  "rounded border-[var(--color-border)] text-accent-base focus:ring-[var(--color-ring)]";
 
 /** A bare "Request failed with status code 500" tells a person nothing. */
 function listErrorMessage(error: Error, fallback: string): string {
@@ -77,7 +80,11 @@ interface DataTableProps<T> {
   renderActions?: (item: T) => React.ReactNode;
   actionsHeader?: string;
 
-  renderCard?: (item: T) => React.ReactNode;
+  /**
+   * Phone layout of a row. When the list is selectable the card gets `selection` and draws
+   * the checkbox itself (see `CardSelectCheckbox`), so it can sit in the card's header.
+   */
+  renderCard?: (item: T, selection?: CardSelection) => React.ReactNode;
   toolbarExtra?: React.ReactNode;
 
   onRowClick?: (item: T) => void;
@@ -231,6 +238,8 @@ export function DataTable<T>({
   const activeSortColumn = sortableColumns.find(
     (col) => (col.sortKey || col.key) === sortBy,
   );
+  const hasPhoneSortRow =
+    !!renderCard && sortableColumns.length > 0 && items.length > 0;
 
   const emptyContent = (
     <div className="flex flex-col items-center text-content-tertiary">
@@ -255,9 +264,14 @@ export function DataTable<T>({
     </div>
   );
 
-  const defaultCard = (item: T) => (
+  const defaultCard = (item: T, selection?: CardSelection) => (
     <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4">
       <div className="space-y-2.5">
+        {selection && (
+          <div className="flex">
+            <CardSelectCheckbox selection={selection} />
+          </div>
+        )}
         {visibleColumns.map((col) => (
           <div key={col.key} className="flex justify-between items-start">
             <span className="text-xs font-medium text-content-tertiary uppercase tracking-wider">
@@ -527,14 +541,34 @@ export function DataTable<T>({
           aria-busy={isLoadingFirstRows || showRefresh}
         >
           {showRefresh && <RefreshOverlay />}
-          {renderCard && sortableColumns.length > 0 && items.length > 0 && (
+          {hasPhoneSortRow && (
             <div className="mb-3 flex items-center gap-2">
-              <label
-                htmlFor={sortSelectId}
-                className="text-xs font-medium text-content-tertiary"
-              >
-                {t("common.sortBy")}
-              </label>
+              {/* With selection on, the select-all box takes the visible "Sort by" label's place
+                  so the list does not spend a whole row on it. */}
+              {selectable ? (
+                <>
+                  <label className="-mx-1 flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-elevated">
+                    <input
+                      type="checkbox"
+                      data-testid="data-table-select-all"
+                      checked={!!allSelected}
+                      onChange={toggleAll}
+                      aria-label={t("common.selectAllOnPage")}
+                      className={`${CHECKBOX_CLASS} size-5`}
+                    />
+                  </label>
+                  <label htmlFor={sortSelectId} className="sr-only">
+                    {t("common.sortBy")}
+                  </label>
+                </>
+              ) : (
+                <label
+                  htmlFor={sortSelectId}
+                  className="text-xs font-medium text-content-tertiary"
+                >
+                  {t("common.sortBy")}
+                </label>
+              )}
               <select
                 id={sortSelectId}
                 data-testid="data-table-sort"
@@ -580,7 +614,7 @@ export function DataTable<T>({
             </div>
           ) : (
             <div className="space-y-3">
-              {selectable && (
+              {selectable && !hasPhoneSortRow && (
                 <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-1 text-sm font-medium text-content-secondary">
                   <input
                     type="checkbox"
@@ -591,17 +625,26 @@ export function DataTable<T>({
                   {t("common.selectAllOnPage")}
                 </label>
               )}
-              {items.map((item) => (
-                <SelectableCard
-                  key={rowKey(item)}
-                  isSelectable={selectable}
-                  isSelected={selectedKeys?.has(rowKey(item)) ?? false}
-                  label={selectLabel(item)}
-                  onToggle={() => toggleOne(rowKey(item))}
-                >
-                  {renderCard ? renderCard(item) : defaultCard(item)}
-                </SelectableCard>
-              ))}
+              {items.map((item) => {
+                const key = rowKey(item);
+                const selection: CardSelection | undefined = selectable
+                  ? {
+                      isSelected: selectedKeys?.has(key) ?? false,
+                      onToggle: () => toggleOne(key),
+                      label: selectLabel(item),
+                    }
+                  : undefined;
+                return (
+                  <div
+                    key={key}
+                    className={`rounded-xl ${selection?.isSelected ? "ring-2 ring-[var(--color-ring)]" : ""}`}
+                  >
+                    {renderCard
+                      ? renderCard(item, selection)
+                      : defaultCard(item, selection)}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -623,43 +666,6 @@ export function DataTable<T>({
       ) : (
         isLoadingFirstRows && <PaginationPlaceholder isShown={showSkeleton} />
       )}
-    </div>
-  );
-}
-
-interface SelectableCardProps {
-  isSelectable: boolean;
-  isSelected: boolean;
-  label: string;
-  onToggle: () => void;
-  children: React.ReactNode;
-}
-
-/** Cards have no table column for a checkbox, so each gets a 44 px tap box beside it. */
-function SelectableCard({
-  isSelectable,
-  isSelected,
-  label,
-  onToggle,
-  children,
-}: SelectableCardProps) {
-  if (!isSelectable) return <>{children}</>;
-  return (
-    <div className="flex items-start gap-1">
-      <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onToggle}
-          aria-label={label}
-          className={`${CHECKBOX_CLASS} size-5`}
-        />
-      </label>
-      <div
-        className={`min-w-0 flex-1 rounded-xl ${isSelected ? "ring-2 ring-[var(--color-ring)]" : ""}`}
-      >
-        {children}
-      </div>
     </div>
   );
 }

@@ -339,9 +339,10 @@ export const ProductsPage = () => {
           isCompact
           rowLabel={(product) => product.name}
           onRowClick={(product) => setDrawerProduct(product)}
-          renderCard={(product) => (
+          renderCard={(product, selection) => (
             <ProductCard
               product={product}
+              selection={selection}
               onOpen={setDrawerProduct}
               onEdit={handleEdit}
               onDelete={handleDelete}

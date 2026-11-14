@@ -5,6 +5,10 @@ import { ShoppingCart, Lock } from "lucide-react";
 import { ordersApi, formatCurrency, formatDate, type Order } from "../lib/api";
 import { DataTable } from "../components/ui/DataTable";
 import {
+  CardSelectCheckbox,
+  type CardSelection,
+} from "../components/ui/CardSelectCheckbox";
+import {
   CreateOrderModal,
   EditOrderForm,
   OrderDetails,
@@ -396,15 +400,21 @@ export const OrdersPage = () => {
   );
 
   const renderOrderCard = useCallback(
-    (order: Order) => (
+    (order: Order, selection?: CardSelection) => (
       <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4 hover:shadow-md transition-shadow">
         <div className="space-y-3">
           {/* Top row: Recipient + Status */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                {order.is_locked && (
-                  <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
+                {/* The lock repeats the status badge below, so on a selectable list the
+                    checkbox takes its place instead of widening the card. */}
+                {selection ? (
+                  <CardSelectCheckbox selection={selection} />
+                ) : (
+                  order.is_locked && (
+                    <Lock className="w-3.5 h-3.5 text-warning-base flex-shrink-0" />
+                  )
                 )}
                 {/* The name is what a thumb goes for first: it opens the details like the
                     View button below and a row click on a desktop. */}
