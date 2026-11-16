@@ -136,7 +136,7 @@ const homeLoading = async (results, name, config) => {
     await open(page, state, "/dashboard");
     const grid = page.locator("div.grid.grid-cols-2").first();
     await grid.waitFor();
-    const productsCard = page.locator("h3", { hasText: "Latest Products" }).locator("xpath=../..");
+    const productsCard = page.locator("h2", { hasText: "Latest Products" }).locator("xpath=../..");
     await page.waitForTimeout(450);
     const during = (await grid.boundingBox()).height;
     const rows = await productsCard.locator('[data-testid="dashboard-skeleton"] > div > *').count();

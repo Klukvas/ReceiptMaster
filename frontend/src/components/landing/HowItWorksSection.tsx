@@ -18,7 +18,8 @@ export const HowItWorksSection: React.FC = React.memo(() => {
       <div className="landing-steps">
         {STEPS.map((num, i) => (
           <div key={num} className="landing-step">
-            <div className="landing-step-num">{num}</div>
+            {/* A faint watermark; the steps' order is already the reading order. */}
+            <div className="landing-step-num" aria-hidden="true">{num}</div>
             <div className="landing-step-title">
               {t(`landing.howItWorks.step${i + 1}.title`)}
             </div>

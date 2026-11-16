@@ -14,9 +14,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       {(title || actions) && (
         <div className="mb-4 flex items-center justify-between">
           {title && (
-            <h3 className="text-lg font-semibold text-[var(--color-text)]">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">
               {title}
-            </h3>
+            </h2>
           )}
           {actions && <div className="flex space-x-2">{actions}</div>}
         </div>

@@ -418,7 +418,7 @@ export const OrdersPage = () => {
                 )}
                 {/* The name is what a thumb goes for first: it opens the details like the
                     View button below and a row click on a desktop. */}
-                <h3 className="min-w-0 flex-1 text-base font-semibold text-content">
+                <h2 className="min-w-0 flex-1 text-base font-semibold text-content">
                   <button
                     type="button"
                     onClick={() => setSelectedOrder(order)}
@@ -430,7 +430,7 @@ export const OrdersPage = () => {
                     <span className="text-content-tertiary">{" · "}</span>
                     {order.recipient?.name || "-"}
                   </button>
-                </h3>
+                </h2>
               </div>
               <p className="text-xs text-content-tertiary mt-0.5">
                 {formatDate(order.created_at)}

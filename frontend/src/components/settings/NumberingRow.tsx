@@ -164,9 +164,9 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
       }}
       noValidate
     >
-      <h4 id={idOf("title")} className="mb-3 text-sm font-semibold text-content">
+      <h3 id={idOf("title")} className="mb-3 text-sm font-semibold text-content">
         {t(documentLabelKey(type))}
-      </h4>
+      </h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label htmlFor={idOf("prefix")} className={LABEL_CLASS}>

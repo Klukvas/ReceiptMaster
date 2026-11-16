@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
 import { useAutoPreview } from "../../hooks/useAutoPreview";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
+import { SectionHeadingContext } from "./document-layout";
 
 const WIDE_SCREEN = "(min-width: 1024px)";
 
@@ -29,6 +30,7 @@ export function DocumentPreviewPanel({
   isVisible?: boolean;
 }) {
   const { t } = useTranslation();
+  const Heading = useContext(SectionHeadingContext);
   const [open, setOpen] = useState(
     () =>
       defaultOpen ||
@@ -42,9 +44,9 @@ export function DocumentPreviewPanel({
         aria-labelledby="document-preview-title"
         className="min-w-0 self-start rounded-xl border border-[var(--color-border)] bg-elevated p-4 lg:sticky lg:top-4"
       >
-        <h3 id="document-preview-title" className="font-semibold text-content">
+        <Heading id="document-preview-title" className="font-semibold text-content">
           {title ?? t("document.pdfPreview")}
-        </h3>
+        </Heading>
         <p role="status" className="my-3 text-sm text-content-tertiary">
           {t("document.previewUnavailableForType")}
         </p>
@@ -67,9 +69,9 @@ export function DocumentPreviewPanel({
       className="min-w-0 self-start rounded-xl border border-[var(--color-border)] bg-elevated p-4 lg:sticky lg:top-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id="document-preview-title" className="font-semibold text-content">
+        <Heading id="document-preview-title" className="font-semibold text-content">
           {title ?? t("document.pdfPreview")}
-        </h3>
+        </Heading>
         <div className="flex items-center gap-2">
           {open && (
             <Button

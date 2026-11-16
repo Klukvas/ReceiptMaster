@@ -148,7 +148,7 @@ const checkOrderDetailsDialog = async (results) => {
     await dialog.waitFor({ state: "hidden" });
     const onView = await settle(() => view.evaluate((element) => element === document.activeElement));
     results.check("375px: closing returns focus to the card's View button", onView, "focus lost");
-    const title = await page.locator("main h3").first().innerText();
+    const title = await page.locator("main h2").first().innerText();
     results.check("375px: the order card separates number and name", title.replace(/\s+/g, " ").trim() === "#1 · Aurora Coffee Bar", title);
   });
 };
