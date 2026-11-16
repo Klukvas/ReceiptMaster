@@ -194,9 +194,9 @@ const SubscriptionTab = () => {
       <div className="rounded-xl border border-[var(--color-border)] bg-elevated p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-semibold text-content">
+            <h2 className="text-base font-semibold text-content">
               {t("subscription.currentPlanLabel", "Your current plan")}
-            </h3>
+            </h2>
             <span
               className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${PLAN_COLORS[currentPlan]?.badge}`}
             >
@@ -279,9 +279,9 @@ const SubscriptionTab = () => {
                           : "text-content-tertiary"
                     }`}
                   />
-                  <h4 className="font-semibold text-content">
+                  <h3 className="font-semibold text-content">
                     {t(`subscription.${plan}`, plan)}
-                  </h4>
+                  </h3>
                 </div>
 
                 <ul className="space-y-2 mb-4">

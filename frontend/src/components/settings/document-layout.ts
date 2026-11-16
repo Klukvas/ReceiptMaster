@@ -7,3 +7,10 @@ import { createContext } from "react";
  */
 export type DocumentLayout = "page" | "dialog";
 export const DocumentLayoutContext = createContext<DocumentLayout>("page");
+
+/**
+ * Tag of the section titles. The settings page puts them right under its h1, so h2 there; the
+ * other hosts (a dialog or drawer) already have an h2 title, so h3 by default.
+ */
+export type SectionHeadingTag = "h2" | "h3";
+export const SectionHeadingContext = createContext<SectionHeadingTag>("h3");

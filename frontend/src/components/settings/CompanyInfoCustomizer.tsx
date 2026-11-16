@@ -150,9 +150,9 @@ export const CompanyInfoCustomizer = () => {
           <div className="space-y-6">
             {/* Branding Section */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
                 {t("settings.branding", "Branding")}
-              </h4>
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t("settings.companyName", "Company Name")}
@@ -184,9 +184,9 @@ export const CompanyInfoCustomizer = () => {
 
             {/* Contact Info Section */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
                 {t("settings.contactInfo", "Contact Information")}
-              </h4>
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t("settings.companyEmail", "Company Email")}
@@ -243,9 +243,9 @@ export const CompanyInfoCustomizer = () => {
 
             {/* Legal & Banking Section */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-content-tertiary mb-3">
                 {t("settings.legalBanking", "Legal & Banking")}
-              </h4>
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t("settings.companyTaxId", "Tax ID / VAT ID")}

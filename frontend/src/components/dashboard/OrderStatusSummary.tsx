@@ -54,9 +54,9 @@ export const OrderStatusSummary = () => {
 
   return (
     <Card>
-      <h3 className="text-sm font-medium text-content-secondary mb-4">
+      <h2 className="text-sm font-medium text-content-secondary mb-4">
         {t("dashboard.ordersByStatus", "Orders by Status")}
-      </h3>
+      </h2>
       {isError ? (
         <QueryErrorState
           className="h-[200px]"

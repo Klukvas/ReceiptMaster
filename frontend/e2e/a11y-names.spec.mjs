@@ -2,7 +2,9 @@
 //  - the active sidebar link and the phone order card's View link keep 4.5:1 in the dark theme
 //    (they used a fixed indigo that measured 2.4:1 on the dark sidebar);
 //  - the orders status filter, the landing logo links and every navigation landmark have a name;
-//  - the public document page has a <main> landmark and the phone top bar is a <header>.
+//  - the public document page has a <main> landmark and the phone top bar is a <header>;
+//  - dashboard, analytics, settings and the phone order cards skip no heading level (they went h1 → h3);
+//  - landing text on the faint/muted/status tokens keeps 4.5:1 in both themes (it measured 2–4.3:1).
 
 import { BASE_URL, createState, installApiMocks, withPage } from "./support/harness.mjs";
 import { makeOrder } from "./support/fixtures.mjs";
@@ -120,9 +122,70 @@ const names = async (results) => {
   });
 };
 
+/** Visible headings whose level jumps more than one below the previous one (h1 → h3). */
+const skippedHeadings = (page) =>
+  page.evaluate(() => {
+    const visible = [...document.querySelectorAll("h1, h2, h3, h4, h5, h6")].filter(
+      (heading) => heading.getClientRects().length > 0,
+    );
+    return visible.flatMap((heading, index) => {
+      const level = Number(heading.tagName[1]);
+      const previous = index === 0 ? 0 : Number(visible[index - 1].tagName[1]);
+      return level > previous + 1 ? [`${heading.tagName} ${heading.textContent.trim().slice(0, 40)}`] : [];
+    });
+  });
+
+const headingOrder = async (results) => {
+  const pages = [
+    [DESKTOP, "/dashboard", "Profit Over Time"],
+    [DESKTOP, "/analytics", "Profit by Product"],
+    [DESKTOP, "/settings", "Requisites for documents"],
+    [DESKTOP, "/settings?tab=subscription", "Your current plan"],
+    [PHONE, "/orders", "Aurora Coffee Bar"],
+  ];
+  for (const [device, path, landmark] of pages) {
+    await withPage(device, async (page) => {
+      await open(page, path);
+      await page.getByText(landmark).locator("visible=true").first().waitFor();
+      const skipped = await skippedHeadings(page);
+      results.check(`${device.viewport.width}px ${path}: no heading level is skipped`, skipped.length === 0, skipped.join(" | "));
+    });
+  }
+};
+
+/** Landing text drawn from the faint, muted and status tokens, each on its own background. */
+const LANDING_TEXT = [
+  [".landing-nav-pill a", "nav link on the pill"],
+  [".landing-feat-pill", "feature pill"],
+  [".landing-trusted-l", "'at a glance' caption"],
+  [".landing-fo-date", "mock list date"],
+  [".landing-tag-green", "green status tag"],
+  [".landing-tag-amber", "amber status tag"],
+  [".landing-tag-red", "red status tag"],
+  [".landing-tag-indigo", "indigo status tag"],
+  [".landing-tpl-category", "template category"],
+];
+
+const landingContrast = async (results) => {
+  for (const theme of ["light", "dark"]) {
+    await withPage(DESKTOP, async (page) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await open(page, "/", { theme, signedIn: false });
+      for (const [selector, what] of LANDING_TEXT) {
+        const element = page.locator(selector).first();
+        await element.waitFor({ state: "attached" });
+        const ratio = await contrastOf(element);
+        results.check(`landing ${theme}: the ${what} reads at 4.5:1 or more`, ratio >= 4.5, ratio.toFixed(2));
+      }
+    });
+  }
+};
+
 export const run = async () => {
   const results = new Results("a11y names and contrast");
   await darkContrast(results);
   await names(results);
+  await headingOrder(results);
+  await landingContrast(results);
   return results;
 };

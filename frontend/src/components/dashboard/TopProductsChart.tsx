@@ -70,7 +70,7 @@ export const TopProductsChart = ({
 
   return (
     <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
-      <h3 className="text-sm font-semibold text-content mb-5">{title}</h3>
+      <h2 className="text-sm font-semibold text-content mb-5">{title}</h2>
       {isError ? (
         <QueryErrorState
           className="h-[250px]"

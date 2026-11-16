@@ -114,7 +114,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
       className="rounded-lg border border-[var(--color-border)] p-4"
       data-testid={`signoff-${kind}`}
     >
-      <h4 className="text-sm font-semibold text-content">{label}</h4>
+      <h3 className="text-sm font-semibold text-content">{label}</h3>
       <p className="mt-1 text-xs text-content-tertiary">{t(`signoff.${kind}Hint`)}</p>
 
       <div

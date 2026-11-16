@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-14
+**Last Updated:** 2026-11-16
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -471,6 +471,10 @@ const { user, token, isAuthenticated, isLoading, login, register, logout } = use
 **Text colour tokens** (`index.css`): `--color-text-secondary` and `--color-text-tertiary` are chosen to keep at least 4.5:1 against the page and card backgrounds in both themes (light 4.5–7:1, dark 4.8–8.5:1). Do not lighten them; use `text-content-tertiary` for the faintest readable text only. Status text uses its own tokens (`--color-text-accent|danger|success|warning`, applied through the `.text-*-base` classes in `index.css`): the fill tokens measured 2.6-4.3:1 as small text on their own tint, the text tokens keep at least 4.5:1 in both themes. Keep fills and text apart: change a fill via `--color-accent|danger|success|warning`, text via the `--color-text-*` ones. Form error lines (the `Input` primitive's `error`, the field errors of the document dialogs) use `text-danger-base`, like error banners. Accent-coloured text (the active sidebar link, the phone order card's View link, the sidebar avatar initial) uses `text-accent-base`, not `text-primary-600`, which measured 2.4:1 on the dark sidebar.
 
 **Landmarks and names:** the sidebar `<nav>` and the footer's legal `<nav>` are named (`navigation.mainNavigation`, `navigation.legalLinks`), the phone top bar is a `<header>`, the public document page (`/r/:token`) is wrapped in `<main>`, the landing logo links carry `aria-label="ReceiptMaster"` (their text is hidden on phones) and the orders status filter is labelled. Spec: `e2e/a11y-names.spec.mjs`. The dark accent fill is `#6064F0` so white text on it reaches 4.5:1.
+
+**Heading order:** every page has one `h1`; its sections are `h2` and their parts `h3`, never a skipped level. The dashboard and analytics cards (`ui/Card`'s `title`, the widgets in `components/dashboard/`), the phone order card title, the settings sections (`SettingsSection`, `CompanyRequisitesCard`, the subscription tab) are `h2`, numbering rows and signature/stamp slots `h3`. The document editor's section titles and preview title read `SectionHeadingContext` (`components/settings/document-layout.ts`): `h2` on the settings page, `h3` (the default) in dialogs and drawers, whose own title is the `h2`. Change the tag, not the classes, when moving a heading: Tailwind's preflight leaves `h2`/`h3` unstyled. `a11y-names` checks the outline of dashboard, analytics, settings and the phone orders list.
+
+**Landing contrast:** the landing has its own tokens on `.landing-page` / `.dark .landing-page` (`index.css`). `--l-muted` and `--l-faint` keep 4.5:1 on every landing surface, including the nav pill and the feature pills, so faint is only slightly lighter than muted; do not lighten them. Status text uses `--l-green-text`, `--l-amber-text`, `--l-red-text` and indigo text `--l-indigo-text`; `--l-green`, `--l-amber`, `--l-indigo` are fills and dots. Text on the dark steps and CTA bands is white at 60% or more. The template thumbnails (`TemplatesSection`) are `aria-hidden` pictures but their labels still meet 4.5:1, since axe checks hidden text too; the big step numerals are an `aria-hidden` watermark.
 
 **useTheme hook** (`hooks/useTheme.ts`):
 ```typescript

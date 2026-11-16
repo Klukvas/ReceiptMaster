@@ -64,7 +64,8 @@ const ReceiptMockup: React.FC<{
 }> = ({ accent, accentLight, bg, style, name, category }) => {
   const isDark = style === "dark";
   const textColor = isDark ? "#E0E0E0" : "#333";
-  const mutedColor = isDark ? "#777" : "#999";
+  // Labels inside the paper preview still meet 4.5:1 on its own background.
+  const mutedColor = isDark ? "#9A9A9A" : "#666";
   const borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
   const fontFamily =
     style === "serif"
@@ -75,8 +76,10 @@ const ReceiptMockup: React.FC<{
 
   return (
     <div className="landing-tpl-card">
+      {/* A picture of the paper: the name and category below already say what it is. */}
       <div
         className="landing-tpl-preview"
+        aria-hidden="true"
         style={{ background: bg, fontFamily }}
       >
         {/* Accent bar */}
