@@ -191,14 +191,17 @@
     "receiptVoid": "VOID",
     "receiptProcessing": "Generating...",
     "moreActions": "More actions",
-    "selectedCount": "{{count}} orders selected",
+    "selectedCount_one": "{{count}} order selected",
+    "selectedCount_other": "{{count}} orders selected",
     "batchApprove": "Approve",
     "batchApproveTitle": "Approve selected orders",
-    "batchApproveMessage": "Approve {{count}} selected orders? Approved orders can no longer be edited, and waybills are created for them if automatic waybills are on.",
+    "batchApproveMessage_one": "Approve {{count}} selected order? Approved orders can no longer be edited, and waybills are created for them if automatic waybills are on.",
+    "batchApproveMessage_other": "Approve {{count}} selected orders? Approved orders can no longer be edited, and waybills are created for them if automatic waybills are on.",
     "batchDelete": "Delete",
     "batchApproveDisabledHint": "All selected orders must be in draft status",
     "batchDeleteTitle": "Delete Selected Orders",
-    "batchDeleteMessage": "Are you sure you want to delete {{count}} orders? This action cannot be undone.",
+    "batchDeleteMessage_one": "Are you sure you want to delete {{count}} order? This action cannot be undone.",
+    "batchDeleteMessage_other": "Are you sure you want to delete {{count}} orders? This action cannot be undone.",
     "subtitle": "Manage order lifecycle, payments and documents",
     "emptyTitle": "No orders yet",
     "emptyDescription": "Create your first order to start creating documents.",
@@ -246,7 +249,8 @@
     "createdAt": "Created",
     "createError": "Error creating product",
     "bulkDeletePartial": "Deleted {{deleted}}, skipped {{skipped}}",
-    "bulkDeleteMessage": "Are you sure you want to delete {{count}} products?",
+    "bulkDeleteMessage_one": "Are you sure you want to delete {{count}} product?",
+    "bulkDeleteMessage_other": "Are you sure you want to delete {{count}} products?",
     "title": "Products",
     "stockValueCost": "Stock value (cost)",
     "stockValueRetail": "Stock value (retail)",
@@ -292,7 +296,11 @@
     "inStock": "in stock",
     "marginTooltip": "Margin: (Sale - Purchase) / Sale × 100",
     "priceTooHigh": "The price is too high. The maximum is {{max}}.",
-    "quantityTooHigh": "The quantity is too large. The maximum is {{max}}."
+    "quantityTooHigh": "The quantity is too large. The maximum is {{max}}.",
+    "supplierAssigned": "A supplier is assigned",
+    "removeSupplier": "Remove supplier",
+    "stockValueLockedTitle": "Stock value",
+    "stockValueLocked": "What your stock is worth at cost and at retail."
   },
   "recipients": {
     "deleteRecipient": "Delete Recipient",
@@ -402,7 +410,8 @@
     "memberSince": "Supplier since",
     "linkedProducts": "Linked Products",
     "noProducts": "No linked products",
-    "noActivity": "No activity yet"
+    "noActivity": "No activity yet",
+    "readOnlyOnPlan": "Your plan does not include suppliers: the list stays readable and suppliers can be deleted, but not added or edited."
   },
   "settings": {
     "tabsLabel": "Settings sections",
@@ -522,7 +531,7 @@
     "autoReceiptTitle": "Automatic waybills",
     "autoReceiptDescription": "Create a waybill as soon as an order is confirmed, including bulk approval.",
     "autoReceiptLabel": "Automatically create a waybill when an order is confirmed",
-    "autoReceiptHint": "The 10 most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
+    "autoReceiptHint": "The {{count}} most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
     "autoReceiptInstant": "This switch applies immediately; there is nothing to save.",
     "autoReceiptEnabled": "Waybills will be created on confirm",
     "autoReceiptDisabled": "Automatic waybills turned off",
@@ -599,7 +608,6 @@
     "copyFailed": "Could not copy the link. Select it and copy it manually."
   },
   "profile": {
-    "unlimitedAccess": "Unlimited access",
     "templates": "Templates",
     "subscription": "Subscription",
     "products": "Products",
@@ -628,7 +636,8 @@
       "emailInvalid": "Enter a valid email address",
       "currentPasswordWrong": "The current password is incorrect",
       "newPasswordSame": "The new password must be different from the current one"
-    }
+    },
+    "recipients": "Recipients"
   },
   "landing": {
     "welcome": "Welcome",
@@ -659,7 +668,7 @@
       "languagesValue": "EN / UK / RU",
       "languages": "Languages",
       "templatesValue": "15",
-      "templates": "Document templates",
+      "templates": "Document templates on Pro",
       "botValue": "Telegram",
       "bot": "Sales bot"
     },
@@ -669,9 +678,9 @@
       "subtitle": "From products and customers to PDF documents you can download, print or share.",
       "products": {
         "title": "Products",
-        "description": "Keep purchase and sale prices, see your margin at a glance, get low-stock alerts and delete several products at once.",
+        "description": "Keep purchase and sale prices, see your margin at a glance and delete several products at once. Paid plans add a low-stock list and the value of your stock.",
         "tag1": "margin %",
-        "tag2": "low-stock alerts",
+        "tag2": "low stock on paid plans",
         "tag3": "bulk delete"
       },
       "customers": {
@@ -690,16 +699,16 @@
       },
       "receipts": {
         "title": "PDF documents",
-        "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts, packing lists and return notes are made in the background as PDFs with your company details. Waybills come in 15 templates; other documents use a shorter set of designs. Download, print or share a link.",
-        "tag1": "15 templates",
+        "description": "Waybills, quotes, invoices, acts of completed work, non-fiscal sales receipts, packing lists and return notes are made in the background as PDFs with your company details. Waybills come in up to 15 templates, depending on the plan; other documents use a shorter set of designs. Download, print or share a link.",
+        "tag1": "up to 15 templates",
         "tag2": "7 document types",
         "tag3": "public link"
       },
       "analytics": {
         "title": "Analytics",
-        "description": "Revenue charts, an order status breakdown, turnover by product and customer, and CSV export for any date range.",
+        "description": "On paid plans: revenue charts, an order status breakdown and turnover by product and customer. Start covers the last 90 days; Pro covers the whole history and adds CSV export.",
         "tag1": "revenue charts",
-        "tag2": "CSV export",
+        "tag2": "CSV export on Pro",
         "tag3": "date ranges"
       },
       "telegramBot": {
@@ -747,41 +756,44 @@
     "pricing": {
       "label": "Pricing",
       "title": "Simple, transparent pricing",
-      "subtitle": "Start free and upgrade when you need higher limits.",
+      "subtitle": "Start free. Move to Start or Pro when you need more orders, document types and analytics.",
       "month": "mo",
       "popular": "Most popular",
       "free": {
         "name": "Free",
         "price": "$0",
-        "description": "Perfect for getting started and testing the platform.",
-        "feat1": "Up to 10 products",
-        "feat2": "Up to 20 orders / month",
-        "feat3": "4 basic templates",
-        "cta": "Get started"
+        "description": "For trying the service and occasional sales.",
+        "feat1": "20 orders / month",
+        "feat2": "10 products and 10 recipients",
+        "feat3": "1 standard template: waybill, invoice, sales receipt",
+        "cta": "Get started",
+        "feat4": "This month's orders and turnover"
       },
       "pro": {
-        "name": "Pro",
-        "price": "$19",
-        "description": "For growing businesses that need more capacity.",
-        "feat1": "Up to 100 products",
-        "feat2": "Up to 500 orders / month",
-        "feat3": "All 15 templates",
-        "cta": "Sign up for Pro"
+        "name": "Start",
+        "price": "$9",
+        "description": "For a small shop with regular orders.",
+        "feat1": "150 orders / month",
+        "feat2": "500 products and 300 recipients",
+        "feat3": "10 templates, all document types, your logo, signature and stamp",
+        "cta": "Sign up for Start",
+        "feat4": "Analytics for the last 90 days, suppliers, low-stock list"
       },
       "business": {
-        "name": "Business",
-        "price": "$49",
-        "description": "No limits on products or orders.",
-        "feat1": "Unlimited products",
-        "feat2": "Unlimited orders",
-        "feat3": "All 15 templates",
-        "cta": "Sign up for Business"
+        "name": "Pro",
+        "price": "$19",
+        "description": "For a growing business that needs the whole history and exports.",
+        "feat1": "1500 orders / month",
+        "feat2": "Unlimited products and recipients",
+        "feat3": "All 15 templates and every generated document kept",
+        "cta": "Sign up for Pro",
+        "feat4": "Analytics for the whole history and CSV export"
       }
     },
     "templates": {
       "label": "Document templates",
       "title": "15 waybill templates",
-      "subtitle": "From minimal layouts to branded corporate designs. Every document can be issued in English, Russian or Ukrainian.",
+      "subtitle": "From minimal layouts to branded corporate designs. Free includes the standard template, Start ten of them, Pro all of them. Every document can be issued in English, Russian or Ukrainian.",
       "modern": {
         "name": "Modern",
         "category": "Creative"
@@ -889,7 +901,16 @@
     "createFirstOrder": "Create your first order",
     "noProducts": "No products yet",
     "noRecipients": "No recipients yet",
-    "noOrders": "No orders yet"
+    "noOrders": "No orders yet",
+    "turnoverThisMonth": "Turnover this month",
+    "turnoverThisMonthDescription": "Confirmed orders of the current month",
+    "locked": {
+      "profit": "Profit from the cost of each order line.",
+      "sparklineTitle": "Revenue and turnover by day",
+      "sparkline": "A daily chart of the last weeks.",
+      "lowStockTitle": "Low stock",
+      "lowStock": "The products that are about to run out."
+    }
   },
   "dashboard": {
     "topRecipientsByRevenue": "Top recipients by profit",
@@ -942,7 +963,12 @@
     "csvUnknownCostLines": "Lines with unknown cost",
     "csvUnknownCostTurnover": "Turnover with unknown cost",
     "ordersCount_one": "{{count}} order",
-    "ordersCount_other": "{{count}} orders"
+    "ordersCount_other": "{{count}} orders",
+    "locked": {
+      "analyticsTitle": "Analytics comes with a paid plan",
+      "analyticsDescription": "Revenue and turnover charts, the breakdown by products and customers and any period you pick. Your plan shows this month's orders and turnover on the home page."
+    },
+    "historyLimited": "Your plan shows the last {{count}} days."
   },
   "notFound": {
     "title": "Page Not Found",
@@ -990,29 +1016,18 @@
   "subscription": {
     "currentPlan": "Current Plan",
     "free": "Free",
-    "pro": "Pro",
-    "business": "Business",
+    "pro": "Start",
+    "business": "Pro",
     "usageUnlimited": "{{current}} / unlimited",
     "loadFailed": "Could not load your subscription. Your plan and usage are unknown until you retry.",
     "productsUsage": "Products",
     "ordersUsage": "Orders this month",
     "templateNotInPlan": "Not in your plan",
-    "upgradeProductsTitle": "Product Limit Reached",
-    "limitProductsNoBilling": "You have reached the product limit of your plan. Delete a product you no longer need to add another. Plan upgrades are not available right now.",
-    "limitOrdersNoBilling": "You have used all orders included in your plan this month. The counter resets next month. Plan upgrades are not available right now.",
-    "limitTemplatesNoBilling": "This template is not part of your plan. Pick one of the unlocked templates. Plan upgrades are not available right now.",
-    "upgradeProductsDesc": "You have reached the maximum number of products for your plan. Upgrade to add more products.",
-    "upgradeOrdersTitle": "Monthly Order Limit Reached",
-    "upgradeOrdersDesc": "You have reached the maximum number of orders for this month. Upgrade to create more orders.",
-    "upgradeTemplatesTitle": "Template Not Available",
-    "upgradeTemplatesDesc": "This template is only available on Pro or Business plans. Upgrade to unlock all templates.",
     "contactAdminHint": "Contact your administrator to upgrade your plan.",
     "locked": "Locked",
     "upgrade": "Upgrade",
     "planBadge": "{{plan}} Plan",
     "limitReached": "Limit reached",
-    "upgradeToPro": "Upgrade to Pro",
-    "upgradeToBusiness": "Upgrade to Business",
     "manageSubscription": "Manage Subscription",
     "currentPlanLabel": "Your current plan",
     "canceledNotice": "Your subscription will end on {{date}}",
@@ -1023,10 +1038,8 @@
     "features": "Features",
     "unlimitedProducts": "Unlimited products",
     "unlimitedOrders": "Unlimited orders",
-    "allTemplates": "All templates",
     "productsLimit": "Up to {{count}} products",
     "ordersLimit": "Up to {{count}} orders/month",
-    "freeTemplates": "4 basic templates",
     "checkout": "Checkout",
     "processing": "Processing...",
     "subscriptionTab": "Subscription",
@@ -1034,7 +1047,117 @@
     "portalError": "Failed to open billing portal",
     "alreadyTopPlan": "You're on the top plan!",
     "billingDisabled": "Payments are currently unavailable. Your current plan and usage limits still apply.",
-    "planUnavailable": "Not included in your current plan"
+    "planUnavailable": "Not included in your current plan",
+    "upgradeTo": "Upgrade to {{plan}}",
+    "upgradesUnavailable": "Plan upgrades are not available right now.",
+    "availableOn": "Available on {{plan}}",
+    "recipientsUsage": "Recipients",
+    "recipientsLimit": "Up to {{count}} recipients",
+    "unlimitedRecipients": "Unlimited recipients",
+    "catalog": {
+      "oneTemplate": "1 document template (standard)",
+      "templates": "{{count}} document templates",
+      "basicDocumentTypes": "Waybill, invoice and sales receipt",
+      "allDocumentTypes": "All {{count}} document types",
+      "documentsKeptAll": "Every generated document is kept",
+      "documentsKept": "{{count}} latest documents of each type kept",
+      "analyticsFull": "Analytics for the whole history",
+      "analyticsDays": "Analytics for the last {{count}} days",
+      "csvExport": "CSV export",
+      "branding": "Logo, signature and stamp, custom numbering",
+      "presets": "Saved sets of settings: {{count}}",
+      "suppliersAndStock": "Suppliers, low-stock list, stock value, automatic receipts",
+      "attribution": "“Made with ReceiptMaster” line on documents"
+    },
+    "limits": {
+      "heading": "Included in your plan",
+      "templates": "Document templates",
+      "documentTypes": "Document types",
+      "documentsKept": "Documents kept per type",
+      "presets": "Saved sets of settings",
+      "analytics": "Analytics",
+      "csvExport": "CSV export",
+      "branding": "Logo, signature and stamp",
+      "customNumbering": "Custom numbering",
+      "autoReceipt": "Automatic receipts",
+      "suppliersAndStock": "Suppliers and stock insights",
+      "all": "All",
+      "included": "Included",
+      "notIncluded": "Not included",
+      "lastDays": "Last {{count}} days",
+      "wholeHistory": "Whole history",
+      "attribution": "Documents carry a “Made with ReceiptMaster” line."
+    },
+    "reasons": {
+      "products": {
+        "title": "Product limit reached",
+        "description": "You have reached the number of products your plan allows. Delete a product you no longer need to add another, or move to a higher plan."
+      },
+      "orders": {
+        "title": "Monthly order limit reached",
+        "description": "You have used all orders your plan includes this month. The counter resets next month; a higher plan includes more orders."
+      },
+      "recipients": {
+        "title": "Recipient limit reached",
+        "description": "You have reached the number of recipients your plan allows. Delete a recipient you no longer need to add another, or move to a higher plan."
+      },
+      "presets": {
+        "title": "Limit of saved sets reached",
+        "description": "Your plan does not include more saved sets of settings. Delete one you no longer use, or move to a higher plan."
+      },
+      "templates": {
+        "title": "Template not in your plan",
+        "description": "This template is not part of your plan. Pick one of the unlocked templates; a higher plan includes more."
+      },
+      "documentTypes": {
+        "title": "Document type not in your plan",
+        "description": "Your plan includes waybills, invoices and sales receipts. Quotes, acts, packing lists and return notes come with a paid plan."
+      },
+      "retention": {
+        "title": "Document storage limit",
+        "description": "Your plan keeps a limited number of generated documents of each type; older ones are removed. A higher plan keeps more."
+      },
+      "analyticsHistory": {
+        "title": "Analytics history is limited",
+        "description": "Your plan shows analytics for a limited number of recent days. The top plan covers the whole history."
+      },
+      "analytics": {
+        "title": "Analytics is not in your plan",
+        "description": "Charts, the breakdown by products and customers and period comparison come with a paid plan. Your plan shows this month's orders and turnover."
+      },
+      "profit": {
+        "title": "Profit is not in your plan",
+        "description": "Profit figures come with a paid plan. Your plan shows turnover only."
+      },
+      "csvExport": {
+        "title": "CSV export is not in your plan",
+        "description": "Exporting analytics to CSV comes with the top plan."
+      },
+      "logo": {
+        "title": "Logo is not in your plan",
+        "description": "Uploading your own logo comes with a paid plan. A logo stored earlier is kept but not printed on documents."
+      },
+      "signoff": {
+        "title": "Signature and stamp are not in your plan",
+        "description": "Uploading a signature and a stamp comes with a paid plan. Images stored earlier are kept but not printed on documents."
+      },
+      "customNumbering": {
+        "title": "Custom numbering is not in your plan",
+        "description": "Changing document numbers (prefix, digits, year, starting number) comes with a paid plan. Your documents keep the standard numbering."
+      },
+      "autoReceipt": {
+        "title": "Automatic receipts are not in your plan",
+        "description": "Creating a receipt automatically when an order is confirmed comes with a paid plan. You can still create each document by hand."
+      },
+      "suppliers": {
+        "title": "Suppliers are not in your plan",
+        "description": "Adding and editing suppliers comes with a paid plan. Suppliers you already have stay visible and can be deleted."
+      },
+      "stockInsights": {
+        "title": "Stock insights are not in your plan",
+        "description": "The low-stock list and the stock value come with a paid plan."
+      }
+    }
   },
   "appError": {
     "title": "Something went wrong",
@@ -1113,7 +1236,14 @@
     "documentNumbersExhausted": "The numbers for this document type have run out. Change the number format in Settings → Documents or contact support.",
     "previewBusy": "A preview is already being prepared. Try again in a moment.",
     "passwordTooLong": "The password is too long: at most {{max}} bytes (a Latin letter or digit is 1 byte, a Cyrillic letter 2, an emoji 4)",
-    "templatePlanRestricted": "This template is not included in your plan. Choose another one under “Template and title”, or upgrade your plan."
+    "templatePlanRestricted": "This template is not included in your plan. Choose another one under “Template and title”, or upgrade your plan.",
+    "productLimitExceeded": "You have reached the product limit of your plan. Delete a product or move to a higher plan.",
+    "orderMonthlyLimitExceeded": "You have used all orders your plan includes this month. The counter resets next month.",
+    "recipientLimitExceeded": "You have reached the recipient limit of your plan. Delete a recipient or move to a higher plan.",
+    "presetLimitExceeded": "Your plan does not include more saved sets of settings.",
+    "documentTypePlanRestricted": "This document type is not included in your plan.",
+    "planFeatureRestricted": "This feature is not included in your plan.",
+    "documentContentPurged": "The file of this document was removed by your plan's storage limit. The record stays, but there is nothing to download or share."
   },
   "document": {
     "interfaceLanguage": "Interface language",
@@ -1128,7 +1258,7 @@
     "timeZone": "Time zone",
     "invalidFormatting": "Enter a valid time zone to see an example.",
     "presets": "Saved sets of settings",
-    "presetsHelp": "Save the current settings under a name and apply them again later (up to 20). Applying a set only fills in the form; nothing is saved until you press Save.",
+    "presetsHelp": "Save the current settings under a name and apply them again later. Applying a set only fills in the form; nothing is saved until you press Save.",
     "savedPresets": "Saved sets",
     "choosePreset": "Choose a set",
     "usePreset": "Apply set",
@@ -1266,7 +1396,10 @@
       "logoTooLarge": "Logo: the file is too large. Use an image up to 5 MiB."
     },
     "templateNotForType": "not for this document type",
-    "templateNotForTypeHint": "Only some templates can lay out this document type; the others are listed but cannot be chosen."
+    "templateNotForTypeHint": "Only some templates can lay out this document type; the others are listed but cannot be chosen.",
+    "logoNotPrintedOnPlan": "Your plan does not include a logo: the stored one is kept but not printed on documents.",
+    "attributionNote": "Documents on your plan carry a “Made with ReceiptMaster” line. Paid plans remove it.",
+    "presetsUsed": "Sets saved: {{used}} of {{limit}}"
   },
   "blog": {
     "title": "Blog",
@@ -1421,7 +1554,15 @@
     "voidedRepeatable": "Its quantities are available for a new return note.",
     "replaceOldestUnknownMessage": "We could not check how many documents of this type ({{type}}) are kept. Creating this one may permanently delete your oldest document of this type, and its public link would stop working. Download it first if you need a copy.",
     "replaceOldestUnknownTitle": "The oldest document may be replaced",
-    "voidedOrderCancelled": "The order is cancelled, so no new documents can be created for it."
+    "voidedOrderCancelled": "The order is cancelled, so no new documents can be created for it.",
+    "designsLocked": "Designs of a higher plan: {{count}}",
+    "retentionUpgradeHint": "A higher plan keeps more documents.",
+    "purgeOldestTitle": "Remove the file of the oldest document?",
+    "purgeOldestMessage": "Your plan keeps the files of the {{limit}} most recent documents of this type ({{type}}). Creating this one removes the PDF and the public link of the oldest, {{number}}; its record and number stay. Download it first if you need a copy.",
+    "purged": {
+      "note": "The file was removed by your plan's storage limit. The record and number stay; it cannot be downloaded, shared or regenerated.",
+      "short": "File removed"
+    }
   },
   "documentFields": {
     "seller": {
@@ -1449,8 +1590,8 @@
   "documentsPage": {
     "title": "Documents",
     "subtitle": "Every document issued from your orders",
-    "retentionHint": "Only the {{limit}} most recent waybills, quotes, sales receipts and packing lists of each type are kept: when you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
-    "retentionHintGeneric": "Only the most recent waybills, quotes, sales receipts and packing lists of each type are kept: when you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
+    "retentionHint": "Your plan keeps the {{limit}} most recent generated documents of each type. When you create one more, the oldest waybill, quote, sales receipt or packing list is deleted for good, together with its public link; the oldest invoice, act or return note keeps its record and number but loses its PDF and public link. Voided and failed documents are not removed. A higher plan keeps more.",
+    "retentionHintGeneric": "Your plan keeps a limited number of the most recent generated documents of each type. When you create one more, the oldest waybill, quote, sales receipt or packing list is deleted for good, together with its public link; the oldest invoice, act or return note keeps its record and number but loses its PDF and public link. Voided and failed documents are not removed. A higher plan keeps more.",
     "filters": "Document filters",
     "type": "Type",
     "allTypes": "All types",
@@ -1473,15 +1614,16 @@
     "timeZoneHint": "Dates are counted by calendar day {{zone}}.",
     "rangeReversed": "The “From” date is later than the “To” date, so nothing can match. Swap them or clear one.",
     "failedReturnNote": "Open the order and create a new return note.",
-    "retentionShort": "Only the {{limit}} most recent waybills, quotes, sales receipts and packing lists of each type are kept.",
-    "retentionShortGeneric": "Only the most recent waybills, quotes, sales receipts and packing lists of each type are kept.",
-    "retentionMore": "When you create a new one, the oldest of that type is deleted for good, together with its public link. Invoices, acts, return notes, voided and failed documents are not deleted.",
+    "retentionShort": "Your plan keeps the {{limit}} most recent generated documents of each type.",
+    "retentionShortGeneric": "Your plan keeps a limited number of the most recent generated documents of each type.",
+    "retentionMore": "When you create one more, the oldest waybill, quote, sales receipt or packing list is deleted for good, together with its public link; the oldest invoice, act or return note keeps its record and number but loses its PDF and public link. Voided and failed documents are not removed. A higher plan keeps more.",
     "stillGenerating": "Some documents are still being generated. Refresh to see whether they are ready.",
     "refresh": "Refresh",
     "filtersToggle": "Filters",
     "timeZoneKyiv": "in Kyiv time",
     "timeZoneUniversal": "in Coordinated Universal Time (UTC)",
-    "timeZoneCity": "in the {{city}} time zone"
+    "timeZoneCity": "in the {{city}} time zone",
+    "retentionHintUnlimited": "Your plan keeps every generated document."
   },
   "numbering": {
     "title": "Document numbering",
@@ -1508,12 +1650,13 @@
       "rejected": "The numbering was not accepted. Check the prefix, the number of digits and the start number.",
       "startTooLow": "The start number must be at least {{min}}: numbering only moves forward, so no number is issued twice"
     },
-    "prefixHint": "Optional. Include the separator in it: “{{prefix}}” gives {{example}}.",
+    "prefixHint": "Optional. A hyphen is added automatically after a letter or digit. You can use your own separator: “{{prefix}}” gives {{example}}.",
     "paddingHint": "Zero-padded: {{value}} becomes {{example}}.",
     "yearHint": "The counter does not restart each year; only the year inside the number changes.",
     "prefixExample": "INV-",
     "prefixSpaceHint": "A trailing space is not kept: a hyphen goes between the prefix and the number, e.g. {{example}}.",
-    "discardConfirm": "Discard unsaved numbering changes?"
+    "discardConfirm": "Discard unsaved numbering changes?",
+    "lockedOnPlan": "Your plan uses the standard numbering. The current format is shown below and cannot be changed."
   },
   "signoff": {
     "title": "Signature and stamp",
@@ -1571,6 +1714,7 @@
     "missing": {
       "signature": "The signature image is missing. New documents will be issued without the signature until you upload it again.",
       "stamp": "The stamp image is missing. New documents will be issued without the stamp until you upload it again."
-    }
+    },
+    "notOnPlan": "Your plan does not include the signature and stamp. Images stored earlier are kept and can be deleted, but they are not printed on documents."
   }
 }

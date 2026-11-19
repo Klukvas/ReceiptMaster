@@ -7,11 +7,13 @@ import { formatStyleList } from "../../lib/style-list";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSection } from "./SettingsSection";
 import { SignoffUploader } from "./SignoffUploader";
+import { usePlan } from "../../hooks/usePlan";
 
 export const SignoffSettings = () => {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useSignoff();
   const { isSupported, styleName, supportingStyles } = useSignoffStyleSupport();
+  const isLocked = !usePlan().allows("signoff");
   // The style names come from the backend's list, so a new or retired style needs no text change.
   const styleList = (kind: "conjunction" | "disjunction") =>
     supportingStyles
@@ -35,6 +37,14 @@ export const SignoffSettings = () => {
             : t("signoff.noteGeneric")}
         </p>
       </div>
+      {isLocked && (
+        <p
+          data-testid="signoff-plan-note"
+          className="mb-4 text-sm text-content-secondary"
+        >
+          {t("signoff.notOnPlan")}
+        </p>
+      )}
       {isSupported === false && (
         <div
           role="status"
@@ -62,8 +72,8 @@ export const SignoffSettings = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <SignoffUploader kind="signature" image={data.signature} />
-          <SignoffUploader kind="stamp" image={data.stamp} />
+          <SignoffUploader kind="signature" image={data.signature} isLocked={isLocked} />
+          <SignoffUploader kind="stamp" image={data.stamp} isLocked={isLocked} />
         </div>
       )}
     </SettingsSection>

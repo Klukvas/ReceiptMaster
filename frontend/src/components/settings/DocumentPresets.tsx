@@ -14,12 +14,22 @@ import { Disclosure } from "../ui/Disclosure";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { Input } from "../ui/Input";
 import { selectClass } from "./document-ui";
+import { useSubscription } from "../../hooks/useSubscription";
+import { isPresetLimitReached } from "../../lib/subscriptionApi";
+import { PlanLockButton, PlanLockTile } from "../subscription/PlanLock";
+
+/** The most presets any plan stores; the cap while the plan is still unknown. */
+const MAX_PRESETS_ANY_PLAN = 20;
+
 export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState("");
   const [loaded, setLoaded] = useState<Preset>();
   const [name, setName] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const { status } = useSubscription();
+  const hasNoPresetsOnPlan = status?.limits.maxPresets === 0;
+  const presetLimit = status?.limits.maxPresets ?? MAX_PRESETS_ANY_PLAN;
   // "Discard changes" drops the preset's values from the editor; "Update" must not then write
   // the saved defaults over the preset, so the preset counts as no longer loaded.
   const [seenDiscards, setSeenDiscards] = useState(model.discards);
@@ -33,7 +43,14 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
       (await api.get<{ data: PresetSummary[] }>("/settings/document-presets"))
         .data.data,
     retry: false,
+    enabled: !hasNoPresetsOnPlan,
   });
+  const presetsCount = presets.data?.length ?? 0;
+  const isAtLimit = status
+    ? isPresetLimitReached(status, presetsCount)
+    : presetsCount >= MAX_PRESETS_ANY_PLAN;
+  // On the top plan there is nothing to upgrade to: the button is simply disabled, as before.
+  const isCreateLocked = isAtLimit && !!status && status.plan !== "business";
   const act = async (action: "use" | "create" | "update" | "delete") => {
     if (model.busy) return;
     model.setBusy(true);
@@ -81,11 +98,30 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
       model.setBusy(false);
     }
   };
+  if (hasNoPresetsOnPlan)
+    return (
+      <Disclosure summary={t("document.presets")}>
+        <PlanLockTile
+          reason="presets"
+          testId="presets-upsell"
+          title={t("document.presets")}
+          description={t("document.presetsHelp")}
+        />
+      </Disclosure>
+    );
   return (
     <Disclosure summary={t("document.presets")}>
       <p className="text-sm text-content-tertiary">
         {t("document.presetsHelp")}
       </p>
+      {status && (
+        <p className="text-xs text-content-tertiary tabular-nums">
+          {t("document.presetsUsed", {
+            used: presetsCount,
+            limit: presetLimit,
+          })}
+        </p>
+      )}
       {presets.isError && (
         <button type="button" onClick={() => presets.refetch()}>
           {t("common.retry")}
@@ -129,16 +165,22 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
         disabled={model.busy}
       />
       <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={
-            !name.trim() || model.busy || (presets.data?.length || 0) >= 20
-          }
-          onClick={() => act("create")}
-        >
-          {t("document.saveAsPreset")}
-        </Button>
+        {isCreateLocked ? (
+          <PlanLockButton
+            reason="presets"
+            subject={t("document.saveAsPreset")}
+            testId="preset-create-lock"
+          />
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!name.trim() || model.busy || isAtLimit}
+            onClick={() => act("create")}
+          >
+            {t("document.saveAsPreset")}
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"

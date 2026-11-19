@@ -92,7 +92,7 @@ const checkListing = async (results) => {
       );
       results.check(
         `${label}: the retention hint is shown`,
-        (await page.getByTestId("documents-retention-hint").innerText()).includes("10 most recent waybills, quotes, sales receipts and packing lists"),
+        (await page.getByTestId("documents-retention-hint").innerText()).includes("keeps the 10 most recent generated documents of each type"),
         "hint missing",
       );
       results.check(`${label}: no horizontal overflow`, await hasNoHorizontalOverflow(page), "page scrolls sideways");

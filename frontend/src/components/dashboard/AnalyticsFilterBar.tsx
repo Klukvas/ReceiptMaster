@@ -15,6 +15,10 @@ interface AnalyticsFilterBarProps {
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onClear: () => void;
+  /** The earliest day the plan lets analytics look at; undefined = no bound. */
+  minDate?: string;
+  /** Overrides "a date is set" when the widest range is itself a pair of dates. */
+  canClear?: boolean;
 }
 
 export const AnalyticsFilterBar = ({
@@ -26,9 +30,11 @@ export const AnalyticsFilterBar = ({
   onStartDateChange,
   onEndDateChange,
   onClear,
+  minDate,
+  canClear,
 }: AnalyticsFilterBarProps) => {
   const { t } = useTranslation();
-  const hasFilters = Boolean(startDate || endDate);
+  const hasFilters = canClear ?? Boolean(startDate || endDate);
 
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-surface-alt border border-[var(--color-border-light)]">
@@ -60,6 +66,7 @@ export const AnalyticsFilterBar = ({
           type="date"
           aria-label={t("dashboard.startDate")}
           value={startDate}
+          min={minDate}
           max={endDate || undefined}
           onChange={(e) => onStartDateChange(e.target.value)}
           className="flex-1 min-w-0 px-2.5 py-1.5 pointer-coarse:min-h-11 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
@@ -69,7 +76,7 @@ export const AnalyticsFilterBar = ({
           type="date"
           aria-label={t("dashboard.endDate")}
           value={endDate}
-          min={startDate || undefined}
+          min={startDate || minDate || undefined}
           onChange={(e) => onEndDateChange(e.target.value)}
           className="flex-1 min-w-0 px-2.5 py-1.5 pointer-coarse:min-h-11 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
         />

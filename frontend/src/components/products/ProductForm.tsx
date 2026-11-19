@@ -16,6 +16,10 @@ import {
   MAX_QUANTITY,
 } from "../../lib/product-metrics";
 import { ErrorCode, parseApiError } from "../../lib/api-errors";
+import { planRefusalReason } from "../../lib/plan-refusal";
+import type { UpgradeReason } from "../../lib/plan-catalog";
+import { usePlan } from "../../hooks/usePlan";
+import { PlanLockButton } from "../subscription/PlanLock";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
@@ -33,6 +37,8 @@ import {
 interface ProductFormProps {
   product?: Product | null;
   onClose: () => void;
+  /** The server (or a locked field) says the plan does not allow this; the page explains it. */
+  onPlanRefusal?: (reason: UpgradeReason) => void;
 }
 
 type QuantityConflict = { readonly server: number; readonly mine: number };
@@ -45,7 +51,11 @@ const FIELD_IDS = {
   quantity: "product-quantity",
 } as const;
 
-export const ProductForm = ({ product, onClose }: ProductFormProps) => {
+export const ProductForm = ({
+  product,
+  onClose,
+  onPlanRefusal,
+}: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormValues>({
     name: "",
     purchase_price_cents: "",
@@ -88,6 +98,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     queryFn: () => suppliersApi.getAll({ limit: 100 }),
   });
 
+  const canPickSupplier = usePlan().allows("suppliers");
+
   const supplierOptions = useMemo(() => {
     const suppliers = suppliersData?.data?.data;
     if (!suppliers) return [];
@@ -123,6 +135,18 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }
   };
 
+  // A 402 that slipped past the page's pre-check (the cached plan status was stale).
+  const reportPlanRefusal = (
+    error: unknown,
+    fallback: UpgradeReason | null,
+  ): boolean => {
+    const reason = planRefusalReason(error, fallback);
+    if (!reason || !onPlanRefusal) return false;
+    queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+    onPlanRefusal(reason);
+    return true;
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof productsApi.create>[0]) =>
       productsApi.create(data, { idempotencyKey: keyFor(data) }),
@@ -137,6 +161,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
+      if (reportPlanRefusal(error, "products")) return;
       const { code, message } = parseApiError(error);
       // A taken name is a problem with that field, not with the form.
       if (code === ErrorCode.PRODUCT_ALREADY_EXISTS) {
@@ -159,6 +184,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown, { id, data }) => {
+      if (reportPlanRefusal(error, null)) return;
       const { code, message } = parseApiError(error);
       // Nothing was saved; the form keeps every typed value for a second try.
       if (
@@ -418,6 +444,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
                 ({t("common.optional", "optional")})
               </span>
             </label>
+            {canPickSupplier ? (
             <Combobox
               options={supplierOptions}
               value={formData.supplier_id}
@@ -430,6 +457,38 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               noResultsText={t("common.noResults", "Nothing found")}
               ariaLabel={t("products.supplier", "Supplier")}
             />
+            ) : (
+              <div
+                data-testid="supplier-locked"
+                className="flex flex-wrap items-center gap-2"
+              >
+                {formData.supplier_id && (
+                  <>
+                    <span className="text-sm text-content">
+                      {supplierOptions.find(
+                        (option) => option.value === formData.supplier_id,
+                      )?.label ?? t("products.supplierAssigned")}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setFormData({ ...formData, supplier_id: "" })
+                      }
+                    >
+                      {t("products.removeSupplier")}
+                    </Button>
+                  </>
+                )}
+                <PlanLockButton
+                  reason="suppliers"
+                  subject={t("products.supplier", "Supplier")}
+                  size="sm"
+                  onOpen={onPlanRefusal}
+                />
+              </div>
+            )}
             {isSuppliersError && (
               <p
                 role="alert"

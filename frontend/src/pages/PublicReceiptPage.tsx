@@ -136,7 +136,7 @@ const DownloadButton = ({ label, isBusy, onClick }: DownloadButtonProps) => (
     onClick={onClick}
     disabled={isBusy}
     aria-busy={isBusy}
-    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-accent-base rounded-lg hover:bg-accent-base-hover transition-colors disabled:opacity-50 pointer-coarse:min-h-11"
+    className="shrink-0 self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-accent-base rounded-lg hover:bg-accent-base-hover transition-colors disabled:opacity-50 pointer-coarse:min-h-11"
   >
     {isBusy ? (
       <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" />
@@ -308,10 +308,10 @@ const PublicReceiptContent = () => {
         <div className="bg-elevated rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
           {/* Receipt header */}
           <div className="px-6 py-5 border-b border-[var(--color-border-light)] bg-surface-alt">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-content-tertiary" />
-                <h2 className="text-lg font-semibold text-content">
+            <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1 flex items-center gap-2">
+                <FileText className="w-5 h-5 shrink-0 text-content-tertiary" />
+                <h2 className="min-w-0 text-lg font-semibold text-content [overflow-wrap:anywhere]">
                   {documentTitle}
                 </h2>
               </div>

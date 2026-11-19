@@ -1,6 +1,7 @@
 // Node-only checks on the translation files: en, ru and uk must offer the same
-// keys with the same {{placeholders}}, and the landing page's template count
-// must equal the backend template registry it describes.
+// keys with the same {{placeholders}}, the landing page's template count must equal
+// the backend template registry it describes, and the plan numbers (the display
+// catalogue and the landing pricing cards) must equal the backend's PLAN_LIMITS.
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -14,6 +15,12 @@ const TEMPLATE_METADATA = resolve(
   ROOT,
   "backend/src/modules/receipts/templates/metadata.ts",
 );
+const PLAN_CONFIG = resolve(
+  ROOT,
+  "backend/src/modules/subscription/config/plans.config.ts",
+);
+const PLAN_CATALOG_FILE = resolve(ROOT, "frontend/src/lib/plan-catalog.ts");
+const ALL_DOCUMENT_TYPES = 7;
 const PLACEHOLDER = /\{\{\s*([^}\s]+)\s*\}\}/g;
 // A number standing alone, so "SHA256" or "S3" are not read as counts.
 const STANDALONE_NUMBER = /(?<![\p{L}\p{N}])\d+(?![\p{L}\p{N}])/gu;
@@ -89,24 +96,89 @@ const checkParity = (results, flat) => {
   }
 };
 
+const numbersIn = (text) => (text.match(STANDALONE_NUMBER) ?? []).map(Number);
+
 const checkTemplateCount = (results, translations) => {
   const count = templateCount();
   for (const locale of LOCALES) {
     const { landing } = translations[locale];
+    // What the product offers in total; the pricing cards say what each plan gets of it.
     const places = {
       "grid.receipts": `${landing.grid.receipts.description} ${landing.grid.receipts.tag1}`,
       "stats strip": landing.stats.templatesValue,
       "templates title": landing.templates.title,
-      "pro plan": landing.pricing.pro.feat3,
-      "business plan": landing.pricing.business.feat3,
     };
     for (const [place, text] of Object.entries(places)) {
-      const numbers = (text.match(STANDALONE_NUMBER) ?? []).map(Number);
+      const numbers = numbersIn(text);
       results.check(
         `${locale}: the landing template count in ${place} matches TEMPLATE_METADATA (${count})`,
         numbers.length >= 1 && numbers.every((number) => number === count),
         text,
       );
+    }
+  }
+};
+
+const sameNumbers = (actual, expected) =>
+  JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort());
+
+/**
+ * The frontend's display catalogue and the landing pricing cards against the backend's
+ * PLAN_LIMITS, so neither can drift from what the server enforces.
+ */
+const checkPlans = (results, translations) => {
+  const { PLAN_LIMITS } = loadTsModule(PLAN_CONFIG);
+  const { PLAN_CATALOG } = loadTsModule(PLAN_CATALOG_FILE);
+  const allTemplates = templateCount();
+
+  for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
+    const entry = PLAN_CATALOG[plan];
+    const expected = {
+      ordersPerMonth: limits.maxOrdersPerMonth,
+      products: limits.maxProducts,
+      recipients: limits.maxRecipients,
+      templates: limits.allowedTemplateIds?.length ?? allTemplates,
+      documentsKeptPerType: limits.documentsRetainedPerType,
+      documentTypes: limits.allowedDocumentTypes?.length ?? ALL_DOCUMENT_TYPES,
+      presets: limits.maxPresets,
+      analyticsHistoryDays: limits.analyticsHistoryDays,
+      hasAttribution: limits.hasAttribution,
+      features: Object.keys(limits.features).filter((feature) => limits.features[feature]).sort(),
+    };
+    const actual = Object.fromEntries(
+      Object.keys(expected).map((key) => [
+        key,
+        key === "features" ? [...entry.features].sort() : entry[key],
+      ]),
+    );
+    results.check(
+      `plan-catalog.ts describes the ${plan} plan as the backend's PLAN_LIMITS does`,
+      JSON.stringify(actual) === JSON.stringify(expected),
+      `catalog ${JSON.stringify(actual)} vs backend ${JSON.stringify(expected)}`,
+    );
+
+    for (const locale of LOCALES) {
+      const card = translations[locale].landing.pricing[plan];
+      const countable = [expected.products, expected.recipients].filter((value) => value !== null);
+      const checks = {
+        price: [numbersIn(card.price), [entry.monthlyPriceUsd]],
+        "feat1 (orders)": [numbersIn(card.feat1), [expected.ordersPerMonth]],
+        "feat2 (products, recipients)": [numbersIn(card.feat2), countable],
+        "feat3 (templates)": [numbersIn(card.feat3), [expected.templates]],
+        "feat4 (analytics days)": [
+          numbersIn(card.feat4),
+          limits.features.analytics && expected.analyticsHistoryDays !== null
+            ? [expected.analyticsHistoryDays]
+            : [],
+        ],
+      };
+      for (const [place, [found, wanted]] of Object.entries(checks)) {
+        results.check(
+          `${locale}: landing ${plan} ${place} states the plan's numbers (${wanted.join(", ") || "none"})`,
+          sameNumbers(found, wanted),
+          `${card.price} | ${card.feat1} | ${card.feat2} | ${card.feat3} | ${card.feat4}`,
+        );
+      }
     }
   }
 };
@@ -121,5 +193,6 @@ export const run = async () => {
   );
   checkParity(results, flat);
   checkTemplateCount(results, translations);
+  checkPlans(results, translations);
   return results;
 };

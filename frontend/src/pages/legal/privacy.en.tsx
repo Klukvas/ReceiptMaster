@@ -246,14 +246,15 @@ export const privacyEn: LegalContent = {
           are only hidden from you until then.
         </li>
         <li>
-          <strong>Documents:</strong> We keep the 10 most recent generated
-          documents of each of these types: delivery note, quote, sales receipt
-          and packing list. Generating a new one permanently removes the oldest
-          document of the same type: its share link stops working at once and
-          its PDF file is deleted from storage shortly afterwards. Payment
-          invoices, acts of completed work, return notes, and voided and failed
-          documents of any type are not removed under this limit; we keep them,
-          with their numbers, for as long as your account exists. We are not an
+          <strong>Documents:</strong> We keep a limited number of the most recent generated documents of each type;
+          the number depends on your plan and is shown in Settings &rarr;
+          Subscription. Generating a new document over that limit affects the
+          oldest one of the same type. A delivery note, quote, sales receipt or
+          packing list is permanently removed together with its PDF file and
+          public link. A payment invoice, act of completed work or return note
+          keeps its record and number, but its PDF file and public link are
+          removed. Voided and failed documents are not affected by the limit.
+          Removed PDF files are deleted from storage shortly afterwards. We are not an
           archive, so save copies of the documents you are required to keep.
         </li>
         <li>

@@ -1,10 +1,11 @@
-import { Ban, Download, RefreshCw, Share2 } from "lucide-react";
+import { Ban, Download, FileX, RefreshCw, Share2 } from "lucide-react";
 import type { DocumentListItem } from "../../lib/api";
 import {
   canDownloadDocument,
   canRetryDocument,
   canShareDocument,
   canVoidDocument,
+  isPurgedDocument,
 } from "../../lib/document-actions";
 import { documentLabelKey } from "../../lib/document-types";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -78,6 +79,18 @@ export function DocumentRowActions({
 
   return (
     <div className={`flex items-center gap-1 ${showLabels ? "flex-wrap justify-start" : "justify-end"}`}>
+      {isPurgedDocument(document) && (
+        <span
+          data-testid="document-purged"
+          title={t("documents.purged.note")}
+          className="inline-flex items-center gap-1.5 px-1.5 text-xs text-content-tertiary"
+        >
+          <FileX className="h-4 w-4 shrink-0" aria-hidden />
+          <span className={showLabels ? undefined : "sr-only"}>
+            {t("documents.purged.short")}
+          </span>
+        </span>
+      )}
       {actions
         .filter((action) => action.isShown)
         .map(({ label, icon: Icon, run, extraClass, isPending }) => (

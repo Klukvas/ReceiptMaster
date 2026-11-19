@@ -37,7 +37,7 @@ Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context
 |---|---|
 | A backend module, guard, interceptor, job, auth, tenancy, "how do we do X in Nest" | [**backend-patterns.md**](./backend-patterns.md) |
 | A domain flow — orders, receipt/PDF generation, billing, subscriptions, notifications | [**business-logic.md**](./business-logic.md) |
-| Calling / changing an HTTP endpoint (all 113 routes, 112 in the OpenAPI contract, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
+| Calling / changing an HTTP endpoint (all 109 HTTP operations, 108 on 80 paths in the OpenAPI contract, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
 | Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (quote/invoice/act/sales receipt/packing list/return note), requisites forms, the `/documents` list, document numbering and signature/stamp settings | [**frontend.md**](./frontend.md) |
 
 Common combinations: a **full-stack feature** → `backend-patterns` + `frontend` + `api-reference`;
@@ -115,7 +115,7 @@ Typed documents (everything but the waybill) live in `backend/src/modules/receip
 | `templates/translations/document-labels.ts` | `DOCUMENT_LABELS` (all wording of the blocks, uk/ru/en, key parity checked), `STYLE_LABEL_OVERRIDES` (receipt-only style labels per type), `TAX_ID_LABELS` |
 | `return-note.ts`, `return-note-ledger.ts` | return-note lines and source (`ReturnSource`), the `order_items.returned_qty` ledger, duplicate-submit detection |
 | `order-lock.ts` | `LOCKING_DOCUMENT_TYPES` and `syncOrderLock` (kept equal to the specs' `locking` by a test) |
-| `document-retention.ts` | `DOCUMENTS_RETAINED_PER_TYPE` and the types exempt from the per-type cap |
+| `document-retention.ts` | Which document types are deleted and which only lose their file when the plan's per-type limit is passed |
 
 ### Adding a document type
 

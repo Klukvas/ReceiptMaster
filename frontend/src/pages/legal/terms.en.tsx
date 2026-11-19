@@ -114,13 +114,14 @@ export const termsEn: LegalContent = {
       <ul>
         <li>
           The Service is not an archive of your accounting records. It keeps
-          the 10 most recent generated documents of each of these types:
-          delivery note, quote, sales receipt and packing list. Generating a
-          new one permanently removes the oldest document of the same type,
-          together with its PDF file and public link. Payment invoices, acts of
-          completed work, return notes, and voided and failed documents of any
-          type are not removed under this limit and are kept for as long as
-          your account exists. You are responsible for saving copies of the
+          a limited number of the most recent generated documents of each type;
+          the number depends on your plan and is shown in Settings &rarr;
+          Subscription. Generating a new document over that limit affects the
+          oldest one of the same type. A delivery note, quote, sales receipt or
+          packing list is permanently removed together with its PDF file and
+          public link. A payment invoice, act of completed work or return note
+          keeps its record and number, but its PDF file and public link are
+          removed. Voided and failed documents are not affected by the limit. You are responsible for saving copies of the
           documents you are required to keep.
         </li>
         <li>
@@ -153,7 +154,7 @@ export const termsEn: LegalContent = {
 
       <h2>4. Subscription Plans and Billing</h2>
       <p>
-        ReceiptMaster offers subscription plans (Free, Pro, Business) with
+        ReceiptMaster offers subscription plans (Free, Start, Pro) with
         varying features and usage limits. Paid subscriptions are billed on a
         recurring basis (monthly or annually) depending on the plan selected.
       </p>

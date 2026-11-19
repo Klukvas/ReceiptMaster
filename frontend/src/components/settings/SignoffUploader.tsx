@@ -18,6 +18,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { FieldError } from "../ui/FieldError";
+import { PlanLockButton } from "../subscription/PlanLock";
 
 const HTTP_TOO_LARGE = 413;
 const HTTP_RATE_LIMITED = 429;
@@ -42,12 +43,14 @@ const CHECKERBOARD_STYLE = {
 type SignoffUploaderProps = {
   kind: SignoffKind;
   image: SignoffImage | null;
+  /** The plan has no signature/stamp: a stored image can still be deleted, not uploaded. */
+  isLocked?: boolean;
 };
 
 const kilobytes = (bytes: number): number => Math.max(1, Math.round(bytes / 1024));
 
 /** Upload, preview and removal of one image (signature or stamp). */
-export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
+export function SignoffUploader({ kind, image, isLocked = false }: SignoffUploaderProps) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerButtonRef = useRef<HTMLButtonElement>(null);
@@ -167,6 +170,14 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
         }}
       />
       <div className="mt-3 flex flex-wrap gap-2">
+        {isLocked ? (
+          <PlanLockButton
+            reason="signoff"
+            subject={t(`signoff.actions.${kind}.${image ? "replace" : "upload"}`)}
+            size="sm"
+            testId={`signoff-${kind}-lock`}
+          />
+        ) : (
         <Button
           ref={pickerButtonRef}
           type="button"
@@ -182,6 +193,7 @@ export function SignoffUploader({ kind, image }: SignoffUploaderProps) {
           <ImageUp className="mr-1.5 h-3.5 w-3.5" aria-hidden />
           {image ? t("signoff.replace") : t("signoff.upload")}
         </Button>
+        )}
         {image && (
           <Button
             type="button"

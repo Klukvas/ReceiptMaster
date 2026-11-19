@@ -45,7 +45,13 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   // fonts settle, because they reflow the text above the target.
   useEffect(() => {
     if (!hash) return;
-    const id = decodeURIComponent(hash.slice(1));
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      // A malformed URL fragment must not take down the whole landing page.
+      return;
+    }
     const jumpToTarget = () =>
       document
         .getElementById(id)
@@ -126,7 +132,7 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
         className={`landing-nav ${scrolled ? "scrolled" : ""}`}
         aria-label={t("landing.nav.mainNavigation")}
       >
-        <a href="/" className="landing-logo">
+        <a href="/" className="landing-logo" aria-label="receiptmaster">
           <img src="/logo-icon.svg" alt="" className="landing-logo-icon" />
           <span className="landing-logo-name">
             receipt<em>master</em>

@@ -75,14 +75,14 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  <div className="space-y-1">
  {/* ── Profile Header ── */}
  <div className="-mx-6 -mt-6 px-6 pt-5 pb-5 bg-gradient-to-b from-surface-alt to-elevated border-b border-[var(--color-border-light)]">
- <div className="flex items-start justify-between mb-4">
- <div className="flex items-start gap-4">
+ <div className="flex items-start justify-between gap-3 mb-4">
+ <div className="min-w-0 flex-1 flex items-start gap-4">
  <RecipientAvatar
  name={recipient.name}
  telegramLinked={!!recipient.telegram_user_id}
  size="lg"
  />
- <div className="min-w-0 pt-0.5">
+ <div className="min-w-0 flex-1 pt-0.5">
  <h2 className="text-lg font-semibold text-content truncate leading-tight">
  {recipient.name}
  </h2>
@@ -104,7 +104,7 @@ export const RecipientDrawer = ({ recipient, open, onClose, onEdit, onDelete }: 
  </div>
 
  {/* Context Menu */}
- <div className="relative">
+ <div className="relative shrink-0">
  <button
  onClick={() => setMenuOpen(!menuOpen)}
  aria-label={t("orders.moreActions")}

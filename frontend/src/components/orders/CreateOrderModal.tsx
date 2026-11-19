@@ -11,12 +11,16 @@ import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import { OrderLineItem } from "./OrderLineItem";
+import { planRefusalReason } from "../../lib/plan-refusal";
+import type { UpgradeReason } from "../../lib/plan-catalog";
 import { OrderSummary } from "./OrderSummary";
 
 interface CreateOrderModalProps {
   onClose: () => void;
   /** Recipient to preselect, e.g. when opened from that recipient's drawer. */
   initialRecipientId?: string;
+  /** The server refused the order because of the plan (402); the page explains it. */
+  onPlanRefusal?: (reason: UpgradeReason) => void;
 }
 
 interface OrderItem {
@@ -36,6 +40,7 @@ const createItem = (): OrderItem => ({
 export const CreateOrderModal = ({
   onClose,
   initialRecipientId,
+  onPlanRefusal,
 }: CreateOrderModalProps) => {
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [recipientId, setRecipientId] = useState(initialRecipientId ?? "");
@@ -74,6 +79,13 @@ export const CreateOrderModal = ({
       onClose();
     },
     onError: (error: unknown) => {
+      // A 402 that slipped past the page's pre-check (the cached plan status was stale).
+      const reason = planRefusalReason(error, "orders");
+      if (reason && onPlanRefusal) {
+        queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+        onPlanRefusal(reason);
+        return;
+      }
       setBackendError(parseApiError(error).message);
     },
   });

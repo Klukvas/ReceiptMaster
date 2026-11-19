@@ -16,7 +16,10 @@ export type OrderItem = components["schemas"]["OrderItem"];
 export type Order = Omit<components["schemas"]["Order"], "receipts"> & {
   receipts: Receipt[];
 };
-export type Receipt = components["schemas"]["ReceiptProjection"];
+export type Receipt = components["schemas"]["ReceiptProjection"] & {
+  /** The plan's retention limit removed the file: the record stays, with no PDF or public link. */
+  purged?: boolean;
+};
 
 // Recipient & Supplier have server-computed fields not in the entity schema
 export type Recipient = components["schemas"]["Recipient"] & {

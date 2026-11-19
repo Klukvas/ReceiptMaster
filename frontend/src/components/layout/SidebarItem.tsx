@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { clsx } from "clsx";
-import { type LucideIcon } from "lucide-react";
+import { Lock, type LucideIcon } from "lucide-react";
 
 interface SidebarItemProps {
   href: string;
@@ -9,6 +9,8 @@ interface SidebarItemProps {
   isActive: boolean;
   isCollapsed: boolean;
   onClick?: () => void;
+  /** The plan does not include this page: a small lock, and the reason in the name. */
+  lockedHint?: string;
 }
 
 export const SidebarItem = ({
@@ -18,13 +20,14 @@ export const SidebarItem = ({
   isActive,
   isCollapsed,
   onClick,
+  lockedHint,
 }: SidebarItemProps) => {
   return (
     <li className="relative group">
       <Link
         to={href}
         onClick={onClick}
-        aria-label={label}
+        aria-label={lockedHint ? `${label}. ${lockedHint}` : label}
         aria-current={isActive ? "page" : undefined}
         className={clsx(
           "flex items-center rounded-lg text-sm font-medium transition-all duration-150 motion-reduce:transition-none relative motion-safe:active:scale-[0.98] pointer-coarse:min-h-11",
@@ -55,6 +58,16 @@ export const SidebarItem = ({
         />
 
         {!isCollapsed && <span className="ml-3 truncate">{label}</span>}
+        {lockedHint && (
+          <Lock
+            aria-hidden="true"
+            data-testid="sidebar-lock"
+            className={clsx(
+              "h-3 w-3 shrink-0 text-warning-base",
+              isCollapsed ? "absolute right-1.5 top-1.5" : "ml-auto",
+            )}
+          />
+        )}
       </Link>
 
       {/* Tooltip when collapsed */}

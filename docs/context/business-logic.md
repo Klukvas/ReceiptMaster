@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-19
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -142,7 +142,7 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 
 ### 2. Receipt & Invoice PDF Generation
 
-**Retention cap:** an account keeps its 10 most recent generated documents **of each document type** (`DOCUMENTS_RETAINED_PER_TYPE` in `receipts/document-retention.ts`, the single source of the number). The cap is enforced when a document is **promoted** to `GENERATED` (`ReceiptArtifactService`, under the tenant lock), never when its row is created: promoting the 11th document of a type retires the oldest one of that same type and its public link stops working, while a generation that fails costs nobody their place. **Invoices, acts and return notes are exempt** (`document-retention.ts::isRetentionExempt`): deleting an invoice or act would free its one-per-order slot (the same order could be invoiced twice under another number) and a return note is the record behind the quantities counted on the order lines, so their rows are never evicted and the cap is not enforced for them; `GET /receipts/retention` reports `replaces: null` for them. The cap still applies to the waybill, sales receipt, packing list and quotation; documents of other types are never counted or evicted by it. Every evictable type (waybill, sales receipt, packing list, quote) has its own ten. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`, which accepts `?type=`, default `waybill`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
+**Retention cap:** an account keeps a number of generated documents **of each document type** set by its plan (`PlanLimits.documentsRetainedPerType`: 10, 100, or all). For the waybill, sales receipt, packing list and quotation the oldest document over the cap is deleted, as described below. **For the invoice, act and return note only the content goes** (`document-retention.ts::retentionAction` = `purge`, `ReceiptArtifactService.purgeOverCap`): the PDF is retired, `public_token` cleared and `receipts.content_purged_at` set, while the row keeps its number and order slot. A purged record does not count towards the cap; download, share and regeneration answer 410 `DOCUMENT_CONTENT_PURGED`, and projections carry `purged: true`. `GET /receipts/retention` returns `{ limit, count, action, replaces }` with `limit: null` on a plan that keeps everything. The sentences below about "10" and "exempt" describe the free plan and the delete path; they predate the per-plan cap. The cap is enforced when a document is **promoted** to `GENERATED` (`ReceiptArtifactService`, under the tenant lock), never when its row is created: promoting the 11th document of a type retires the oldest one of that same type and its public link stops working, while a generation that fails costs nobody their place. **Invoices, acts and return notes are exempt** (`document-retention.ts::isRetentionExempt`): deleting an invoice or act would free its one-per-order slot (the same order could be invoiced twice under another number) and a return note is the record behind the quantities counted on the order lines, so their rows are never evicted and the cap is not enforced for them; `GET /receipts/retention` reports `replaces: null` for them. The cap still applies to the waybill, sales receipt, packing list and quotation; documents of other types are never counted or evicted by it. Every evictable type (waybill, sales receipt, packing list, quote) has its own ten. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`, which accepts `?type=`, default `waybill`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
 
 **Document numbers** (`"2026-000007"` by default) are per account **and per document type**: `receipts/receipt-number.ts::nextDocumentNumber(manager, userId, type)` upserts the `(user_id, document_type)` row of `document_counters` in one statement (`INSERT … ON CONFLICT DO UPDATE … RETURNING value, prefix, padding, include_year`, so concurrent generations queue on that row, including the first insert, and never collide; a number is never reused, even after the retention cap evicts its document). It returns `{ number, value }`: the format is read in the same statement as the value, so a prefix change racing a draw yields a whole old or whole new number. Uniqueness is `(user_id, document_type, number)`; nothing looks a document up by number (public links use `public_token`, the API uses ids), and the download file name carries the type: `receipt-<number>.pdf` for a waybill, `<type>-<number>.pdf` for every other type (`invoice-…`, `act-…`, `quote-…`, `sales_receipt-…`, `packing_list-…`, `return_note-…`; `receipts.service.ts`), so equal numbers of two types never share a file name. An invoice and a waybill may both be `2026-000001`.
 
@@ -252,9 +252,11 @@ Files: `backend/src/modules/receipts/templates/` (contains HTML templates)
 
 **Plan-Based Restrictions:**
 
-- Free plan: STANDARD, COMPACT, MINIMAL, THERMAL templates
-- Pro plan: all templates
-- Business plan: all 15 templates
+- free: `standard` only
+- pro ("Start"): 10 templates
+- business ("Pro"): all 15 templates
+
+See *Plans & Limits* for the list and for what happens to a saved template the plan lost.
 
 File: `backend/src/modules/subscription/config/plans.config.ts`
 
@@ -315,25 +317,61 @@ complete Creem credentials, product IDs, frontend URL and explicit production en
 
 File: `backend/src/modules/subscription/config/plans.config.ts`
 
-```typescript
-export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
-  free: {
-    maxProducts: 10,           // Can create up to 10 products
-    maxOrdersPerMonth: 20,    // Up to 20 orders/month
-    allowedTemplates: ["standard", "compact", "minimal", "thermal"],
-  },
-  pro: {
-    maxProducts: 100,
-    maxOrdersPerMonth: 500,
-    allowedTemplates: null, // all templates
-  },
-  business: {
-    maxProducts: null,        // Unlimited
-    maxOrdersPerMonth: null,  // Unlimited
-    allowedTemplates: [/* all 15 */],
-  },
-};
-```
+The stored plan names are `free` / `pro` / `business`; they are **sold as Free / Start / Pro**
+(`pro` = Start, $9; `business` = Pro, $19). Stored values were not renamed, so a rollback stays safe.
+
+| | free | pro ("Start") | business ("Pro") |
+|---|---|---|---|
+| Orders per month | 20 | 150 | 1500 |
+| Products | 10 | 500 | unlimited |
+| Recipients | 10 | 300 | unlimited |
+| Templates | `standard` | 10 (adds compact, minimal, thermal, classic, corporate, modern, wave, delivery, proforma) | all 15 |
+| Document types | waybill, invoice, sales receipt | all 7 | all 7 |
+| Generated documents kept per type | 10 | 100 | all |
+| Presets | 0 | 3 | 20 |
+| Analytics history | none (home shows turnover of the current UTC month) | 90 days | all |
+| Features (`features`) | none | all but `csvExport` | all |
+| "Made with ReceiptMaster" line (`hasAttribution`) | yes | no | no |
+
+Features are `analytics`, `profit`, `csvExport` (UI only: the CSV is built in the browser), `logo`,
+`signoff`, `customNumbering`, `autoReceipt`, `suppliers`, `stockInsights`.
+
+**Where the plan is read.** `subscription/plan-access.ts` (`readPlan`, `readPlanLimits`,
+`assertPlanFeature`) works with any `EntityManager`, so a check runs inside the caller's
+transaction without new dependencies; `SubscriptionService` wraps the same functions. A missing
+subscription row is the free plan and no row is created by a check. Refusals are HTTP 402:
+`PRODUCT_LIMIT_EXCEEDED`, `ORDER_MONTHLY_LIMIT_EXCEEDED`, `RECIPIENT_LIMIT_EXCEEDED`,
+`PRESET_LIMIT_EXCEEDED`, `TEMPLATE_PLAN_RESTRICTED`, `DOCUMENT_TYPE_PLAN_RESTRICTED`,
+`PLAN_FEATURE_RESTRICTED` (`feature` names what is missing).
+
+**What each gate does:**
+
+- *Counts* (products, recipients, orders) are checked in the creating transaction under a
+  per-user advisory lock. Web and Telegram creation both check; an idempotent replay returns the
+  stored response before the check. Data above a lower plan's limit stays; only new creates stop.
+- *Templates.* Picking a template outside the plan is refused. A saved default that the plan no
+  longer includes (after a downgrade or a change of the table) is **not** an error: generation
+  falls back to `standard` (`DocumentConfigService.resolve`) and other settings stay editable
+  (`assertTemplateChange` checks only a change of template).
+- *Document types* are checked in `ReceiptsService.generateDocument` and on a `replace`
+  regeneration; redrawing the frozen content of an existing document stays allowed.
+- *Logo, signature, stamp.* Uploading needs the feature; already stored images are kept but not
+  printed on a plan without it (`templates/attribution.ts::planBranding`, applied in
+  `DocumentRenderService.prepare`). The same place appends the service line on a plan with
+  `hasAttribution`. Issued documents are frozen and never change.
+- *Numbering, auto-receipt, suppliers.* Changing a numbering format, turning auto-receipt on, and
+  creating or editing a supplier or linking a new one to a product need the feature. Existing
+  formats and suppliers stay and can be read and removed; auto-receipt is silently skipped on a
+  plan without it. `quantity` and `purchase_price_cents` are never gated: orders depend on them.
+  `GET /products/low-stock` and `/products/stock-value` need `stockInsights`.
+- *Analytics* (`orders/dashboard-plan-window.ts`). Without `analytics` only `status-summary` and
+  `total-turnover` answer, the latter forced to the current UTC month; the other six dashboard
+  routes are 402. With `analyticsHistoryDays` the range start is raised to today − N days and
+  `daily-revenue` `days` is capped. Refusal and clamping happen before the cache key is built.
+- *Presets.* Creating one past `maxPresets` is 402; a plan with none cannot generate from a preset.
+
+**Rollout.** These limits apply to every account, including existing free ones. They must ship
+together with billing going live: with `BILLING_ENABLED=false` nobody can buy the higher plan.
 
 **Subscription Lifecycle:**
 
@@ -935,9 +973,7 @@ Files:
    - Template must be allowed by user's plan
 
 4. **Subscription Entitlements:**
-   - Free plan: max 10 products, 20 orders/month, 4 templates
-   - Pro plan: max 100 products, 500 orders/month, all templates
-   - Business plan: unlimited everything
+   - See the table in *Plans & Limits*: counts, templates, document types, retention and features
 
 5. **Tenant Isolation:**
    - Every query must filter by `user_id`

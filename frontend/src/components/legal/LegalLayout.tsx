@@ -64,7 +64,7 @@ export const LegalLayout: React.FC<LegalLayoutProps> = ({
         className="max-w-3xl mx-auto px-4 sm:px-6 py-10"
         aria-labelledby={titleId}
       >
-        <h1 id={titleId} className="text-3xl font-bold text-content mb-2">
+        <h1 id={titleId} className="text-3xl font-bold text-content mb-2 break-words">
           {title}
         </h1>
         <p className="text-sm text-content-tertiary mb-8">

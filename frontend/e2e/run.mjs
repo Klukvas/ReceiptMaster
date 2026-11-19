@@ -13,7 +13,11 @@ import { dirname, resolve } from "node:path";
 import { BASE_URL, WS_PORT } from "./support/harness.mjs";
 
 const SPECS = [
+  { name: "design-audit-fixes", load: () => import("./design-audit-fixes.spec.mjs") },
+  { name: "public-report-regressions", load: () => import("./public-report-regressions.spec.mjs") },
+  { name: "dashboard-profile-regressions", load: () => import("./dashboard-profile-regressions.spec.mjs") },
   { name: "billing-disabled", load: () => import("./billing-disabled.spec.mjs") },
+  { name: "plan-gating", load: () => import("./plan-gating.spec.mjs") },
   { name: "proxy-audit", load: () => import("./proxy-audit.spec.mjs") },
   { name: "infra-audit", load: () => import("./infra-audit.spec.mjs") },
   { name: "order-audit", load: () => import("./order-audit.spec.mjs") },

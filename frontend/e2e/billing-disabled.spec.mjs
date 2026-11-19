@@ -146,8 +146,8 @@ export const run = async () => {
       .getByText("Payments are currently unavailable.", { exact: false })
       .waitFor();
     results.check(
-      "settings preserves Business plan and usage",
-      /Business/.test(await page.locator("main").innerText()),
+      "settings preserves the top plan (shown as Pro) and usage",
+      /\bPro\b/.test(await page.locator("main").innerText()),
     );
     results.check(
       "settings has no purchase/manage buttons",

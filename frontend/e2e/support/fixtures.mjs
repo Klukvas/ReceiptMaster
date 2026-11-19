@@ -8,18 +8,76 @@ export const USER = {
   created_at: "2026-01-01T00:00:00.000Z",
 };
 
-export const SUBSCRIPTION_STATUS = {
-  plan: "business",
-  usage: { productsCount: 3, ordersThisMonth: 1 },
-  limits: {
-    maxProducts: null,
-    maxOrdersPerMonth: null,
-    allowedTemplateIds: null,
+const PLAN_FEATURES = [
+  "analytics",
+  "profit",
+  "csvExport",
+  "logo",
+  "signoff",
+  "customNumbering",
+  "autoReceipt",
+  "suppliers",
+  "stockInsights",
+];
+const features = (enabled) =>
+  Object.fromEntries(PLAN_FEATURES.map((feature) => [feature, enabled.includes(feature)]));
+
+// The three plans as `GET /subscription/status` reports their limits (a copy of the backend's
+// PLAN_LIMITS; `plan-gating` uses the lower two).
+const PLAN_LIMITS = {
+  free: {
+    maxProducts: 10,
+    maxOrdersPerMonth: 20,
+    maxRecipients: 10,
+    allowedTemplateIds: ["standard"],
+    allowedDocumentTypes: ["waybill", "invoice", "sales_receipt"],
+    documentsRetainedPerType: 10,
+    maxPresets: 0,
+    analyticsHistoryDays: null,
+    hasAttribution: true,
+    features: features([]),
   },
+  pro: {
+    maxProducts: 500,
+    maxOrdersPerMonth: 150,
+    maxRecipients: 300,
+    allowedTemplateIds: [
+      "standard", "compact", "minimal", "thermal", "classic",
+      "corporate", "modern", "wave", "delivery", "proforma",
+    ],
+    allowedDocumentTypes: null,
+    documentsRetainedPerType: 100,
+    maxPresets: 3,
+    analyticsHistoryDays: 90,
+    hasAttribution: false,
+    features: features(PLAN_FEATURES.filter((feature) => feature !== "csvExport")),
+  },
+  business: {
+    maxProducts: null,
+    maxOrdersPerMonth: 1500,
+    maxRecipients: null,
+    allowedTemplateIds: null,
+    allowedDocumentTypes: null,
+    documentsRetainedPerType: null,
+    maxPresets: 20,
+    analyticsHistoryDays: null,
+    hasAttribution: false,
+    features: features(PLAN_FEATURES),
+  },
+};
+
+/** A subscription status for one of the stored plans: "free", "pro" (Start) or "business" (Pro). */
+export const subscriptionStatusFor = (plan, usage = {}) => ({
+  plan,
+  usage: { productsCount: 3, ordersThisMonth: 1, recipientsCount: 1, ...usage },
+  limits: PLAN_LIMITS[plan],
   billingStatus: null,
   currentPeriodEnd: null,
   hasBillingSubscription: false,
-};
+});
+
+// The top plan, so specs that are not about plans see everything unlocked.
+export const SUBSCRIPTION_STATUS = subscriptionStatusFor("business");
 
 // Long names on purpose: a narrow viewport must not be widened by dropdown content.
 export const PRODUCTS = [

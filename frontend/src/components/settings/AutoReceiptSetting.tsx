@@ -9,6 +9,10 @@ import {
 } from "../../hooks/useAutoReceiptSetting";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSection } from "./SettingsSection";
+import { usePlan } from "../../hooks/usePlan";
+import { planRefusalReason } from "../../lib/plan-refusal";
+import { PlanLockButton } from "../subscription/PlanLock";
+import { useUpgradePrompt } from "../../hooks/usePlanLock";
 
 export const AutoReceiptSetting = () => {
   const { t } = useTranslation();
@@ -20,7 +24,17 @@ export const AutoReceiptSetting = () => {
   } = useAutoReceiptSetting();
   const update = useUpdateAutoReceiptSetting();
 
+  const plan = usePlan();
+  const upgradePrompt = useUpgradePrompt();
+  // Turning the switch off is always allowed, so an account that lost the feature can stop it.
+  const isTurningOnLocked = !isEnabled && !plan.allows("autoReceipt");
+  const retainedPerType = plan.limits?.documentsRetainedPerType ?? null;
+
   const handleToggle = () => {
+    if (isTurningOnLocked) {
+      upgradePrompt.open("autoReceipt");
+      return;
+    }
     const next = !isEnabled;
     update.mutate(next, {
       onSuccess: () =>
@@ -35,8 +49,11 @@ export const AutoReceiptSetting = () => {
                 "Automatic receipts turned off",
               ),
         ),
-      onError: (mutationError) =>
-        toast.error(parseApiError(mutationError).message),
+      onError: (mutationError) => {
+        const reason = planRefusalReason(mutationError, "autoReceipt");
+        if (reason) upgradePrompt.open(reason);
+        else toast.error(parseApiError(mutationError).message);
+      },
     });
   };
 
@@ -95,20 +112,29 @@ export const AutoReceiptSetting = () => {
               </span>
             </button>
           </div>
+          {isTurningOnLocked && !isLoading && (
+            <PlanLockButton
+              reason="autoReceipt"
+              subject={t("settings.autoReceiptTitle", "Automatic receipts")}
+              size="sm"
+              testId="auto-receipt-lock"
+              onOpen={upgradePrompt.open}
+            />
+          )}
           <p className="text-xs font-medium text-content-secondary">
             {t(
               "settings.autoReceiptInstant",
               "This switch applies immediately; there is nothing to save.",
             )}
           </p>
-          <p className="text-xs text-content-tertiary leading-relaxed">
-            {t(
-              "settings.autoReceiptHint",
-              "The 10 most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
-            )}
-          </p>
+          {retainedPerType !== null && (
+            <p className="text-xs text-content-tertiary leading-relaxed">
+              {t("settings.autoReceiptHint", { count: retainedPerType })}
+            </p>
+          )}
         </div>
       )}
+      {upgradePrompt.modal}
     </SettingsSection>
   );
 };

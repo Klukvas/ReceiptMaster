@@ -65,6 +65,16 @@ export const ErrorCode = {
 
   RATE_LIMITED: "RATE_LIMITED",
 
+  // Plan refusals (HTTP 402) and the retention purge (HTTP 410)
+  PRODUCT_LIMIT_EXCEEDED: "PRODUCT_LIMIT_EXCEEDED",
+  ORDER_MONTHLY_LIMIT_EXCEEDED: "ORDER_MONTHLY_LIMIT_EXCEEDED",
+  RECIPIENT_LIMIT_EXCEEDED: "RECIPIENT_LIMIT_EXCEEDED",
+  PRESET_LIMIT_EXCEEDED: "PRESET_LIMIT_EXCEEDED",
+  TEMPLATE_PLAN_RESTRICTED: "TEMPLATE_PLAN_RESTRICTED",
+  DOCUMENT_TYPE_PLAN_RESTRICTED: "DOCUMENT_TYPE_PLAN_RESTRICTED",
+  PLAN_FEATURE_RESTRICTED: "PLAN_FEATURE_RESTRICTED",
+  DOCUMENT_CONTENT_PURGED: "DOCUMENT_CONTENT_PURGED",
+
   // General errors
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   UNAUTHORIZED: "UNAUTHORIZED",
@@ -138,6 +148,24 @@ const ERROR_MESSAGES: Record<string, string> = {
   [ErrorCode.FILE_NOT_FOUND]: "File not found",
   [ErrorCode.FILE_UPLOAD_FAILED]: "Failed to upload file",
   [ErrorCode.FILE_DELETE_FAILED]: "Failed to delete file",
+
+  // Plan refusals
+  [ErrorCode.PRODUCT_LIMIT_EXCEEDED]:
+    "You have reached the product limit of your plan",
+  [ErrorCode.ORDER_MONTHLY_LIMIT_EXCEEDED]:
+    "You have used all orders included in your plan this month",
+  [ErrorCode.RECIPIENT_LIMIT_EXCEEDED]:
+    "You have reached the recipient limit of your plan",
+  [ErrorCode.PRESET_LIMIT_EXCEEDED]:
+    "You have reached the preset limit of your plan",
+  [ErrorCode.TEMPLATE_PLAN_RESTRICTED]:
+    "This template is not included in your plan",
+  [ErrorCode.DOCUMENT_TYPE_PLAN_RESTRICTED]:
+    "This document type is not included in your plan",
+  [ErrorCode.PLAN_FEATURE_RESTRICTED]:
+    "This feature is not included in your plan",
+  [ErrorCode.DOCUMENT_CONTENT_PURGED]:
+    "The file of this document was removed by your plan's storage limit",
 
   // Validation errors
   [ErrorCode.VALIDATION_ERROR]: "Validation error",
@@ -284,9 +312,31 @@ export function parseApiError(error: unknown): {
   };
 }
 
+/** The body of an API refusal as a plain object, or null (network failure, Blob, text). */
+export function errorBodyOf(error: unknown): Record<string, unknown> | null {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  return typeof body === "object" && body !== null && !(body instanceof Blob)
+    ? (body as Record<string, unknown>)
+    : null;
+}
+
 /** The HTTP status of an API refusal, or undefined for a network failure or a non-HTTP error. */
 export function httpStatusOf(error: unknown): number | undefined {
   return isAxiosError(error) ? error.response?.status : undefined;
+}
+
+const HTTP_GONE = 410;
+
+/**
+ * The text for a failed PDF request. Its error body arrives as a Blob, which `parseApiError`
+ * cannot read, and the one refusal worth explaining there is the 410 of a document whose
+ * file the plan's retention limit removed.
+ */
+export function pdfErrorMessage(error: unknown): string {
+  return httpStatusOf(error) === HTTP_GONE
+    ? i18n.t("errors.documentContentPurged")
+    : parseApiError(error).message;
 }
 
 /** "Too many requests, try again in N s" with the server's wait when it sent one. */

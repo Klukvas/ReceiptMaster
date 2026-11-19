@@ -92,9 +92,12 @@ export const refundPolicyEn: LegalContent = {
         </li>
         <li>
           <strong>Your data is kept</strong> — downgrading does not delete it.
-          Free plan limits apply to new products and orders, and each account
-          keeps only its 10 most recent active documents of each type (a new document
-          replaces the oldest active one of the same type)
+          Free plan limits apply from then on: new products, recipients and
+          orders are counted against them, and the Free plan keeps a limited
+          number of generated documents of each type, so older ones are
+          removed. Invoices, acts and return notes keep their record and
+          number but lose the PDF file and public link; older documents of the
+          other types are deleted
         </li>
       </ul>
 

@@ -8,6 +8,10 @@ import { buildPeriodLabel } from '../components/dashboard/periodLabel';
 import { useTranslation } from '../hooks/useTranslation';
 import { dashboardApi } from '../lib/api';
 import { exportToCsv } from '../lib/csv-export';
+import { usePlan } from '../hooks/usePlan';
+import { ContentSpinner } from '../components/common/PageSpinner';
+import { AnalyticsUpsell } from '../components/dashboard/AnalyticsUpsell';
+import { AnalyticsHistoryNote } from '../components/dashboard/AnalyticsHistoryNote';
 
 function daysAgo(days: number): string {
  const d = new Date();
@@ -20,10 +24,43 @@ function today(): string {
  return new Date().toISOString().split('T')[0];
 }
 
+/**
+ * The analytics endpoints answer 402 on a plan without analytics, so nothing below is
+ * mounted until the plan is known, and a plan without the feature gets the upsell instead.
+ */
 export const DashboardPage = () => {
+ const plan = usePlan();
+ if (!plan.isSettled) return <ContentSpinner />;
+ if (!plan.allows('analytics')) return <AnalyticsUpsell />;
+ return (
+ <AnalyticsContent
+ // A plan change (after an upgrade) starts from that plan's own window.
+ key={plan.limits?.analyticsHistoryDays ?? 'all'}
+ historyDays={plan.limits?.analyticsHistoryDays ?? null}
+ canExportCsv={plan.allows('csvExport')}
+ />
+ );
+};
+
+interface AnalyticsContentProps {
+ /** How far back the plan lets analytics look; null = the whole history. */
+ historyDays: number | null;
+ canExportCsv: boolean;
+}
+
+const AnalyticsContent = ({ historyDays, canExportCsv }: AnalyticsContentProps) => {
  const { t } = useTranslation();
- const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
- const [activePreset, setActivePreset] = useState<number | null>(null);
+ // With a limited history "all time" would be a false label: the widest range is the window.
+ const widestRange = useMemo(
+ () =>
+ historyDays === null
+ ? { startDate: '', endDate: '' }
+ : { startDate: daysAgo(historyDays), endDate: today() },
+ [historyDays],
+ );
+ const earliestDate = historyDays === null ? undefined : widestRange.startDate;
+ const [dateRange, setDateRange] = useState(widestRange);
+ const [activePreset, setActivePreset] = useState<number | null>(historyDays);
  const [activeTab, setActiveTab] = useState<'revenue' | 'turnover'>('revenue');
 
  const presets = useMemo(
@@ -32,8 +69,8 @@ export const DashboardPage = () => {
  { label: t('dashboard.last30d', '30d'), days: 30 },
  { label: t('dashboard.last90d', '90d'), days: 90 },
  { label: t('dashboard.lastYear', '1y'), days: 365 },
- ],
- [t],
+ ].filter((preset) => historyDays === null || preset.days <= historyDays),
+ [t, historyDays],
  );
 
  const handlePresetClick = (days: number) => {
@@ -60,8 +97,8 @@ export const DashboardPage = () => {
  };
 
  const clearDates = () => {
- setDateRange({ startDate: '', endDate: '' });
- setActivePreset(null);
+ setDateRange(widestRange);
+ setActivePreset(historyDays);
  };
 
  const periodLabel = buildPeriodLabel(dateRange, t);
@@ -139,6 +176,7 @@ export const DashboardPage = () => {
  <AnalyticsHeader
  onExportCsv={handleExportCsv}
  canExport={canExport}
+ isCsvLocked={!canExportCsv}
  periodLabel={periodLabel}
  />
 
@@ -152,7 +190,10 @@ export const DashboardPage = () => {
  onStartDateChange={handleStartDateChange}
  onEndDateChange={handleEndDateChange}
  onClear={clearDates}
+ minDate={earliestDate}
+ canClear={dateRange.startDate !== widestRange.startDate || dateRange.endDate !== widestRange.endDate}
  />
+ {historyDays !== null && <AnalyticsHistoryNote days={historyDays} />}
 
  {/* Segmented control */}
  <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-alt w-fit border border-[var(--color-border)]">

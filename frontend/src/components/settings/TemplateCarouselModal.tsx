@@ -6,11 +6,14 @@ import { clsx } from "clsx";
 import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { useTranslation } from "../../hooks/useTranslation";
 import { templateDisplayName } from "../../lib/template-name";
+import { PlanLockButton } from "../subscription/PlanLock";
 
 interface Template {
   id: string;
   name: string;
   description: string;
+  /** Not in the account's plan: previewed, with a lock in place of Select. */
+  locked?: boolean;
 }
 
 interface TemplateCarouselModalProps {
@@ -224,6 +227,13 @@ export const TemplateCarouselModal = ({
           </div>
 
           {/* Select button */}
+          {current.locked ? (
+            <PlanLockButton
+              reason="templates"
+              subject={templateDisplayName(t, current)}
+              testId="carousel-template-lock"
+            />
+          ) : (
           <button
             onClick={handleSelect}
             className="inline-flex items-center gap-2 rounded-lg bg-accent-base px-4 py-2 text-sm font-medium text-white hover:bg-accent-base transition-colors"
@@ -231,6 +241,7 @@ export const TemplateCarouselModal = ({
             <Check className="h-4 w-4" />
             {t("settings.selectTemplate", "Select This Template")}
           </button>
+          )}
         </div>
       </div>
     </div>

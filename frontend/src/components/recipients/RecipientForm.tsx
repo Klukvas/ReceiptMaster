@@ -20,6 +20,8 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { planRefusalReason } from "../../lib/plan-refusal";
+import type { UpgradeReason } from "../../lib/plan-catalog";
 import { useHighlightedFields } from "../../hooks/useHighlightedFields";
 import { RecipientRequisitesFields } from "./RecipientRequisitesFields";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -28,6 +30,8 @@ import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 interface RecipientFormProps {
   recipient?: Recipient | null;
   onClose: () => void;
+  /** The server refused the recipient because of the plan (402); the page explains it. */
+  onPlanRefusal?: (reason: UpgradeReason) => void;
 }
 
 type FieldErrors = Partial<Record<"name" | "email" | "phone", string>>;
@@ -47,7 +51,11 @@ const FIELD_IDS = {
   phone: "recipient-phone",
 } as const;
 
-export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
+export const RecipientForm = ({
+  recipient,
+  onClose,
+  onPlanRefusal,
+}: RecipientFormProps) => {
   const { t } = useTranslation();
   const isSubmittingRef = useRef(false);
   const keyFor = useIdempotencyKey();
@@ -130,10 +138,19 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       recipientsApi.create(data, { idempotencyKey: keyFor(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
+      // The usage bar ("3/10") comes from the plan usage, not from the recipient list.
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       toast.success(t("recipients.recipientCreated"));
       onClose();
     },
     onError: (error: unknown) => {
+      // A 402 that slipped past the page's pre-check (the cached plan status was stale).
+      const reason = planRefusalReason(error, "recipients");
+      if (reason && onPlanRefusal) {
+        queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+        onPlanRefusal(reason);
+        return;
+      }
       const { code, message } = parseApiError(error);
       if (code === ErrorCode.RECIPIENT_ALREADY_EXISTS) {
         showErrors({ email: message });

@@ -1,8 +1,8 @@
 # API Reference
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-19
 
-**Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Creem webhook is excluded from Swagger). This reference covers all controllers exhaustively.
+**Total Endpoints:** 109 HTTP operations across 17 controllers; 108 operations on 80 paths are in the OpenAPI contract (the signed Creem webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -1470,18 +1470,52 @@ Returns current plan and usage metrics.
   plan: "free" | "pro" | "business",
   usage: {
     productsCount: number,
-    ordersThisMonth: number    // orders created this UTC month, excluding cancelled and deleted ones
+    ordersThisMonth: number,   // orders created this UTC month, excluding cancelled and deleted ones
+    recipientsCount: number
   },
-  limits: {
-    maxProducts: number | null,       // null = unlimited
+  limits: {                             // the plan's row of PLAN_LIMITS, passed through
+    maxProducts: number | null,         // null = unlimited
     maxOrdersPerMonth: number | null,
-    allowedTemplates: string[]
+    maxRecipients: number | null,
+    allowedTemplateIds: string[] | null,     // null = every template
+    allowedDocumentTypes: string[] | null,   // null = every type
+    documentsRetainedPerType: number | null, // null = all kept
+    maxPresets: number,
+    analyticsHistoryDays: number | null,     // null = whole history
+    hasAttribution: boolean,                 // documents carry the "Made with ReceiptMaster" line
+    features: {                              // analytics, profit, csvExport, logo, signoff,
+      [feature: string]: boolean             // customNumbering, autoReceipt, suppliers, stockInsights
+    }
   },
   billingStatus: string | null,       // "active", "trialing", "past_due", "scheduled_cancel", "paused", "canceled" (if subscribed)
   currentPeriodEnd: string | null,    // ISO date (if subscribed)
   hasBillingSubscription: boolean
 }
 ```
+
+`plan` is the stored name: `pro` is sold as "Start" and `business` as "Pro".
+
+**Plan refusals (any endpoint).** A request the plan does not cover answers HTTP 402 with
+`{ error, errorCode, ... }`:
+
+| `errorCode` | Extra field | Raised by |
+|---|---|---|
+| `PRODUCT_LIMIT_EXCEEDED` | — | `POST /products` |
+| `ORDER_MONTHLY_LIMIT_EXCEEDED` | — | `POST /orders`, Telegram order |
+| `RECIPIENT_LIMIT_EXCEEDED` | `limit` | `POST /recipients`, Telegram order with a new buyer |
+| `PRESET_LIMIT_EXCEEDED` | `limit` | creating a preset; generating from a preset on a plan with none |
+| `TEMPLATE_PLAN_RESTRICTED` | — | choosing a template outside the plan |
+| `DOCUMENT_TYPE_PLAN_RESTRICTED` | `documentType` | `POST /receipts/orders/:orderId/documents`, `replace` regeneration |
+| `PLAN_FEATURE_RESTRICTED` | `feature` | logo or signature/stamp upload, numbering update, enabling auto-receipt, supplier create/update and linking, `GET /products/low-stock`, `GET /products/stock-value`, dashboard routes |
+
+HTTP 410 `DOCUMENT_CONTENT_PURGED` (`id`) answers download, share and regeneration of an invoice,
+act or return note whose file the plan's retention limit removed; such a document has
+`purged: true` in every projection. `GET /receipts/retention` returns
+`{ limit: number | null, count, action: "delete" | "purge", replaces }`.
+
+Dashboard routes: without the `analytics` feature only `status-summary` and `total-turnover`
+answer (the latter for the current UTC month); with `analyticsHistoryDays` the server clamps the
+range. See `business-logic.md`, *Plans & Limits*.
 
 ---
 

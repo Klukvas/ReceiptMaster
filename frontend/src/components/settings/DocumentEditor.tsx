@@ -21,6 +21,7 @@ import { DocumentPresets } from "./DocumentPresets";
 import { DocumentTextSection } from "./DocumentTextSection";
 import { DocumentLayoutContext } from "./document-layout";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
+import { usePlan } from "../../hooks/usePlan";
 
 // Template options come from GET /settings/templates, i.e. the backend's template IDs.
 type TemplateId = DocumentConfig["templateId"];
@@ -49,6 +50,7 @@ export function DocumentEditor({
   const { t } = useTranslation();
   const [gallery, setGallery] = useState(false);
   const templates = useDocumentTemplates();
+  const hasAttribution = usePlan().limits?.hasAttribution === true;
   const fitsType = (template: DocumentTemplate) =>
     !documentType || template.capabilities.documentTypes.includes(documentType);
   // The preview endpoint renders the waybill layout only, so it would mislead for the other types.
@@ -152,6 +154,14 @@ export function DocumentEditor({
               : "document.accountDefaults",
           )}
         </p>
+        {hasAttribution && (
+          <p
+            data-testid="attribution-note"
+            className="text-sm text-content-secondary"
+          >
+            {t("document.attributionNote")}
+          </p>
+        )}
         {model.error && model.isConflict && (
           <div
             role="alert"
@@ -231,11 +241,8 @@ export function DocumentEditor({
           isOpen={gallery}
           language={config.documentLanguage}
           onClose={() => setGallery(false)}
-          templates={
-            templates.data?.filter(
-              (value) => !value.locked && fitsType(value),
-            ) || []
-          }
+          // Designs of a higher plan can be looked at; the carousel will not select them.
+          templates={templates.data?.filter(fitsType) || []}
           initialTemplateId={config.templateId}
           onSelectTemplate={(templateId) => {
             model.update({ ...config, templateId: templateId as TemplateId });

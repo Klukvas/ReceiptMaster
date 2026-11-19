@@ -15,10 +15,24 @@ import {
  type ColumnDef,
 } from"../hooks/useServerPagination";
 import { useTranslation } from"../hooks/useTranslation";
+import { usePlan } from "../hooks/usePlan";
+import { PlanLockButton } from "../components/subscription/PlanLock";
+import { useUpgradePrompt } from "../hooks/usePlanLock";
 import { parseApiError } from"../lib/api-errors";
 
 export const SuppliersPage = () => {
  const [showForm, setShowForm] = useState(false);
+ // Without the suppliers feature the list stays readable and deletable; adding and editing
+ // are locked (the server answers 402 to both).
+ const canEditSuppliers = usePlan().allows("suppliers");
+ const upgradePrompt = useUpgradePrompt();
+ const openCreateForm = () => {
+ if (!canEditSuppliers) {
+ upgradePrompt.open("suppliers");
+ return;
+ }
+ setShowForm(true);
+ };
  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
  const [drawerSupplier, setDrawerSupplier] = useState<Supplier | null>(null);
  const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
@@ -134,6 +148,10 @@ export const SuppliersPage = () => {
  });
 
  const handleEdit = (supplier: Supplier) => {
+ if (!canEditSuppliers) {
+ upgradePrompt.open("suppliers");
+ return;
+ }
  setEditingSupplier(supplier);
  setShowForm(true);
  };
@@ -158,14 +176,28 @@ export const SuppliersPage = () => {
  {t("suppliers.subtitle")}
  </p>
  </div>
+ {!canEditSuppliers ? (
+ <PlanLockButton
+ reason="suppliers"
+ subject={t("suppliers.createSupplier")}
+ testId="suppliers-create-lock"
+ onOpen={upgradePrompt.open}
+ />
+ ) : (
  <Button
- onClick={() => setShowForm(true)}
+ onClick={openCreateForm}
  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-base to-accent-base-hover hover:from-accent-base-hover hover:to-accent-base-hover text-white font-medium px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 text-sm"
  >
  <Plus className="w-4 h-4" />
  {t("suppliers.createSupplier")}
  </Button>
+ )}
  </div>
+ {!canEditSuppliers && (
+ <p data-testid="suppliers-readonly-note" className="text-sm text-content-secondary">
+ {t("suppliers.readOnlyOnPlan")}
+ </p>
+ )}
 
  <DataTable<Supplier>
  items={pagination.items}
@@ -201,7 +233,7 @@ export const SuppliersPage = () => {
  }
  emptyMessage={t("suppliers.noSuppliers")}
  emptyAction={
- <Button onClick={() => setShowForm(true)}>
+ <Button onClick={openCreateForm}>
  {t("suppliers.createFirstSupplier")}
  </Button>
  }
@@ -217,10 +249,10 @@ export const SuppliersPage = () => {
  )}
  renderCard={(s) => (
  <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4">
- <div className="flex items-start justify-between mb-3">
+ <div className="flex items-start justify-between gap-2 mb-3">
  <button
  onClick={() => setDrawerSupplier(s)}
- className="flex items-center gap-3 text-left pointer-coarse:min-h-11"
+ className="min-w-0 flex-1 flex items-center gap-3 text-left pointer-coarse:min-h-11"
  >
  <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-accent-base to-accent-base flex items-center justify-center text-white font-semibold text-xs shadow-sm shrink-0">
  {s.name
@@ -230,9 +262,9 @@ export const SuppliersPage = () => {
  .toUpperCase()
  .slice(0, 2)}
  </div>
- <div className="min-w-0">
+ <div className="min-w-0 flex-1">
  <p
- className="text-sm font-medium text-content truncate max-w-[180px]"
+ className="text-sm font-medium text-content truncate"
  title={s.name}
  >
  {s.name}
@@ -242,6 +274,7 @@ export const SuppliersPage = () => {
  </p>
  </div>
  </button>
+ <div className="shrink-0">
  <SupplierActionsMenu
  supplier={s}
  onView={(sup) => setDrawerSupplier(sup)}
@@ -249,6 +282,7 @@ export const SuppliersPage = () => {
  onDelete={handleDelete}
  isDeleting={deleteMutation.isPending}
  />
+ </div>
  </div>
  <div className="flex items-center gap-4 pt-3 border-t border-[var(--color-border-light)]">
  <span
@@ -274,6 +308,7 @@ export const SuppliersPage = () => {
  {showForm && (
  <SupplierForm supplier={editingSupplier} onClose={handleFormClose} />
  )}
+ {upgradePrompt.modal}
  <SupplierDrawer
  supplier={drawerSupplier}
  open={!!drawerSupplier}

@@ -1,4 +1,3 @@
-import { useBilling } from "../../../providers/BillingProvider";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Lock, Crown } from "lucide-react";
@@ -7,6 +6,7 @@ import { useTranslation } from "../../../hooks/useTranslation";
 import { templateDisplayName } from "../../../lib/template-name";
 import { TemplatePreviewIframe } from "../../settings/TemplatePreviewIframe";
 import { UpgradeModal } from "../../subscription/UpgradeModal";
+import { usePlanLockHint } from "../../../hooks/usePlanLock";
 
 interface Template {
   id: string;
@@ -56,7 +56,7 @@ interface TemplateStepProps {
 
 export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
   const { t } = useTranslation();
-  const { billingEnabled } = useBilling();
+  const lockHint = usePlanLockHint("templates");
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   const { data: templates, isLoading } = useQuery<Template[]>({
@@ -180,9 +180,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
                 <p className="mt-0.5 flex items-center gap-1 text-[11px] text-content-secondary">
                   <Crown className="h-3 w-3 shrink-0" />
                   <span className="truncate">
-                    {billingEnabled
-                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
-                      : t("subscription.templateNotInPlan", "Not in your plan")}
+                    {lockHint}
                   </span>
                 </p>
               )}

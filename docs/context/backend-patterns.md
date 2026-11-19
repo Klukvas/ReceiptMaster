@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-19
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -538,6 +538,13 @@ refresh-token revocation, after which a fresh pair is issued to the caller). The
 receipts WebSocket gateway (`receipts.gateway.ts`) calls the same `findAccessTokenOwner` once per
 connection (so `ReceiptsModule` registers `User` in `TypeOrmModule.forFeature`). Migration
 `1794000000000-UserTokenVersion`; `rm_app` writes it through the table-level `UPDATE` grant.
+
+Before every receipt event, the gateway fetches the room's sockets and rechecks the account's
+current token version, disconnecting stale sockets before delivery. If either the socket lookup
+or the database recheck fails, it logs the error and suppresses that event (including completed
+payloads with a PDF URL). Sends remain serialized per user; a suppressed event resolves normally
+so later events can recheck and resume delivery in order. There is no replay of suppressed events;
+the frontend's HTTP refetch/polling remains the source of truth.
 
 **Related files:**
 - `backend/src/modules/users/access-token.ts` — access-token claims, the version check
@@ -1284,6 +1291,16 @@ Use these instead of ad-hoc handling when a DTO or query touches the same kind o
 - [frontend.md](./frontend.md) — React client, components, state management
 
 ### Explicit billing capability and releases
+
+**Plan checks.** Read the plan through `subscription/plan-access.ts` (`readPlanLimits`,
+`assertPlanFeature`, `isTemplateAllowed`, `isDocumentTypeAllowed`) with the `EntityManager` the code
+already holds, or through `SubscriptionService` where it is injected. Never compare plan names:
+add a limit or a feature flag to `PLAN_LIMITS` and test that. A count limit is checked inside the
+creating transaction under a per-user advisory lock (`assertCanCreate*InTx`). Unit specs with a
+mocked manager either return a `UserSubscription` row from `findOne` or mock `readPlanLimits`;
+the database suites run with `test/helpers/paid-plan-default.ts`, which makes an account without
+a subscription row top-plan (`planDefaults.withoutSubscription`), so a suite about free limits
+sets it back to `"free"` or inserts a row.
 
 `BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
 defaulting to false. Empty optional Creem settings are accepted while OFF; ON production

@@ -17,13 +17,14 @@ interface StatCardProps {
 
 export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, description, footer }: StatCardProps) => {
  const content = (
- <Card className={href ? 'hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
+ <Card className={href ? '@container hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
  <div className="flex items-center">
- <div className={`p-3 rounded-lg ${bgColor}`}>
+ {/* Narrow linked counters need the full line for translated labels, regardless of viewport width. */}
+ <div className={`shrink-0 p-3 ${href ? 'hidden @[10rem]:block' : ''} rounded-lg ${bgColor}`}>
  <Icon className={`h-6 w-6 ${color}`} />
  </div>
- <div className="ml-4">
- <p className="text-sm font-medium text-content-secondary">{name}</p>
+ <div className={`min-w-0 ${href ? '@[10rem]:ml-4' : 'ml-4'}`}>
+ <p className="break-words text-sm font-medium text-content-secondary">{name}</p>
  <p className="text-2xl font-bold text-content tabular-nums">{value}</p>
  {description && (
  <p className="text-xs text-content-tertiary mt-0.5">{description}</p>

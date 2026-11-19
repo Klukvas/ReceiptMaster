@@ -36,12 +36,12 @@ const Bone = ({ className }: { className: string }) => (
 /** Entity count card (icon + name + value): 102 px like StatCard without a description. */
 export const EntityStatCardSkeleton = () => (
   <DelayedSkeleton>
-    <Card>
+    <Card className="@container">
       <div className="flex items-center">
-        <Bone className="h-12 w-12 shrink-0 rounded-lg" />
-        <div className="ml-4">
-          <Bone className="h-5 w-20" />
-          <Bone className="h-8 w-14" />
+        <Bone className="hidden h-12 w-12 shrink-0 rounded-lg @[10rem]:block" />
+        <div className="min-w-0 flex-1 @[10rem]:ml-4">
+          <Bone className="h-5 w-20 max-w-full" />
+          <Bone className="h-8 w-14 max-w-full" />
         </div>
       </div>
     </Card>

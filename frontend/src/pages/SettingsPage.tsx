@@ -25,6 +25,13 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
 import { hasLiveSubscription } from "../lib/subscriptionApi";
+import {
+  PLAN_ORDER,
+  planDisplayName,
+  planFeatureLines,
+  planMonthlyPrice,
+} from "../lib/plan-catalog";
+import { PlanLimitsSummary } from "../components/subscription/PlanLimitsSummary";
 
 type SettingsTab = "documents" | "subscription" | "advanced";
 
@@ -118,37 +125,6 @@ const SubscriptionTab = () => {
     );
   }
 
-  // M3: Drive feature lists from API response limits instead of hardcoding
-  const planFeatures = (plan: PlanKey): string[] => {
-    if (plan === "business") {
-      return [
-        t("subscription.unlimitedProducts", "Unlimited products"),
-        t("subscription.unlimitedOrders", "Unlimited orders"),
-        t("subscription.allTemplates", "All templates"),
-      ];
-    }
-    if (plan === "pro") {
-      return [
-        t("subscription.productsLimit", "Up to {{count}} products", {
-          count: 100,
-        }),
-        t("subscription.ordersLimit", "Up to {{count}} orders/month", {
-          count: 500,
-        }),
-        t("subscription.allTemplates", "All templates"),
-      ];
-    }
-    return [
-      t("subscription.productsLimit", "Up to {{count}} products", {
-        count: 10,
-      }),
-      t("subscription.ordersLimit", "Up to {{count}} orders/month", {
-        count: 20,
-      }),
-      t("subscription.freeTemplates", "4 basic templates"),
-    ];
-  };
-
   return (
     <div className="space-y-6">
       {!billingEnabled && (
@@ -205,7 +181,7 @@ const SubscriptionTab = () => {
             <span
               className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${PLAN_COLORS[currentPlan]?.badge}`}
             >
-              {t(`subscription.${currentPlan}`, currentPlan)}
+              {planDisplayName(t, currentPlan)}
             </span>
           </div>
           {billingEnabled && hasBillingSub && (
@@ -236,8 +212,15 @@ const SubscriptionTab = () => {
               max={status.limits.maxOrdersPerMonth}
               label={t("subscription.ordersUsage", "Orders this month")}
             />
+            <UsageBar
+              current={status.usage.recipientsCount}
+              max={status.limits.maxRecipients}
+              label={t("subscription.recipientsUsage")}
+            />
           </div>
         )}
+
+        {status && <PlanLimitsSummary limits={status.limits} />}
 
         {billingEnabled &&
           hasBillingSub &&
@@ -253,13 +236,12 @@ const SubscriptionTab = () => {
       {/* Plan comparison */}
       {billingEnabled && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {(["free", "pro", "business"] as const).map((plan) => {
+          {PLAN_ORDER.map((plan) => {
             const isCurrent = currentPlan === plan;
             const colors = PLAN_COLORS[plan];
             const isUpgrade =
-              (currentPlan === "free" &&
-                (plan === "pro" || plan === "business")) ||
-              (currentPlan === "pro" && plan === "business");
+              plan !== "free" &&
+              PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan);
 
             return (
               <div
@@ -285,17 +267,21 @@ const SubscriptionTab = () => {
                     }`}
                   />
                   <h4 className="font-semibold text-content">
-                    {t(`subscription.${plan}`, plan)}
+                    {planDisplayName(t, plan)}
                   </h4>
+                  <span className="ml-auto text-sm font-medium tabular-nums text-content-secondary">
+                    {planMonthlyPrice(plan)}
+                    {t("subscription.perMonth")}
+                  </span>
                 </div>
 
                 <ul className="space-y-2 mb-4">
-                  {planFeatures(plan).map((feature) => (
+                  {planFeatureLines(t, plan).map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-2 text-sm text-content-secondary"
+                      className="flex items-start gap-2 text-sm text-content-secondary"
                     >
-                      <Check className="h-3.5 w-3.5 text-success-base shrink-0" />
+                      <Check className="mt-0.5 h-3.5 w-3.5 text-success-base shrink-0" />
                       {feature}
                     </li>
                   ))}
@@ -316,12 +302,9 @@ const SubscriptionTab = () => {
                     ) : (
                       <CreditCard className="h-4 w-4" />
                     )}
-                    {plan === "pro"
-                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
-                      : t(
-                          "subscription.upgradeToBusiness",
-                          "Upgrade to Business",
-                        )}
+                    {t("subscription.upgradeTo", {
+                      plan: planDisplayName(t, plan),
+                    })}
                   </button>
                 )}
               </div>

@@ -92,6 +92,10 @@ export const DocumentsPage = () => {
       </div>
 
       <div className="text-xs text-content-tertiary" data-testid="documents-retention-hint">
+        {retentionLimit === null ? (
+          <p>{t("documentsPage.retentionHintUnlimited")}</p>
+        ) : (
+        <>
         <p className="hidden sm:block">
           {retentionLimit === undefined
             ? t("documentsPage.retentionHintGeneric")
@@ -106,6 +110,8 @@ export const DocumentsPage = () => {
           </summary>
           <p className="mt-1">{t("documentsPage.retentionMore")}</p>
         </details>
+        </>
+        )}
       </div>
 
       <DocumentsFilterBar

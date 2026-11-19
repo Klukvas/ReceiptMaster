@@ -168,10 +168,11 @@ export class ReceiptsGateway
     try {
       await this.dropRevokedSockets(room, userId);
     } catch (error) {
-      // The connect-time check already held; a failed recheck must not stop progress.
+      // Without a current authorization check, no receipt data may reach this room.
       this.logger.warn(
         `Could not recheck token versions in ${room}: ${error instanceof Error ? error.message : error}`,
       );
+      return;
     }
     this.server.to(room).emit(event, payload);
   }
