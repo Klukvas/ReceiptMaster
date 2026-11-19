@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-18
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -12,7 +12,7 @@ User (subscription owner)
 ├── many Recipients      (owned by user, scoped to tenant)
 ├── many Orders          (created by user)
 ├── many Receipts        (generated from orders)
-└── one UserSubscription (plan, Paddle integration)
+└── one UserSubscription (plan, Creem integration)
 
 Order
 ├── one Recipient        (to)
@@ -295,20 +295,21 @@ both public metadata and PDF paths return 404 after revocation/voiding. Delayed 
 updates only PDF fields and cannot restore an old token/status. Concurrent share creation uses
 one winning token and cannot attach a token to an already voided receipt.
 
-### 3. Subscription & Billing (Paddle)
+### 3. Subscription & Billing (Creem)
 
 Payments are an explicit capability: strict `BILLING_ENABLED` defaults to false. The
 current release disables new payments, portal management, webhook processing and the
 scheduled canceled-subscription downgrade. Existing free/paid plans, stored subscription
 data, usage reads and quota enforcement are preserved. Disabled payment endpoints return
-503 `BILLING_DISABLED`; no SDK is constructed. Enabling billing in production requires
-complete Paddle credentials, price IDs, frontend URL and explicit production environment.
+503 `BILLING_DISABLED`; Creem is never called. Enabling billing in production requires
+complete Creem credentials, product IDs, frontend URL and explicit production environment.
+The provider was Paddle until 2026-11-18; it was never enabled in production.
 
 
 **Entities:**
 
-- `UserSubscription`: Plan, Paddle subscription ID, billing cycle dates
-- `Product`: User's products (not to be confused with Paddle products; these are the items being sold)
+- `UserSubscription`: Plan, Creem customer/subscription IDs and status (`creem_*` columns, status typed as `BillingStatus`), `creem_event_at` (time of the last applied webhook event), end of the paid period. Added by the additive `1794100000000-AddCreemSubscriptionColumns`; the unused `paddle_*` columns stay until a later release, because the deploy keeps migrations when it rolls images back
+- `Product`: User's products (not to be confused with Creem products, which are the Pro and Business plans; these are the items being sold)
 - `Order`: Transactions recorded in ReceiptMaster
 
 **Plans & Limits:**
@@ -342,16 +343,42 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
    - Granted default admin user subscription at startup (via seed data)
 
 2. **User Upgrades to Pro**
-   - Clicks "Upgrade" in app
-   - Redirected to Paddle checkout (external)
-   - After payment, Paddle sends webhook
+   - Clicks "Upgrade" in app; the backend creates a Creem checkout for the plan's product
+     with `metadata.userId` and returns `checkoutUrl`
+   - The tab navigates to the Creem-hosted checkout (there is no overlay or frontend SDK);
+     Creem returns the user to `/settings?tab=subscription`
+   - A second checkout is refused while a subscription is live (any status but `canceled`).
+     The guard only sees what a webhook already stored: two checkouts opened before the first
+     payment lands can both be paid. Activation then logs an error naming both subscription
+     ids, and one has to be cancelled in Creem by hand
+   - The redirect back grants nothing: only webhooks change the plan
 
-3. **Paddle Webhook Received**
-   - Event type: `subscription.created` or `subscription.updated`
-   - Webhook signature verified using PADDLE_WEBHOOK_SECRET
-   - Extract `subscription_id`, `status`, `billing_cycle` (start/end dates)
-   - Update UserSubscription record
-   - File: `backend/src/modules/paddle/paddle.service.ts::handleWebhookEvent()`
+3. **Creem Webhook Received** (`POST /creem/webhook`)
+   - `creem-signature` is the hex HMAC-SHA256 of the raw body with `CREEM_WEBHOOK_SECRET`
+   - `checkout.completed`, `subscription.active`, `subscription.paid`, `subscription.trialing`:
+     the plan comes from the product id (`CREEM_PRO_PRODUCT_ID` / `CREEM_BUSINESS_PRODUCT_ID`).
+     The row is found by `metadata.userId` (must be a UUID) or, for renewals without metadata,
+     by the already linked `creem_subscription_id`. An unknown product grants nothing.
+     `checkout.completed` falls back to the checkout's own metadata when the nested
+     subscription's names no user.
+   - **Ordering:** every applied event stores its `created_at` in `creem_event_at`; an event
+     older than that is ignored. Creem retries a failed delivery for hours, so without this a
+     retried payment would revive a cancelled subscription, or an old subscription's event
+     would take the row back from a newer purchase. The cron keeps `creem_event_at`.
+   - `subscription.update`: plan, status and period end are synced; unknown values keep the
+     stored ones
+   - `subscription.scheduled_cancel` (cancel at period end), `subscription.canceled` and
+     `subscription.paused`: only the status and period end change. The plan stays until the
+     hourly cron `downgradeCanceledSubscriptions` finds `creem_status` `canceled` or `paused`
+     with `current_period_end` in the past (or unknown) and resets the row to free
+   - `subscription.past_due` / `subscription.unpaid`: status `past_due`, plan kept while Creem
+     retries the payment
+   - Other events are logged only. Events are not deduplicated by id: a redelivery of the
+     last applied event writes the same state again
+   - A payload with an unexpected shape is logged and acknowledged (a retry cannot fix it);
+     a database failure is a 500 and Creem retries
+   - Files: `backend/src/modules/creem/creem.service.ts::handleWebhookEvent()`,
+     `creem.webhook.ts` (signature, zod payload schemas), `creem.client.ts` (HTTP calls)
 
 4. **Entitlement Check on Action**
    - On every `createOrder()`, `createProduct()`, or template selection, assert limits
@@ -361,40 +388,40 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
      reading the plan without creating a subscription row (no row = free)
    - Throws 402 (Payment Required) if limit exceeded or template restricted
 
-**Paddle Configuration:**
+**Creem Configuration:**
 
 File: `backend/src/config/env.schema.ts`
 
 ```
-PADDLE_API_KEY                 # For server-side API calls
-PADDLE_WEBHOOK_SECRET          # For signature verification
-PADDLE_PRO_PRICE_ID            # Paddle product price for Pro plan
-PADDLE_BUSINESS_PRICE_ID       # Paddle product price for Business plan
-PADDLE_ENVIRONMENT             # "sandbox" or "production"
+CREEM_API_KEY                  # For server-side API calls (x-api-key)
+CREEM_WEBHOOK_SECRET           # For signature verification
+CREEM_PRO_PRODUCT_ID           # Creem product for the Pro plan
+CREEM_BUSINESS_PRODUCT_ID      # Creem product for the Business plan
+CREEM_ENVIRONMENT              # "test" (test-api.creem.io) or "production" (api.creem.io)
 ```
 
 **Webhook Handling:**
 
-File: `backend/src/modules/paddle/paddle.controller.ts`
+File: `backend/src/modules/creem/creem.controller.ts`
 
 ```typescript
-@Post("paddle/webhook")
+@Post("creem/webhook")
 @HttpCode(HttpStatus.OK)
 async webhook(
   @Req() req: RawBodyRequest<Request>,
-  @Headers("paddle-signature") signature?: string,
+  @Headers("creem-signature") signature?: string,
 ) {
   // Step 1: Verify signature (if invalid, return 400 — don't retry)
-  const event = await this.paddleService.verifyWebhook(rawBody, signature);
+  const event = this.creemService.verifyWebhook(rawBody, signature);
 
-  // Step 2: Process event (if error, return 500 — Paddle retries)
-  await this.paddleService.handleWebhookEvent(event);
+  // Step 2: Process event (if error, return 500 — Creem retries)
+  await this.creemService.handleWebhookEvent(event);
 
   return { ok: true };
 }
 ```
 
-**Important:** Signature verification must pass, or the webhook is rejected (400). Processing errors return 500, and Paddle retries.
+**Important:** Signature verification must pass, or the webhook is rejected (400). Processing errors return 500, and Creem retries.
 
 ---
 
@@ -625,7 +652,7 @@ bucket (nginx's address).
 
 File: `backend/src/modules/products/entities/product.entity.ts`
 
-- User-owned catalog of items being sold (SKUs, not Paddle products)
+- User-owned catalog of items being sold (SKUs, not Creem products)
 - Name, price (in cents), currency
 - Used when creating OrderItems
 - Scoped to tenant via `user_id`
@@ -831,7 +858,7 @@ Files:
        │               └─── 1:N ────→ Receipt
        │
        ├─── 1:1 ────→ UserSubscription
-       │               └─── (paddle_subscription_id, paddle_status, plan)
+       │               └─── (creem_subscription_id, creem_status, plan)
        │
        └─── 1:1 ────→ UserSettings
                        └─── (receipt_template_id, logo_url, language)

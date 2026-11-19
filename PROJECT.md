@@ -749,7 +749,7 @@ Jobs 1–7 gate publication through `needs`. Making them required checks for pul
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 | `JWT_SECRET` | Token signing key (min 32 chars) |
 | `JWT_EXPIRES_IN` | Access token TTL (default: `24h`) |
-| `FRONTEND_URL` | Public origin for receipt share links and Paddle checkout. Production requires the bare `https` origin; the release sets it (`.github/DEPLOYMENT.md`). Development falls back to `http://localhost:5173` |
+| `FRONTEND_URL` | Public origin for receipt share links and the Creem checkout return URL. Production requires the bare `https` origin; the release sets it (`.github/DEPLOYMENT.md`). Development falls back to `http://localhost:5173` |
 | `RECEIPT_BASE_URL` | Accepted but not read by any service; receipt links come from `FRONTEND_URL` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials |
 | `AWS_REGION`, `S3_ENDPOINT` | S3 endpoint config |

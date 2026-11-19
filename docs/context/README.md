@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-18
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -16,12 +16,12 @@ should not need to read all four to be productive.
 
 ReceiptMaster is a **multi-tenant SaaS** for order management, invoice/receipt PDF generation,
 and business analytics. Users create orders for recipients, generate branded receipt PDFs
-(async), and have plan limits (Free / Pro / Business). Paddle payments are explicitly disabled
+(async), and have plan limits (Free / Pro / Business). Creem payments are explicitly disabled
 by default; existing entitlements and quotas still apply.
 
 | Layer | Stack |
 |---|---|
-| **Frontend** | React 19 + TypeScript, Vite, Tailwind CSS v4, React Router 7, TanStack React Query 5, i18next (en/ru/uk), Axios, Paddle.js |
+| **Frontend** | React 19 + TypeScript, Vite, Tailwind CSS v4, React Router 7, TanStack React Query 5, i18next (en/ru/uk), Axios |
 | **Backend** | NestJS 10, TypeORM 0.3 + PostgreSQL, Passport + JWT, BullMQ + Redis (jobs), Zod (env), Swagger |
 | **Infra** | Docker Compose, single Hetzner server, Nginx, S3 (receipt storage), Telegram (notifications) |
 | **Repo** | Yarn workspaces monorepo (`backend/`, `frontend/`) — Node 20 |
@@ -54,7 +54,7 @@ market/
 │   └── src/
 │       ├── main.ts, app.module.ts
 │       ├── modules/         # orders, products, receipts, recipients, settings,
-│       │                    #   subscription, suppliers, users, paddle, telegram
+│       │                    #   subscription, suppliers, users, creem, telegram
 │       ├── common/          # guards, interceptors, filters, pipes, subscribers,
 │       │                    #   tenancy (ALS/interceptor/query runners), idempotency (keyed creates),
 │       │                    #   middleware, services, utils, entities, dto
@@ -72,7 +72,7 @@ market/
 │   │   │                    #   (stale-chunk reload guard for AppErrorBoundary)
 │   │   ├── hooks/           # useOrders, useCheckout, useReceiptSocket, useServerPagination, …
 │   │   ├── contexts/        # AuthContext, ThemeContext
-│   │   └── providers/       # PaddleProvider
+│   │   └── providers/       # BillingProvider
 │   └── e2e/                 # browser regression suite (`node frontend/e2e/run.mjs`)
 │                            #   — see frontend/e2e/README.md
 ├── docker-compose*.yml      # dev / self-built prod / production variants

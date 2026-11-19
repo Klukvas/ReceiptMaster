@@ -466,8 +466,6 @@ jobs:
             VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
             VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
             VITE_BILLING_ENABLED=false
-            VITE_PADDLE_CLIENT_TOKEN=
-            VITE_PADDLE_ENVIRONMENT=production
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
           labels: |

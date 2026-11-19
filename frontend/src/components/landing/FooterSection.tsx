@@ -1,4 +1,4 @@
-import { usePaddle } from "../../providers/PaddleProvider";
+import { useBilling } from "../../providers/BillingProvider";
 import React from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -75,7 +75,7 @@ const FluxLabBadge = () => (
 
 export const FooterSection: React.FC = React.memo(() => {
   const { t } = useTranslation();
-  const { billingEnabled } = usePaddle();
+  const { billingEnabled } = useBilling();
 
   return (
     <footer className="landing-footer">

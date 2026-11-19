@@ -26,9 +26,9 @@ describe("SubscriptionService", () => {
     id: "sub-1",
     user_id: userId,
     plan,
-    paddle_status: null,
-    paddle_subscription_id: null,
-    paddle_customer_id: null,
+    creem_status: null,
+    creem_subscription_id: null,
+    creem_customer_id: null,
     current_period_end: null,
     ...overrides,
   });
@@ -93,9 +93,9 @@ describe("SubscriptionService", () => {
         plan: "free",
         usage: { productsCount: 3, ordersThisMonth: 5 },
         limits: PLAN_LIMITS.free,
-        paddleStatus: null,
+        billingStatus: null,
         currentPeriodEnd: null,
-        hasPaddleSubscription: false,
+        hasBillingSubscription: false,
       });
     });
 

@@ -11,13 +11,21 @@ export interface SubscriptionUsage {
   ordersThisMonth: number;
 }
 
+export type BillingStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "scheduled_cancel"
+  | "paused"
+  | "canceled";
+
 export interface SubscriptionStatus {
   plan: "free" | "pro" | "business";
   usage: SubscriptionUsage;
   limits: SubscriptionLimits;
-  paddleStatus: string | null;
+  billingStatus: BillingStatus | null;
   currentPeriodEnd: string | null;
-  hasPaddleSubscription: boolean;
+  hasBillingSubscription: boolean;
 }
 
 export const subscriptionApi = {
@@ -28,8 +36,8 @@ export const subscriptionApi = {
 
   checkout: async (
     plan: "pro" | "business",
-  ): Promise<{ transactionId: string }> => {
-    const response = await api.post<{ transactionId: string }>(
+  ): Promise<{ checkoutUrl: string }> => {
+    const response = await api.post<{ checkoutUrl: string }>(
       "/subscription/checkout",
       { plan },
     );
@@ -41,6 +49,15 @@ export const subscriptionApi = {
     return response.data;
   },
 };
+
+/**
+ * A canceled subscription stays on record until its paid period ends, but it no longer
+ * renews: the user may buy a new one. Any other status is managed in the billing portal.
+ */
+export const hasLiveSubscription = (
+  status: SubscriptionStatus | null | undefined,
+): boolean =>
+  !!status?.hasBillingSubscription && status.billingStatus !== "canceled";
 
 export const isProductLimitReached = (status: SubscriptionStatus): boolean => {
   if (status.limits.maxProducts === null) return false;

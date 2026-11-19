@@ -42,6 +42,43 @@ export const ApiErrors = {
       "BILLING_DISABLED",
       503,
     ),
+  /** Billing is on but its configuration is incomplete; the detail goes to the log only. */
+  BILLING_UNAVAILABLE: () =>
+    new ApiErrorResponse(
+      "Payments are currently unavailable",
+      "BILLING_UNAVAILABLE",
+      503,
+    ),
+  PAYMENT_PROVIDER_FAILED: () =>
+    new ApiErrorResponse(
+      "Payment provider request failed",
+      "PAYMENT_PROVIDER_FAILED",
+      502,
+    ),
+  SUBSCRIPTION_ALREADY_EXISTS: () =>
+    new ApiErrorResponse(
+      "A subscription already exists. Use the billing portal to change plans.",
+      "SUBSCRIPTION_ALREADY_EXISTS",
+      400,
+    ),
+  SUBSCRIPTION_NOT_FOUND: () =>
+    new ApiErrorResponse(
+      "No active subscription found",
+      "SUBSCRIPTION_NOT_FOUND",
+      400,
+    ),
+  WEBHOOK_SIGNATURE_INVALID: () =>
+    new ApiErrorResponse(
+      "Invalid webhook signature",
+      "WEBHOOK_SIGNATURE_INVALID",
+      400,
+    ),
+  WEBHOOK_PAYLOAD_INVALID: () =>
+    new ApiErrorResponse(
+      "Invalid webhook payload",
+      "WEBHOOK_PAYLOAD_INVALID",
+      400,
+    ),
   // User errors
   USER_ALREADY_EXISTS: (email: string) =>
     new ApiErrorResponse(

@@ -457,7 +457,7 @@
     "/subscription/checkout": {
       "post": {
         "operationId": "SubscriptionController_checkout",
-        "summary": "Create Paddle checkout transaction",
+        "summary": "Create a hosted checkout and return its URL",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -487,7 +487,7 @@
     "/subscription/portal": {
       "post": {
         "operationId": "SubscriptionController_portal",
-        "summary": "Get Paddle customer portal URL",
+        "summary": "Get the customer billing portal URL",
         "parameters": [],
         "responses": {
           "201": {
@@ -506,7 +506,7 @@
     },
     "/billing/config": {
       "get": {
-        "operationId": "PaddleController_getBillingConfig",
+        "operationId": "CreemController_getBillingConfig",
         "summary": "Public billing capability flag (no auth)",
         "parameters": [],
         "responses": {
@@ -522,7 +522,7 @@
           }
         },
         "tags": [
-          "paddle"
+          "billing"
         ]
       }
     },

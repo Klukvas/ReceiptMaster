@@ -14,6 +14,7 @@ import { Button } from "../ui/Button";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useSubscription } from "../../hooks/useSubscription";
 import { useCheckout } from "../../hooks/useCheckout";
+import { hasLiveSubscription } from "../../lib/subscriptionApi";
 
 export type UpgradeReason = "products" | "orders" | "templates";
 
@@ -60,7 +61,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const titleKey = TITLE_KEYS[reason];
   const descKey = DESC_KEYS[reason];
   const currentPlan = status?.plan ?? "free";
-  const hasPaddleSub = status?.hasPaddleSubscription ?? false;
+  const hasLiveSub = hasLiveSubscription(status);
 
   if (!billingEnabled)
     return (
@@ -101,7 +102,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           {t(descKey, "You have reached the limit of your current plan.")}
         </p>
 
-        {hasPaddleSub ? (
+        {hasLiveSub ? (
           <Button
             variant="primary"
             onClick={handleManage}

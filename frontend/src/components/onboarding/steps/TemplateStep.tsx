@@ -1,4 +1,4 @@
-import { usePaddle } from "../../../providers/PaddleProvider";
+import { useBilling } from "../../../providers/BillingProvider";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Lock, Crown } from "lucide-react";
@@ -56,7 +56,7 @@ interface TemplateStepProps {
 
 export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
   const { t } = useTranslation();
-  const { billingEnabled } = usePaddle();
+  const { billingEnabled } = useBilling();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   const { data: templates, isLoading } = useQuery<Template[]>({

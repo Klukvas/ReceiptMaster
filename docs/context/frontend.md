@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-18
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -20,7 +20,7 @@ frontend/
 │   ├── services/             # Business logic (OrderService, ReceiptService)
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
-│   ├── providers/            # Context providers (PaddleProvider for billing)
+│   ├── providers/            # Context providers (BillingProvider for the billing capability)
 │   ├── lib/                  # Utilities (api.ts, api-errors.ts, chunk-load.ts, i18n.ts)
 │   └── locales/              # i18next translations (en, ru, uk)
 ├── package.json
@@ -57,7 +57,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 3. `<ThemeProvider>` — dark/light mode context
 4. `<AuthProvider>` — session + current user context
 5. `<BrowserRouter>` — React Router 7.8 routing
-6. `<PaddleProvider>` — Paddle billing (checkout, subscriptions); inside the router because it is not initialized on the public share route `/r/:token` (`providers/paddle-route.ts`)
+6. `<BillingProvider>` — billing capability flag; inside the router because it does nothing on the public share route `/r/:token` (`providers/billing-route.ts`)
 7. `<Toaster>` — react-hot-toast notifications (top-right; `bottom-center` on phones below `sm`, `hooks/useMediaQuery.ts`, so a toast never covers an open dialog's header and Close; `NotificationToast` follows the same rule)
 
 **Query client config** (lines 73–82):
@@ -484,11 +484,10 @@ const { theme, toggleTheme, setTheme } = useTheme()
 
 ### Other Contexts
 
-**PaddleProvider** (`providers/PaddleProvider.tsx`):
-- Initializes Paddle SDK (`@paddle/paddle-js`) only when the explicit build flag and backend capability are both enabled, and never on `/r/:token` (`isPaddleAllowedOn`, case-insensitive like the router, so `/R/<token>` too; the recipient of a share link is not a customer, and the SDK would see the capability URL). Opening an app page later initializes it then. The initialization promise is kept in a ref, so returning from `/r/` (or a StrictMode re-run) reuses it instead of loading the SDK again; the context value is memoized. Spec: `e2e/billing-disabled.spec.mjs`.
-- Token from `VITE_PADDLE_CLIENT_TOKEN` env var
-- Enabled production requires explicit `VITE_PADDLE_ENVIRONMENT=production`; development can use sandbox. Invalid values fail initialization.
-- Exported `usePaddle()` hook provides `paddle` instance for checkout
+**BillingProvider** (`providers/BillingProvider.tsx`):
+- Holds no payment SDK: Creem checkout and the portal are hosted pages the backend returns links to. It only resolves whether billing is on: the build flag `VITE_BILLING_ENABLED` and then the backend capability `GET /billing/config`, never on `/r/:token` (`isBillingAllowedOn`, case-insensitive like the router, so `/R/<token>` too; the recipient of a share link is not a customer). The check promise is kept in a ref, so returning from `/r/` (or a StrictMode re-run) reuses it instead of asking again
+- No provider key or environment is built into the frontend
+- Exported `useBilling()` hook provides `{ billingEnabled, isLoading }`
 - See `useCheckout` hook for usage
 
 ## Cross-Cutting Concerns
@@ -511,7 +510,7 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 
 **Convention:** Organize translation keys hierarchically (orders.recipient, settings.receiptTitle, etc.). Check JSON files for the full key structure.
 
-**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
+**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Creem and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
 
 **Wording:** user-facing strings outside the landing say "document" (or "waybill" where the waybill is meant) instead of receipt/квитанція/чек; type names are `documentTypes.{waybill,quote,invoice,act,sales_receipt,packing_list,return_note}` (the sales receipt is "Товарний чек" / "Sales receipt"; never name a document "cash/касовий"), requisite labels `documentFields.{seller,buyer,details}.*`, document UI `documents.*`. Code identifiers keep the `receipt*` names. `avgOrderValue` ("Середній чек") is a retail term and stays.
 
@@ -590,25 +589,24 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   the full commit SHA; production compose requires `IMAGE_TAG` for both services.
   Deployment transfers an allowlisted SHA archive and waits for both builds to succeed; existing production files are preserved.
 - The current release sets `VITE_BILLING_ENABLED=false` and overrides backend
-  `BILLING_ENABLED=false`, so Paddle secrets may be absent. When explicitly enabled,
-  frontend builds require the public client token and production environment; backend
-  production validation requires complete Paddle settings and frontend URL. Example env
+  `BILLING_ENABLED=false`, so Creem secrets may be absent. When explicitly enabled,
+  the frontend build needs only the flag; backend
+  production validation requires complete Creem settings and frontend URL. Example env
   files contain only empty values. Deployment preserves the existing secret environment.
 - `.dockerignore` excludes local `.env*` files from the frontend build context. Every
   dependency comes from the public npm registry, so the image's `yarn install
   --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
   PR verification runs with a `contents: read` workflow token and no secrets;
   publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
-- Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
-  `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
+- Nginx proxies the exact unprefixed `/creem/webhook` URI with its raw request body and
+  `Creem-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
 
 ### Billing & Checkout
 
-Strict `VITE_BILLING_ENABLED` defaults to false. The provider does not contact Paddle or
-initialize its SDK while disabled. An enabled build first checks the authoritative public
-`/billing/config` capability; only server-enabled billing initializes the SDK. Production
-requires the public token and explicit production environment. Hooks guard programmatic
+Strict `VITE_BILLING_ENABLED` defaults to false. The provider makes no request while
+disabled. An enabled build checks the authoritative public `/billing/config` capability;
+only server-enabled billing shows purchase surfaces. Hooks guard programmatic
 checkout/portal calls too. Disabled UI hides pricing/upgrade/manage actions, while current
 plan and usage remain visible; quota dialogs explain the current plan without purchase
 buttons. `release.json` exposes the immutable image SHA and billing flag for deployment
@@ -619,16 +617,23 @@ verification.
 ```typescript
 const { loading, handleUpgrade, handleManage } = useCheckout()
 
-// Trigger checkout overlay
+// Navigate to the Creem-hosted checkout
 <button onClick={() => handleUpgrade('pro')}>Upgrade to Pro</button>
 ```
 
 **Flow:**
-1. Call `subscriptionApi.checkout(plan)` → backend creates Paddle transaction
-2. Backend returns `transactionId`
-3. Call `paddle.Checkout.open({ transactionId, settings: {...} })`
-4. Paddle opens overlay, user completes payment
-5. Success URL redirects back to `/settings?tab=subscription`
+1. Call `subscriptionApi.checkout(plan)` → backend creates a Creem checkout
+2. Backend returns `checkoutUrl`
+3. `window.location.assign(checkoutUrl)` — the checkout replaces the tab (a popup after an await would be blocked); the button stays busy until the tab unloads
+4. User pays on Creem's page; Creem returns them to `/settings?tab=subscription`
+5. The plan changes when the backend receives the webhook, not on return
+
+`handleManage` does the same with the portal link from `subscriptionApi.portal()`. A `pageshow`
+listener resets the busy state when the page comes back from the back/forward cache. The settings
+page shows the "subscription will end" notice for `billingStatus` `scheduled_cancel` and `canceled`.
+Upgrade buttons (settings and `UpgradeModal`) depend on `hasLiveSubscription(status)`
+(`lib/subscriptionApi.ts`): a `canceled` subscription still on record does not hide them, so the
+user can buy again before the paid period runs out; any other status offers the portal instead.
 
 **useSubscription hook** (`hooks/useSubscription.ts`):
 - Fetches current plan + usage (e.g., orders count)
@@ -921,11 +926,11 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/lib/api-errors.ts` | Error parsing, error code enum, friendly messages |
 | `src/contexts/AuthContext.tsx` | Login/logout, token storage, user profile |
 | `src/contexts/ThemeContext.tsx` | Dark/light mode toggle + persistence |
-| `src/providers/PaddleProvider.tsx` | Paddle SDK init for billing |
+| `src/providers/BillingProvider.tsx` | Billing capability flag (`useBilling`) |
 | `src/hooks/useOrders.ts` | Orders CRUD + mutations + UI state example |
 | `src/hooks/useServerPagination.ts` | Table pagination, sorting, filtering |
 | `src/hooks/useSimilarProducts.ts` | Debounced server search behind the product form's similar-name hint |
-| `src/hooks/useCheckout.ts` | Paddle checkout flow |
+| `src/hooks/useCheckout.ts` | Creem checkout and portal redirects |
 | `src/hooks/useSubscription.ts` | Current plan + usage limits |
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |
 | `src/services/OrderService.ts` | Business logic, error handling, notifications |
@@ -979,7 +984,6 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
   "axios": "^1.11.0",
   "i18next": "^25.6.0",
   "tailwindcss": "^4.1.12",
-  "@paddle/paddle-js": "^1.6.2",
   "socket.io-client": "^4.8.3",
   "lucide-react": "^0.542.0",
   "typescript": "~5.8.3"

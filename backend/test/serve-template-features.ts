@@ -76,7 +76,7 @@ async function main(): Promise<void> {
       plan: "business",
       usage: { productsCount: 0, ordersThisMonth: 0 },
       limits: { maxProducts: null, maxOrdersPerMonth: null },
-      hasPaddleSubscription: false,
+      hasBillingSubscription: false,
     }),
   );
   server.get("/api/v1/fixture-order", async (_req, res) => {

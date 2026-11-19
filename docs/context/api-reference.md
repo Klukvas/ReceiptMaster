@@ -1,8 +1,8 @@
 # API Reference
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-18
 
-**Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Paddle webhook is excluded from Swagger). This reference covers all controllers exhaustively.
+**Total Endpoints:** 113 routes across 17 controllers; 112 are in the OpenAPI contract (the signed Creem webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -18,7 +18,7 @@ same check when a client connects and disconnects a revoked token.
 
 **API Docs:** `{BASE_URL}/docs` (interactive Swagger UI)
 
-**Contract:** `backend/openapi.json` is generated from the controllers (`yarn openapi:export` in `backend/`; paths there have no `API_PREFIX`). CI's `contract-test` job fails when the committed file differs from the code or a routed handler is undocumented, then generates the frontend types from it and type-checks the frontend. Zod-validated bodies, the JSON/multipart document draft envelope, success bodies and `{ error, errorCode }` failures are documented for the document-config, preset, preview and receipt create/regenerate routes; receipt list/get/void/share/revoke document their projected bodies. POST handlers without `@HttpCode` answer 201 (Nest's default) and are documented that way; only the Telegram and Paddle webhooks set 200 explicitly. These 13 routes were missing from the contract until 2026-10-29: `GET /products/stock-value`, `GET`/`POST /settings/auto-receipt`, `POST /settings/footer`, `GET`/`PUT /settings/document-config`, `GET`/`POST /settings/document-presets`, `GET`/`PUT`/`DELETE /settings/document-presets/:id`, `POST /receipts/preview`, `GET /billing/config`. The Telegram webhook (`tg/webhook`) stays documented as a regular operation.
+**Contract:** `backend/openapi.json` is generated from the controllers (`yarn openapi:export` in `backend/`; paths there have no `API_PREFIX`). CI's `contract-test` job fails when the committed file differs from the code or a routed handler is undocumented, then generates the frontend types from it and type-checks the frontend. Zod-validated bodies, the JSON/multipart document draft envelope, success bodies and `{ error, errorCode }` failures are documented for the document-config, preset, preview and receipt create/regenerate routes; receipt list/get/void/share/revoke document their projected bodies. POST handlers without `@HttpCode` answer 201 (Nest's default) and are documented that way; only the Telegram and Creem webhooks set 200 explicitly. These 13 routes were missing from the contract until 2026-10-29: `GET /products/stock-value`, `GET`/`POST /settings/auto-receipt`, `POST /settings/footer`, `GET`/`PUT /settings/document-config`, `GET`/`POST /settings/document-presets`, `GET`/`PUT`/`DELETE /settings/document-presets/:id`, `POST /receipts/preview`, `GET /billing/config`. The Telegram webhook (`tg/webhook`) stays documented as a regular operation.
 
 ---
 
@@ -1451,7 +1451,7 @@ return 404. Voiding also clears the share token.
 POSTs return HTTP 503 with `errorCode: BILLING_DISABLED` and perform no payment or
 subscription mutations. Subscription status/usage reads and existing plan limits remain
 available. Direct webhook service entry points and scheduled canceled-plan downgrades
-are also disabled. Enabling production billing requires all Paddle settings below.
+are also disabled. Enabling production billing requires all Creem settings (`CREEM_*`, see `backend-patterns.md`).
 
 
 All endpoints require JWT auth.
@@ -1477,19 +1477,27 @@ Returns current plan and usage metrics.
     maxOrdersPerMonth: number | null,
     allowedTemplates: string[]
   },
-  paddleStatus: string | null,        // "active", "trialing", etc. (if subscribed)
+  billingStatus: string | null,       // "active", "trialing", "past_due", "scheduled_cancel", "paused", "canceled" (if subscribed)
   currentPeriodEnd: string | null,    // ISO date (if subscribed)
-  hasPaddleSubscription: boolean
+  hasBillingSubscription: boolean
 }
 ```
 
 ---
 
-### Create Checkout Transaction (Paddle)
+### Create Checkout (Creem)
 
 **POST** `/subscription/checkout`
 
-Initiates Paddle checkout for plan upgrade.
+Creates a Creem-hosted checkout for the plan's product and returns its URL. The user's id
+goes to Creem as checkout `metadata.userId` (and `request_id`), the account email prefills
+the checkout. Errors use `ApiErrors`:
+
+- 400 `SUBSCRIPTION_ALREADY_EXISTS` while the user has a live subscription (any status but
+  `canceled`): plan changes go through the portal
+- 502 `PAYMENT_PROVIDER_FAILED` on a Creem failure or an unexpected response
+- 503 `BILLING_UNAVAILABLE` when billing is on but the API key or the plan's product id is
+  missing (the gap is named in the log only)
 
 **Request Body:**
 ```typescript
@@ -1498,26 +1506,27 @@ Initiates Paddle checkout for plan upgrade.
 }
 ```
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
-  transaction_id: string,
-  checkout_url: string    // Redirect user here
+  checkoutUrl: string     // https URL on Creem; the frontend navigates the tab to it
 }
 ```
 
 ---
 
-### Get Customer Portal URL (Paddle)
+### Get Customer Portal URL (Creem)
 
 **POST** `/subscription/portal`
 
-Generates URL for Paddle customer portal (manage billing, cancel, etc.).
+Returns a Creem customer portal link (payment method, invoices, cancel). 400
+`SUBSCRIPTION_NOT_FOUND` when the user has no linked Creem customer and subscription; 502 and
+503 as for checkout.
 
-**Response** (200):
+**Response** (201):
 ```typescript
 {
-  portal_url: string      // Redirect user here
+  url: string             // Redirect user here
 }
 ```
 
@@ -2208,37 +2217,52 @@ Renders the same prepared sample data as localised HTML, including selected-lang
 
 ## Webhooks
 
-### Paddle Billing Webhook
+### Creem Billing Webhook
 
-**POST** `/paddle/webhook` (no API prefix; no auth required)
+**POST** `/creem/webhook` (no API prefix; no auth required)
 
-Inbound webhook from Paddle billing platform. Signature-verified.
+Inbound webhook from Creem. Signature-verified.
 
 **Headers:**
-- `paddle-signature` (required) — HMAC-SHA256 signature
-  - Secret: `PADDLE_WEBHOOK_SECRET` env var
+- `creem-signature` (required) — hex HMAC-SHA256 of the raw request body
+  - Secret: `CREEM_WEBHOOK_SECRET` env var
 
-**Request Body:** Paddle Event
-- `type` — Event type, e.g., "subscription.created", "subscription.updated", "subscription.canceled"
-- `data` — Event-specific payload
+**Request Body:** Creem event envelope
+- `id` — Event id (`evt_...`; automatic retries keep it)
+- `eventType` — e.g. "subscription.paid", "subscription.canceled"
+- `object` — Event-specific payload (a subscription, or a checkout for `checkout.completed`)
 
 **Response** (200):
 ```typescript
 { ok: true }
 ```
 
-**Signature Verification Failure:**
-- 400 `Bad Request` — Missing or invalid signature (do not retry)
+**Failures:**
+- 400 `WEBHOOK_SIGNATURE_INVALID` — missing/invalid signature or no raw body
+- 400 `WEBHOOK_PAYLOAD_INVALID` — a signed body that is not a Creem event envelope
+- 503 `BILLING_DISABLED` — billing is off
+- 503 `BILLING_UNAVAILABLE` — `CREEM_WEBHOOK_SECRET` is missing (Creem retries after the fix)
+- 500 — processing failed (e.g. the database); Creem retries (30 s, 5 min, 30 min, 6 h)
+
+A signed event whose `object` has an unexpected shape is logged as an error and answered
+200: a retry would carry the same payload. An event older than the last one applied to the
+row (`created_at` against `creem_event_at`) is ignored and answered 200.
 
 **Rate Limiting:**
 - 60 requests/min per endpoint
 
 **Events Handled:**
-- `subscription.created` — User upgraded plan
-- `subscription.updated` — Billing cycle changed
-- `subscription.canceled` — User cancelled subscription
 
-**See Also:** See `backend/src/modules/paddle/paddle.service.ts` for event handling logic.
+| Event | Effect |
+|---|---|
+| `checkout.completed` (with a subscription), `subscription.active`, `subscription.paid`, `subscription.trialing` | Link the subscription to the user and set the plan from the product id |
+| `subscription.update` | Sync plan, status and period end |
+| `subscription.scheduled_cancel` | Status `scheduled_cancel`; plan kept until the period ends |
+| `subscription.canceled`, `subscription.paused` | Status `canceled` / `paused`; the hourly cron moves the user to free after `current_period_end` |
+| `subscription.past_due`, `subscription.unpaid` | Status `past_due`; plan kept |
+| anything else (`subscription.expired`, `refund.created`, `dispute.created`, ...) | Logged only |
+
+**See Also:** `backend/src/modules/creem/creem.service.ts` for event handling, `creem.webhook.ts` for the signature and payload schemas.
 
 ---
 
@@ -2358,7 +2382,7 @@ supplies defaults, and no `APP_GUARD` applies them, so a route is limited only w
 throttler guard. Per-route limits:
 
 - Per client IP (`ThrottlerGuard`): login and register 5 per 60 s each, `/auth/refresh` 20 per 60 s,
-  `/public/receipts/*` 20 per 60 s, Paddle webhook 60 per 60 s
+  `/public/receipts/*` 20 per 60 s, Creem webhook 60 per 60 s
 - Per signed-in user (`UserThrottlerGuard`): document issuing 20 per 60 s in one bucket,
   `POST /receipts/test-preview` 10 per 60 s, `POST /receipts/preview` 30 per 60 s,
   `PUT /settings/signoff/:kind` 10 per 60 s
@@ -2367,7 +2391,7 @@ In front of the API, the production nginx (`frontend/nginx.conf`, `limit_req zon
 each client 10 requests/s on `/api/` with a burst of 40 (`nodelay`); beyond that nginx answers
 itself, before the request reaches the API, with `429 {"error", "errorCode": "RATE_LIMITED",
 "retryAfterSeconds": 1}` and `Retry-After: 1`. Preflight `OPTIONS`, `/socket.io/` and
-`/paddle/webhook` are not limited. (Until 2026-11-11 this limit lived only in an unused
+`/creem/webhook` are not limited. (Until 2026-11-11 this limit lived only in an unused
 `nginx/nginx.conf`, so production had none.)
 
 "Client" and "IP" mean the real client address. Production sits behind Cloudflare: nginx restores

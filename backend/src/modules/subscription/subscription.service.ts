@@ -5,6 +5,7 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import {
   UserSubscription,
   PlanName,
+  BillingStatus,
 } from "./entities/user-subscription.entity";
 import { PLAN_LIMITS, PlanLimits } from "./config/plans.config";
 import { Product } from "../products/entities/product.entity";
@@ -17,9 +18,9 @@ export interface SubscriptionStatus {
     ordersThisMonth: number;
   };
   limits: PlanLimits;
-  paddleStatus: string | null;
+  billingStatus: BillingStatus | null;
   currentPeriodEnd: string | null;
-  hasPaddleSubscription: boolean;
+  hasBillingSubscription: boolean;
 }
 
 @Injectable()
@@ -88,11 +89,11 @@ export class SubscriptionService {
       plan: subscription.plan,
       usage: { productsCount, ordersThisMonth },
       limits,
-      paddleStatus: subscription.paddle_status ?? null,
+      billingStatus: subscription.creem_status ?? null,
       currentPeriodEnd: subscription.current_period_end
         ? subscription.current_period_end.toISOString()
         : null,
-      hasPaddleSubscription: !!subscription.paddle_subscription_id,
+      hasBillingSubscription: !!subscription.creem_subscription_id,
     };
   }
 

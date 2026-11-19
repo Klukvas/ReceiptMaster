@@ -39,7 +39,7 @@ async function bootstrap() {
 
   // API prefix (исключаем Telegram webhook)
   app.setGlobalPrefix(apiPrefix, {
-    exclude: ["tg/webhook", "tg/order", "paddle/webhook"],
+    exclude: ["tg/webhook", "tg/order", "creem/webhook"],
   });
 
   // CORS - configure via CORS_ORIGINS env variable (comma-separated list)

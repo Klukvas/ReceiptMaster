@@ -16,9 +16,9 @@ export const SUBSCRIPTION_STATUS = {
     maxOrdersPerMonth: null,
     allowedTemplateIds: null,
   },
-  paddleStatus: null,
+  billingStatus: null,
   currentPeriodEnd: null,
-  hasPaddleSubscription: false,
+  hasBillingSubscription: false,
 };
 
 // Long names on purpose: a narrow viewport must not be widened by dropdown content.

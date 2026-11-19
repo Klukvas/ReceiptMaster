@@ -50,12 +50,9 @@ export const run = async () => {
   }
   let calls = 0;
   const { useCheckout } = load("../src/hooks/useCheckout.ts", {
-    react: { useState: () => [null, () => {}] },
-    "../providers/PaddleProvider": {
-      usePaddle: () => ({
-        billingEnabled: false,
-        paddle: { Checkout: { open: () => calls++ } },
-      }),
+    react: { useState: () => [null, () => {}], useEffect: () => {} },
+    "../providers/BillingProvider": {
+      useBilling: () => ({ billingEnabled: false }),
     },
     "./useTranslation": { useTranslation: () => ({ t: (x) => x }) },
     "../lib/subscriptionApi": {
@@ -70,14 +67,14 @@ export const run = async () => {
     "programmatic disabled checkout/portal have no effects",
     calls === 0,
   );
-  const { isPaddleAllowedOn } = load("../src/providers/paddle-route.ts", {});
+  const { isBillingAllowedOn } = load("../src/providers/billing-route.ts", {});
   results.check(
-    "Paddle is allowed on app pages but never on the public share page",
-    isPaddleAllowedOn("/") && isPaddleAllowedOn("/settings") && !isPaddleAllowedOn("/r/abc123"),
+    "billing is checked on app pages but never on the public share page",
+    isBillingAllowedOn("/") && isBillingAllowedOn("/settings") && !isBillingAllowedOn("/r/abc123"),
   );
   results.check(
     "the public share check ignores case, like the router (/R/<token> is the same page)",
-    !isPaddleAllowedOn("/R/abc123") && isPaddleAllowedOn("/reports"),
+    !isBillingAllowedOn("/R/abc123") && isBillingAllowedOn("/reports"),
   );
   for (const [buildFlag, pathname, expectedRequests, effectRuns = 1] of [
     [false, "/", 0],
@@ -89,7 +86,6 @@ export const run = async () => {
   ]) {
     const effects = [];
     let requests = 0;
-    let sdk = 0;
     const react = {
       createContext: () => ({ Provider: "provider" }),
       useContext: () => ({}),
@@ -99,11 +95,10 @@ export const run = async () => {
       useEffect: (fn) => effects.push(fn),
       createElement: () => ({}),
     };
-    const { PaddleProvider } = load(
-      "../src/providers/PaddleProvider.tsx",
+    const { BillingProvider } = load(
+      "../src/providers/BillingProvider.tsx",
       {
         react,
-        "@paddle/paddle-js": { initializePaddle: () => sdk++ },
         "../lib/api": {
           api: {
             get: async () => {
@@ -112,11 +107,8 @@ export const run = async () => {
             },
           },
         },
-        "./paddle-environment": {
-          resolvePaddleEnvironment: () => "production",
-        },
         "./billing-enabled": { resolveBillingEnabled },
-        "./paddle-route": { isPaddleAllowedOn },
+        "./billing-route": { isBillingAllowedOn },
         "react-router-dom": { useLocation: () => ({ pathname }) },
       },
       (source) =>
@@ -128,13 +120,13 @@ export const run = async () => {
           }),
         ),
     );
-    PaddleProvider({ children: null });
+    BillingProvider({ children: null });
     for (let run = 0; run < effectRuns; run += 1) effects.forEach((fn) => fn());
     await new Promise((resolve) => setTimeout(resolve, 0));
     results.check(
-      `build flag ${buildFlag} on ${pathname}${effectRuns > 1 ? " (effect re-run)" : ""}, backend OFF never initializes Paddle`,
-      sdk === 0 && requests === expectedRequests,
-      `sdk=${sdk} requests=${requests}`,
+      `build flag ${buildFlag} on ${pathname}${effectRuns > 1 ? " (effect re-run)" : ""}, asks the backend ${expectedRequests} time(s)`,
+      requests === expectedRequests,
+      `requests=${requests}`,
     );
   }
   await withPage({ viewport: { width: 1280, height: 900 } }, async (page) => {
@@ -166,9 +158,9 @@ export const run = async () => {
         .count()) === 0,
     );
     results.check(
-      "disabled page never contacts Paddle or payment routes",
+      "disabled page never contacts Creem or payment routes",
       !requests.some((url) =>
-        /paddle\.com|paddle\.net|billing\/(checkout|portal)/.test(url),
+        /creem\.io|subscription\/(checkout|portal)/.test(url),
       ),
     );
   });

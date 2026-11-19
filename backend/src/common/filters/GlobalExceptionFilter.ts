@@ -46,7 +46,7 @@ function isBodyParserClientError(
 const DEFAULT_RETRY_AFTER_SECONDS = 60;
 
 /**
- * The stock ThrottlerGuard (login, register, refresh, public links, Paddle) throws a bare
+ * The stock ThrottlerGuard (login, register, refresh, public links, Creem) throws a bare
  * ThrottlerException after setting `Retry-After`. Answer it in the same shape as
  * UserThrottlerGuard, so every 429 reads `{ error, errorCode: "RATE_LIMITED",
  * retryAfterSeconds }`.

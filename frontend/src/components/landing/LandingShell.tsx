@@ -1,4 +1,4 @@
-import { usePaddle } from "../../providers/PaddleProvider";
+import { useBilling } from "../../providers/BillingProvider";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Moon, Sun, Menu, X } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -19,7 +19,7 @@ interface LandingShellProps {
 
 export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { billingEnabled } = usePaddle();
+  const { billingEnabled } = useBilling();
   const { isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();

@@ -42,7 +42,7 @@ export async function createTestApp(): Promise<{
   );
 
   app.setGlobalPrefix(apiPrefix, {
-    exclude: ["tg/webhook", "tg/order", "paddle/webhook"],
+    exclude: ["tg/webhook", "tg/order", "creem/webhook"],
   });
 
   await app.init();

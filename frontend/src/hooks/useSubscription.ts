@@ -3,12 +3,12 @@ import {
   subscriptionApi,
   type SubscriptionStatus,
 } from "../lib/subscriptionApi";
-import { usePaddle } from "../providers/PaddleProvider";
+import { useBilling } from "../providers/BillingProvider";
 import { useAuth } from "./useAuth";
 
 export const useSubscription = () => {
   const { isAuthenticated } = useAuth();
-  const { billingEnabled } = usePaddle();
+  const { billingEnabled } = useBilling();
 
   const {
     data: status,

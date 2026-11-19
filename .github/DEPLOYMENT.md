@@ -9,7 +9,7 @@ Verification includes CI's `test-release-gate` job, which runs
 script against fake Docker plus real `docker compose config` rendering and never contacts
 production. A failure there stops image publication and therefore deployment.
 The current release deliberately has payments disabled: `BILLING_ENABLED=false` on the
-backend and `VITE_BILLING_ENABLED=false` in the frontend image. Paddle secrets are not
+backend and `VITE_BILLING_ENABLED=false` in the frontend image. Creem secrets are not
 required for this release. Existing plan records and quota enforcement remain active.
 
 The workflow uses the existing trusted `APP_HOST`, `SSH_USER`, `SSH_KEY` and Docker Hub
@@ -80,8 +80,10 @@ operator runbook, and integration tests cover the scripts it uses.
 ## Enabling payments later
 
 This requires an explicit configuration/release change. Set strict backend/frontend flags
-to true, securely configure backend `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
-`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
-`PADDLE_ENVIRONMENT=production`. Supply the public frontend client token and explicit
-production environment during its image build. Keep secrets out of chat and source control.
-The frontend also requires the server capability to be enabled before initializing Paddle.
+to true, securely configure backend `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`,
+`CREEM_PRO_PRODUCT_ID`, `CREEM_BUSINESS_PRODUCT_ID`, and explicitly
+`CREEM_ENVIRONMENT=production`. In the Creem dashboard point the webhook at
+`https://<host>/creem/webhook`. The frontend needs no provider key: checkout and the billing
+portal are Creem-hosted pages the backend returns links to. Keep secrets out of chat and
+source control. The frontend also requires the server capability to be enabled before it
+shows any purchase surface.

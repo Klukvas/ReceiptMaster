@@ -24,6 +24,7 @@ import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
+import { hasLiveSubscription } from "../lib/subscriptionApi";
 
 type SettingsTab = "documents" | "subscription" | "advanced";
 
@@ -75,9 +76,13 @@ const SubscriptionTab = () => {
   } = useCheckout();
 
   const currentPlan = status?.plan ?? "free";
-  const paddleStatus = status?.paddleStatus;
+  const billingStatus = status?.billingStatus;
   const periodEnd = status?.currentPeriodEnd;
-  const hasPaddleSub = status?.hasPaddleSubscription ?? false;
+  const hasBillingSub = status?.hasBillingSubscription ?? false;
+  const hasLiveSub = hasLiveSubscription(status);
+  // Creem reports a cancellation at period end as scheduled_cancel until it takes effect.
+  const isEnding =
+    billingStatus === "canceled" || billingStatus === "scheduled_cancel";
 
   if (isLoading) {
     return (
@@ -155,7 +160,7 @@ const SubscriptionTab = () => {
         </p>
       )}
       {/* Status notices */}
-      {billingEnabled && paddleStatus === "canceled" && periodEnd && (
+      {billingEnabled && isEnding && periodEnd && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-warning-light)] border border-[var(--color-warning-light)]">
           <AlertTriangle className="h-5 w-5 text-warning-base shrink-0" />
           <p className="text-sm text-warning-base">
@@ -170,7 +175,7 @@ const SubscriptionTab = () => {
         </div>
       )}
 
-      {billingEnabled && paddleStatus === "past_due" && (
+      {billingEnabled && billingStatus === "past_due" && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-danger-light)] border border-[var(--color-danger-light)]">
           <AlertTriangle className="h-5 w-5 text-danger-base shrink-0" />
           <p className="text-sm text-danger-base">
@@ -179,7 +184,7 @@ const SubscriptionTab = () => {
               "Payment failed. Please update your payment method.",
             )}
           </p>
-          {billingEnabled && hasPaddleSub && (
+          {billingEnabled && hasBillingSub && (
             <button
               onClick={handleManage}
               className="ml-auto text-sm font-medium text-danger-base underline"
@@ -203,7 +208,7 @@ const SubscriptionTab = () => {
               {t(`subscription.${currentPlan}`, currentPlan)}
             </span>
           </div>
-          {billingEnabled && hasPaddleSub && (
+          {billingEnabled && hasBillingSub && (
             <button
               onClick={handleManage}
               disabled={!!upgrading}
@@ -235,9 +240,9 @@ const SubscriptionTab = () => {
         )}
 
         {billingEnabled &&
-          hasPaddleSub &&
+          hasBillingSub &&
           periodEnd &&
-          paddleStatus === "active" && (
+          billingStatus === "active" && (
             <p className="mt-4 text-xs text-content-tertiary">
               {t("subscription.nextRenewal", "Next renewal")}:{" "}
               {formatDateOnly(periodEnd)}
@@ -296,7 +301,7 @@ const SubscriptionTab = () => {
                   ))}
                 </ul>
 
-                {isUpgrade && !hasPaddleSub && (
+                {isUpgrade && !hasLiveSub && (
                   <button
                     onClick={() => handleUpgrade(plan)}
                     disabled={!!upgrading}

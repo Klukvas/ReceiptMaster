@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
-import ts from "typescript";
 import { Results } from "./support/runner.mjs";
 const read = (path) =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
@@ -97,14 +96,11 @@ export const run = async () => {
     (step) => step.with.context === "./frontend",
   ).with["build-args"];
   results.check(
-    "16: Paddle public build args reach Vite",
-    ["VITE_PADDLE_CLIENT_TOKEN", "VITE_PADDLE_ENVIRONMENT"].every(
-      (key) =>
-        dockerfile.includes(`ARG ${key}`) &&
-        dockerfile.includes(`ENV ${key}=`) &&
-        frontendBuild.includes(`${key}=`),
-    ),
-    "Missing Paddle build settings",
+    "16: the frontend build takes the billing flag and no payment provider settings",
+    dockerfile.includes("ARG VITE_BILLING_ENABLED=false") &&
+      frontendBuild.includes("VITE_BILLING_ENABLED=") &&
+      !/PADDLE|CREEM/.test(dockerfile + frontendBuild),
+    "Unexpected frontend billing build settings",
   );
   // Dependencies come from the public registry only, so the build takes no
   // package token at all (no build arg, secret mount or .npmrc).
@@ -114,50 +110,15 @@ export const run = async () => {
       !/github_token|\.npmrc/i.test(dockerfile),
     "Environment or package credentials can enter an image layer",
   );
-  const compiled = ts.transpileModule(
-    read("../src/providers/paddle-environment.ts"),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.ESNext,
-        target: ts.ScriptTarget.ES2022,
-      },
-    },
-  ).outputText;
-  const { resolvePaddleEnvironment } = await import(
-    `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
-  );
-  for (const [configured, production, expected] of [
-    [undefined, true, "production"],
-    [undefined, false, "sandbox"],
-    ["production", false, "production"],
-    ["sandbox", false, "sandbox"],
-  ]) {
-    results.check(
-      `16: Paddle environment ${configured || "unset"}, production=${production} resolves to ${expected}`,
-      resolvePaddleEnvironment(configured, production) === expected,
-      "Wrong SDK environment",
-    );
-  }
-  let invalidRejected = false;
-  try {
-    resolvePaddleEnvironment("invalid", true);
-  } catch {
-    invalidRejected = true;
-  }
-  results.check(
-    "16: invalid Paddle SDK environment is rejected",
-    invalidRejected,
-    "Invalid SDK environment accepted",
-  );
   const backendEnv = compose.services.backend.environment.join("\n");
   results.check(
-    "16: production backend receives all Paddle settings",
+    "16: production backend receives all Creem settings",
     [
-      "PADDLE_API_KEY",
-      "PADDLE_WEBHOOK_SECRET",
-      "PADDLE_PRO_PRICE_ID",
-      "PADDLE_BUSINESS_PRICE_ID",
-      "PADDLE_ENVIRONMENT",
+      "CREEM_API_KEY",
+      "CREEM_WEBHOOK_SECRET",
+      "CREEM_PRO_PRODUCT_ID",
+      "CREEM_BUSINESS_PRODUCT_ID",
+      "CREEM_ENVIRONMENT",
       "FRONTEND_URL",
     ].every((key) => backendEnv.includes(`${key}=`)),
     "Missing backend/deployment settings",
@@ -165,7 +126,7 @@ export const run = async () => {
   const nginx = read("../nginx.conf");
   results.check(
     "16: unprefixed signed webhook goes straight to backend",
-    /location = \/paddle\/webhook\s*\{[^}]*proxy_pass http:\/\/api_backend;/s.test(
+    /location = \/creem\/webhook\s*\{[^}]*proxy_pass http:\/\/api_backend;/s.test(
       nginx,
     ),
     "Missing exact webhook route",

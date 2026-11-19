@@ -11,7 +11,7 @@ import { IsIn, IsString } from "class-validator";
 import { JwtAuthGuard } from "../users/guards/jwt-auth.guard";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "./subscription.service";
-import { PaddleService } from "../paddle/paddle.service";
+import { CreemService } from "../creem/creem.service";
 
 export class CheckoutDto {
   @IsString()
@@ -26,7 +26,7 @@ export class CheckoutDto {
 export class SubscriptionController {
   constructor(
     private readonly subscriptionService: SubscriptionService,
-    private readonly paddleService: PaddleService,
+    private readonly creemService: CreemService,
   ) {}
 
   @Get("status")
@@ -36,10 +36,10 @@ export class SubscriptionController {
   }
 
   @Post("checkout")
-  @ApiOperation({ summary: "Create Paddle checkout transaction" })
+  @ApiOperation({ summary: "Create a hosted checkout and return its URL" })
   @ApiBody({ type: CheckoutDto })
   async checkout(@Request() req: { user: User }, @Body() dto: CheckoutDto) {
-    return this.paddleService.createCheckoutTransaction(
+    return this.creemService.createCheckout(
       req.user.id,
       req.user.email,
       dto.plan,
@@ -47,8 +47,8 @@ export class SubscriptionController {
   }
 
   @Post("portal")
-  @ApiOperation({ summary: "Get Paddle customer portal URL" })
+  @ApiOperation({ summary: "Get the customer billing portal URL" })
   async portal(@Request() req: { user: User }) {
-    return this.paddleService.createPortalSession(req.user.id);
+    return this.creemService.createPortalSession(req.user.id);
   }
 }

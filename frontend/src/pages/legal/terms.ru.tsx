@@ -169,30 +169,30 @@ export const termsRu: LegalContent = {
       <p>
         <strong>Обработка платежей:</strong> Все платежи обрабатываются{" "}
         <a
-          href="https://www.paddle.com"
+          href="https://www.creem.io"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Paddle.com
+          Creem
         </a>
         , которая выступает в качестве Merchant of Record по всем транзакциям.
         Оформляя подписку, вы также принимаете{" "}
         <a
-          href="https://www.paddle.com/legal/terms"
+          href="https://www.creem.io/buyer-terms"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Условия использования
+          Условия для покупателей
         </a>{" "}
         и{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
           Политику конфиденциальности
         </a>{" "}
-        Paddle.
+        Creem.
       </p>
       <p>
         <strong>Автоматическое продление:</strong> Платные подписки
@@ -209,7 +209,7 @@ export const termsRu: LegalContent = {
       <h2>5. Отмена</h2>
       <p>
         Вы можете отменить подписку в любое время через платежный портал
-        Paddle, доступный в настройках вашей учетной записи. После отмены:
+        Creem, доступный в настройках вашей учетной записи. После отмены:
       </p>
       <ul>
         <li>
@@ -228,9 +228,9 @@ export const termsRu: LegalContent = {
 
       <h2>6. Возвраты</h2>
       <p>
-        Все продажи являются окончательными. Как правило, мы не предусматриваем
-        возврат платежей за подписку, хотя могут применяться ограниченные исключения.
-        Полную информацию, включая исключительные обстоятельства, смотрите в
+        Как правило, мы не возвращаем платежи за подписку. Это не затрагивает
+        право на отказ от покупки, которое может быть у вас как у потребителя;
+        действуют и ограниченные исключения. Полную информацию смотрите в
         нашей <Link to="/refund-policy">Политике возврата</Link>.
       </p>
 

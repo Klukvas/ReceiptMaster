@@ -1,5 +1,5 @@
 import React from "react";
-import { usePaddle } from "../../providers/PaddleProvider";
+import { useBilling } from "../../providers/BillingProvider";
 import { Check } from "lucide-react";
 import { useTranslation } from "../../hooks/useTranslation";
 
@@ -12,7 +12,7 @@ const PLANS = ["free", "pro", "business"] as const;
 export const PricingSection: React.FC<PricingSectionProps> = React.memo(
   ({ onOpenRegister }) => {
     const { t } = useTranslation();
-    const { billingEnabled } = usePaddle();
+    const { billingEnabled } = useBilling();
     if (!billingEnabled) return null;
 
     return (

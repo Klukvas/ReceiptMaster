@@ -160,25 +160,25 @@ export const termsEn: LegalContent = {
       <p>
         <strong>Payment Processing:</strong> All payments are processed by{" "}
         <a
-          href="https://www.paddle.com"
+          href="https://www.creem.io"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Paddle.com
+          Creem
         </a>
         , which acts as the Merchant of Record for all transactions. By
-        purchasing a subscription, you also agree to Paddle's{" "}
+        purchasing a subscription, you also agree to Creem's{" "}
         <a
-          href="https://www.paddle.com/legal/terms"
+          href="https://www.creem.io/buyer-terms"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Terms of Use
+          Buyer Terms of Service
         </a>
         {" "}
         and{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -199,7 +199,7 @@ export const termsEn: LegalContent = {
 
       <h2>5. Cancellation</h2>
       <p>
-        You may cancel your subscription at any time through the Paddle billing
+        You may cancel your subscription at any time through the Creem billing
         portal accessible from your account settings. Upon cancellation:
       </p>
       <ul>
@@ -217,10 +217,10 @@ export const termsEn: LegalContent = {
 
       <h2>6. Refunds</h2>
       <p>
-        All sales are final. We generally do not offer refunds for subscription
-        payments, though limited exceptions may apply. Please review our{" "}
-        <Link to="/refund-policy">Refund Policy</Link> for complete details,
-        including exceptional circumstances.
+        We generally do not offer refunds for subscription payments. This does
+        not affect a right of withdrawal you may have as a consumer, and limited
+        exceptions apply. Please review our{" "}
+        <Link to="/refund-policy">Refund Policy</Link> for complete details.
       </p>
 
       <h2>7. Acceptable Use</h2>

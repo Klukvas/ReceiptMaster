@@ -3,11 +3,11 @@ const base = { JWT_SECRET: "test-only-validation-value-32-characters" };
 const publicOrigin = { FRONTEND_URL: "https://example.test" };
 const billing = {
   BILLING_ENABLED: true,
-  PADDLE_API_KEY: "test-value",
-  PADDLE_WEBHOOK_SECRET: "test-value",
-  PADDLE_PRO_PRICE_ID: "pri_test_pro",
-  PADDLE_BUSINESS_PRICE_ID: "pri_test_business",
-  PADDLE_ENVIRONMENT: "production",
+  CREEM_API_KEY: "test-value",
+  CREEM_WEBHOOK_SECRET: "test-value",
+  CREEM_PRO_PRODUCT_ID: "prod_test_pro",
+  CREEM_BUSINESS_PRODUCT_ID: "prod_test_business",
+  CREEM_ENVIRONMENT: "production",
   ...publicOrigin,
 };
 describe("production billing configuration", () => {
@@ -23,13 +23,13 @@ describe("production billing configuration", () => {
       expect(envSchema.safeParse(input).success).toBe(false);
     },
   );
-  it("rejects sandbox in production and accepts complete production configuration", () => {
+  it("rejects test mode in production and accepts complete production configuration", () => {
     expect(
       envSchema.safeParse({
         ...base,
         ...billing,
         NODE_ENV: "production",
-        PADDLE_ENVIRONMENT: "sandbox",
+        CREEM_ENVIRONMENT: "test",
       }).success,
     ).toBe(false);
     expect(
@@ -104,7 +104,7 @@ describe("production public origin", () => {
 });
 
 describe("explicit billing switch", () => {
-  it("starts production without Paddle configuration when billing is off or omitted", () => {
+  it("starts production without Creem configuration when billing is off or omitted", () => {
     const production = { ...base, ...publicOrigin, NODE_ENV: "production" };
     expect(
       envSchema.parse({ ...production, BILLING_ENABLED: "false" }),
@@ -116,11 +116,11 @@ describe("explicit billing switch", () => {
       envSchema.parse({
         ...production,
         BILLING_ENABLED: "false",
-        PADDLE_API_KEY: "",
-        PADDLE_WEBHOOK_SECRET: "",
-        PADDLE_PRO_PRICE_ID: "",
-        PADDLE_BUSINESS_PRICE_ID: "",
-        PADDLE_ENVIRONMENT: "",
+        CREEM_API_KEY: "",
+        CREEM_WEBHOOK_SECRET: "",
+        CREEM_PRO_PRODUCT_ID: "",
+        CREEM_BUSINESS_PRODUCT_ID: "",
+        CREEM_ENVIRONMENT: "",
       }),
     ).toMatchObject({ BILLING_ENABLED: false });
   });

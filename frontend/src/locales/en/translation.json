@@ -1033,7 +1033,6 @@
     "checkoutError": "Failed to start checkout",
     "portalError": "Failed to open billing portal",
     "alreadyTopPlan": "You're on the top plan!",
-    "paddleUnavailable": "Payment system unavailable. Please refresh the page.",
     "billingDisabled": "Payments are currently unavailable. Your current plan and usage limits still apply.",
     "planUnavailable": "Not included in your current plan"
   },

@@ -167,30 +167,30 @@ export const termsUk: LegalContent = {
       <p>
         <strong>Обробка платежів:</strong> Усі платежі обробляє{" "}
         <a
-          href="https://www.paddle.com"
+          href="https://www.creem.io"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Paddle.com
+          Creem
         </a>
         , яка виступає як Merchant of Record за всіма транзакціями. Оформлюючи
         підписку, ви також приймаєте{" "}
         <a
-          href="https://www.paddle.com/legal/terms"
+          href="https://www.creem.io/buyer-terms"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Умови користування
+          Умови для покупців
         </a>{" "}
         та{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
           Політику конфіденційності
         </a>{" "}
-        Paddle.
+        Creem.
       </p>
       <p>
         <strong>Автоматичне продовження:</strong> Платні підписки автоматично
@@ -207,7 +207,7 @@ export const termsUk: LegalContent = {
       <h2>5. Скасування</h2>
       <p>
         Ви можете скасувати підписку в будь-який час через платіжний портал
-        Paddle, доступний у налаштуваннях вашого облікового запису. Після
+        Creem, доступний у налаштуваннях вашого облікового запису. Після
         скасування:
       </p>
       <ul>
@@ -227,9 +227,9 @@ export const termsUk: LegalContent = {
 
       <h2>6. Повернення коштів</h2>
       <p>
-        Усі продажі є остаточними. Як правило, ми не здійснюємо повернення коштів за платежі
-        за підписку, хоча можуть застосовуватися обмежені винятки. Повну
-        інформацію, зокрема про виняткові обставини, див. у нашій{" "}
+        Як правило, ми не повертаємо платежі за підписку. Це не зачіпає права
+        на відмову від покупки, яке ви можете мати як споживач; діють і
+        обмежені винятки. Повну інформацію див. у нашій{" "}
         <Link to="/refund-policy">Політиці повернення коштів</Link>.
       </p>
 

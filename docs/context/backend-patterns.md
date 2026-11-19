@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-18
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -680,7 +680,7 @@ export class AuditLogInterceptor implements NestInterceptor {
 - Sanitizes the body recursively: passwords/tokens and counterparty/bank requisites (any key containing `iban`, `taxId`, `legalName`, `legalAddress`, `bankName`, `vatId`, `signatory`, `contractRef`, `companyAddress`, snake or camel case) are stored as `***`, so `audit_logs` shows that a field changed but not its value
 - A multipart document request carries its JSON in one `payload` string field; the interceptor parses it first so the same masking applies inside (a `payload` that is not JSON is stored as `***`, never raw)
 - Personal data is masked too, by where the key sits: a recipient's `name`/`email`/`phone`/`address` (the top level of a `RecipientsController` body, or any object under a `recipient`/`recipients` key), a supplier's `name`/`email`/`phone`/`address`/`contactPerson`/`notes` (the top level of a `SuppliersController` body, or under `supplier`/`suppliers`), `companyEmail`/`companyPhone`/`*swift*` and `recipientName|Email|Phone|Address` anywhere, `reason`/`completionText`/`paymentTerms`/`deliveryTerms` inside `details`, and the top-level `reason` of a void body (any `void*` handler). These personal-data keys are masked whatever the JSON type of the value (string, number, object); only `null`/absent values and booleans stay readable, so the visibility switches of a document configuration still show. A product `name` stays readable
-- Webhook calls (all of `TelegramController` and `PaddleController`, i.e. `/tg/*` and `/paddle/*` outside the API prefix) are recorded without a body (`newValues` empty). Matched by controller class, not by path, because Express routes are case-insensitive (`/TG/webhook` reaches the same handler)
+- Webhook calls (all of `TelegramController` and `CreemController`, i.e. `/tg/*` and `/creem/*` outside the API prefix) are recorded without a body (`newValues` empty). Matched by controller class, not by path, because Express routes are case-insensitive (`/TG/webhook` reaches the same handler)
 - Runs after the handler returns (in `tap()`), so it has the response data. The change is committed
   by then, so building the entry is wrapped in try/catch: a failure is logged and the client still
   gets its success, never a 500 for a write that happened
@@ -737,7 +737,7 @@ error is logged once with `error`, `errorCode`, `status`, `detail` (the original
 
 Two non-`HttpException` errors are client errors and mapped before the generic 500:
 - `ThrottlerException` from the stock `ThrottlerGuard` (login, register, refresh, public links,
-  Paddle) becomes `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }`, the seconds read
+  Creem) becomes `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }`, the seconds read
   from the `Retry-After` header the guard set (60 if absent), the same body as `UserThrottlerGuard`
 - express body-parser errors (`http-errors` objects with `expose: true` and a 4xx `status`): a body
   above the size limit (`type: "entity.too.large"`) is `413 PAYLOAD_TOO_LARGE`, any other keeps its
@@ -1026,11 +1026,12 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(32),  // Required, no default
   JWT_EXPIRES_IN: z.string().default("24h"),
 
-  // Paddle Billing
-  PADDLE_API_KEY: z.string().optional(),
-  PADDLE_WEBHOOK_SECRET: z.string().optional(),
-  PADDLE_PRO_PRICE_ID: z.string().optional(),
-  PADDLE_BUSINESS_PRICE_ID: z.string().optional(),
+  // Creem billing
+  CREEM_API_KEY: z.string().optional(),
+  CREEM_WEBHOOK_SECRET: z.string().optional(),
+  CREEM_PRO_PRODUCT_ID: z.string().optional(),
+  CREEM_BUSINESS_PRODUCT_ID: z.string().optional(),
+  CREEM_ENVIRONMENT: z.enum(["test", "production"]).optional(), // "" counts as unset
 
   // Telegram Bot
   TELEGRAM_BOT_TOKEN: z.string().optional(),
@@ -1064,11 +1065,11 @@ ConfigModule.forRoot({
 ```
 
 Production always requires `FRONTEND_URL` to be the bare `https` origin customers reach, with no
-path or trailing slash, whether billing is on or off. Public receipt links and the Paddle checkout URL are
+path or trailing slash, whether billing is on or off. Public receipt links and the Creem checkout return URL are
 built from it, and both consumers keep a `http://localhost:5173` fallback that only development and
-test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`,
-`PADDLE_WEBHOOK_SECRET`, `PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
-`PADDLE_ENVIRONMENT=production`. Missing values or sandbox mode fail startup. Development/test
+test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `CREEM_API_KEY`,
+`CREEM_WEBHOOK_SECRET`, `CREEM_PRO_PRODUCT_ID`, `CREEM_BUSINESS_PRODUCT_ID`, and explicitly
+`CREEM_ENVIRONMENT=production`. Missing values or test mode fail startup. Development/test
 may leave billing disabled. `.env.example` lists empty configuration keys; production image
 selection uses an explicit immutable `IMAGE_TAG`. Test-mode boot ignores `.env` files.
 If a required variable is missing, the app fails to start with a clear error.
@@ -1285,9 +1286,9 @@ Use these instead of ad-hoc handling when a DTO or query touches the same kind o
 ### Explicit billing capability and releases
 
 `BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
-defaulting to false. Empty optional Paddle settings are accepted while OFF; ON production
-requires complete keys, prices and explicit production environment.
-`PaddleService` guards SDK construction, payment creation/portal, signature verification,
+defaulting to false. Empty optional Creem settings are accepted while OFF; ON production
+requires complete keys, product IDs and explicit production environment.
+`CreemService` guards payment creation/portal, signature verification,
 direct webhook handling and scheduled subscription downgrades. Stored entitlements and
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable

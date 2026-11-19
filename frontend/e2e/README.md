@@ -51,7 +51,7 @@ server's transform, so they only run against `vite dev`.)
 | Spec | Guards |
 |---|---|
 | `order-audit` | Hidden selections after search/date/amount filters, sorting and loading; bounded catalogue search/pagination past record 100; selected edit-ID hydration; zero/empty custom prices; currency labels and mixed-currency rejection; visible edit errors without losing values |
-| `infra-audit` | Trusted publication guards, matching immutable image tags, Paddle build/runtime references, and proxy locations |
+| `infra-audit` | Trusted publication guards, matching immutable image tags, billing build/runtime references, and proxy locations |
 | `proxy-audit` | Native Nginx syntax, webhook byte/header preservation, and receipt events over both transport modes |
 | `dropdown-position` | `computeDropdownPosition` clamps, caps and flips the product selector popup so it always fits the visible viewport |
 | `mobile-product-dropdown` | At 320px and 375px — and with the on-screen keyboard shrinking the viewport — opening the product selector causes no horizontal overflow and leaves every option reachable and selectable |
