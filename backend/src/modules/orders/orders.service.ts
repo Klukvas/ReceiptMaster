@@ -145,6 +145,8 @@ export class OrdersService {
         return false;
       });
     if (!isEnabled) return;
+    // The flag outlives a downgrade; the plan decides whether it still applies.
+    if (!(await this.planHasAutoReceipt(user.id))) return;
 
     for (const orderId of orderIds) {
       try {
@@ -156,6 +158,19 @@ export class OrdersService {
           }`,
         );
       }
+    }
+  }
+
+  private async planHasAutoReceipt(userId: string): Promise<boolean> {
+    try {
+      const limits = await this.subscriptionService.getPlanLimits(userId);
+      return limits.features.autoReceipt;
+    } catch (error) {
+      this.logger.error(
+        `Auto-receipt plan lookup failed for user ${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return false;
     }
   }
 

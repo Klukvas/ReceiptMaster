@@ -8,12 +8,14 @@ import { Product } from "../products/entities/product.entity";
 import { OrderItem } from "../orders/entities/order-item.entity";
 import { RecipientsModule } from "../recipients/recipients.module";
 import { OrdersModule } from "../orders/orders.module";
+import { SubscriptionModule } from "../subscription/subscription.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Recipient, Order, Product, OrderItem]),
     RecipientsModule,
     OrdersModule,
+    SubscriptionModule,
   ],
   controllers: [TelegramController],
   providers: [TelegramService],

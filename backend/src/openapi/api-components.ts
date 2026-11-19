@@ -66,6 +66,7 @@ export const receiptProjectionSchema = z.object({
   active_revision: z.number().int(),
   replacement_status: z.enum(["processing", "failed"]).nullable(),
   replacement_error: z.string().nullable(),
+  purged: z.boolean(),
 });
 
 /** Mirrors `issuedDocument()`: the projection plus the optional issue-time warnings. */

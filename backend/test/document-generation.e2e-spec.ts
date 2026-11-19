@@ -41,6 +41,10 @@ import {
 } from "./helpers/isolated-postgres";
 import { RestrictedAppDatabase } from "./helpers/restricted-app-database";
 import { openMigratedAppDatabase } from "./helpers/migrated-app-database";
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
 
 const FIXTURE_PDF = Buffer.from("%PDF-1.4 document generation fixture");
 const SELLER_IBAN = "UA213223130000026007233566001";

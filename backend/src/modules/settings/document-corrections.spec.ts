@@ -13,6 +13,7 @@ import { DocumentPreset } from "./entities/document-preset.entity";
 import { DocumentArtifact } from "../receipts/entities/document-artifact.entity";
 import { Receipt, ReceiptStatus } from "../receipts/entities/receipt.entity";
 import { Order } from "../orders/entities/order.entity";
+import { UserSubscription } from "../subscription/entities/user-subscription.entity";
 import { sampleOrder } from "../receipts/services/document-render.service";
 import { formatDocumentDate } from "../../common/utils/document-formatting.util";
 // Its types alias the gitignored api-types.generated.ts, so backend ts-jest skips
@@ -364,6 +365,8 @@ describe("durable document cleanup with synthetic storage only", () => {
     ).resolves.toBeUndefined();
   });
   it("eviction removes pending references, schedules storage and preserves the ten-receipt bound", async () => {
+    // The fixture account is on the top plan, which keeps every document; ten is the free limit.
+    for (const row of f.memory.rows(UserSubscription)) row.plan = "free";
     const created = await f.receipts.generateReceipt(ORDER_ID, f.user);
     const active = await f.artifacts.execute(
       created.id,

@@ -5,6 +5,7 @@ import { DocumentType, Receipt } from "../entities/receipt.entity";
 import type { DocumentRequest } from "../frozen-document";
 import { resolveReturnSource } from "../return-note-ledger";
 import { ReceiptSnapshotService } from "./receipt-snapshot.service";
+import { PLAN_LIMITS } from "../../subscription/config/plans.config";
 
 const USER = "user-1";
 const items = [
@@ -65,6 +66,7 @@ describe("ReceiptSnapshotService goods return preflight", () => {
             companyName: "ТОВ Продавець",
           },
         },
+        limits: PLAN_LIMITS.business,
       })),
       assertTemplate: jest.fn().mockResolvedValue(undefined),
     };
@@ -186,6 +188,7 @@ describe("ReceiptSnapshotService preflight of a document without money", () => {
             companyName: "ТОВ Продавець",
           },
         },
+        limits: PLAN_LIMITS.business,
       })),
       assertTemplate: jest.fn().mockResolvedValue(undefined),
     };
@@ -217,6 +220,7 @@ describe("ReceiptSnapshotService.prepare: one instant for number and date", () =
     const db = { manager: { findOne: jest.fn(async () => order) } };
     const configs = {
       resolve: jest.fn(async () => ({
+        limits: PLAN_LIMITS.business,
         config: {
           ...legacyConfig(null),
           documentLanguage: "uk" as const,
@@ -248,8 +252,9 @@ describe("ReceiptSnapshotService.prepare: one instant for number and date", () =
 
     expect(drawn).toHaveLength(1);
     expect(drawn[0].zone).toBe("Europe/Kyiv");
+    // The instant is the argument before the plan branding, which is the last one.
     const renderArgs = renders.prepare.mock.calls[0] as unknown[];
-    expect(renderArgs[renderArgs.length - 1]).toBe(drawn[0].now);
+    expect(renderArgs[renderArgs.length - 2]).toBe(drawn[0].now);
   });
 });
 

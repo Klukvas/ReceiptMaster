@@ -55,7 +55,7 @@ export class ProductsController {
   @ApiFailureResponses({
     400: "Invalid body (HTTP_EXCEPTION) or Idempotency-Key (VALIDATION_ERROR)",
     422: "The Idempotency-Key was already used with a different body (IDEMPOTENCY_KEY_REUSED)",
-    402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+    402: "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED), or supplier_id set on a plan without suppliers (PLAN_FEATURE_RESTRICTED, `feature: suppliers`)",
     404: "supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND)",
     409: "Another live product already has this name (PRODUCT_ALREADY_EXISTS)",
   })
@@ -107,6 +107,9 @@ export class ProductsController {
     required: false,
     description: "Max results (default 50, max 100)",
   })
+  @ApiFailureResponses({
+    402: "The plan has no stock insights (PLAN_FEATURE_RESTRICTED, `feature: stockInsights`)",
+  })
   getLowStock(
     @Request() req: { user: User },
     @Query("threshold") threshold?: string,
@@ -129,6 +132,9 @@ export class ProductsController {
     status: 200,
     description: "Aggregate stock value",
     type: InventoryValueDto,
+  })
+  @ApiFailureResponses({
+    402: "The plan has no stock insights (PLAN_FEATURE_RESTRICTED, `feature: stockInsights`)",
   })
   getStockValue(@Request() req: { user: User }) {
     return this.productsService.getInventoryValue(req.user);
@@ -153,6 +159,7 @@ export class ProductsController {
     type: Product,
   })
   @ApiFailureResponses({
+    402: "supplier_id changed to another supplier on a plan without suppliers (PLAN_FEATURE_RESTRICTED, `feature: suppliers`); the unchanged id and null are accepted",
     400: "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
     404: "Товар не найден (PRODUCT_NOT_FOUND), or supplier_id is not one of the user's suppliers (SUPPLIER_NOT_FOUND); supplier_id null unlinks",
     409: "Stock no longer equals expectedQuantity; nothing was saved (PRODUCT_QUANTITY_CONFLICT), or another live product already has the new name (PRODUCT_ALREADY_EXISTS)",

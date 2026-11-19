@@ -6,6 +6,7 @@ import {
   SignoffPointers,
 } from "../../settings/services/document-signoff.service";
 import { getTemplateCapabilities } from "../templates/metadata";
+import { planBranding } from "../templates/attribution";
 import { DocumentType, Receipt } from "../entities/receipt.entity";
 import { Order } from "../../orders/entities/order.entity";
 import { UserSettings } from "../../settings/entities/user-settings.entity";
@@ -219,9 +220,12 @@ export class ReceiptSnapshotService {
       ? await this.documentContext(userId, order, request, config)
       : undefined;
     // Read last, closest to the render; validatePrepared re-checks the pointers under the lock.
-    const signoffLoad = getTemplateCapabilities(config.templateId).signoff
-      ? await this.signoffs?.load(userId)
-      : undefined;
+    const branding = planBranding(resolved.limits);
+    const signoffLoad =
+      getTemplateCapabilities(config.templateId).signoff &&
+      branding.allowsSignoff
+        ? await this.signoffs?.load(userId)
+        : undefined;
     // One instant for the number's year and the document's issue date, so they cannot
     // disagree across midnight in the document's zone.
     const now = new Date();
@@ -239,6 +243,7 @@ export class ReceiptSnapshotService {
       context,
       signoffLoad?.source,
       now,
+      branding,
     );
     return {
       ...prepared,

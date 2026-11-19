@@ -25,6 +25,7 @@ import {
   sampleOrder,
 } from "./services/document-render.service";
 import { ApiErrors } from "../../common/errors/ApiError";
+import { planBranding } from "./templates/attribution";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   ApiDocumentDraftBody,
@@ -72,7 +73,16 @@ export class DocumentPreviewController {
         })
       : sampleOrder(req.user.id);
     if (!order) throw ApiErrors.ORDER_NOT_FOUND(draft.orderId);
-    const bytes = await this.renders.preview(req.user.id, draft, order, file);
+    // The preview shows what would be issued: no logo or signature the plan lacks, and the
+    // service line where the plan has one.
+    const branding = planBranding(await this.configs.planLimits(req.user.id));
+    const bytes = await this.renders.preview(
+      req.user.id,
+      draft,
+      order,
+      file,
+      branding,
+    );
     res.set({
       "Content-Type": "application/pdf",
       "Cache-Control": "private, no-store",

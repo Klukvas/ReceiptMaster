@@ -24,6 +24,7 @@ import {
   teardownIsolatedPostgres,
   typeormCredentials,
 } from "./helpers/isolated-postgres";
+import { planDefaults } from "../src/modules/subscription/plan-access";
 
 // Explicit opt-in; no dotenv, production ORM config, or shared cleanup helper.
 // This schema comes from the entities (synchronize), so it has no numbering trigger: rows
@@ -108,6 +109,8 @@ describeIsolatedPostgres(
     );
 
     beforeEach(async () => {
+      // A test may lower the default plan for accounts without a subscription row.
+      planDefaults.withoutSubscription = "business";
       cache.clear();
       user = await db
         .getRepository(User)
@@ -381,6 +384,8 @@ describeIsolatedPostgres(
     it.each([true, false])(
       "8: serializes distinct-product quota creates with subscription present=%s",
       async (present) => {
+        // Without a row the account must read as free here, not as the suites' paid default.
+        planDefaults.withoutSubscription = "free";
         if (present)
           await db
             .getRepository(UserSubscription)

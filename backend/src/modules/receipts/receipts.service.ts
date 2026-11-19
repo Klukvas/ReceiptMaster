@@ -59,10 +59,11 @@ import {
   raiseCounterToIssued,
   releaseDocumentNumber,
 } from "./receipt-number";
+import { RetentionAction, retentionAction } from "./document-retention";
 import {
-  DOCUMENTS_RETAINED_PER_TYPE,
-  isRetentionExempt,
-} from "./document-retention";
+  isDocumentTypeAllowed,
+  readPlanLimits,
+} from "../subscription/plan-access";
 import { isLockingDocumentType, syncOrderLock } from "./order-lock";
 import {
   frozenReturnLines,
@@ -244,6 +245,7 @@ export class ReceiptsService {
   ): Promise<Receipt> {
     if (!isGeneratableType(type))
       throw ApiErrors.DOCUMENT_TYPE_NOT_SUPPORTED(type);
+    await this.assertTypeInPlan(user.id, type);
     const run = () =>
       this.runGenerationHealing(orderId, user, type, selection, details, file);
     // Two requests for the same order and type must not both draw a number: the late copies
@@ -257,6 +259,16 @@ export class ReceiptsService {
       `${user.id}:${orderId}:${type}`,
       run,
     );
+  }
+
+  /** Every path that issues a document of a type goes through here before a number is drawn. */
+  private async assertTypeInPlan(
+    userId: string,
+    type: DocumentType,
+  ): Promise<void> {
+    const limits = await readPlanLimits(this.dataSource.manager, userId);
+    if (!isDocumentTypeAllowed(limits, type))
+      throw ApiErrors.DOCUMENT_TYPE_PLAN_RESTRICTED(type);
   }
 
   /** One automatic retry after the counter was found behind an existing number. */
@@ -896,18 +908,27 @@ export class ReceiptsService {
     user: User,
     type: DocumentType = DocumentType.WAYBILL,
   ): Promise<{
-    limit: number;
+    /** null when the plan keeps every document */
+    limit: number | null;
     count: number;
+    /** What happens to `replaces`: its row is deleted, or only its file is removed */
+    action: RetentionAction;
     replaces: { id: string; number: string; order_id: string } | null;
   }> {
+    const action = retentionAction(type);
     const where = {
       user_id: user.id,
       status: ReceiptStatus.GENERATED,
       document_type: type,
+      // Purged records no longer count towards the limit: they hold no file.
+      ...(action === "purge" ? { content_purged_at: IsNull() } : {}),
     };
-    const count = await this.receiptsRepository.count({ where });
-    if (count < DOCUMENTS_RETAINED_PER_TYPE || isRetentionExempt(type)) {
-      return { limit: DOCUMENTS_RETAINED_PER_TYPE, count, replaces: null };
+    const [{ documentsRetainedPerType: limit }, count] = await Promise.all([
+      readPlanLimits(this.dataSource.manager, user.id),
+      this.receiptsRepository.count({ where }),
+    ]);
+    if (limit === null || count < limit) {
+      return { limit, count, action, replaces: null };
     }
 
     const oldest = await this.receiptsRepository.findOne({
@@ -915,8 +936,9 @@ export class ReceiptsService {
       order: { created_at: "ASC", id: "ASC" },
     });
     return {
-      limit: DOCUMENTS_RETAINED_PER_TYPE,
+      limit,
       count,
+      action,
       replaces: oldest
         ? { id: oldest.id, number: oldest.number, order_id: oldest.order_id }
         : null,
@@ -939,6 +961,7 @@ export class ReceiptsService {
     user: User,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const receipt = await this.findOne(id, user);
+    if (receipt.content_purged_at) throw ApiErrors.DOCUMENT_CONTENT_PURGED(id);
 
     const filename = documentFilename(receipt);
     if (!receipt.pdf_path)
@@ -1001,6 +1024,11 @@ export class ReceiptsService {
       ![ReceiptStatus.GENERATED, ReceiptStatus.FAILED].includes(original.status)
     )
       throw new ConflictException("Document is not ready for replacement");
+    if (original.content_purged_at) throw ApiErrors.DOCUMENT_CONTENT_PURGED(id);
+    // A replacement issues new content, so the plan must still include the type; redrawing
+    // the frozen content of a document issued on a higher plan stays possible.
+    if (input.mode === "replace")
+      await this.assertTypeInPlan(user.id, original.document_type);
     // Its quantities were released when it failed; a retry would use them a second time.
     if (
       original.document_type === DocumentType.RETURN_NOTE &&
@@ -1220,6 +1248,8 @@ export class ReceiptsService {
         "Only generated receipts can be shared publicly",
       );
     }
+    if (receipt.content_purged_at)
+      throw ApiErrors.DOCUMENT_CONTENT_PURGED(receiptId);
     return receipt;
   }
 

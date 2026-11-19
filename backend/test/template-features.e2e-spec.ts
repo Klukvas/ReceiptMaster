@@ -32,6 +32,10 @@ import {
   formatDocumentDate,
   formatDocumentMoney,
 } from "../src/common/utils/document-formatting.util";
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
 
 describe("template features: real Nest HTTP, synthetic persistence/storage (no real DB/S3)", () => {
   let f: Awaited<ReturnType<typeof createTemplateFixture>>;
@@ -345,11 +349,12 @@ describe("template features: real Nest HTTP, synthetic persistence/storage (no r
     await api()
       .post("/api/v1/settings/document-presets")
       .send({ name: "Overflow", config })
-      .expect(409);
+      .expect(402);
     await api()
       .post("/api/v1/settings/document-presets")
       .send({ name: "Preset 1", config })
-      .expect(409);
+      // At the limit the plan check answers first, whatever the name.
+      .expect(402);
     expect(f.memory.rows(DocumentPreset)).toHaveLength(20);
   });
   it("creation freezes personalized HTML before outbox intent and retries ignore live settings", async () => {

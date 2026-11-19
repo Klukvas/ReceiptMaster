@@ -3,6 +3,18 @@ import { ReceiptArtifactService } from "./services/receipt-artifact.service";
 import { DocumentConfigService } from "../settings/services/document-config.service";
 import { DocumentRenderService } from "./services/document-render.service";
 import { legacyConfig } from "../settings/document-config";
+// The plan lookup needs a database; these suites are about the document flow, so the
+// account is on the top plan unless a test sets another one.
+jest.mock("../subscription/plan-access", () => {
+  const actual = jest.requireActual("../subscription/plan-access");
+  const { PLAN_LIMITS } = jest.requireActual(
+    "../subscription/config/plans.config",
+  );
+  return {
+    ...actual,
+    readPlanLimits: jest.fn(async () => PLAN_LIMITS.business),
+  };
+});
 // Mock fs/promises before any imports
 jest.mock("fs/promises", () => ({
   readFile: jest.fn().mockResolvedValue(Buffer.from("fake-pdf")),
@@ -27,7 +39,9 @@ import { ReceiptOutboxService } from "./receipt-outbox.service";
 import { ReceiptGenerationOutbox } from "./entities/receipt-generation-outbox.entity";
 import { RECEIPT_GENERATION_QUEUE } from "./receipt-generation.processor";
 import * as fs from "fs/promises";
-import { Not, QueryFailedError } from "typeorm";
+import { IsNull, Not, QueryFailedError } from "typeorm";
+import { readPlanLimits } from "../subscription/plan-access";
+import { PLAN_LIMITS } from "../subscription/config/plans.config";
 
 describe("ReceiptsService", () => {
   let service: ReceiptsService;
@@ -179,13 +193,24 @@ describe("ReceiptsService", () => {
     service = module.get<ReceiptsService>(ReceiptsService);
   });
 
+  const usePlan = (plan: keyof typeof PLAN_LIMITS) =>
+    (readPlanLimits as jest.Mock).mockResolvedValue(PLAN_LIMITS[plan]);
+
   describe("getRetention", () => {
+    beforeEach(() => usePlan("free"));
+    afterEach(() => usePlan("business"));
+
     it("reports the count without a replaced receipt while under the cap", async () => {
       receiptsRepo.count = jest.fn().mockResolvedValue(4);
 
       const result = await service.getRetention(mockUser);
 
-      expect(result).toEqual({ limit: 10, count: 4, replaces: null });
+      expect(result).toEqual({
+        limit: 10,
+        count: 4,
+        action: "delete",
+        replaces: null,
+      });
       expect(receiptsRepo.findOne).not.toHaveBeenCalled();
     });
 
@@ -202,6 +227,7 @@ describe("ReceiptsService", () => {
       expect(result).toEqual({
         limit: 10,
         count: 10,
+        action: "delete",
         replaces: {
           id: "rec-oldest",
           number: "2026-000004",
@@ -214,9 +240,29 @@ describe("ReceiptsService", () => {
         }),
       );
     });
+
+    it("uses the plan's limit, and none at all on a plan that keeps everything", async () => {
+      receiptsRepo.count = jest.fn().mockResolvedValue(50);
+
+      usePlan("pro");
+      await expect(service.getRetention(mockUser)).resolves.toMatchObject({
+        limit: 100,
+        replaces: null,
+      });
+
+      usePlan("business");
+      await expect(service.getRetention(mockUser)).resolves.toMatchObject({
+        limit: null,
+        replaces: null,
+      });
+      expect(receiptsRepo.findOne).not.toHaveBeenCalled();
+    });
   });
 
   describe("getRetention per document type", () => {
+    beforeEach(() => usePlan("free"));
+    afterEach(() => usePlan("business"));
+
     it("counts only the requested type and defaults to waybill", async () => {
       receiptsRepo.count = jest.fn().mockResolvedValue(2);
 
@@ -229,12 +275,14 @@ describe("ReceiptsService", () => {
         },
       });
 
+      // A record whose file was already removed no longer counts towards the limit.
       await service.getRetention(mockUser, DocumentType.INVOICE);
       expect(receiptsRepo.count).toHaveBeenLastCalledWith({
         where: {
           user_id: mockUser.id,
           status: ReceiptStatus.GENERATED,
           document_type: DocumentType.INVOICE,
+          content_purged_at: IsNull(),
         },
       });
     });
@@ -262,14 +310,21 @@ describe("ReceiptsService", () => {
     });
 
     it.each([DocumentType.INVOICE, DocumentType.ACT, DocumentType.RETURN_NOTE])(
-      "never offers a %s to be replaced: the cap is not enforced for it",
+      "says the oldest %s will lose its file, not its record",
       async (type) => {
-        receiptsRepo.count = jest.fn().mockResolvedValue(25);
+        receiptsRepo.count = jest.fn().mockResolvedValue(10);
+        receiptsRepo.findOne.mockResolvedValue({
+          id: "oldest",
+          number: "N-1",
+          order_id: "o1",
+        });
 
         const result = await service.getRetention(mockUser, type);
 
-        expect(result.replaces).toBeNull();
-        expect(receiptsRepo.findOne).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+          action: "purge",
+          replaces: { id: "oldest" },
+        });
       },
     );
   });
@@ -1174,6 +1229,74 @@ describe("ReceiptsService", () => {
       );
       expect(receiptsRepo.save).not.toHaveBeenCalled();
     });
+  });
+
+  describe("plan limits on documents", () => {
+    afterEach(() => usePlan("business"));
+
+    it.each([
+      DocumentType.ACT,
+      DocumentType.QUOTE,
+      DocumentType.PACKING_LIST,
+      DocumentType.RETURN_NOTE,
+    ])(
+      "refuses a %s on the free plan before anything is prepared",
+      async (type) => {
+        usePlan("free");
+
+        await expect(
+          service.generateDocument("order-1", mockUser, type),
+        ).rejects.toMatchObject({
+          errorCode: "DOCUMENT_TYPE_PLAN_RESTRICTED",
+          statusCode: 402,
+          details: { documentType: type },
+        });
+        expect(snapshots.prepare).not.toHaveBeenCalled();
+      },
+    );
+
+    it("refuses replacing a document whose type the plan no longer has, but not redrawing it", async () => {
+      usePlan("free");
+      snapshots.internal.mockResolvedValue({
+        ...mockReceipt,
+        document_type: DocumentType.ACT,
+        active_revision: 1,
+      });
+
+      await expect(
+        service.regenerateReceiptPdf("receipt-1", mockUser, {
+          mode: "replace",
+          expectedActiveRevision: 1,
+        }),
+      ).rejects.toMatchObject({ errorCode: "DOCUMENT_TYPE_PLAN_RESTRICTED" });
+    });
+
+    it.each([
+      ["downloading", () => service.getReceiptPdf("receipt-1", mockUser)],
+      [
+        "regenerating",
+        () => service.regenerateReceiptPdf("receipt-1", mockUser),
+      ],
+      ["sharing", () => service.generatePublicToken("receipt-1", mockUser)],
+    ])(
+      "answers 410 when %s a record whose file was removed",
+      async (_name, act) => {
+        const purged = {
+          ...mockReceipt,
+          status: ReceiptStatus.GENERATED,
+          content_purged_at: new Date(),
+          pdf_path: null,
+          order: { id: "order-1" },
+        };
+        receiptsRepo.findOne.mockResolvedValue(purged);
+        snapshots.internal.mockResolvedValue(purged);
+
+        await expect(act()).rejects.toMatchObject({
+          errorCode: "DOCUMENT_CONTENT_PURGED",
+          statusCode: 410,
+        });
+      },
+    );
   });
 
   describe("regenerateReceiptPdf", () => {

@@ -71,6 +71,11 @@ additive database migration and verified backup remain; never automatically run 
 migration. A real restore requires a separately reviewed operation. Backup validation
 proves archive readability, not a completed restore rehearsal.
 
+**Plan limits ship with billing.** The same release tightens the free plan for every account
+(one template, three document types, no logo, analytics or suppliers). Do not deploy it with
+`BILLING_ENABLED=false`: users would meet limits they cannot pay to lift.
+`AddReceiptContentPurgedAt1794200000000` is additive.
+
 **Exception: the Creem release.** `ReplaceBillingProviderColumns1794100000000` drops the
 previous billing provider's columns from `user_subscriptions`, so it is not additive. The
 automatic rollback restores images that select those columns: subscription reads, and with

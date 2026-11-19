@@ -1,7 +1,7 @@
 import { pickSortColumn } from "../../common/utils/sort-column.util";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { Supplier } from "./entities/supplier.entity";
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto";
@@ -14,6 +14,7 @@ import {
   createIdempotently,
 } from "../../common/idempotency/idempotent-create";
 import { containsPattern } from "../../common/utils/like-pattern.util";
+import { assertPlanFeature } from "../subscription/plan-access";
 
 const SUPPLIER_SORTABLE_COLUMNS: Record<string, string> = {
   name: "supplier.name",
@@ -29,16 +30,28 @@ export class SuppliersService {
     private suppliersRepository: Repository<Supplier>,
   ) {}
 
+  /**
+   * Writing suppliers is a plan feature. Listing, reading and deleting are not: an
+   * account that lost the plan still sees and can remove the suppliers it has.
+   */
+  private assertCanWrite(manager: EntityManager, user: User): Promise<void> {
+    return assertPlanFeature(manager, user.id, "suppliers");
+  }
+
   async create(
     createSupplierDto: CreateSupplierDto,
     user: User,
   ): Promise<Supplier> {
+    await this.assertCanWrite(this.suppliersRepository.manager, user);
     return this.suppliersRepository.save(
       this.buildSupplier(this.suppliersRepository, createSupplierDto, user),
     );
   }
 
-  /** A repeated Idempotency-Key replays the first create instead of adding a duplicate. */
+  /**
+   * A repeated Idempotency-Key replays the first create instead of adding a duplicate.
+   * The plan check runs after the key lookup, so a replay outlives a downgrade.
+   */
   async createWithIdempotencyKey(
     createSupplierDto: CreateSupplierDto,
     user: User,
@@ -53,14 +66,16 @@ export class SuppliersService {
           userId: user.id,
           payload: createSupplierDto,
         },
-        () =>
-          manager.save(
+        async () => {
+          await this.assertCanWrite(manager, user);
+          return manager.save(
             this.buildSupplier(
               manager.getRepository(Supplier),
               createSupplierDto,
               user,
             ),
-          ),
+          );
+        },
       ),
     );
   }
@@ -145,6 +160,7 @@ export class SuppliersService {
     updateSupplierDto: UpdateSupplierDto,
     user: User,
   ): Promise<Supplier> {
+    await this.assertCanWrite(this.suppliersRepository.manager, user);
     const supplier = await this.findOne(id, user);
     const { contactPerson, ...rest } = updateSupplierDto;
 

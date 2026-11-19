@@ -8,10 +8,9 @@ import {
   ReceiptStatus,
 } from "../entities/receipt.entity";
 import { updateReceiptOnFailure } from "../receipt-failure";
-import {
-  DOCUMENTS_RETAINED_PER_TYPE,
-  isRetentionExempt,
-} from "../document-retention";
+import { ApiErrors } from "../../../common/errors/ApiError";
+import { readPlanLimits } from "../../subscription/plan-access";
+import { retentionAction } from "../document-retention";
 import { specFor } from "../document-types";
 import { isLockingDocumentType, syncOrderLock } from "../order-lock";
 import { Order } from "../../orders/entities/order.entity";
@@ -146,13 +145,10 @@ export class ReceiptArtifactService {
         },
       );
       if (!updated.affected) return null;
-      // Eviction happens here, at a successful first promotion, never when a row is created:
-      // a generation that fails must not cost an older document its place.
-      if (
-        current.status === ReceiptStatus.PROCESSING &&
-        !isRetentionExempt(current.document_type)
-      ) {
-        await this.evictOverCap(manager, userId, current.document_type, id);
+      // Retention is enforced here, at a successful first promotion, never when a row is
+      // created: a generation that fails must not cost an older document its place.
+      if (current.status === ReceiptStatus.PROCESSING) {
+        await this.enforceRetention(manager, userId, current.document_type, id);
       }
       await this.leases.retire(userId, current.pdf_path, manager);
       if (receipt.active_logo_asset_id !== receipt.pending_logo_asset_id)
@@ -170,16 +166,81 @@ export class ReceiptArtifactService {
       return manager.findOneOrFail(Receipt, { where: { id, user_id: userId } });
     });
   }
+  /** Applies the account plan's per-type document limit after a promotion. */
+  private async enforceRetention(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+  ): Promise<void> {
+    const { documentsRetainedPerType: cap } = await readPlanLimits(
+      manager,
+      userId,
+    );
+    if (cap === null) return;
+    if (retentionAction(type) === "purge")
+      await this.purgeOverCap(manager, userId, type, promotedId, cap);
+    else await this.evictOverCap(manager, userId, type, promotedId, cap);
+  }
+  /**
+   * For the types whose row must stay: the oldest documents over the cap (never the one
+   * just promoted) lose their file and public link and are marked, so the limit counts
+   * only records that still have content. The row keeps its number and its order slot.
+   */
+  async purgeOverCap(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+    cap: number,
+  ): Promise<void> {
+    const withContent = {
+      user_id: userId,
+      status: ReceiptStatus.GENERATED,
+      document_type: type,
+      content_purged_at: IsNull(),
+    };
+    const total = await manager.count(Receipt, { where: withContent });
+    if (total <= cap) return;
+    const oldest = await manager.find(Receipt, {
+      where: { ...withContent, id: Not(promotedId) },
+      select: [
+        "id",
+        "user_id",
+        "pdf_path",
+        "active_logo_asset_id",
+        "pending_logo_asset_id",
+      ],
+      order: { created_at: "ASC", id: "ASC" },
+      take: total - cap,
+    });
+    const locked = await this.lockRetirements(oldest, userId, manager);
+    const purgedAt = new Date();
+    for (const old of locked) {
+      await this.leases.retire(userId, old.pdf_path, manager);
+      await manager.update(
+        Receipt,
+        { id: old.id, user_id: userId, status: ReceiptStatus.GENERATED },
+        {
+          content_purged_at: purgedAt,
+          pdf_path: null,
+          pdf_url: null,
+          public_token: null,
+        },
+      );
+    }
+  }
   /**
    * Brings the type back to the cap after a promotion: the oldest generated documents of the
    * type (never the one just promoted) are retired and deleted, rows locked in a stable order
-   * before any PDF or logo lease. The caller has excluded the types that are never evicted.
+   * before any PDF or logo lease. For the types whose row may go; see `purgeOverCap`.
    */
   async evictOverCap(
     manager: EntityManager,
     userId: string,
     type: DocumentType,
     promotedId: string,
+    cap: number,
   ): Promise<void> {
     const total = await manager.count(Receipt, {
       where: {
@@ -188,7 +249,7 @@ export class ReceiptArtifactService {
         document_type: type,
       },
     });
-    if (total <= DOCUMENTS_RETAINED_PER_TYPE) return;
+    if (total <= cap) return;
     const oldest = await manager.find(Receipt, {
       where: {
         user_id: userId,
@@ -205,7 +266,7 @@ export class ReceiptArtifactService {
         "pending_logo_asset_id",
       ],
       order: { created_at: "ASC", id: "ASC" },
-      take: total - DOCUMENTS_RETAINED_PER_TYPE,
+      take: total - cap,
     });
     // An evicted locking document may have been the last one holding its order locked.
     // The orders are locked first, in id order and before any receipt of theirs, so the
@@ -345,6 +406,8 @@ export class ReceiptArtifactService {
     const receipt = await this.snapshots.internal(id, userId);
     if (receipt.status !== ReceiptStatus.GENERATED)
       throw new ConflictException("Only an active document can be repaired");
+    // A purged record has no file on purpose; re-rendering it would undo the limit.
+    if (receipt.content_purged_at) throw ApiErrors.DOCUMENT_CONTENT_PURGED(id);
     const active = this.snapshots.active(receipt);
     const buffer = await this.renders.render(active.html, active.snapshot);
     const filename = `repair-${id}-${randomUUID()}.pdf`;

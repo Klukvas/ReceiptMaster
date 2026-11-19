@@ -1,5 +1,12 @@
-import { UserSubscription } from "../../subscription/entities/user-subscription.entity";
-import { PLAN_LIMITS } from "../../subscription/config/plans.config";
+import {
+  DEFAULT_TEMPLATE_ID,
+  PlanLimits,
+} from "../../subscription/config/plans.config";
+import {
+  assertPlanFeature,
+  isTemplateAllowed,
+  readPlanLimits,
+} from "../../subscription/plan-access";
 import { ApiErrors } from "../../../common/errors/ApiError";
 import {
   ConflictException,
@@ -27,7 +34,6 @@ import {
 /** Lets the UI tell a stale-revision conflict (compare and reload) apart from other 409s. */
 export const DOCUMENT_REVISION_CONFLICT = "DOCUMENT_REVISION_CONFLICT";
 
-export const MAX_DOCUMENT_PRESETS = 20;
 export const MAX_CONFIG_REVISION = 2147483646;
 export type ConfigVersion = { config: DocumentConfig; revision: number };
 @Injectable()
@@ -38,18 +44,31 @@ export class DocumentConfigService {
     private readonly cache: CacheService,
   ) {}
 
+  planLimits(userId: string, manager = this.db.manager): Promise<PlanLimits> {
+    return readPlanLimits(manager, userId);
+  }
   async assertTemplate(
     userId: string,
     templateId: string,
     manager = this.db.manager,
   ): Promise<void> {
-    const subscription = await manager.findOne(UserSubscription, {
-      where: { user_id: userId },
-    });
-    const allowed =
-      PLAN_LIMITS[subscription?.plan || "free"].allowedTemplateIds;
-    if (allowed && !allowed.includes(templateId))
+    const limits = await readPlanLimits(manager, userId);
+    if (!isTemplateAllowed(limits, templateId))
       throw ApiErrors.TEMPLATE_PLAN_RESTRICTED(templateId);
+  }
+  /**
+   * A template the plan no longer includes may stay saved (after a downgrade, or when the
+   * plans change), and the footer, logo or requisites must still be editable then. Only
+   * choosing a different template is checked.
+   */
+  private async assertTemplateChange(
+    userId: string,
+    previousTemplateId: string,
+    nextTemplateId: string,
+    manager = this.db.manager,
+  ): Promise<void> {
+    if (nextTemplateId === previousTemplateId) return;
+    await this.assertTemplate(userId, nextTemplateId, manager);
   }
   async read(
     userId: string,
@@ -97,7 +116,12 @@ export class DocumentConfigService {
   ): Promise<ConfigVersion> {
     const row = await this.lock(userId, manager);
     this.checkRevision(row.document_config_revision || 0, expected);
-    await this.assertTemplate(userId, config.templateId, manager);
+    await this.assertTemplateChange(
+      userId,
+      (row.document_config || legacyConfig(row)).templateId,
+      config.templateId,
+      manager,
+    );
     await this.assets.attach(userId, config.logo.assetId, manager);
     if (row.logo_asset_id !== config.logo.assetId)
       await this.assets.release(userId, row.logo_asset_id, manager);
@@ -120,8 +144,14 @@ export class DocumentConfigService {
     file?: Express.Multer.File,
   ): Promise<ConfigVersion> {
     const config = parseConfig(documentConfigSchema, draft.config);
-    this.checkRevision((await this.read(userId)).revision, expected);
-    await this.assertTemplate(userId, config.templateId);
+    const current = await this.read(userId);
+    this.checkRevision(current.revision, expected);
+    await this.assertTemplateChange(
+      userId,
+      current.config.templateId,
+      config.templateId,
+    );
+    if (file) await assertPlanFeature(this.db.manager, userId, "logo");
     const assetId = await this.assets.stage(userId, draft, file);
     const committed = await this.db.transaction((manager) =>
       this.commit(
@@ -173,7 +203,6 @@ export class DocumentConfigService {
           mapped.documentLanguage,
         ),
       });
-      await this.assertTemplate(userId, config.templateId, manager);
       await this.commit(
         userId,
         config,
@@ -215,17 +244,14 @@ export class DocumentConfigService {
     file?: Express.Multer.File,
   ) {
     await this.assertTemplate(userId, draft.config.templateId);
+    if (file) await assertPlanFeature(this.db.manager, userId, "logo");
     const assetId = await this.assets.stage(userId, draft, file);
     return this.db.transaction(async (manager) => {
       await this.lock(userId, manager);
       const existing = id ? await this.preset(userId, id, manager) : undefined;
       await this.assertTemplate(userId, draft.config.templateId, manager);
       if (existing) this.checkRevision(existing.revision, expected);
-      else if (
-        (await manager.count(DocumentPreset, { where: { user_id: userId } })) >=
-        MAX_DOCUMENT_PRESETS
-      )
-        throw new ConflictException("Maximum 20 presets");
+      else await this.assertPresetSlot(userId, manager);
       const duplicate = await manager.findOne(DocumentPreset, {
         where: { user_id: userId, name: draft.name },
       });
@@ -257,6 +283,17 @@ export class DocumentConfigService {
       };
     });
   }
+  /** Counted under the account lock, so two saves cannot both take the last slot. */
+  private async assertPresetSlot(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const { maxPresets } = await readPlanLimits(manager, userId);
+    const count = await manager.count(DocumentPreset, {
+      where: { user_id: userId },
+    });
+    if (count >= maxPresets) throw ApiErrors.PRESET_LIMIT_EXCEEDED(maxPresets);
+  }
   async deletePreset(
     userId: string,
     id: string,
@@ -283,16 +320,31 @@ export class DocumentConfigService {
       throw new ConflictException(
         "Preset changed. Reload it before generating.",
       );
-    const config = parseConfig(
+    const limits = await readPlanLimits(this.db.manager, userId);
+    // Presets saved on a higher plan stay listed, but a plan without presets cannot use them.
+    if (preset && limits.maxPresets === 0)
+      throw ApiErrors.PRESET_LIMIT_EXCEEDED(limits.maxPresets);
+    const merged = parseConfig(
       documentConfigSchema,
       mergeConfig(
         selection.config || preset?.config || account.config,
         selection.overrides,
       ),
     );
+    // The account default was not chosen for this document: when the plan no longer has
+    // it, generation falls back to the template every plan has instead of failing (the
+    // automatic receipt on confirm has nobody to show an error to). A template picked for
+    // this document, by hand or through a preset, is refused.
+    const isAccountDefault =
+      merged.templateId === account.config.templateId &&
+      !isTemplateAllowed(limits, merged.templateId);
+    const config = isAccountDefault
+      ? { ...merged, templateId: DEFAULT_TEMPLATE_ID }
+      : merged;
     await this.assertTemplate(userId, config.templateId);
     return {
       config,
+      limits,
       revision: account.revision,
       preset: preset ? { id: preset.id, revision: preset.revision } : undefined,
     };

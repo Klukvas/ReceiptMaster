@@ -26,7 +26,12 @@ describe("ProductsService", () => {
   let dataSource: any;
   let txManager: any;
   let queryBuilder: any;
-  let subscriptionService: { assertCanCreateProductInTx: jest.Mock };
+  let subscriptionService: {
+    assertCanCreateProductInTx: jest.Mock;
+    assertFeature: jest.Mock;
+  };
+  // The subscription row both managers read; null is an account without one (free).
+  let subscription: { plan: string } | null;
   const mockUser = { id: "user-1" } as User;
 
   const mockProduct: Partial<Product> = {
@@ -56,7 +61,10 @@ describe("ProductsService", () => {
     };
 
     queryBuilder = mockQueryBuilder;
+    subscription = { plan: "business" };
+    const findSubscription = () => Promise.resolve(subscription);
     txManager = {
+      findOne: jest.fn(findSubscription),
       create: jest.fn((_entity, data) => ({ ...data })),
       save: jest.fn((data) => Promise.resolve({ id: "prod-1", ...data })),
       exists: jest.fn().mockResolvedValue(true),
@@ -66,11 +74,15 @@ describe("ProductsService", () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
       softDelete: jest.fn().mockResolvedValue({ affected: 1 }),
       manager: {
+        findOne: jest.fn(findSubscription),
         transaction: jest.fn((work) => work(txManager)),
         exists: jest.fn().mockResolvedValue(true),
       },
     };
-    subscriptionService = { assertCanCreateProductInTx: jest.fn() };
+    subscriptionService = {
+      assertCanCreateProductInTx: jest.fn(),
+      assertFeature: jest.fn().mockResolvedValue(undefined),
+    };
 
     dataSource = {
       query: jest.fn().mockResolvedValue([{ count: "0" }]),
@@ -164,6 +176,10 @@ describe("ProductsService", () => {
   describe("supplier ownership", () => {
     const supplierId = "11111111-1111-4111-8111-111111111111";
 
+    beforeEach(() => {
+      productsRepo.findOne.mockResolvedValue(mockProduct);
+    });
+
     it("creates a product linked to the user's own supplier", async () => {
       await service.create(
         { name: "Widget", supplier_id: supplierId } as any,
@@ -245,6 +261,138 @@ describe("ProductsService", () => {
       await service.create({ name: "Widget" } as any, mockUser);
 
       expect(txManager.exists).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("supplier link on a plan without suppliers", () => {
+    const supplierId = "11111111-1111-4111-8111-111111111111";
+    const otherSupplierId = "22222222-2222-4222-8222-222222222222";
+    const restricted = {
+      statusCode: 402,
+      errorCode: "PLAN_FEATURE_RESTRICTED",
+      details: { feature: "suppliers" },
+    };
+
+    it.each([
+      ["the free plan", { plan: "free" }],
+      ["an account without a subscription row", null],
+    ])("refuses a supplier on create on %s", async (_name, row) => {
+      subscription = row;
+
+      await expect(
+        service.create(
+          { name: "Widget", supplier_id: supplierId } as any,
+          mockUser,
+        ),
+      ).rejects.toMatchObject(restricted);
+      expect(txManager.save).not.toHaveBeenCalled();
+    });
+
+    it("creates a product without a supplier", async () => {
+      subscription = { plan: "free" };
+
+      await service.create(
+        { name: "Widget", quantity: 3, purchase_price_cents: 100 } as any,
+        mockUser,
+      );
+
+      expect(txManager.save).toHaveBeenCalled();
+    });
+
+    it("refuses changing to another supplier on update", async () => {
+      subscription = { plan: "free" };
+      productsRepo.findOne.mockResolvedValue({
+        ...mockProduct,
+        supplier_id: supplierId,
+      });
+
+      await expect(
+        service.update("prod-1", { supplier_id: otherSupplierId }, mockUser),
+      ).rejects.toMatchObject(restricted);
+      expect(queryBuilder.execute).not.toHaveBeenCalled();
+    });
+
+    it("refuses linking a product that had no supplier", async () => {
+      subscription = { plan: "free" };
+      productsRepo.findOne.mockResolvedValue({
+        ...mockProduct,
+        supplier_id: null,
+      });
+
+      await expect(
+        service.update("prod-1", { supplier_id: supplierId }, mockUser),
+      ).rejects.toMatchObject(restricted);
+    });
+
+    it("accepts a PATCH that resends the unchanged supplier", async () => {
+      subscription = { plan: "free" };
+      productsRepo.findOne.mockResolvedValue({
+        ...mockProduct,
+        supplier_id: supplierId,
+      });
+
+      await service.update(
+        "prod-1",
+        { name: "Renamed", supplier_id: supplierId },
+        mockUser,
+      );
+
+      expect(queryBuilder.execute).toHaveBeenCalled();
+    });
+
+    it("accepts unlinking and stock or cost changes", async () => {
+      subscription = { plan: "free" };
+      productsRepo.findOne.mockResolvedValue(mockProduct);
+
+      await service.update(
+        "prod-1",
+        {
+          supplier_id: null,
+          quantity: 5,
+          expectedQuantity: 50,
+          purchase_price_cents: 700,
+        },
+        mockUser,
+      );
+
+      expect(queryBuilder.execute).toHaveBeenCalled();
+    });
+
+    it("lets a paid plan change the supplier", async () => {
+      productsRepo.findOne.mockResolvedValue({
+        ...mockProduct,
+        supplier_id: supplierId,
+      });
+
+      await service.update(
+        "prod-1",
+        { supplier_id: otherSupplierId },
+        mockUser,
+      );
+
+      expect(queryBuilder.set).toHaveBeenCalledWith({
+        supplier_id: otherSupplierId,
+      });
+    });
+  });
+
+  describe("stock insights", () => {
+    it("refuses low stock and stock value without the plan feature", async () => {
+      subscriptionService.assertFeature.mockRejectedValue(
+        ApiErrors.PLAN_FEATURE_RESTRICTED("stockInsights"),
+      );
+
+      await expect(service.getLowStockProducts(mockUser)).rejects.toMatchObject(
+        { statusCode: 402 },
+      );
+      await expect(service.getInventoryValue(mockUser)).rejects.toMatchObject({
+        errorCode: "PLAN_FEATURE_RESTRICTED",
+      });
+      expect(subscriptionService.assertFeature).toHaveBeenCalledWith(
+        "user-1",
+        "stockInsights",
+      );
+      expect(productsRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
   });
 

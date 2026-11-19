@@ -11,8 +11,10 @@ describe("OrdersDashboardService", () => {
   const mockUser = { id: "user-1" } as User;
 
   beforeEach(async () => {
+    // Most tests here are about the queries, so the account is on the plan that limits nothing.
     dataSource = {
       query: jest.fn(),
+      manager: { findOne: jest.fn().mockResolvedValue({ plan: "business" }) },
     };
     cacheService = {
       get: jest.fn().mockResolvedValue(null),
@@ -360,6 +362,133 @@ describe("OrdersDashboardService", () => {
         total_orders: 0,
         currency: "UAH",
       });
+    });
+  });
+
+  describe("plan gating", () => {
+    const NOW = new Date("2026-03-15T10:30:00.000Z");
+    const usePlan = (plan: string | null) =>
+      dataSource.manager.findOne.mockResolvedValue(plan ? { plan } : null);
+
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(NOW);
+      dataSource.query.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const analyticsCalls: Array<[string, () => Promise<unknown>]> = [
+      ["getDailyRevenue", () => service.getDailyRevenue(mockUser, 7)],
+      ["getRevenueByProducts", () => service.getRevenueByProducts(mockUser)],
+      [
+        "getRevenueByRecipients",
+        () => service.getRevenueByRecipients(mockUser),
+      ],
+      ["getTotalRevenue", () => service.getTotalRevenue(mockUser)],
+      ["getTurnoverByProducts", () => service.getTurnoverByProducts(mockUser)],
+      [
+        "getTurnoverByRecipients",
+        () => service.getTurnoverByRecipients(mockUser),
+      ],
+    ];
+
+    it.each(analyticsCalls)(
+      "%s answers 402 without a subscription and never touches the cache",
+      async (_name, call) => {
+        usePlan(null);
+        // A result another plan left behind must not leak out through the refusal.
+        cacheService.get.mockResolvedValue([{ leaked: true }]);
+
+        await expect(call()).rejects.toMatchObject({
+          statusCode: 402,
+          errorCode: "PLAN_FEATURE_RESTRICTED",
+          details: { feature: "analytics" },
+        });
+        expect(cacheService.get).not.toHaveBeenCalled();
+        expect(cacheService.set).not.toHaveBeenCalled();
+        expect(dataSource.query).not.toHaveBeenCalled();
+      },
+    );
+
+    it("status summary is served on the free plan", async () => {
+      usePlan("free");
+      dataSource.query.mockResolvedValue([{ status: "draft", count: 1 }]);
+
+      expect(await service.getOrderStatusSummary(mockUser)).toEqual({
+        draft: 1,
+        confirmed: 0,
+        cancelled: 0,
+      });
+    });
+
+    it("free total turnover is the current UTC month whatever range was sent", async () => {
+      usePlan("free");
+
+      await service.getTotalTurnover(
+        mockUser,
+        new Date("2020-01-01T00:00:00.000Z"),
+        new Date("2020-12-31T23:59:59.999Z"),
+      );
+
+      const monthStart = new Date("2026-03-01T00:00:00.000Z");
+      expect(cacheService.get).toHaveBeenCalledWith(
+        `dashboard:v2:totalTurnover:user-1:${JSON.stringify([monthStart, undefined])}`,
+      );
+      expect(dataSource.query).toHaveBeenCalledWith(
+        expect.not.stringContaining("o.created_at <="),
+        ["confirmed", "user-1", monthStart],
+      );
+    });
+
+    it("a 90-day plan reads and caches the clamped range, not the requested one", async () => {
+      usePlan("pro");
+      const requestedEnd = new Date("2026-03-15T23:59:59.999Z");
+
+      await service.getTotalRevenue(
+        mockUser,
+        new Date("2025-01-01T00:00:00.000Z"),
+        requestedEnd,
+      );
+
+      const earliest = new Date("2025-12-15T00:00:00.000Z");
+      expect(cacheService.get).toHaveBeenCalledWith(
+        `dashboard:v2:totalRevenue:user-1:${JSON.stringify([earliest, requestedEnd])}`,
+      );
+      expect(dataSource.query).toHaveBeenCalledWith(expect.any(String), [
+        "confirmed",
+        "user-1",
+        earliest,
+        requestedEnd,
+      ]);
+    });
+
+    it("a 90-day plan caps the daily series at 90 days before building the key", async () => {
+      usePlan("pro");
+
+      await service.getDailyRevenue(mockUser, 365);
+
+      expect(cacheService.get).toHaveBeenCalledWith(
+        "dashboard:v2:dailyRevenue:user-1:[90]",
+      );
+      expect(dataSource.query).toHaveBeenCalledWith(expect.any(String), [
+        90,
+        "user-1",
+      ]);
+    });
+
+    it("an unlimited plan keeps the requested range and an open one stays open", async () => {
+      usePlan("business");
+      const start = new Date("2019-01-01T00:00:00.000Z");
+
+      await service.getTurnoverByProducts(mockUser, start);
+
+      expect(dataSource.query).toHaveBeenCalledWith(expect.any(String), [
+        "confirmed",
+        "user-1",
+        start,
+      ]);
     });
   });
 });

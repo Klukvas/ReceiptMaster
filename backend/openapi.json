@@ -59,7 +59,7 @@
             }
           },
           "402": {
-            "description": "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED)",
+            "description": "Product limit of the current plan reached (PRODUCT_LIMIT_EXCEEDED), or supplier_id set on a plan without suppliers (PLAN_FEATURE_RESTRICTED, `feature: suppliers`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -229,6 +229,16 @@
                 }
               }
             }
+          },
+          "402": {
+            "description": "The plan has no stock insights (PLAN_FEATURE_RESTRICTED, `feature: stockInsights`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -253,6 +263,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InventoryValueDto"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan has no stock insights (PLAN_FEATURE_RESTRICTED, `feature: stockInsights`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             }
@@ -342,6 +362,16 @@
           },
           "400": {
             "description": "quantity sent without expectedQuantity or vice versa (VALIDATION_ERROR), or an invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "supplier_id changed to another supplier on a plan without suppliers (PLAN_FEATURE_RESTRICTED, `feature: suppliers`); the unchanged id and null are accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -1427,7 +1457,7 @@
             "name": "days",
             "required": false,
             "in": "query",
-            "description": "Number of days (default 7)",
+            "description": "Number of days (default 7, at most 365 and the plan's history)",
             "schema": {
               "type": "string"
             }
@@ -3173,6 +3203,16 @@
               }
             }
           },
+          "402": {
+            "description": "The plan has no custom numbering (PLAN_FEATURE_RESTRICTED, `feature: customNumbering`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
           "409": {
             "description": "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed (of the current year while the yearly reset is on)",
             "content": {
@@ -3414,6 +3454,16 @@
           },
           "400": {
             "description": "Invalid body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Enabling needs a plan with auto-receipt (PLAN_FEATURE_RESTRICTED, `feature: autoReceipt`); disabling is always allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -4105,7 +4155,7 @@
             }
           },
           "402": {
-            "description": "Template not available on the current plan",
+            "description": "The plan's preset limit is reached (PRESET_LIMIT_EXCEEDED), or the logo or template is outside the plan",
             "content": {
               "application/json": {
                 "schema": {
@@ -4115,7 +4165,7 @@
             }
           },
           "409": {
-            "description": "Maximum 20 presets, or a preset with this name already exists",
+            "description": "A preset with this name already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -8183,6 +8233,9 @@
           "replacement_error": {
             "type": "string",
             "nullable": true
+          },
+          "purged": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -8203,7 +8256,8 @@
           "public_token",
           "active_revision",
           "replacement_status",
-          "replacement_error"
+          "replacement_error",
+          "purged"
         ]
       },
       "ReceiptIssueResult": {
@@ -8296,6 +8350,9 @@
             "type": "string",
             "nullable": true
           },
+          "purged": {
+            "type": "boolean"
+          },
           "warnings": {
             "type": "array",
             "items": {
@@ -8348,7 +8405,8 @@
           "public_token",
           "active_revision",
           "replacement_status",
-          "replacement_error"
+          "replacement_error",
+          "purged"
         ]
       },
       "DocumentListItem": {
@@ -8441,6 +8499,9 @@
             "type": "string",
             "nullable": true
           },
+          "purged": {
+            "type": "boolean"
+          },
           "order": {
             "type": "object",
             "properties": {
@@ -8492,6 +8553,7 @@
           "active_revision",
           "replacement_status",
           "replacement_error",
+          "purged",
           "order"
         ]
       },

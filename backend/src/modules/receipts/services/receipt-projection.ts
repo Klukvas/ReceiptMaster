@@ -20,6 +20,8 @@ export function receiptProjection(receipt: Receipt) {
     active_revision: receipt.active_revision,
     replacement_status: receipt.replacement_status,
     replacement_error: receipt.replacement_error,
+    // The record of an invoice, act or return note whose file the plan's limit removed.
+    purged: Boolean(receipt.content_purged_at),
   };
 }
 

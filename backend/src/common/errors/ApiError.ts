@@ -339,6 +339,44 @@ export const ApiErrors = {
       402,
     ),
 
+  RECIPIENT_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Recipient limit exceeded. Your plan allows up to ${limit} recipients`,
+      "RECIPIENT_LIMIT_EXCEEDED",
+      402,
+      { limit },
+    ),
+  PRESET_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Preset limit exceeded. Your plan allows up to ${limit} presets`,
+      "PRESET_LIMIT_EXCEEDED",
+      402,
+      { limit },
+    ),
+  DOCUMENT_TYPE_PLAN_RESTRICTED: (type: string) =>
+    new ApiErrorResponse(
+      `Document type "${type}" is not available on your current plan`,
+      "DOCUMENT_TYPE_PLAN_RESTRICTED",
+      402,
+      { documentType: type },
+    ),
+  /** `feature` is machine-readable so the client can name what the plan lacks. */
+  PLAN_FEATURE_RESTRICTED: (feature: string) =>
+    new ApiErrorResponse(
+      "This feature is not available on your current plan",
+      "PLAN_FEATURE_RESTRICTED",
+      402,
+      { feature },
+    ),
+  /** The record stays, but its PDF was removed when the plan's document limit was passed. */
+  DOCUMENT_CONTENT_PURGED: (id: string) =>
+    new ApiErrorResponse(
+      "This document's file is no longer stored",
+      "DOCUMENT_CONTENT_PURGED",
+      410,
+      { id },
+    ),
+
   // General errors
   INTERNAL_SERVER_ERROR: (message?: string) =>
     new ApiErrorResponse(

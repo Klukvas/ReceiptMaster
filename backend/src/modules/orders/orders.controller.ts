@@ -30,6 +30,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { BatchOrderIdsDto } from "./dto/batch-orders.dto";
 import { parseOrderListFilters } from "./order-list-filters";
+import { parseDailyDays } from "./dashboard-plan-window";
 import { OrderIdsResponse } from "./dto/order-ids-response.dto";
 import {
   DailyRevenueDto,
@@ -294,7 +295,8 @@ export class OrdersController {
   @ApiQuery({
     name: "days",
     required: false,
-    description: "Number of days (default 7)",
+    description:
+      "Number of days (default 7, at most 365 and the plan's history)",
   })
   getDailyRevenue(
     @Request() req: { user: User },
@@ -302,7 +304,7 @@ export class OrdersController {
   ) {
     return this.dashboardService.getDailyRevenue(
       req.user,
-      days ? parseInt(days) : 7,
+      parseDailyDays(days),
     );
   }
 

@@ -28,6 +28,10 @@ import {
 } from "./helpers/isolated-postgres";
 import { openMigratedAppDatabase } from "./helpers/migrated-app-database";
 import type { RestrictedAppDatabase } from "./helpers/restricted-app-database";
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
 
 const KEEP = { logoAction: "keep" } as const;
 const REAL_TIMERS = [

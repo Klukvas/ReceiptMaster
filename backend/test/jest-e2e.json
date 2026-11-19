@@ -1,10 +1,18 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts", "tsx"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts",
+    "tsx"
+  ],
   "rootDir": "..",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)sx?$": "ts-jest"
   },
   "testEnvironment": "node",
-  "testTimeout": 30000
+  "testTimeout": 30000,
+  "setupFilesAfterEnv": [
+    "<rootDir>/test/helpers/paid-plan-default.ts"
+  ]
 }

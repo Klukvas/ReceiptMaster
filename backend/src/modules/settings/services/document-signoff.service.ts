@@ -15,6 +15,7 @@ import { DocumentAsset } from "../entities/document-asset.entity";
 import { UserSettings } from "../entities/user-settings.entity";
 import { DocumentAssetsService } from "./document-assets.service";
 import { DocumentConfigService } from "./document-config.service";
+import { assertPlanFeature } from "../../subscription/plan-access";
 
 export interface SignoffImageInfo {
   assetId: string;
@@ -166,6 +167,8 @@ export class DocumentSignoffService {
     kind: SignoffKind,
     file: Express.Multer.File,
   ): Promise<SignoffImageInfo> {
+    // Removing an image stays possible on any plan; storing a new one needs the feature.
+    await assertPlanFeature(this.db.manager, userId, "signoff");
     const asset = await this.assets.stageSignoff(userId, kind, file);
     await this.db.transaction(async (manager) => {
       await this.configs.lock(userId, manager);
