@@ -71,6 +71,13 @@ additive database migration and verified backup remain; never automatically run 
 migration. A real restore requires a separately reviewed operation. Backup validation
 proves archive readability, not a completed restore rehearsal.
 
+**Exception: the Creem release.** `ReplaceBillingProviderColumns1794100000000` drops the
+previous billing provider's columns from `user_subscriptions`, so it is not additive. The
+automatic rollback restores images that select those columns: subscription reads, and with
+them order and product creation, fail until the migration is reverted by hand
+(`migration:revert`, which re-creates the columns empty). Treat a failed deploy of this
+release as needing that manual step.
+
 The script reports the application's database role from the backend's own connection: its
 name, superuser and bypass flags, and how many objects it owns. An owner or superuser
 bypasses RLS. Until `REQUIRE_RESTRICTED_APP_ROLE` is set this is a warning; afterwards it

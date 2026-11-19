@@ -303,12 +303,11 @@ scheduled canceled-subscription downgrade. Existing free/paid plans, stored subs
 data, usage reads and quota enforcement are preserved. Disabled payment endpoints return
 503 `BILLING_DISABLED`; Creem is never called. Enabling billing in production requires
 complete Creem credentials, product IDs, frontend URL and explicit production environment.
-The provider was Paddle until 2026-11-18; it was never enabled in production.
 
 
 **Entities:**
 
-- `UserSubscription`: Plan, Creem customer/subscription IDs and status (`creem_*` columns, status typed as `BillingStatus`), `creem_event_at` (time of the last applied webhook event), end of the paid period. Added by the additive `1794100000000-AddCreemSubscriptionColumns`; the unused `paddle_*` columns stay until a later release, because the deploy keeps migrations when it rolls images back
+- `UserSubscription`: Plan, Creem customer/subscription IDs and status (`creem_*` columns, status typed as `BillingStatus`), `creem_event_at` (time of the last applied webhook event), end of the paid period. Created by `1794100000000-ReplaceBillingProviderColumns`, which also drops the previous provider's columns. That migration is **not additive**: the deploy keeps migrations when it rolls images back, and the earlier images select the dropped columns, so a rollback of this release also needs the migration reverted (its `down` re-creates them empty)
 - `Product`: User's products (not to be confused with Creem products, which are the Pro and Business plans; these are the items being sold)
 - `Order`: Transactions recorded in ReceiptMaster
 

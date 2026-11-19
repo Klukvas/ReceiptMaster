@@ -5,7 +5,7 @@ three languages now excludes lost profits and other indirect losses instead of t
 punitive/incidental/special list, and question 9 states which documents are primary. Still drafts:
 nothing here has been reviewed by a lawyer.) The public Terms and Privacy pages were
 deliberately not changed. Everything below needs review by a Ukrainian lawyer (and, for the
-Paddle-related parts, a check against Paddle's merchant terms) before it replaces anything.
+Creem-related parts, a check against Creem's merchant terms) before it replaces anything.
 
 Factual statements in the drafts (30-day deletion, tenant isolation, encrypted connections, what the
 user can export or delete themselves) must be checked against the product before publication.
@@ -20,7 +20,7 @@ Contents:
 ## 1. Clause 11 — why it needs to change
 
 The live text caps liability at "the amount you paid to us in the twelve months before the claim".
-Subscriptions are charged through Paddle as Merchant of Record, so the amount paid *to us* may be
+Subscriptions are charged through Creem as Merchant of Record, so the amount paid *to us* may be
 read as zero, and a cap of zero is likely to be unenforceable or to be read against us. The draft
 keeps the first paragraph (no indirect damages), replaces the cap with a floor plus the 12-month
 amount, and lists what the cap does not cover.
@@ -270,7 +270,7 @@ Roles:
 1. Is a cap of "greater of 12 months' fees and a fixed floor" enforceable for business users under
    Ukrainian law, and is it acceptable for consumers? Which carve-outs must be listed? What floor is
    realistic?
-2. Because Paddle is the Merchant of Record, who is the contractual counterparty for the subscription
+2. Because Creem is the Merchant of Record, who is the contractual counterparty for the subscription
    fee, and does "fees you paid … through our payment provider" fit that structure?
 3. Is a separate annex with processor terms required, or enough, under the Law of Ukraine on Personal
    Data Protection, given that users are mostly sole traders entering customer data? Does anything

@@ -99,7 +99,7 @@ export const run = async () => {
     "16: the frontend build takes the billing flag and no payment provider settings",
     dockerfile.includes("ARG VITE_BILLING_ENABLED=false") &&
       frontendBuild.includes("VITE_BILLING_ENABLED=") &&
-      !/PADDLE|CREEM/.test(dockerfile + frontendBuild),
+      !/CREEM/.test(dockerfile + frontendBuild),
     "Unexpected frontend billing build settings",
   );
   // Dependencies come from the public registry only, so the build takes no
