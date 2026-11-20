@@ -11,16 +11,14 @@ import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
 import { OrderLineItem } from "./OrderLineItem";
-import { planRefusalReason } from "../../lib/plan-refusal";
-import type { UpgradeReason } from "../../lib/plan-catalog";
+import { planRefusalOf, type PlanRefusal } from "../../lib/plan-refusal";
+import { PlanRefusalNotice } from "../subscription/PlanRefusalNotice";
 import { OrderSummary } from "./OrderSummary";
 
 interface CreateOrderModalProps {
   onClose: () => void;
   /** Recipient to preselect, e.g. when opened from that recipient's drawer. */
   initialRecipientId?: string;
-  /** The server refused the order because of the plan (402); the page explains it. */
-  onPlanRefusal?: (reason: UpgradeReason) => void;
 }
 
 interface OrderItem {
@@ -40,7 +38,6 @@ const createItem = (): OrderItem => ({
 export const CreateOrderModal = ({
   onClose,
   initialRecipientId,
-  onPlanRefusal,
 }: CreateOrderModalProps) => {
   const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [recipientId, setRecipientId] = useState(initialRecipientId ?? "");
@@ -48,14 +45,16 @@ export const CreateOrderModal = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState("");
   const backendErrorRef = useRef<HTMLDivElement>(null);
+  // A 402 is explained in the form itself, so the order typed so far is not lost.
+  const [planRefusal, setPlanRefusal] = useState<PlanRefusal | null>(null);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
   // The error renders at the top of the scrolling body while Submit sits in the footer.
   useEffect(() => {
-    if (backendError)
+    if (backendError || planRefusal)
       backendErrorRef.current?.scrollIntoView({ block: "nearest" });
-  }, [backendError]);
+  }, [backendError, planRefusal]);
 
   const productOptions = useOrderProducts(items.map((item) => item.productId));
   const products = productOptions.records;
@@ -80,10 +79,10 @@ export const CreateOrderModal = ({
     },
     onError: (error: unknown) => {
       // A 402 that slipped past the page's pre-check (the cached plan status was stale).
-      const reason = planRefusalReason(error, "orders");
-      if (reason && onPlanRefusal) {
+      const refusal = planRefusalOf(error);
+      if (refusal) {
         queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
-        onPlanRefusal(reason);
+        setPlanRefusal(refusal);
         return;
       }
       setBackendError(parseApiError(error).message);
@@ -166,6 +165,7 @@ export const CreateOrderModal = ({
     e.preventDefault();
     setErrors({});
     setBackendError("");
+    setPlanRefusal(null);
 
     if (
       !validateForm() ||
@@ -228,6 +228,12 @@ export const CreateOrderModal = ({
 
           {/* ─── Scrollable body ─── */}
           <div className="px-6 pb-6 pt-2 max-h-[calc(90vh-140px)] overflow-y-auto space-y-6">
+            {planRefusal && (
+              <PlanRefusalNotice
+                ref={backendError ? undefined : backendErrorRef}
+                refusal={planRefusal}
+              />
+            )}
             {/* Backend error */}
             {backendError && (
               <div

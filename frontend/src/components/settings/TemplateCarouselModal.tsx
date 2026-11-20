@@ -7,6 +7,7 @@ import { TemplatePreviewIframe } from "./TemplatePreviewIframe";
 import { useTranslation } from "../../hooks/useTranslation";
 import { templateDisplayName } from "../../lib/template-name";
 import { PlanLockButton } from "../subscription/PlanLock";
+import { useUpgradePrompt } from "../../hooks/usePlanLock";
 
 interface Template {
   id: string;
@@ -39,16 +40,22 @@ export const TemplateCarouselModal = ({
   const previewAreaRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Owned here, not by the lock button: the slide (and its lock) can change, the dialog must not.
+  const upgradePrompt = useUpgradePrompt();
+  const isUpgradeOpen = upgradePrompt.isOpen;
   useBackClosesDialog(isOpen, onClose);
   useBodyScrollLock(isOpen);
 
-  // Sync index when modal opens or initialTemplateId changes
+  // Sync index when modal opens or initialTemplateId changes. Keyed on the ids, not on the
+  // array: a parent that re-renders passes a new array and would throw the user back to
+  // the first slide.
+  const templateIdList = templates.map((tpl) => tpl.id).join("\n");
   useEffect(() => {
     if (isOpen) {
-      const idx = templates.findIndex((tpl) => tpl.id === initialTemplateId);
+      const idx = templateIdList.split("\n").indexOf(initialTemplateId);
       setCurrentIndex(idx >= 0 ? idx : 0);
     }
-  }, [isOpen, initialTemplateId, templates]);
+  }, [isOpen, initialTemplateId, templateIdList]);
 
   // Focus the close button when modal opens
   useEffect(() => {
@@ -89,7 +96,9 @@ export const TemplateCarouselModal = ({
 
   // Keyboard navigation + ESC close + focus trap
   useEffect(() => {
-    if (!isOpen) return;
+    // The upgrade dialog on top handles its own keys; Escape must close only that one and
+    // the arrows must not turn the slide under it.
+    if (!isOpen || isUpgradeOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -124,7 +133,7 @@ export const TemplateCarouselModal = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose, goTo]);
+  }, [isOpen, isUpgradeOpen, onClose, goTo]);
 
   if (!isOpen || templates.length === 0) return null;
 
@@ -230,8 +239,10 @@ export const TemplateCarouselModal = ({
           {current.locked ? (
             <PlanLockButton
               reason="templates"
+              templateId={current.id}
               subject={templateDisplayName(t, current)}
               testId="carousel-template-lock"
+              onOpen={(reason) => upgradePrompt.open(reason, current.id)}
             />
           ) : (
           <button
@@ -244,6 +255,7 @@ export const TemplateCarouselModal = ({
           )}
         </div>
       </div>
+      {upgradePrompt.modal}
     </div>
   );
 };

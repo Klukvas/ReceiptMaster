@@ -1,7 +1,7 @@
 // Node-only checks on the translation files: en, ru and uk must offer the same
 // keys with the same {{placeholders}}, the landing page's template count must equal
-// the backend template registry it describes, and the plan numbers (the display
-// catalogue and the landing pricing cards) must equal the backend's PLAN_LIMITS.
+// the backend template registry it describes, and the plan numbers and template lists
+// (the display catalogue and the landing pricing cards) must equal the backend's PLAN_LIMITS.
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -138,6 +138,8 @@ const checkPlans = (results, translations) => {
       products: limits.maxProducts,
       recipients: limits.maxRecipients,
       templates: limits.allowedTemplateIds?.length ?? allTemplates,
+      // Which templates, not only how many: the lock hint names a plan per template.
+      templateIds: limits.allowedTemplateIds ? [...limits.allowedTemplateIds].sort() : null,
       documentsKeptPerType: limits.documentsRetainedPerType,
       documentTypes: limits.allowedDocumentTypes?.length ?? ALL_DOCUMENT_TYPES,
       presets: limits.maxPresets,
@@ -148,7 +150,7 @@ const checkPlans = (results, translations) => {
     const actual = Object.fromEntries(
       Object.keys(expected).map((key) => [
         key,
-        key === "features" ? [...entry.features].sort() : entry[key],
+        Array.isArray(entry[key]) ? [...entry[key]].sort() : entry[key],
       ]),
     );
     results.check(
@@ -183,6 +185,27 @@ const checkPlans = (results, translations) => {
   }
 };
 
+/** The plan a lock names for a template must be the cheapest backend plan that allows it. */
+const checkTemplateUnlocking = (results) => {
+  const { PLAN_LIMITS } = loadTsModule(PLAN_CONFIG);
+  const { PLAN_ORDER, planUnlocking } = loadTsModule(PLAN_CATALOG_FILE);
+  const templateIds = Object.keys(
+    loadTsModule(TEMPLATE_METADATA, {
+      "../document-types": { DOCUMENT_TYPE_SPECS: {} },
+    }).TEMPLATE_METADATA,
+  );
+  const allows = (plan, id) => PLAN_LIMITS[plan].allowedTemplateIds?.includes(id) ?? true;
+  const wrong = templateIds
+    .filter((id) => !allows("free", id))
+    .map((id) => [id, planUnlocking("templates", "free", id), PLAN_ORDER.find((plan) => allows(plan, id))])
+    .filter(([, named, cheapest]) => named !== cheapest);
+  results.check(
+    `plan-catalog.ts names the cheapest backend plan for each of the ${templateIds.length} templates`,
+    templateIds.length > 0 && wrong.length === 0,
+    wrong.map(([id, named, cheapest]) => `${id}: ${named} instead of ${cheapest}`).join("; "),
+  );
+};
+
 export const run = async () => {
   const results = new Results("locale parity");
   const translations = Object.fromEntries(
@@ -194,5 +217,6 @@ export const run = async () => {
   checkParity(results, flat);
   checkTemplateCount(results, translations);
   checkPlans(results, translations);
+  checkTemplateUnlocking(results);
   return results;
 };

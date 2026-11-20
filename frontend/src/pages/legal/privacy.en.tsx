@@ -262,8 +262,8 @@ export const privacyEn: LegalContent = {
           them or delete your account. After you delete one, the file is erased
           from storage within about 24 hours. The copy embedded in documents
           already generated remains in those documents and in their public
-          links until the document is deleted or removed under the limit of 10
-          documents per type. A failed document whose content was already
+          links until the document is deleted or removed under your plan&apos;s
+          document limit. A failed document whose content was already
           prepared may keep the earlier signature or stamp if you retry it.
           Backup copies are removed when the backups expire.
         </li>

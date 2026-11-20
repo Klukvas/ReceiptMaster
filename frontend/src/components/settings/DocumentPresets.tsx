@@ -16,7 +16,9 @@ import { Input } from "../ui/Input";
 import { selectClass } from "./document-ui";
 import { useSubscription } from "../../hooks/useSubscription";
 import { isPresetLimitReached } from "../../lib/subscriptionApi";
+import { hasHigherPlan } from "../../lib/plan-catalog";
 import { PlanLockButton, PlanLockTile } from "../subscription/PlanLock";
+import { LockedPresetList } from "./LockedPresetList";
 
 /** The most presets any plan stores; the cap while the plan is still unknown. */
 const MAX_PRESETS_ANY_PLAN = 20;
@@ -43,14 +45,29 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
       (await api.get<{ data: PresetSummary[] }>("/settings/document-presets"))
         .data.data,
     retry: false,
-    enabled: !hasNoPresetsOnPlan,
   });
   const presetsCount = presets.data?.length ?? 0;
   const isAtLimit = status
     ? isPresetLimitReached(status, presetsCount)
     : presetsCount >= MAX_PRESETS_ANY_PLAN;
   // On the top plan there is nothing to upgrade to: the button is simply disabled, as before.
-  const isCreateLocked = isAtLimit && !!status && status.plan !== "business";
+  const isCreateLocked = isAtLimit && !!status && hasHigherPlan(status.plan);
+  // Sets kept from a higher plan: removed by their listed revision, without loading them.
+  const deleteSaved = async (preset: PresetSummary) => {
+    if (model.busy) return;
+    model.setBusy(true);
+    model.setError("");
+    try {
+      await api.delete(`/settings/document-presets/${preset.id}`, {
+        data: { expectedRevision: preset.revision },
+      });
+      await presets.refetch();
+    } catch (error) {
+      model.setError(await localizedDocumentError(error));
+    } finally {
+      model.setBusy(false);
+    }
+  };
   const act = async (action: "use" | "create" | "update" | "delete") => {
     if (model.busy) return;
     model.setBusy(true);
@@ -106,6 +123,11 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
           testId="presets-upsell"
           title={t("document.presets")}
           description={t("document.presetsHelp")}
+        />
+        <LockedPresetList
+          presets={presets.data ?? []}
+          isBusy={model.busy}
+          onDelete={(preset) => void deleteSaved(preset)}
         />
       </Disclosure>
     );

@@ -66,10 +66,10 @@ In the order details, each document has **Download**, **Print** and **Share** bu
 
 The **Documents** page in the sidebar lists every document across all your orders, with filters by type, status and date.
 
-receiptmaster keeps the 10 most recent documents of each type and asks before the oldest one is removed. Invoices, acts and return notes are never removed.
+receiptmaster keeps a limited number of the most recent documents of each type (10 on Free, 100 on Start, all of them on Pro) and asks before the oldest one is removed. Invoices, acts and return notes keep their record and number; over the limit only the PDF file and the public link of the oldest one are removed.
 
 ## What's Next?
 
 - **Fine-tune your design** — Go to Settings → Documents to switch templates, upload your logo, set your brand color, and keep favourite setups as saved sets of settings
 - **Track your revenue** — The Analytics dashboard shows revenue and turnover charts, filterable by date range
-- **Go Pro** — Upgrade to Pro for up to 100 products, 500 orders/month, and all 15 templates
+- **Grow with a paid plan** — Start ($9/month) gives you 150 orders a month, 500 products and 10 templates; Pro ($19/month) gives you 1500 orders a month, unlimited products and all 15 templates

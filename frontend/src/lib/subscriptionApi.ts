@@ -92,36 +92,140 @@ const UNRESTRICTED_LIMITS: SubscriptionLimits = {
   features: ALL_FEATURES,
 };
 
-type StatusResponse = Omit<SubscriptionStatus, "usage" | "limits"> & {
-  usage?: Partial<SubscriptionUsage>;
-  limits?: Partial<Omit<SubscriptionLimits, "features">> & {
-    features?: Partial<Record<PlanFeature, boolean>>;
+const FEATURE_NAMES = Object.keys(ALL_FEATURES) as PlanFeature[];
+const BILLING_STATUSES: readonly BillingStatus[] = [
+  "active",
+  "trialing",
+  "past_due",
+  "scheduled_cancel",
+  "paused",
+  "canceled",
+];
+
+/** Thrown for a body that is not a subscription status; the query then reports an error. */
+class MalformedStatusError extends Error {
+  constructor(field: string) {
+    super(`Malformed subscription status: ${field}`);
+    this.name = "MalformedStatusError";
+  }
+}
+
+type Json = Record<string, unknown>;
+type Check<T> = (value: unknown) => value is T;
+
+const isRecord = (value: unknown): value is Json =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
+const isCountOrNull = (value: unknown): value is number | null =>
+  value === null || isCount(value);
+const isBoolean = (value: unknown): value is boolean =>
+  typeof value === "boolean";
+const isStringOrNull = (value: unknown): value is string | null =>
+  value === null || typeof value === "string";
+const isStringListOrNull = (value: unknown): value is string[] | null =>
+  value === null ||
+  (Array.isArray(value) && value.every((item) => typeof item === "string"));
+// A plan this build does not know (a newer server) is kept and shown as sent.
+const isPlanName = (value: unknown): value is PlanName =>
+  typeof value === "string" && value.length > 0;
+const isBillingStatusOrNull = (value: unknown): value is BillingStatus | null =>
+  value === null || BILLING_STATUSES.some((status) => status === value);
+
+/**
+ * One field of the body. An API that predates a field (the frontend can be deployed
+ * first) simply does not send it and gets `fallback`; a field of the wrong type means the
+ * body cannot be trusted at all.
+ */
+const read = <T>(source: Json, field: string, check: Check<T>, fallback: T): T => {
+  const value = source[field];
+  if (value === undefined) return fallback;
+  if (!check(value)) throw new MalformedStatusError(field);
+  return value;
+};
+
+const section = (source: Json, field: string): Json => {
+  const value = source[field] ?? {};
+  if (!isRecord(value)) throw new MalformedStatusError(field);
+  return value;
+};
+
+const parseLimits = (raw: Json): SubscriptionLimits => {
+  const features = section(raw, "features");
+  const defaults = UNRESTRICTED_LIMITS;
+  const allowedDocumentTypes = read(
+    raw,
+    "allowedDocumentTypes",
+    isStringListOrNull,
+    defaults.allowedDocumentTypes,
+  );
+  return {
+    maxProducts: read(raw, "maxProducts", isCountOrNull, defaults.maxProducts),
+    maxOrdersPerMonth: read(
+      raw,
+      "maxOrdersPerMonth",
+      isCountOrNull,
+      defaults.maxOrdersPerMonth,
+    ),
+    maxRecipients: read(raw, "maxRecipients", isCountOrNull, defaults.maxRecipients),
+    allowedTemplateIds: read(
+      raw,
+      "allowedTemplateIds",
+      isStringListOrNull,
+      defaults.allowedTemplateIds,
+    ),
+    // Compared by value only (`isDocumentTypeAllowed`), so an unknown type is harmless.
+    allowedDocumentTypes: allowedDocumentTypes as PlanDocumentType[] | null,
+    documentsRetainedPerType: read(
+      raw,
+      "documentsRetainedPerType",
+      isCountOrNull,
+      defaults.documentsRetainedPerType,
+    ),
+    maxPresets: read(raw, "maxPresets", isCount, defaults.maxPresets),
+    analyticsHistoryDays: read(
+      raw,
+      "analyticsHistoryDays",
+      isCountOrNull,
+      defaults.analyticsHistoryDays,
+    ),
+    hasAttribution: read(raw, "hasAttribution", isBoolean, defaults.hasAttribution),
+    features: Object.fromEntries(
+      FEATURE_NAMES.map((feature) => [
+        feature,
+        read(features, feature, isBoolean, true),
+      ]),
+    ) as Record<PlanFeature, boolean>,
   };
 };
 
 /**
- * The status as the UI reads it. An API that predates a limit (the frontend can be
- * deployed first) simply does not send it; the gap is filled with "not restricted", so
- * nothing is locked on a guess and the server keeps the last word.
+ * The status as the UI reads it, built field by field from an untrusted body. A missing
+ * limit is filled with "not restricted", so nothing is locked on a guess and the server
+ * keeps the last word; a malformed body throws, which the UI treats as an unknown status.
  */
-const withLimitDefaults = (raw: StatusResponse): SubscriptionStatus => ({
-  ...raw,
-  usage: {
-    productsCount: raw.usage?.productsCount ?? 0,
-    ordersThisMonth: raw.usage?.ordersThisMonth ?? 0,
-    recipientsCount: raw.usage?.recipientsCount ?? 0,
-  },
-  limits: {
-    ...UNRESTRICTED_LIMITS,
-    ...raw.limits,
-    features: { ...ALL_FEATURES, ...raw.limits?.features },
-  },
-});
+export const parseSubscriptionStatus = (raw: unknown): SubscriptionStatus => {
+  if (!isRecord(raw) || !isPlanName(raw.plan))
+    throw new MalformedStatusError("plan");
+  const usage = section(raw, "usage");
+  return {
+    plan: raw.plan,
+    usage: {
+      productsCount: read(usage, "productsCount", isCount, 0),
+      ordersThisMonth: read(usage, "ordersThisMonth", isCount, 0),
+      recipientsCount: read(usage, "recipientsCount", isCount, 0),
+    },
+    limits: parseLimits(section(raw, "limits")),
+    billingStatus: read(raw, "billingStatus", isBillingStatusOrNull, null),
+    currentPeriodEnd: read(raw, "currentPeriodEnd", isStringOrNull, null),
+    hasBillingSubscription: read(raw, "hasBillingSubscription", isBoolean, false),
+  };
+};
 
 export const subscriptionApi = {
   getStatus: async (): Promise<SubscriptionStatus> => {
-    const response = await api.get<StatusResponse>("/subscription/status");
-    return withLimitDefaults(response.data);
+    const response = await api.get<unknown>("/subscription/status");
+    return parseSubscriptionStatus(response.data);
   },
 
   checkout: async (

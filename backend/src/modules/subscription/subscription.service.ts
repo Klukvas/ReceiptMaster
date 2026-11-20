@@ -86,7 +86,8 @@ export class SubscriptionService {
 
   async getStatus(userId: string): Promise<SubscriptionStatus> {
     const subscription = await this.getOrCreate(userId);
-    const limits = PLAN_LIMITS[subscription.plan];
+    // A plan name this build does not know reads as free, like every other plan check.
+    const limits = PLAN_LIMITS[subscription.plan] ?? PLAN_LIMITS.free;
 
     const [productsCount, ordersThisMonth, recipientsCount] = await Promise.all(
       [
@@ -218,7 +219,9 @@ export class SubscriptionService {
     return assertPlanFeature(manager, userId, feature);
   }
 
-  async getAllowedTemplateIds(userId: string): Promise<string[] | null> {
+  async getAllowedTemplateIds(
+    userId: string,
+  ): Promise<readonly string[] | null> {
     return (await this.getPlanLimits(userId)).allowedTemplateIds;
   }
 

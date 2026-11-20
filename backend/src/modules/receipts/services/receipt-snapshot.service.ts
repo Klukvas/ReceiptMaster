@@ -193,6 +193,9 @@ export class ReceiptSnapshotService {
     const order = await this.loadOrder(userId, orderId);
     this.assertOrderStatus(order, request?.type ?? DocumentType.WAYBILL);
     const resolved = await this.configs.resolve(userId, selection);
+    // A logo sent with this document would be stored but never printed on such a plan.
+    if (file && !resolved.limits.features.logo)
+      throw ApiErrors.PLAN_FEATURE_RESTRICTED("logo");
     const assetId = await this.assets.stage(
       userId,
       {

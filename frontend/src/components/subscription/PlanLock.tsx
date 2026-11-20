@@ -16,6 +16,7 @@ const SIZE_CLASSES = {
  */
 export const PlanLockButton = ({
   reason,
+  templateId,
   subject,
   label,
   size = "md",
@@ -25,6 +26,8 @@ export const PlanLockButton = ({
   onOpen,
 }: {
   reason: UpgradeReason;
+  /** The locked template, for the "templates" reason: it decides which plan is named. */
+  templateId?: string;
   subject?: string;
   /** Shown in place of the hint when several locks sit side by side (one per document type). */
   label?: string;
@@ -39,7 +42,7 @@ export const PlanLockButton = ({
    */
   onOpen?: (reason: UpgradeReason) => void;
 }) => {
-  const hint = usePlanLockHint(reason);
+  const hint = usePlanLockHint(reason, templateId);
   const prompt = useUpgradePrompt();
   const name = subject ? `${subject}. ${hint}` : hint;
   return (
@@ -52,7 +55,8 @@ export const PlanLockButton = ({
         title={isIconOnly || label ? name : undefined}
         onClick={(event) => {
           event.stopPropagation();
-          (onOpen ?? prompt.open)(reason);
+          if (onOpen) onOpen(reason);
+          else prompt.open(reason, templateId);
         }}
         className={clsx(
           "inline-flex items-center rounded-lg border border-dashed border-[var(--color-border)] font-medium text-content-secondary hover:bg-surface-alt hover:text-content pointer-coarse:min-h-11",
@@ -104,3 +108,27 @@ export const PlanLockTile = ({
     <PlanLockButton reason={reason} subject={title} size="sm" />
   </div>
 );
+
+/**
+ * The lock as plain text, for a place where a dialog must not open (inside a form with
+ * its own focus trap): nothing to click, so nothing typed can be lost.
+ */
+export const PlanLockHint = ({
+  reason,
+  testId,
+}: {
+  reason: UpgradeReason;
+  testId?: string;
+}) => {
+  const hint = usePlanLockHint(reason);
+  return (
+    <p
+      data-plan-lock={reason}
+      data-testid={testId}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary"
+    >
+      <Lock aria-hidden className="h-3.5 w-3.5 shrink-0 text-warning-base" />
+      {hint}
+    </p>
+  );
+};

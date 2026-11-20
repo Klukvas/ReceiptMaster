@@ -31,9 +31,15 @@ function startOfUtcMonth(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-/** First instant the plan may look at: 00:00 UTC, `historyDays` days before today. */
+/**
+ * First instant the plan may look at: 00:00 UTC of the day that makes the window
+ * `historyDays` calendar days long with today as the last one, the same span the daily
+ * series covers.
+ */
 function earliestAllowedStart(historyDays: number, now: Date): Date {
-  return new Date(startOfUtcDay(now).getTime() - historyDays * MS_PER_DAY);
+  return new Date(
+    startOfUtcDay(now).getTime() - (historyDays - 1) * MS_PER_DAY,
+  );
 }
 
 function refusedFeature(

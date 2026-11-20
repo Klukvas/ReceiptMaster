@@ -705,10 +705,6 @@ export const OrdersPage = () => {
         <CreateOrderModal
           initialRecipientId={prefillRecipientId}
           onClose={() => setShowForm(false)}
-          onPlanRefusal={(reason) => {
-            setShowForm(false);
-            upgradePrompt.open(reason);
-          }}
         />
       )}
 

@@ -1,12 +1,13 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Lock, Crown } from "lucide-react";
 import { settingsApi } from "../../../lib/api";
 import { useTranslation } from "../../../hooks/useTranslation";
 import { templateDisplayName } from "../../../lib/template-name";
 import { TemplatePreviewIframe } from "../../settings/TemplatePreviewIframe";
-import { UpgradeModal } from "../../subscription/UpgradeModal";
-import { usePlanLockHint } from "../../../hooks/usePlanLock";
+import {
+  usePlanLockHintFor,
+  useUpgradePrompt,
+} from "../../../hooks/usePlanLock";
 
 interface Template {
   id: string;
@@ -56,8 +57,8 @@ interface TemplateStepProps {
 
 export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
   const { t } = useTranslation();
-  const lockHint = usePlanLockHint("templates");
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const lockHintFor = usePlanLockHintFor("templates");
+  const upgradePrompt = useUpgradePrompt();
 
   const { data: templates, isLoading } = useQuery<Template[]>({
     queryKey: ["availableTemplates"],
@@ -132,18 +133,13 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
           const isLocked = template.locked === true;
           const category =
             CATEGORY_STYLES[template.category] || CATEGORY_STYLES.business;
+          const name = templateDisplayName(t, template);
+          const lockHint = lockHintFor(template.id);
 
           return (
             <div
               key={template.id}
-              onClick={() => {
-                if (isLocked) {
-                  setUpgradeModalOpen(true);
-                  return;
-                }
-                onChange({ ...data, templateId: template.id });
-              }}
-              className={`group relative rounded-xl border-2 p-3 cursor-pointer transition-all duration-200 ${
+              className={`group relative rounded-xl border-2 p-3 transition-all duration-200 ${
                 isLocked
                   ? "border-[var(--color-border)] opacity-70"
                   : isSelected
@@ -151,16 +147,29 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
                     : "border-[var(--color-border)] hover:border-[var(--color-border)]"
               }`}
             >
+              {/* The whole tile is one button laid over its content: a preview frame cannot sit inside a button. */}
+              <button
+                type="button"
+                data-testid={`onboarding-template-${template.id}`}
+                aria-pressed={isSelected && !isLocked}
+                aria-label={isLocked ? `${name}. ${lockHint}` : name}
+                onClick={() => {
+                  if (isLocked) upgradePrompt.open("templates", template.id);
+                  else onChange({ ...data, templateId: template.id });
+                }}
+                className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+              />
+
               {/* Lock indicator */}
               {isLocked && (
-                <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-warning-base text-white z-20">
-                  <Lock className="h-3 w-3" />
+                <div className="pointer-events-none absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-warning-base text-white z-20">
+                  <Lock aria-hidden className="h-3 w-3" />
                 </div>
               )}
 
               {isSelected && !isLocked && (
-                <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent-base text-white z-10">
-                  <Check className="h-3 w-3" />
+                <div className="pointer-events-none absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent-base text-white z-20">
+                  <Check aria-hidden className="h-3 w-3" />
                 </div>
               )}
 
@@ -173,7 +182,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
               </div>
 
               <h3 className="font-medium text-content text-xs truncate">
-                {templateDisplayName(t, template)}
+                {name}
               </h3>
               {/* The card stays readable; the plan note sits under the name instead of covering it. */}
               {isLocked && (
@@ -210,11 +219,7 @@ export const TemplateStep = ({ data, onChange }: TemplateStepProps) => {
         })}
       </div>
 
-      <UpgradeModal
-        isOpen={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
-        reason="templates"
-      />
+      {upgradePrompt.modal}
     </div>
   );
 };

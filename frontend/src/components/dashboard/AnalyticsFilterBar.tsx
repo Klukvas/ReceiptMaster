@@ -15,6 +15,8 @@ interface AnalyticsFilterBarProps {
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onClear: () => void;
+  /** A date field lost focus: the moment to tidy up a half-typed or out-of-range value. */
+  onDateBlur?: () => void;
   /** The earliest day the plan lets analytics look at; undefined = no bound. */
   minDate?: string;
   /** Overrides "a date is set" when the widest range is itself a pair of dates. */
@@ -30,6 +32,7 @@ export const AnalyticsFilterBar = ({
   onStartDateChange,
   onEndDateChange,
   onClear,
+  onDateBlur,
   minDate,
   canClear,
 }: AnalyticsFilterBarProps) => {
@@ -69,6 +72,7 @@ export const AnalyticsFilterBar = ({
           min={minDate}
           max={endDate || undefined}
           onChange={(e) => onStartDateChange(e.target.value)}
+          onBlur={onDateBlur}
           className="flex-1 min-w-0 px-2.5 py-1.5 pointer-coarse:min-h-11 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
         />
         <span className="text-xs text-content-tertiary">&mdash;</span>
@@ -78,6 +82,7 @@ export const AnalyticsFilterBar = ({
           value={endDate}
           min={startDate || minDate || undefined}
           onChange={(e) => onEndDateChange(e.target.value)}
+          onBlur={onDateBlur}
           className="flex-1 min-w-0 px-2.5 py-1.5 pointer-coarse:min-h-11 text-xs rounded-lg border border-[var(--color-border)] bg-elevated text-content focus:outline-none focus:ring-2 focus:ring-[var(--color-border)] transition-shadow"
         />
       </div>

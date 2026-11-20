@@ -24,6 +24,24 @@ function today(): string {
  return new Date().toISOString().split('T')[0];
 }
 
+interface DateRange {
+ startDate: string;
+ endDate: string;
+}
+
+/**
+ * A range kept inside the plan's history window (ISO dates compare correctly as strings).
+ * A cleared or too-early start becomes the first allowed day: the server would clamp it
+ * anyway, and the label and the CSV name must show the period that was really asked for.
+ */
+function clampToWindow(range: DateRange, earliestDate: string | undefined): DateRange {
+ if (!earliestDate) return range;
+ const startDate =
+ !range.startDate || range.startDate < earliestDate ? earliestDate : range.startDate;
+ const endDate = range.endDate && range.endDate < startDate ? startDate : range.endDate;
+ return { startDate, endDate };
+}
+
 /**
  * The analytics endpoints answer 402 on a plan without analytics, so nothing below is
  * mounted until the plan is known, and a plan without the feature gets the upsell instead.
@@ -59,7 +77,12 @@ const AnalyticsContent = ({ historyDays, canExportCsv }: AnalyticsContentProps) 
  [historyDays],
  );
  const earliestDate = historyDays === null ? undefined : widestRange.startDate;
- const [dateRange, setDateRange] = useState(widestRange);
+ // What the date fields hold, which may be half-typed; everything else reads `dateRange`.
+ const [enteredRange, setEnteredRange] = useState<DateRange>(widestRange);
+ const dateRange = useMemo(
+ () => clampToWindow(enteredRange, earliestDate),
+ [enteredRange, earliestDate],
+ );
  const [activePreset, setActivePreset] = useState<number | null>(historyDays);
  const [activeTab, setActiveTab] = useState<'revenue' | 'turnover'>('revenue');
 
@@ -74,14 +97,14 @@ const AnalyticsContent = ({ historyDays, canExportCsv }: AnalyticsContentProps) 
  );
 
  const handlePresetClick = (days: number) => {
- setDateRange({ startDate: daysAgo(days), endDate: today() });
+ setEnteredRange({ startDate: daysAgo(days), endDate: today() });
  setActivePreset(days);
  };
 
  // ISO dates compare correctly as strings. Moving one end past the other drags the
  // other end along instead of leaving a reversed range that silently shows zeros.
  const handleStartDateChange = (value: string) => {
- setDateRange((prev) => ({
+ setEnteredRange((prev) => ({
  startDate: value,
  endDate: value && prev.endDate && value > prev.endDate ? value : prev.endDate,
  }));
@@ -89,15 +112,19 @@ const AnalyticsContent = ({ historyDays, canExportCsv }: AnalyticsContentProps) 
  };
 
  const handleEndDateChange = (value: string) => {
- setDateRange((prev) => ({
+ setEnteredRange((prev) => ({
  startDate: value && prev.startDate && value < prev.startDate ? value : prev.startDate,
  endDate: value,
  }));
  setActivePreset(null);
  };
 
+ // Leaving a field snaps it to the period in use, so the field and the label never differ.
+ const settleDates = () =>
+ setEnteredRange((prev) => clampToWindow(prev, earliestDate));
+
  const clearDates = () => {
- setDateRange(widestRange);
+ setEnteredRange(widestRange);
  setActivePreset(historyDays);
  };
 
@@ -184,8 +211,9 @@ const AnalyticsContent = ({ historyDays, canExportCsv }: AnalyticsContentProps) 
  <AnalyticsFilterBar
  presets={presets}
  activePreset={activePreset}
- startDate={dateRange.startDate}
- endDate={dateRange.endDate}
+ startDate={enteredRange.startDate}
+ endDate={enteredRange.endDate}
+ onDateBlur={settleDates}
  onPresetClick={handlePresetClick}
  onStartDateChange={handleStartDateChange}
  onEndDateChange={handleEndDateChange}

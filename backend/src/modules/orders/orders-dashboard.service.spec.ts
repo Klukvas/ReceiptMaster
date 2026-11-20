@@ -452,7 +452,7 @@ describe("OrdersDashboardService", () => {
         requestedEnd,
       );
 
-      const earliest = new Date("2025-12-15T00:00:00.000Z");
+      const earliest = new Date("2025-12-16T00:00:00.000Z");
       expect(cacheService.get).toHaveBeenCalledWith(
         `dashboard:v2:totalRevenue:user-1:${JSON.stringify([earliest, requestedEnd])}`,
       );

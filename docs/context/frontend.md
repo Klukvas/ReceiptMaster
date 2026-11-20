@@ -647,11 +647,13 @@ catalog or the landing pricing cards drift from the backend `PLAN_LIMITS`.
 | Piece | Role |
 |---|---|
 | `lib/subscriptionApi.ts` | Status types; `planAllows(status, feature)`; helpers for the recipient, preset and document-type limits |
-| `hooks/usePlan.ts` | `{ limits, allows(feature), isSettled }`. **An unknown status (loading or failed) locks nothing**; the server refuses anyway. Queries to plan-gated endpoints wait for `isSettled`, so a Free account sends no request that would be 402 |
+| `hooks/usePlan.ts` | `{ limits, allows(feature), isSettled }`. **An unknown status (loading, failed or malformed: `parseSubscriptionStatus` rejects a body it does not recognise) locks nothing**; the server refuses anyway, and `UpgradeModal` then shows text without purchase buttons. Queries to plan-gated endpoints wait for `isSettled`, so a Free account whose status loaded sends no request that would be 402; if the status request itself fails, those requests are sent and refused |
 | `components/subscription/PlanLock.tsx` | `PlanLockButton` and `PlanLockTile`: a locked control stays visible as a real button with a lock and a hint, and opens `UpgradeModal` |
 | `hooks/usePlanLock.tsx` | `useUpgradePrompt()` opens the modal for a reason; `usePlanLockHint(reason)` |
 | `components/subscription/UpgradeModal.tsx` | One modal for every limit and feature: `reason` → `subscription.reasons.<reason>.{title,description}`. Offers come from the catalog. Billing off: text and Close only; a live subscription: the portal |
-| `lib/plan-refusal.ts` | Maps a 402 (`errorCode`, `feature`) to an upgrade reason; `isContentPurged` for the 410 |
+| `lib/plan-refusal.ts` | `planRefusalOf` maps a 402 (`errorCode`, `feature`) to an upgrade reason; an unknown code gives a null reason, shown as "not included in your plan" |
+| `components/subscription/PlanRefusalNotice.tsx` | The inline notice a form shows after a 402, with a link to Settings → Subscription when billing is on |
+| `hooks/useSubscriptionRefresh.ts` | Refetches the status on focus, visibility and back/forward restore (mounted in `Layout`), and re-checks for about 20 s when the page loads on `?tab=subscription` with billing on: the plan changes when the webhook arrives, which can lag the redirect from checkout |
 | `components/subscription/PlanLimitsSummary.tsx` | The current plan's limits in Settings → Subscription |
 
 Gated surfaces: the analytics page and its sidebar item, CSV export, the profit card, sparkline
@@ -662,9 +664,12 @@ suppliers and the supplier select of the product form, recipients (limit pre-che
 stock value on the products page. A document whose file the plan's limit removed (`purged`) shows
 a "file removed" state without download, share or regenerate.
 
-A 402 from the product, order or recipient form closes the form and opens the upgrade dialog (the
-form's focus trap cannot hold a stacked dialog), so typed values are lost in that rare case: the
-pre-check normally stops the user before the form opens.
+A 402 from the product, order or recipient form keeps the form and everything typed and shows
+`PlanRefusalNotice` inline; a lock inside a form (the supplier select) is a text hint, not a button.
+Forms never open the upgrade dialog themselves: their focus trap cannot hold a stacked dialog.
+The template carousel owns its upgrade dialog and stops its key listener while it is open.
+The hint on a locked template names the plan that really includes it (`templateIds` per plan in the
+catalog, compared with the backend by `locale-parity`).
 
 **useSubscription hook** (`hooks/useSubscription.ts`):
 - Fetches current plan + usage (e.g., orders count)
@@ -1038,7 +1043,7 @@ The server owns template capabilities, returned by `/settings/templates`. When t
 
 **Preview.** `DocumentPreviewPanel` posts the complete unsaved multipart draft to `/receipts/preview` and displays actual PDF bytes. `useAutoPreview` re-renders it shortly after the last change (2 s quiet, at least 4 s between runs, never two at once, skipped while a custom title is empty or after a failed render until the next edit), because a render is a real PDF on the server and the API allows 30 a minute; a 429 sets `previewPaused` with a message and **Update now**. Preview problems are `previewError` in the panel, not the page-wide `error`. On a phone the panel comes first and collapsed, and renders only once opened. On `SettingsPage` the editor stays mounted behind the Subscription and Advanced tabs, so it gets `isVisible={activeTab === "documents"}` and renders nothing while hidden. Draft changes mark it stale. AbortController, request sequence and draft version guard late responses; old blob URLs are revoked. Navigation links, indexed browser Back/Forward and browser unload warn about unsaved changes; cancelling Back/Forward restores the current route and draft. The guard is `hooks/useUnsavedChangesGuard.ts` (`useUnsavedChangesGuard(isDirty, confirmKey)`, translated question): the design draft (`document.discardConfirm`), `CompanyRequisitesCard` and every `NumberingRow` use it; one set of listeners serves all dirty forms, so leaving asks once (`common.discardUnsavedChanges` when several kinds are unsaved). Opening the PDF in a new tab keeps the draft. Headless Chrome may show a dark native PDF iframe; verification uses valid PDF bytes/text and the *Open the preview in a new tab* link, and does not treat that screenshot as proof of native viewer rendering.
 
-Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. Maximum 20 presets; names and revisions are validated by the server.
+Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. The number of presets depends on the plan (`limits.maxPresets`: 0, 3 or 20); names and revisions are validated by the server.
 
 The Orders action menu opens `CustomizeDocumentModal`, using the same editor with **This document only** scope. Generation sends a complete config and optional staged logo without saving defaults. Existing generated documents use explicit `replace`, expected active revision and a share-link replacement warning. Legacy reconstruction requires confirmation. Replacement status is separate from the active generated receipt; order polling recognizes it.
 

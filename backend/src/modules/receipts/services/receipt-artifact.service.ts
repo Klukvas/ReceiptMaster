@@ -1,6 +1,12 @@
 import { ConflictException, Injectable, Logger } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
-import { DataSource, EntityManager, IsNull, Not } from "typeorm";
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  IsNull,
+  Not,
+} from "typeorm";
 import { createHash, randomUUID } from "crypto";
 import {
   DocumentType,
@@ -17,6 +23,11 @@ import { Order } from "../../orders/entities/order.entity";
 import { DocumentRenderService } from "./document-render.service";
 import { DocumentArtifactsService } from "./document-artifacts.service";
 import { ReceiptSnapshotService } from "./receipt-snapshot.service";
+
+/** How many documents one promotion may retire; see `oldestOverCap`. */
+const RETIRED_PER_PROMOTION = 1;
+/** Oldest records looked at for a purge, so one that is being replaced can be skipped. */
+const PURGE_CANDIDATES = 3;
 
 @Injectable()
 export class ReceiptArtifactService {
@@ -104,6 +115,8 @@ export class ReceiptArtifactService {
       });
       const current = await this.snapshots.lookup(id, userId, manager);
       if (!current) return null;
+      // The plan's limit removed this record's file after the candidate was queued.
+      if (current.content_purged_at) return null;
       if (
         !this.matches(current, generationId) ||
         current.pending_id !== receipt.pending_id ||
@@ -183,80 +196,22 @@ export class ReceiptArtifactService {
     else await this.evictOverCap(manager, userId, type, promotedId, cap);
   }
   /**
-   * For the types whose row must stay: the oldest documents over the cap (never the one
-   * just promoted) lose their file and public link and are marked, so the limit counts
-   * only records that still have content. The row keeps its number and its order slot.
+   * The oldest generated documents of a type that are over the plan's cap, never the one
+   * just promoted, and at most `RETIRED_PER_PROMOTION` of them. An account that is far over
+   * the cap (it was downgraded, or the type had no cap before plans set one) therefore
+   * stops growing instead of losing everything above the cap with its next document.
    */
-  async purgeOverCap(
+  private async oldestOverCap(
     manager: EntityManager,
-    userId: string,
-    type: DocumentType,
+    where: FindOptionsWhere<Receipt>,
     promotedId: string,
     cap: number,
-  ): Promise<void> {
-    const withContent = {
-      user_id: userId,
-      status: ReceiptStatus.GENERATED,
-      document_type: type,
-      content_purged_at: IsNull(),
-    };
-    const total = await manager.count(Receipt, { where: withContent });
-    if (total <= cap) return;
-    const oldest = await manager.find(Receipt, {
-      where: { ...withContent, id: Not(promotedId) },
-      select: [
-        "id",
-        "user_id",
-        "pdf_path",
-        "active_logo_asset_id",
-        "pending_logo_asset_id",
-      ],
-      order: { created_at: "ASC", id: "ASC" },
-      take: total - cap,
-    });
-    const locked = await this.lockRetirements(oldest, userId, manager);
-    const purgedAt = new Date();
-    for (const old of locked) {
-      await this.leases.retire(userId, old.pdf_path, manager);
-      await manager.update(
-        Receipt,
-        { id: old.id, user_id: userId, status: ReceiptStatus.GENERATED },
-        {
-          content_purged_at: purgedAt,
-          pdf_path: null,
-          pdf_url: null,
-          public_token: null,
-        },
-      );
-    }
-  }
-  /**
-   * Brings the type back to the cap after a promotion: the oldest generated documents of the
-   * type (never the one just promoted) are retired and deleted, rows locked in a stable order
-   * before any PDF or logo lease. For the types whose row may go; see `purgeOverCap`.
-   */
-  async evictOverCap(
-    manager: EntityManager,
-    userId: string,
-    type: DocumentType,
-    promotedId: string,
-    cap: number,
-  ): Promise<void> {
-    const total = await manager.count(Receipt, {
-      where: {
-        user_id: userId,
-        status: ReceiptStatus.GENERATED,
-        document_type: type,
-      },
-    });
-    if (total <= cap) return;
-    const oldest = await manager.find(Receipt, {
-      where: {
-        user_id: userId,
-        status: ReceiptStatus.GENERATED,
-        document_type: type,
-        id: Not(promotedId),
-      },
+    candidates = RETIRED_PER_PROMOTION,
+  ): Promise<Receipt[]> {
+    const total = await manager.count(Receipt, { where });
+    if (total <= cap) return [];
+    return manager.find(Receipt, {
+      where: { ...where, id: Not(promotedId) },
       select: [
         "id",
         "user_id",
@@ -266,8 +221,100 @@ export class ReceiptArtifactService {
         "pending_logo_asset_id",
       ],
       order: { created_at: "ASC", id: "ASC" },
-      take: total - cap,
+      take: Math.min(total - cap, candidates),
     });
+  }
+  /**
+   * For the types whose row must stay: the oldest document over the cap loses its file,
+   * frozen HTML, logo and public link and is marked, so the limit counts only records that
+   * still have content. The row keeps its number, its order slot and the snapshot a return
+   * note's quantities are read from.
+   */
+  async purgeOverCap(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+    cap: number,
+  ): Promise<void> {
+    const candidates = await this.oldestOverCap(
+      manager,
+      {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+        content_purged_at: IsNull(),
+      },
+      promotedId,
+      cap,
+      PURGE_CANDIDATES,
+    );
+    for (const candidate of candidates) {
+      const row = await manager.findOne(Receipt, {
+        where: {
+          id: candidate.id,
+          user_id: userId,
+          status: ReceiptStatus.GENERATED,
+          content_purged_at: IsNull(),
+        },
+        select: [
+          "id",
+          "user_id",
+          "pdf_path",
+          "replacement_status",
+          "active_logo_asset_id",
+          "pending_logo_asset_id",
+        ],
+        lock: { mode: "pessimistic_write" },
+      });
+      // A replacement being rendered would write a fresh file onto the purged record; that
+      // document waits for a later promotion and the next oldest is taken instead.
+      if (!row || row.replacement_status === "processing") continue;
+      await this.retire(row, manager);
+      await manager.update(
+        Receipt,
+        { id: row.id, user_id: userId, status: ReceiptStatus.GENERATED },
+        {
+          content_purged_at: new Date(),
+          pdf_path: null,
+          pdf_url: null,
+          public_token: null,
+          html_snapshot: null,
+          active_logo_asset_id: null,
+          replacement_status: null,
+          replacement_error: null,
+          pending_id: null,
+          pending_snapshot: null,
+          pending_html: null,
+          pending_logo_asset_id: null,
+          pending_expected_revision: null,
+        },
+      );
+      return;
+    }
+  }
+  /**
+   * For the types whose row may go: the oldest generated document over the cap is retired
+   * and deleted, rows locked in a stable order before any PDF or logo lease.
+   */
+  async evictOverCap(
+    manager: EntityManager,
+    userId: string,
+    type: DocumentType,
+    promotedId: string,
+    cap: number,
+  ): Promise<void> {
+    const oldest = await this.oldestOverCap(
+      manager,
+      {
+        user_id: userId,
+        status: ReceiptStatus.GENERATED,
+        document_type: type,
+      },
+      promotedId,
+      cap,
+    );
+    if (oldest.length === 0) return;
     // An evicted locking document may have been the last one holding its order locked.
     // The orders are locked first, in id order and before any receipt of theirs, so the
     // lock-flag recount below sees a stable set of documents.

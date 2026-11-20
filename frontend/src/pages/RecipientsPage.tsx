@@ -363,10 +363,6 @@ export const RecipientsPage = () => {
  <RecipientForm
  recipient={editingRecipient}
  onClose={handleFormClose}
- onPlanRefusal={(reason) => {
- handleFormClose();
- upgradePrompt.open(reason);
- }}
  />
  )}
 

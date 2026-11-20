@@ -30,9 +30,9 @@ export interface PlanLimits {
   maxOrdersPerMonth: number | null;
   maxRecipients: number | null;
   /** null = every template */
-  allowedTemplateIds: string[] | null;
+  allowedTemplateIds: readonly string[] | null;
   /** null = every document type */
-  allowedDocumentTypes: PlanDocumentType[] | null;
+  allowedDocumentTypes: readonly PlanDocumentType[] | null;
   /** Generated documents kept per type; null = all of them */
   documentsRetainedPerType: number | null;
   maxPresets: number;
@@ -40,13 +40,13 @@ export interface PlanLimits {
   analyticsHistoryDays: number | null;
   /** Documents carry a "Made with ReceiptMaster" line */
   hasAttribution: boolean;
-  features: Record<PlanFeature, boolean>;
+  features: Readonly<Record<PlanFeature, boolean>>;
 }
 
 /** The template every plan has: the fallback when a saved one is no longer allowed. */
 export const DEFAULT_TEMPLATE_ID = "standard";
 
-const START_TEMPLATE_IDS = [
+const START_TEMPLATE_IDS: readonly string[] = [
   DEFAULT_TEMPLATE_ID,
   "compact",
   "minimal",
@@ -59,7 +59,7 @@ const START_TEMPLATE_IDS = [
   "proforma",
 ];
 
-const NO_FEATURES: Record<PlanFeature, boolean> = {
+const NO_FEATURES: Readonly<Record<PlanFeature, boolean>> = {
   analytics: false,
   profit: false,
   csvExport: false,
@@ -71,7 +71,7 @@ const NO_FEATURES: Record<PlanFeature, boolean> = {
   stockInsights: false,
 };
 
-const ALL_FEATURES: Record<PlanFeature, boolean> = {
+const ALL_FEATURES: Readonly<Record<PlanFeature, boolean>> = {
   analytics: true,
   profit: true,
   csvExport: true,
@@ -87,7 +87,7 @@ const ALL_FEATURES: Record<PlanFeature, boolean> = {
  * The stored plan names predate the public ones: `pro` is sold as "Start" and `business`
  * as "Pro". Renaming the stored values would break a rollback, so only the labels changed.
  */
-export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
+export const PLAN_LIMITS: Readonly<Record<PlanName, PlanLimits>> = {
   free: {
     maxProducts: 10,
     maxOrdersPerMonth: 20,

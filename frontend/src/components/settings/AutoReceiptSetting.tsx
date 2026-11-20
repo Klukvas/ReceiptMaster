@@ -10,7 +10,7 @@ import {
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSection } from "./SettingsSection";
 import { usePlan } from "../../hooks/usePlan";
-import { planRefusalReason } from "../../lib/plan-refusal";
+import { planRefusalOf } from "../../lib/plan-refusal";
 import { PlanLockButton } from "../subscription/PlanLock";
 import { useUpgradePrompt } from "../../hooks/usePlanLock";
 
@@ -26,8 +26,11 @@ export const AutoReceiptSetting = () => {
 
   const plan = usePlan();
   const upgradePrompt = useUpgradePrompt();
+  const isLocked = !plan.allows("autoReceipt");
   // Turning the switch off is always allowed, so an account that lost the feature can stop it.
-  const isTurningOnLocked = !isEnabled && !plan.allows("autoReceipt");
+  const isTurningOnLocked = !isEnabled && isLocked;
+  // Left on from a higher plan: the server skips the receipt, and the switch must not hide that.
+  const isOnButInactive = Boolean(isEnabled) && isLocked;
   const retainedPerType = plan.limits?.documentsRetainedPerType ?? null;
 
   const handleToggle = () => {
@@ -50,7 +53,7 @@ export const AutoReceiptSetting = () => {
               ),
         ),
       onError: (mutationError) => {
-        const reason = planRefusalReason(mutationError, "autoReceipt");
+        const reason = planRefusalOf(mutationError)?.reason;
         if (reason) upgradePrompt.open(reason);
         else toast.error(parseApiError(mutationError).message);
       },
@@ -112,7 +115,15 @@ export const AutoReceiptSetting = () => {
               </span>
             </button>
           </div>
-          {isTurningOnLocked && !isLoading && (
+          {isOnButInactive && !isLoading && (
+            <p
+              data-testid="auto-receipt-inactive"
+              className="text-sm text-warning-base"
+            >
+              {t("settings.autoReceiptInactiveOnPlan")}
+            </p>
+          )}
+          {isLocked && !isLoading && (
             <PlanLockButton
               reason="autoReceipt"
               subject={t("settings.autoReceiptTitle", "Automatic receipts")}

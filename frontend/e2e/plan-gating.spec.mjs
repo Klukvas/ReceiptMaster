@@ -8,6 +8,12 @@
 //  - Start: all of that is open, analytics is limited to the plan's 90 days (no "1y" preset,
 //    bounded date inputs, a note), and only the CSV export is locked.
 //  - A lock is a real button whose click opens the upgrade dialog for its reason.
+//  - A 402 on create keeps the form and what was typed; a document whose file was removed
+//    offers no download, share or replacement; automatic receipts left on from a higher plan
+//    say so and can be switched off.
+//  - With billing on (the build flag is swapped for the page): a template lock names the plan
+//    that has that template, the carousel ignores keys under the upgrade dialog, and an
+//    unknown plan status sells nothing.
 
 import {
   BASE_URL,
@@ -17,7 +23,7 @@ import {
 } from "./support/harness.mjs";
 import { Results, settle } from "./support/runner.mjs";
 import { makeOrder, subscriptionStatusFor } from "./support/fixtures.mjs";
-import { documentHandlers, signoffHandlers } from "./support/document-mocks.mjs";
+import { TEMPLATES, documentHandlers, signoffHandlers } from "./support/document-mocks.mjs";
 
 const VIEWPORT = { width: 1280, height: 900 };
 
@@ -41,14 +47,31 @@ const SUPPLIER = {
   updated_at: "2026-01-02T00:00:00.000Z",
 };
 
-const withPlan = async (plan, usage, run, orders = []) =>
+// The dev server is built with billing off. A spec that needs the purchase surface swaps the
+// module that reads the build flag and lets the capability check answer "enabled".
+const enableBilling = (page) =>
+  page.route("**/src/providers/billing-enabled.ts*", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: "export function resolveBillingEnabled() { return true; }",
+    }),
+  );
+
+const PURCHASE_BUTTONS = /upgrade to|manage subscription/i;
+
+const withPlan = async (plan, usage, run, orders = [], { billing = false } = {}) =>
   withPage({ viewport: VIEWPORT }, async (page) => {
     page.setDefaultTimeout(8000);
+    if (billing) await enableBilling(page);
     const state = createState(orders);
+    state.analyticsQueries = [];
     state.signoff = { signature: null, stamp: null };
     state.designId = "standard";
     state.handlers = [
-      async (route, { path, method }, json) => {
+      async (route, { path, method, search }, json) => {
+        if (path === "/billing/config")
+          return json(route, { billingEnabled: billing }), true;
+        if (ANALYTICS_ONLY.includes(path)) state.analyticsQueries.push(new URLSearchParams(search));
         if (path === "/subscription/status")
           return json(route, subscriptionStatusFor(plan, usage)), true;
         if (path === "/settings/onboarding-status")
@@ -246,9 +269,23 @@ const checkStart = (results) =>
         (Date.now() - new Date(earliest).getTime()) / 86400000 < 92,
       String(earliest),
     );
+    const startDates = () => [...new Set(state.analyticsQueries.map((query) => query.get("startDate")))];
     results.check(
-      "start: analytics requests carry the limited start date",
-      called(state, ANALYTICS_ONLY).length > 0,
+      "start: every analytics request asks from the first day of the plan's window",
+      state.analyticsQueries.length > 0 && startDates().length === 1 && startDates()[0] === earliest,
+      `sent ${startDates().join(", ")}; window starts ${earliest}`,
+    );
+    const startInput = page.getByLabel("Start date");
+    await startInput.fill("");
+    await startInput.blur();
+    await page.waitForLoadState("networkidle");
+    results.check(
+      "start: a cleared start date is put back to the window's first day, never \"All time\"",
+      (await startInput.inputValue()) === earliest &&
+        startDates().length === 1 &&
+        startDates()[0] === earliest &&
+        !/All time/.test(await page.locator("main").innerText()),
+      `field ${await startInput.inputValue()}; sent ${startDates().join(", ")}`,
     );
     results.check(
       "start: CSV export is a lock that opens the CSV upgrade dialog",
@@ -277,6 +314,219 @@ const checkStart = (results) =>
     );
   });
 
+const PRODUCT_LIMIT = { error: "Product limit reached", errorCode: "PRODUCT_LIMIT_EXCEEDED" };
+const UNKNOWN_REFUSAL = { error: "Not on this plan", errorCode: "SOMETHING_NEWER" };
+
+const checkRefusedCreateKeepsForm = (results) =>
+  withPlan("free", {}, async (page, state) => {
+    const refusals = [PRODUCT_LIMIT, UNKNOWN_REFUSAL];
+    state.handlers.unshift(async (route, { path, method }, json) => {
+      if (path !== "/products" || method !== "POST") return false;
+      await json(route, refusals.shift() ?? UNKNOWN_REFUSAL, 402);
+      return true;
+    });
+    await open(page, "/products");
+    await page.getByRole("button", { name: "Create Product" }).first().click();
+    const name = page.getByLabel("Product Name");
+    await name.fill("Kenya AA beans 250g");
+    await page.getByLabel("Purchase Price").fill("7.5");
+    await page.getByLabel("Sale Price").fill("12.4");
+    await page.getByLabel("Quantity").fill("31");
+    const create = page.getByRole("button", { name: "Create", exact: true });
+    await create.click();
+    const notice = page.getByTestId("plan-refusal");
+    await notice.waitFor();
+    const typed = async () =>
+      [await name.inputValue(), await page.getByLabel("Sale Price").inputValue(), await page.getByLabel("Quantity").inputValue()].join("|");
+    results.check(
+      "free: a 402 on product create keeps the form open with everything typed",
+      (await typed()) === "Kenya AA beans 250g|12.4|31" && (await page.getByRole("dialog").count()) === 1,
+      await typed(),
+    );
+    results.check(
+      "free: the refusal is explained inside the form, with no purchase control while billing is off",
+      /Product limit reached/.test(await notice.innerText()) &&
+        (await page.getByTestId("plan-refusal-upgrade").count()) === 0 &&
+        (await page.getByRole("button", { name: PURCHASE_BUTTONS }).count()) === 0,
+      await notice.innerText(),
+    );
+    await create.click();
+    results.check(
+      "free: a 402 with a code this client does not know is not shown as the product limit",
+      await settle(async () => {
+        const text = await notice.innerText();
+        return /not included in your plan/i.test(text) && !/Product limit/.test(text);
+      }),
+      await notice.innerText(),
+    );
+    results.check("free: the form still holds the typed values after the second refusal", (await typed()) === "Kenya AA beans 250g|12.4|31");
+  });
+
+const purgedOrder = () => {
+  const order = makeOrder({ id: "order-1", receiptId: "receipt-1", receiptStatus: "generated", recipientName: "Aurora Purged" });
+  const [current] = order.receipts;
+  return {
+    ...order,
+    receipts: [
+      { ...current, purged: true },
+      { ...current, id: "receipt-0", number: "R-0000", status: "void", purged: true, created_at: "2026-01-20T10:00:00.000Z", voided_at: "2026-01-21T10:00:00.000Z" },
+    ],
+  };
+};
+
+const checkPurgedDocument = (results) =>
+  withPlan(
+    "free",
+    {},
+    async (page) => {
+      await open(page, "/orders");
+      await page.getByText("Aurora Purged").first().click();
+      const card = page.getByTestId("document-card").first();
+      await card.waitFor();
+      // textContent, not the accessible tree: the voided history sits in a closed <details>.
+      const buttons = await card.locator("button").allTextContents();
+      results.check(
+        "free: a document whose file was removed offers no download, print, share or replacement",
+        (await card.getByTestId("document-purged").count()) === 2 &&
+          !buttons.some((label) => /download|print|share|replace|customi[sz]e|again/i.test(label)),
+        buttons.join(" | "),
+      );
+      results.check(
+        "free: a voided document whose file was removed says so in the history instead of Download",
+        (await card.getByTestId("voided-document").getByTestId("document-purged").count()) === 1 &&
+          (await card.getByTestId("voided-document").locator("button").count()) === 0,
+      );
+    },
+    [purgedOrder()],
+  );
+
+const checkAutoReceiptLeftOn = (results) =>
+  withPlan("free", {}, async (page, state) => {
+    const saved = [];
+    state.handlers.unshift(async (route, { path, method, body }, json) => {
+      if (path !== "/settings/auto-receipt") return false;
+      if (method === "POST") saved.push(JSON.parse(body).enabled);
+      await json(route, { data: { enabled: method === "GET" } });
+      return true;
+    });
+    await open(page, "/settings?tab=advanced");
+    const toggle = page.getByRole("switch");
+    results.check(
+      "free: automatic receipts left on from a higher plan are marked as not active",
+      (await isShown(page, "auto-receipt-inactive")) && (await toggle.getAttribute("aria-checked")) === "true",
+    );
+    await toggle.click();
+    results.check(
+      "free: switching automatic receipts off is saved, with no upgrade dialog",
+      (await settle(async () => (await toggle.getAttribute("aria-checked")) === "false")) &&
+        JSON.stringify(saved) === "[false]" &&
+        (await page.getByRole("dialog").count()) === 0,
+      JSON.stringify(saved),
+    );
+  });
+
+// As the API lists them for a Free account: one template of Start and one only Pro has.
+const [STANDARD_TEMPLATE] = TEMPLATES;
+const LOCKED_TEMPLATES = [
+  STANDARD_TEMPLATE,
+  { ...STANDARD_TEMPLATE, id: "compact", name: "Compact", locked: true },
+  { ...STANDARD_TEMPLATE, id: "dark", name: "Dark", locked: true },
+];
+
+const checkTemplateLockNamesItsPlan = (results) =>
+  withPlan(
+    "free",
+    {},
+    async (page, state) => {
+      state.handlers.unshift(async (route, { path }, json) => {
+        if (path !== "/settings/templates") return false;
+        await json(route, { data: LOCKED_TEMPLATES });
+        return true;
+      });
+      await open(page, "/settings?tab=documents");
+      await page.getByRole("button", { name: "See template previews" }).click();
+      const carousel = page.locator('[aria-labelledby="carousel-dialog-title"]');
+      const lock = carousel.getByTestId("carousel-template-lock");
+      const lockNameFor = async (templateName) => {
+        await carousel.getByRole("button", { name: templateName, exact: true }).click();
+        await page.locator("#carousel-dialog-title", { hasText: templateName }).waitFor();
+        return (await lock.getAttribute("aria-label")) ?? "";
+      };
+      const startOnly = await lockNameFor("Compact");
+      const proOnly = await lockNameFor("Dark");
+      results.check(
+        "free, billing on: a Start template is \"Available on Start\", a Pro-only one \"Available on Pro\"",
+        /Available on Start$/.test(startOnly) && /Available on Pro$/.test(proOnly),
+        `${startOnly} / ${proOnly}`,
+      );
+
+      await lock.click();
+      const upgrade = page.getByRole("dialog", { name: "Template not in your plan" });
+      await upgrade.waitFor();
+      const offers = await upgrade.getByRole("button", { name: /upgrade to/i }).allInnerTexts();
+      results.check(
+        "free, billing on: the dialog for a Pro-only template offers Pro and not Start",
+        offers.length === 1 && /Upgrade to Pro/.test(offers[0]),
+        offers.join(" | "),
+      );
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("Escape");
+      await upgrade.waitFor({ state: "hidden" });
+      results.check(
+        "the carousel under the upgrade dialog ignores the arrows, and Escape closes only the dialog",
+        (await carousel.isVisible()) && (await page.locator("#carousel-dialog-title").innerText()) === "Dark",
+        await page.locator("#carousel-dialog-title").innerText().catch(() => "carousel closed"),
+      );
+    },
+    [],
+    { billing: true },
+  );
+
+const checkBillingOffLocks = (results) =>
+  withPlan("free", {}, async (page) => {
+    await open(page, "/suppliers");
+    const lock = page.getByTestId("suppliers-create-lock");
+    await lock.waitFor();
+    const lockName = (await lock.getAttribute("aria-label")) ?? "";
+    await lock.click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByText("Plan upgrades are not available right now.").waitFor();
+    results.check(
+      "billing off: a lock names no plan and its dialog has no purchase or portal button",
+      /Not included in your current plan/.test(lockName) &&
+        (await dialog.getByRole("button", { name: PURCHASE_BUTTONS }).count()) === 0,
+      lockName,
+    );
+  });
+
+const checkUnknownStatusSellsNothing = (results) =>
+  withPlan(
+    "free",
+    {},
+    async (page, state) => {
+      state.handlers.unshift(async (route, { path, method }, json) => {
+        if (path === "/subscription/status") return await json(route, { error: "Boom", errorCode: "INTERNAL_SERVER_ERROR" }, 500), true;
+        if (path === "/settings/auto-receipt" && method === "POST")
+          return await json(route, { error: "No", errorCode: "PLAN_FEATURE_RESTRICTED", feature: "autoReceipt" }, 402), true;
+        return false;
+      });
+      await open(page, "/settings?tab=advanced");
+      results.check("unknown status: nothing is locked", (await page.locator("[data-plan-lock]").count()) === 0);
+      // The server refuses the switch, which is the only way to reach the dialog without a status.
+      await page.getByRole("switch").click();
+      const dialog = page.getByRole("dialog", { name: "Automatic receipts are not in your plan" });
+      await dialog.waitFor();
+      results.check(
+        "unknown status, billing on: the upgrade dialog explains and offers no purchase or portal",
+        /could not check your plan/i.test(await dialog.innerText()) &&
+          (await dialog.getByRole("button", { name: PURCHASE_BUTTONS }).count()) === 0,
+        await dialog.innerText(),
+      );
+    },
+    [],
+    { billing: true },
+  );
+
 export const run = async () => {
   const results = new Results("plan gating");
   await checkFreeAnalytics(results);
@@ -285,5 +535,11 @@ export const run = async () => {
   await checkFreeLists(results);
   await checkFreeDocumentTypes(results);
   await checkStart(results);
+  await checkRefusedCreateKeepsForm(results);
+  await checkPurgedDocument(results);
+  await checkAutoReceiptLeftOn(results);
+  await checkBillingOffLocks(results);
+  await checkTemplateLockNamesItsPlan(results);
+  await checkUnknownStatusSellsNothing(results);
   return results;
 };

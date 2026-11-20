@@ -63,7 +63,12 @@ describe("ReceiptsService", () => {
     active: jest.Mock;
     releaseLogo: jest.Mock;
   };
-  let documents: { read: jest.Mock; assertTemplate: jest.Mock };
+  let documents: {
+    read: jest.Mock;
+    assertTemplate: jest.Mock;
+    planLimits: jest.Mock;
+    templateForRender: jest.Mock;
+  };
   let renders: { preview: jest.Mock };
   const mockUser = { id: "user-1" } as User;
 
@@ -146,6 +151,8 @@ describe("ReceiptsService", () => {
       read: jest
         .fn()
         .mockResolvedValue({ config: legacyConfig(null), revision: 0 }),
+      planLimits: jest.fn().mockResolvedValue(PLAN_LIMITS.business),
+      templateForRender: jest.fn(async (_userId: string, id: string) => id),
       assertTemplate: jest.fn().mockResolvedValue(undefined),
     };
     renders = {
@@ -1226,8 +1233,35 @@ describe("ReceiptsService", () => {
         mockUser.id,
         { config: legacyConfig(null), logoAction: "keep" },
         expect.any(Object),
+        undefined,
+        { allowsLogo: true, allowsSignoff: true, hasAttribution: false },
       );
       expect(receiptsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("shows a free account what it would really issue: the fallback template, no logo, the service line", async () => {
+      documents.planLimits.mockResolvedValue(PLAN_LIMITS.free);
+      documents.templateForRender.mockResolvedValue("standard");
+      documents.read.mockResolvedValue({
+        config: { ...legacyConfig(null), templateId: "compact" },
+        revision: 0,
+      });
+
+      await service.generateTestReceipt(mockUser);
+
+      expect(documents.templateForRender).toHaveBeenCalledWith(
+        mockUser.id,
+        "compact",
+      );
+      expect(renders.preview).toHaveBeenCalledWith(
+        mockUser.id,
+        expect.objectContaining({
+          config: expect.objectContaining({ templateId: "standard" }),
+        }),
+        expect.any(Object),
+        undefined,
+        { allowsLogo: false, allowsSignoff: false, hasAttribution: true },
+      );
     });
   });
 

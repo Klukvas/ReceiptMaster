@@ -64,8 +64,17 @@ export class DocumentPreviewController {
     @UploadedFile() file: Express.Multer.File | undefined,
     @Res() res: Response,
   ) {
-    const draft = documentPayload(previewSchema, body, file);
-    await this.configs.assertTemplate(req.user.id, draft.config.templateId);
+    const payload = documentPayload(previewSchema, body, file);
+    const draft = {
+      ...payload,
+      config: {
+        ...payload.config,
+        templateId: await this.configs.templateForRender(
+          req.user.id,
+          payload.config.templateId,
+        ),
+      },
+    };
     const order = draft.orderId
       ? await this.orders.findOne({
           where: { id: draft.orderId, user_id: req.user.id },

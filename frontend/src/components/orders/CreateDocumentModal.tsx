@@ -49,6 +49,8 @@ import { selectClass } from "../settings/document-ui";
 import { Button } from "../ui/Button";
 import { RetentionConfirmModal } from "../documents/RetentionConfirmModal";
 import { PlanLockButton } from "../subscription/PlanLock";
+import { useSubscription } from "../../hooks/useSubscription";
+import { PLAN_ORDER, easiestTemplateToUnlock } from "../../lib/plan-catalog";
 import { Modal } from "../ui/Modal";
 import { ActDetailsFields, InvoiceDetailsFields, QuoteDetailsFields } from "./DocumentDetailsFields";
 import { RequisitesNotice } from "./RequisitesNotice";
@@ -103,6 +105,12 @@ export function CreateDocumentModal({
   const createDocument = useCreateDocument();
   const queryClient = useQueryClient();
   const design = useTemplateChoice(type);
+  const { status: planStatus } = useSubscription();
+  // One lock stands for every locked design; it names the plan that opens the first of them.
+  const lockedDesignId = easiestTemplateToUnlock(
+    design.lockedOptions.map((option) => option.id),
+    planStatus?.plan ?? PLAN_ORDER[0],
+  );
   const signoff = useSignoff();
   const willPrintSignoff =
     Boolean(signoff.data?.signature || signoff.data?.stamp) &&
@@ -385,6 +393,7 @@ export function CreateDocumentModal({
               </span>
               <PlanLockButton
                 reason="templates"
+                templateId={lockedDesignId}
                 subject={t("documents.designsLocked", {
                   count: design.lockedOptions.length,
                 })}

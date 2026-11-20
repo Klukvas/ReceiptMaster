@@ -387,10 +387,6 @@ export const ProductsPage = () => {
         <ProductForm
           product={editingProduct}
           onClose={handleFormClose}
-          onPlanRefusal={(reason) => {
-            handleFormClose();
-            upgradePrompt.open(reason);
-          }}
         />
       )}
 

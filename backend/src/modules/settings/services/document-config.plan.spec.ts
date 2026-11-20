@@ -129,6 +129,30 @@ describe("document configuration and the plan's templates", () => {
   });
 });
 
+describe("the template a preview or a test receipt renders with", () => {
+  it("is the fallback when the request is the saved default the plan lost", async () => {
+    const { service } = setup({ plan: "free", savedTemplate: "compact" });
+
+    await expect(service.templateForRender(USER, "compact")).resolves.toBe(
+      "standard",
+    );
+  });
+
+  it("is the requested template when the plan includes it", async () => {
+    const { service } = setup({ plan: "pro", savedTemplate: "standard" });
+
+    await expect(service.templateForRender(USER, "wave")).resolves.toBe("wave");
+  });
+
+  it("refuses a template outside the plan that is not the saved default", async () => {
+    const { service } = setup({ plan: "free", savedTemplate: "compact" });
+
+    await expect(
+      service.templateForRender(USER, "elegant"),
+    ).rejects.toMatchObject({ errorCode: "TEMPLATE_PLAN_RESTRICTED" });
+  });
+});
+
 describe("document configuration and the plan's logo", () => {
   it("refuses a logo upload on a plan without the logo and stores nothing", async () => {
     const { service, assets } = setup({ plan: "free" });

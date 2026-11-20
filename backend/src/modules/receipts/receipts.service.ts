@@ -60,6 +60,7 @@ import {
   releaseDocumentNumber,
 } from "./receipt-number";
 import { RetentionAction, retentionAction } from "./document-retention";
+import { planBranding } from "./templates/attribution";
 import {
   isDocumentTypeAllowed,
   readPlanLimits,
@@ -650,12 +651,21 @@ export class ReceiptsService {
   }
 
   async generateTestReceipt(user: User): Promise<Buffer> {
-    const { config } = await this.documents.read(user.id);
-    await this.documents.assertTemplate(user.id, config.templateId);
+    const [{ config }, limits] = await Promise.all([
+      this.documents.read(user.id),
+      this.documents.planLimits(user.id),
+    ]);
+    // The sample must look like what the account would really issue on its plan.
+    const templateId = await this.documents.templateForRender(
+      user.id,
+      config.templateId,
+    );
     return this.renders.preview(
       user.id,
-      { config, logoAction: "keep" },
+      { config: { ...config, templateId }, logoAction: "keep" },
       sampleOrder(user.id),
+      undefined,
+      planBranding(limits),
     );
   }
 
@@ -1114,6 +1124,9 @@ export class ReceiptsService {
         throw new ConflictException(
           "Document changed or replacement is running. Reload before replacing.",
         );
+      // Under the row lock: the limit may have removed the file since the read above.
+      if (receipt.content_purged_at)
+        throw ApiErrors.DOCUMENT_CONTENT_PURGED(id);
       const generationId = crypto.randomUUID();
       await manager.update(
         Receipt,
@@ -1211,6 +1224,7 @@ export class ReceiptsService {
         user_id: user.id,
         status: ReceiptStatus.GENERATED,
         public_token: IsNull(),
+        content_purged_at: IsNull(),
       })
       .andWhere(
         `EXISTS (SELECT 1 FROM "orders" "o" WHERE "o"."id" = "receipts"."order_id" AND "o"."deleted_at" IS NULL)`,

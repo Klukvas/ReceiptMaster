@@ -104,9 +104,10 @@ describe("resolveAnalyticsWindow", () => {
   });
 
   describe("plan with a 90-day history", () => {
-    const earliest = utc("2025-12-15T00:00:00.000Z");
+    // Ninety calendar days with today (15 March) as the last one.
+    const earliest = utc("2025-12-16T00:00:00.000Z");
 
-    it("clamps a wider range to start 90 days before today, keeping its end", () => {
+    it("clamps a wider range to the last 90 days, keeping its end", () => {
       const endDate = utc("2026-03-15T23:59:59.999Z");
 
       expect(
@@ -178,7 +179,7 @@ describe("resolveAnalyticsWindow", () => {
 
       expect(lastInstant).toMatchObject({ startDate: earliest });
       expect(nextDay).toMatchObject({
-        startDate: utc("2025-12-16T00:00:00.000Z"),
+        startDate: utc("2025-12-17T00:00:00.000Z"),
       });
     });
   });

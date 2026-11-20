@@ -46,6 +46,8 @@ interface UpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   reason: UpgradeReason;
+  /** The locked template, for the "templates" reason: it decides which plans are offered. */
+  templateId?: string;
 }
 
 const REASON_ICONS: Record<UpgradeReason, LucideIcon> = {
@@ -128,6 +130,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   isOpen,
   onClose,
   reason,
+  templateId,
 }) => {
   const { t } = useTranslation();
   const { status } = useSubscription();
@@ -137,10 +140,13 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   const Icon = REASON_ICONS[reason];
   const title = t(`subscription.reasons.${reason}.title`);
   const description = t(`subscription.reasons.${reason}.description`);
-  const currentPlan = status?.plan ?? "free";
-  const offeredPlans = plansOfferedFor(reason, currentPlan);
+  // Nothing is sold on a guess: an unknown status (loading or failed) could belong to a
+  // paying account, so it gets the explanation only, as with billing switched off.
+  const offeredPlans = status
+    ? plansOfferedFor(reason, status.plan, templateId)
+    : [];
 
-  if (!billingEnabled)
+  if (!billingEnabled || !status)
     return (
       <Modal
         isOpen={isOpen}
@@ -154,7 +160,12 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <Icon className="h-12 w-12 text-warning-base" />
           </div>
           <p className="text-content-secondary mb-6">
-            {description} {t("subscription.upgradesUnavailable")}
+            {description}{" "}
+            {t(
+              billingEnabled
+                ? "subscription.statusUnknown"
+                : "subscription.upgradesUnavailable",
+            )}
           </p>
           <Button onClick={onClose}>{t("common.close", "Close")}</Button>
         </div>

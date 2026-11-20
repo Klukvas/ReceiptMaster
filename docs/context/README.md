@@ -120,7 +120,7 @@ Typed documents (everything but the waybill) live in `backend/src/modules/receip
 ### Adding a document type
 
 1. Add the value to `DocumentType` (`entities/receipt.entity.ts`) with a migration for the Postgres enum, and decide whether the partial unique index (one live row per order and type) applies.
-2. Add its spec to `DOCUMENT_TYPE_SPECS` (`document-types.ts`); add it to `LOCKING_DOCUMENT_TYPES` (`order-lock.ts`) if `locking`, to `REISSUABLE_DOCUMENT_TYPES` if a void frees the slot, and to the retention exemptions (`document-retention.ts`) if its rows must never be evicted.
+2. Add its spec to `DOCUMENT_TYPE_SPECS` (`document-types.ts`); add it to `LOCKING_DOCUMENT_TYPES` (`order-lock.ts`) if `locking`, to `REISSUABLE_DOCUMENT_TYPES` if a void frees the slot, and to `RECORD_KEPT_TYPES` (`document-retention.ts`) if its row must outlive the plan's limit and lose only its file.
 3. Add its `details` schema (`document-schemas.ts`) and freezing (`frozen-document.ts`), and any new view field in `services/document-view.ts`; templates read only view flags, never the type.
 4. Add every new label to all three languages of `DOCUMENT_LABELS` and an entry to `STYLE_LABEL_OVERRIDES` (`document-labels.ts`).
 5. Mirror the type in the frontend (`frontend/src/lib/document-types.ts`, locales); `frontend/e2e/document-types-parity.spec.mjs` compares the two.

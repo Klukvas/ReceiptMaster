@@ -533,6 +533,7 @@
     "autoReceiptLabel": "Automatically create a waybill when an order is confirmed",
     "autoReceiptHint": "The {{count}} most recent waybills are kept. Approving many orders at once replaces the oldest ones.",
     "autoReceiptInstant": "This switch applies immediately; there is nothing to save.",
+    "autoReceiptInactiveOnPlan": "The switch is on, but your plan does not include automatic waybills, so none is created when an order is confirmed. You can switch it off.",
     "autoReceiptEnabled": "Waybills will be created on confirm",
     "autoReceiptDisabled": "Automatic waybills turned off",
     "templateNames": {
@@ -767,7 +768,7 @@
         "feat2": "10 products and 10 recipients",
         "feat3": "1 standard template: waybill, invoice, sales receipt",
         "cta": "Get started",
-        "feat4": "This month's orders and turnover"
+        "feat4": "Order summary and this month's turnover"
       },
       "pro": {
         "name": "Start",
@@ -966,7 +967,7 @@
     "ordersCount_other": "{{count}} orders",
     "locked": {
       "analyticsTitle": "Analytics comes with a paid plan",
-      "analyticsDescription": "Revenue and turnover charts, the breakdown by products and customers and any period you pick. Your plan shows this month's orders and turnover on the home page."
+      "analyticsDescription": "Revenue and turnover charts, the breakdown by products and customers and any period you pick. Your plan shows the order summary and this month's turnover on the home page."
     },
     "historyLimited": "Your plan shows the last {{count}} days."
   },
@@ -1050,6 +1051,8 @@
     "planUnavailable": "Not included in your current plan",
     "upgradeTo": "Upgrade to {{plan}}",
     "upgradesUnavailable": "Plan upgrades are not available right now.",
+    "viewPlansNewTab": "View plans (opens in a new tab)",
+    "statusUnknown": "We could not check your plan right now, so no plan change is offered here. Reload the page and try again.",
     "availableOn": "Available on {{plan}}",
     "recipientsUsage": "Recipients",
     "recipientsLimit": "Up to {{count}} recipients",
@@ -1123,7 +1126,7 @@
       },
       "analytics": {
         "title": "Analytics is not in your plan",
-        "description": "Charts, the breakdown by products and customers and period comparison come with a paid plan. Your plan shows this month's orders and turnover."
+        "description": "Charts, the breakdown by products and customers and period comparison come with a paid plan. Your plan shows the order summary and this month's turnover."
       },
       "profit": {
         "title": "Profit is not in your plan",
@@ -1259,6 +1262,7 @@
     "invalidFormatting": "Enter a valid time zone to see an example.",
     "presets": "Saved sets of settings",
     "presetsHelp": "Save the current settings under a name and apply them again later. Applying a set only fills in the form; nothing is saved until you press Save.",
+    "presetsKeptLocked": "Sets saved on a higher plan are kept. On your plan they cannot be applied or changed, only deleted.",
     "savedPresets": "Saved sets",
     "choosePreset": "Choose a set",
     "usePreset": "Apply set",

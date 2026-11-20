@@ -24,6 +24,7 @@ import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
+import { useSubscriptionRefreshOnOpen } from "../hooks/useSubscriptionRefresh";
 import { hasLiveSubscription } from "../lib/subscriptionApi";
 import {
   PLAN_ORDER,
@@ -72,7 +73,7 @@ const PLAN_COLORS: Record<
   },
 };
 
-const SubscriptionTab = () => {
+const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
   const { t } = useTranslation();
   const { status, isLoading, isError, refetch } = useSubscription();
   const {
@@ -81,6 +82,8 @@ const SubscriptionTab = () => {
     handleManage,
     billingEnabled,
   } = useCheckout();
+  // Without billing there is no checkout or portal to come back from.
+  useSubscriptionRefreshOnOpen(isLandingTab && billingEnabled);
 
   const currentPlan = status?.plan ?? "free";
   const billingStatus = status?.billingStatus;
@@ -331,6 +334,8 @@ export const SettingsPage = () => {
   const setActiveTab = (tab: SettingsTab) =>
     setSearchParams({ tab }, { replace: true });
 
+  // The provider's return link opens the page on this tab; a click on the tab does not count.
+  const [isLandedOnSubscription] = useState(activeTab === "subscription");
   const [hasOpenedDocuments, setHasOpenedDocuments] = useState(activeTab === "documents");
   if (activeTab === "documents" && !hasOpenedDocuments) setHasOpenedDocuments(true);
 
@@ -488,7 +493,9 @@ export const SettingsPage = () => {
           </div>
         )}
 
-        {activeTab === "subscription" && <SubscriptionTab />}
+        {activeTab === "subscription" && (
+          <SubscriptionTab isLandingTab={isLandedOnSubscription} />
+        )}
 
         {activeTab === "advanced" && <AutoReceiptSetting />}
       </div>

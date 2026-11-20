@@ -16,10 +16,10 @@ import {
   MAX_QUANTITY,
 } from "../../lib/product-metrics";
 import { ErrorCode, parseApiError } from "../../lib/api-errors";
-import { planRefusalReason } from "../../lib/plan-refusal";
-import type { UpgradeReason } from "../../lib/plan-catalog";
+import { planRefusalOf, type PlanRefusal } from "../../lib/plan-refusal";
 import { usePlan } from "../../hooks/usePlan";
-import { PlanLockButton } from "../subscription/PlanLock";
+import { PlanLockHint } from "../subscription/PlanLock";
+import { PlanRefusalNotice } from "../subscription/PlanRefusalNotice";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
@@ -37,8 +37,6 @@ import {
 interface ProductFormProps {
   product?: Product | null;
   onClose: () => void;
-  /** The server (or a locked field) says the plan does not allow this; the page explains it. */
-  onPlanRefusal?: (reason: UpgradeReason) => void;
 }
 
 type QuantityConflict = { readonly server: number; readonly mine: number };
@@ -54,7 +52,6 @@ const FIELD_IDS = {
 export const ProductForm = ({
   product,
   onClose,
-  onPlanRefusal,
 }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormValues>({
     name: "",
@@ -66,6 +63,8 @@ export const ProductForm = ({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState<string>("");
+  // A 402 is explained in the form itself, so nothing typed is lost.
+  const [planRefusal, setPlanRefusal] = useState<PlanRefusal | null>(null);
   // The stock a quantity edit replaces: the loaded value, or the server's after
   // a conflict, so saving again is an informed overwrite.
   const [quantityBaseline, setQuantityBaseline] = useState<number | null>(null);
@@ -136,14 +135,11 @@ export const ProductForm = ({
   };
 
   // A 402 that slipped past the page's pre-check (the cached plan status was stale).
-  const reportPlanRefusal = (
-    error: unknown,
-    fallback: UpgradeReason | null,
-  ): boolean => {
-    const reason = planRefusalReason(error, fallback);
-    if (!reason || !onPlanRefusal) return false;
+  const reportPlanRefusal = (error: unknown): boolean => {
+    const refusal = planRefusalOf(error);
+    if (!refusal) return false;
     queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
-    onPlanRefusal(reason);
+    setPlanRefusal(refusal);
     return true;
   };
 
@@ -161,7 +157,7 @@ export const ProductForm = ({
       onClose();
     },
     onError: (error: unknown) => {
-      if (reportPlanRefusal(error, "products")) return;
+      if (reportPlanRefusal(error)) return;
       const { code, message } = parseApiError(error);
       // A taken name is a problem with that field, not with the form.
       if (code === ErrorCode.PRODUCT_ALREADY_EXISTS) {
@@ -184,7 +180,7 @@ export const ProductForm = ({
       onClose();
     },
     onError: (error: unknown, { id, data }) => {
-      if (reportPlanRefusal(error, null)) return;
+      if (reportPlanRefusal(error)) return;
       const { code, message } = parseApiError(error);
       // Nothing was saved; the form keeps every typed value for a second try.
       if (
@@ -243,6 +239,7 @@ export const ProductForm = ({
     e.preventDefault();
     setErrors({});
     setBackendError("");
+    setPlanRefusal(null);
     setQuantityConflict(null);
     if (!validateForm()) return;
 
@@ -293,6 +290,7 @@ export const ProductForm = ({
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {planRefusal && <PlanRefusalNotice refusal={planRefusal} />}
           {backendError && (
             <div className="p-3 bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] rounded-lg">
               <div className="flex items-center">
@@ -481,12 +479,7 @@ export const ProductForm = ({
                     </Button>
                   </>
                 )}
-                <PlanLockButton
-                  reason="suppliers"
-                  subject={t("products.supplier", "Supplier")}
-                  size="sm"
-                  onOpen={onPlanRefusal}
-                />
+                <PlanLockHint reason="suppliers" />
               </div>
             )}
             {isSuppliersError && (

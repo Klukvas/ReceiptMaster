@@ -14,10 +14,30 @@ import { ReceiptSnapshotService } from "./receipt-snapshot.service";
 
 const USER = "user-1";
 
-function setup(plan: PlanName | null, generatedCount: number) {
-  const oldest = [
-    { id: "old-1", user_id: USER, pdf_path: "object-storage://b/old-1.pdf" },
-  ];
+type OldRow = {
+  id: string;
+  user_id: string;
+  pdf_path: string;
+  replacement_status: string | null;
+  active_logo_asset_id: string | null;
+  pending_logo_asset_id: string | null;
+};
+
+const oldRow = (id: string, overrides: Partial<OldRow> = {}): OldRow => ({
+  id,
+  user_id: USER,
+  pdf_path: `object-storage://b/${id}.pdf`,
+  replacement_status: null,
+  active_logo_asset_id: null,
+  pending_logo_asset_id: null,
+  ...overrides,
+});
+
+function setup(
+  plan: PlanName | null,
+  generatedCount: number,
+  oldest: OldRow[] = [oldRow("old-1")],
+) {
   const manager = {
     findOne: jest.fn(
       async (entity: unknown, options: { where: { id?: string } }) => {
@@ -27,7 +47,10 @@ function setup(plan: PlanName | null, generatedCount: number) {
       },
     ),
     count: jest.fn().mockResolvedValue(generatedCount),
-    find: jest.fn().mockResolvedValue(oldest),
+    // Like the database: never more rows than asked for.
+    find: jest.fn(async (_entity: unknown, options: { take: number }) =>
+      oldest.slice(0, options.take),
+    ),
     update: jest.fn(),
     delete: jest.fn(),
     // Deleting a waybill re-counts what still locks its order.
@@ -52,7 +75,9 @@ function setup(plan: PlanName | null, generatedCount: number) {
         ): Promise<void>;
       }
     ).enforceRetention(manager as unknown as EntityManager, USER, type, "new");
-  return { enforce, manager, leases };
+  const receiptUpdates = () =>
+    manager.update.mock.calls.filter(([entity]) => entity === Receipt);
+  return { enforce, manager, leases, snapshots, receiptUpdates };
 }
 
 describe("which documents keep their record over the limit", () => {
@@ -70,8 +95,12 @@ describe("which documents keep their record over the limit", () => {
 });
 
 describe("retention after a document is promoted", () => {
-  it("removes only the file and the public link of the oldest invoice over the free limit", async () => {
-    const { enforce, manager, leases } = setup("free", 11);
+  it("strips the oldest invoice over the free limit of its file, frozen HTML, logo and link, and keeps the row", async () => {
+    const { enforce, manager, leases, snapshots, receiptUpdates } = setup(
+      "free",
+      11,
+      [oldRow("old-1", { active_logo_asset_id: "logo-1" })],
+    );
 
     await enforce(DocumentType.INVOICE);
 
@@ -88,7 +117,6 @@ describe("retention after a document is promoted", () => {
       expect.objectContaining({
         where: expect.objectContaining({ id: Not("new") }),
         order: { created_at: "ASC", id: "ASC" },
-        take: 1,
       }),
     );
     expect(leases.retire).toHaveBeenCalledWith(
@@ -96,22 +124,70 @@ describe("retention after a document is promoted", () => {
       "object-storage://b/old-1.pdf",
       manager,
     );
-    expect(manager.update).toHaveBeenCalledWith(
-      Receipt,
-      { id: "old-1", user_id: USER, status: ReceiptStatus.GENERATED },
-      {
-        content_purged_at: expect.any(Date),
-        pdf_path: null,
-        pdf_url: null,
-        public_token: null,
-      },
-    );
+    expect(snapshots.releaseLogo).toHaveBeenCalledWith(USER, "logo-1", manager);
+    expect(receiptUpdates()).toEqual([
+      [
+        Receipt,
+        { id: "old-1", user_id: USER, status: ReceiptStatus.GENERATED },
+        {
+          content_purged_at: expect.any(Date),
+          pdf_path: null,
+          pdf_url: null,
+          public_token: null,
+          html_snapshot: null,
+          active_logo_asset_id: null,
+          replacement_status: null,
+          replacement_error: null,
+          pending_id: null,
+          pending_snapshot: null,
+          pending_html: null,
+          pending_logo_asset_id: null,
+          pending_expected_revision: null,
+        },
+      ],
+    ]);
     // The row keeps the invoice's number and its one-per-order slot.
     expect(manager.delete).not.toHaveBeenCalled();
   });
 
+  it("retires one document per promotion however far the account is over the limit", async () => {
+    const invoices = setup("free", 60, [oldRow("old-1"), oldRow("old-2")]);
+    await invoices.enforce(DocumentType.INVOICE);
+    expect(invoices.receiptUpdates()).toHaveLength(1);
+
+    const waybills = setup("free", 500, [oldRow("old-1"), oldRow("old-2")]);
+    await waybills.enforce(DocumentType.WAYBILL);
+    expect(waybills.manager.find).toHaveBeenCalledWith(
+      Receipt,
+      expect.objectContaining({ take: 1 }),
+    );
+    expect(waybills.manager.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves an invoice that is being replaced alone and takes the next oldest", async () => {
+    const { enforce, receiptUpdates, leases } = setup("free", 12, [
+      oldRow("old-1", { replacement_status: "processing" }),
+      oldRow("old-2"),
+    ]);
+
+    await enforce(DocumentType.INVOICE);
+
+    expect(receiptUpdates().map(([, where]) => where.id)).toEqual(["old-2"]);
+    expect(leases.retire).toHaveBeenCalledTimes(1);
+  });
+
+  it("purges nothing when every candidate is being replaced", async () => {
+    const { enforce, receiptUpdates } = setup("free", 11, [
+      oldRow("old-1", { replacement_status: "processing" }),
+    ]);
+
+    await enforce(DocumentType.INVOICE);
+
+    expect(receiptUpdates()).toEqual([]);
+  });
+
   it("deletes the oldest waybill over the limit, as before", async () => {
-    const { enforce, manager } = setup("free", 11);
+    const { enforce, manager, receiptUpdates } = setup("free", 11);
 
     await enforce(DocumentType.WAYBILL);
 
@@ -120,11 +196,7 @@ describe("retention after a document is promoted", () => {
       user_id: USER,
       status: ReceiptStatus.GENERATED,
     });
-    expect(manager.update).not.toHaveBeenCalledWith(
-      Receipt,
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(receiptUpdates()).toEqual([]);
   });
 
   it.each([

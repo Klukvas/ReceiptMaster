@@ -1,6 +1,7 @@
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useSubscription } from "../../hooks/useSubscription";
+import { hasHigherPlan } from "../../lib/plan-catalog";
 import type { RetentionFinding } from "../../lib/document-retention";
 
 type RetentionConfirmModalProps = {
@@ -21,7 +22,7 @@ export function RetentionConfirmModal({ finding, typeLabel, onConfirm, onClose }
   const isPurge = finding?.kind === "known" && finding.action === "purge";
   // A higher plan keeps more; not said where there is none to move to.
   const upgradeHint =
-    billingEnabled && status && status.plan !== "business"
+    billingEnabled && status && hasHigherPlan(status.plan)
       ? ` ${t("documents.retentionUpgradeHint")}`
       : "";
   return (
