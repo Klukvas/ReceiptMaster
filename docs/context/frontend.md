@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-20
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -629,12 +629,27 @@ const { loading, handleUpgrade, handleManage } = useCheckout()
 4. User pays on Creem's page; Creem returns them to `/settings?tab=subscription`
 5. The plan changes when the backend receives the webhook, not on return
 
-`handleManage` does the same with the portal link from `subscriptionApi.portal()`. A `pageshow`
-listener resets the busy state when the page comes back from the back/forward cache. The settings
-page shows the "subscription will end" notice for `billingStatus` `scheduled_cancel` and `canceled`.
-Upgrade buttons (settings and `UpgradeModal`) depend on `hasLiveSubscription(status)`
-(`lib/subscriptionApi.ts`): a `canceled` subscription still on record does not hide them, so the
-user can buy again before the paid period runs out; any other status offers the portal instead.
+`handleManage` does the same with the portal link from `subscriptionApi.portal()`; its only caller
+is the "payment failed" notice, where the card has to be replaced on Creem's side. A `pageshow`
+listener resets the busy state when the page comes back from the back/forward cache.
+
+**A live subscription is managed on the subscription tab, not in the portal.**
+`hooks/useSubscriptionActions.ts` calls `subscriptionApi.changePlan / cancel / resume`; each
+answers with the status after the change, which replaces the `["subscription","status"]` query
+data, so every plan lock follows at once. `components/subscription/PlanCards.tsx` decides the
+button of each plan card ("Switch to <plan>"):
+
+- no live subscription: a higher paid plan opens the checkout (`handleUpgrade`);
+- `active` / `trialing` (`canChangePlan`): every other paid plan switches the subscription, and
+  the Free card cancels it;
+- `scheduled_cancel`, `past_due`, `paused`: no plan buttons. The "subscription will end" notice
+  (shown for `scheduled_cancel` and `canceled`) carries "Resume subscription" while
+  `canResumeSubscription`; a `canceled` subscription still on record can buy again.
+
+"Cancel subscription" sits in the current-plan card (`canCancelSubscription`: also `past_due`).
+Nothing is sent before `SubscriptionChangeConfirm` is confirmed: it says an upgrade is charged
+now, a downgrade is not refunded, and a cancellation keeps the plan until the period end. A
+failed attempt keeps the dialog open.
 
 ### Plan limits in the UI
 
@@ -650,7 +665,7 @@ catalog or the landing pricing cards drift from the backend `PLAN_LIMITS`.
 | `hooks/usePlan.ts` | `{ limits, allows(feature), isSettled }`. **An unknown status (loading, failed or malformed: `parseSubscriptionStatus` rejects a body it does not recognise) locks nothing**; the server refuses anyway, and `UpgradeModal` then shows text without purchase buttons. Queries to plan-gated endpoints wait for `isSettled`, so a Free account whose status loaded sends no request that would be 402; if the status request itself fails, those requests are sent and refused |
 | `components/subscription/PlanLock.tsx` | `PlanLockButton` and `PlanLockTile`: a locked control stays visible as a real button with a lock and a hint, and opens `UpgradeModal` |
 | `hooks/usePlanLock.tsx` | `useUpgradePrompt()` opens the modal for a reason; `usePlanLockHint(reason)` |
-| `components/subscription/UpgradeModal.tsx` | One modal for every limit and feature: `reason` → `subscription.reasons.<reason>.{title,description}`. Offers come from the catalog. Billing off: text and Close only; a live subscription: the portal |
+| `components/subscription/UpgradeModal.tsx` | One modal for every limit and feature: `reason` → `subscription.reasons.<reason>.{title,description}`. Offers come from the catalog. Billing off: text and Close only; a live subscription: "Open plans", which goes to the subscription tab |
 | `lib/plan-refusal.ts` | `planRefusalOf` maps a 402 (`errorCode`, `feature`) to an upgrade reason; an unknown code gives a null reason, shown as "not included in your plan" |
 | `components/subscription/PlanRefusalNotice.tsx` | The inline notice a form shows after a 402, with a link to Settings → Subscription when billing is on |
 | `hooks/useSubscriptionRefresh.ts` | Refetches the status on focus, visibility and back/forward restore (mounted in `Layout`), and re-checks for about 20 s when the page loads on `?tab=subscription` with billing on: the plan changes when the webhook arrives, which can lag the redirect from checkout |
@@ -968,6 +983,7 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/hooks/useServerPagination.ts` | Table pagination, sorting, filtering |
 | `src/hooks/useSimilarProducts.ts` | Debounced server search behind the product form's similar-name hint |
 | `src/hooks/useCheckout.ts` | Creem checkout and portal redirects |
+| `src/hooks/useSubscriptionActions.ts` | In-app plan change, cancellation and resume of a live subscription |
 | `src/hooks/useSubscription.ts` | Current plan + usage limits |
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |
 | `src/services/OrderService.ts` | Business logic, error handling, notifications |

@@ -91,4 +91,57 @@ describe("CreemClient", () => {
       { errorCode: "PAYMENT_PROVIDER_FAILED" },
     );
   });
+
+  it("switches the product of a subscription with the chosen billing behaviour", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ id: "sub_1", status: "active", product: "prod_2" }),
+    );
+
+    const subscription = await makeClient().changeSubscriptionProduct(
+      "sub_1",
+      "prod_2",
+      "proration-none",
+    );
+
+    expect(subscription).toMatchObject({ id: "sub_1", product: "prod_2" });
+    const [requestUrl, init] = fetchMock.mock.calls[0];
+    expect(requestUrl).toBe(
+      "https://test-api.creem.io/v1/subscriptions/sub_1/upgrade",
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({
+      product_id: "prod_2",
+      update_behavior: "proration-none",
+    });
+  });
+
+  it("cancels at the end of the period, never immediately", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ id: "sub_1", status: "scheduled_cancel" }),
+    );
+
+    await makeClient().cancelSubscriptionAtPeriodEnd("sub_1");
+
+    const [requestUrl, init] = fetchMock.mock.calls[0];
+    expect(requestUrl).toBe(
+      "https://test-api.creem.io/v1/subscriptions/sub_1/cancel",
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({ mode: "scheduled" });
+  });
+
+  it("resumes a subscription and answers 502 when the reply is not a subscription", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ id: "sub_1", status: "active" }),
+    );
+    await expect(
+      makeClient().resumeSubscription("sub_1"),
+    ).resolves.toMatchObject({ status: "active" });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://test-api.creem.io/v1/subscriptions/sub_1/resume",
+    );
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    await expect(
+      makeClient().resumeSubscription("sub_1"),
+    ).rejects.toMatchObject({ errorCode: "PAYMENT_PROVIDER_FAILED" });
+  });
 });

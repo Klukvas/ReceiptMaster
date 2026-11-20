@@ -150,6 +150,10 @@ const isPlanFeature = (reason: UpgradeReason): reason is PlanFeature =>
 /** Position in `PLAN_ORDER`; -1 for a plan this build does not know (a newer server). */
 const planRank = (plan: PlanName): number => PLAN_ORDER.indexOf(plan);
 
+/** True when `candidate` sits above `current`: the switch is an upgrade and costs money now. */
+export const isHigherPlan = (candidate: PlanName, current: PlanName): boolean =>
+  planRank(candidate) > planRank(current);
+
 /** True when the catalog has a plan above this one, so an upgrade can be suggested at all. */
 export const hasHigherPlan = (plan: PlanName): boolean => {
   const rank = planRank(plan);
@@ -187,7 +191,10 @@ const liftsRestriction = (
   if (isPlanFeature(reason)) return candidate.features.includes(reason);
   if (reason === "templates" && templateId !== undefined)
     return includesTemplate(candidate, templateId);
-  if (reason === "analyticsHistory" && !candidate.features.includes("analytics"))
+  if (
+    reason === "analyticsHistory" &&
+    !candidate.features.includes("analytics")
+  )
     return false;
   const countOf = COUNT_OF[reason];
   if (!countOf || !current) return true;

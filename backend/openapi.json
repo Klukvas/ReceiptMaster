@@ -534,6 +534,76 @@
         ]
       }
     },
+    "/subscription/change-plan": {
+      "post": {
+        "operationId": "SubscriptionController_changePlan",
+        "summary": "Move the live subscription to another paid plan",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/subscription/cancel": {
+      "post": {
+        "operationId": "SubscriptionController_cancel",
+        "summary": "Cancel the subscription at the end of the paid period",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/subscription/resume": {
+      "post": {
+        "operationId": "SubscriptionController_resume",
+        "summary": "Undo a cancellation that is still scheduled",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "subscription"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/billing/config": {
       "get": {
         "operationId": "CreemController_getBillingConfig",
@@ -5446,6 +5516,10 @@
         }
       },
       "CheckoutDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ChangePlanDto": {
         "type": "object",
         "properties": {}
       },

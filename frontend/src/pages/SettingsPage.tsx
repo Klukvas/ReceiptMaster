@@ -6,9 +6,6 @@ import {
   Wrench,
   Settings,
   CreditCard,
-  Crown,
-  Check,
-  ExternalLink,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
@@ -25,13 +22,18 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
 import { useSubscriptionRefreshOnOpen } from "../hooks/useSubscriptionRefresh";
-import { hasLiveSubscription } from "../lib/subscriptionApi";
 import {
-  PLAN_ORDER,
-  planDisplayName,
-  planFeatureLines,
-  planMonthlyPrice,
-} from "../lib/plan-catalog";
+  canCancelSubscription,
+  canResumeSubscription,
+} from "../lib/subscriptionApi";
+import { isHigherPlan, planDisplayName } from "../lib/plan-catalog";
+import { useSubscriptionActions } from "../hooks/useSubscriptionActions";
+import { PlanCards } from "../components/subscription/PlanCards";
+import { PLAN_COLORS } from "../components/subscription/plan-colors";
+import {
+  SubscriptionChangeConfirm,
+  type SubscriptionIntent,
+} from "../components/subscription/SubscriptionChangeConfirm";
 import { PlanLimitsSummary } from "../components/subscription/PlanLimitsSummary";
 
 type SettingsTab = "documents" | "subscription" | "advanced";
@@ -47,30 +49,6 @@ const LEGACY_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
   company: "documents",
   receipt: "documents",
   language: "documents",
-};
-
-type PlanKey = "free" | "pro" | "business";
-
-const PLAN_COLORS: Record<
-  PlanKey,
-  { border: string; bg: string; badge: string }
-> = {
-  free: {
-    border: "border-[var(--color-border)]",
-    bg: "bg-elevated",
-    badge: "bg-surface-alt text-content-secondary",
-  },
-  pro: {
-    border: "border-[var(--color-accent-light)]",
-    bg: "bg-[var(--color-accent-light)]",
-    badge: "bg-[var(--color-accent-light)] text-accent-base",
-  },
-  business: {
-    border: "border-purple-200 dark:border-purple-800",
-    bg: "bg-purple-50/30 dark:bg-purple-900/10",
-    badge:
-      "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
-  },
 };
 
 const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
@@ -89,7 +67,21 @@ const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
   const billingStatus = status?.billingStatus;
   const periodEnd = status?.currentPeriodEnd;
   const hasBillingSub = status?.hasBillingSubscription ?? false;
-  const hasLiveSub = hasLiveSubscription(status);
+  const actions = useSubscriptionActions();
+  const [intent, setIntent] = useState<SubscriptionIntent | null>(null);
+  const busy = upgrading ?? actions.pending;
+
+  const confirmIntent = async () => {
+    if (!intent) return;
+    const isDone =
+      intent === "cancel"
+        ? await actions.cancel()
+        : await actions.changePlan(intent, {
+            isUpgrade: isHigherPlan(intent, currentPlan),
+          });
+    // A failed attempt keeps the dialog open so it can be retried.
+    if (isDone) setIntent(null);
+  };
   // Creem reports a cancellation at period end as scheduled_cancel until it takes effect.
   const isEnding =
     billingStatus === "canceled" || billingStatus === "scheduled_cancel";
@@ -151,6 +143,21 @@ const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
               },
             )}
           </p>
+          {canResumeSubscription(status) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+              onClick={() => void actions.resume()}
+              disabled={!!busy}
+            >
+              {actions.pending === "resume" && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              {t("subscription.resumeSubscription")}
+            </Button>
+          )}
         </div>
       )}
 
@@ -187,19 +194,16 @@ const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
               {planDisplayName(t, currentPlan)}
             </span>
           </div>
-          {billingEnabled && hasBillingSub && (
-            <button
-              onClick={handleManage}
-              disabled={!!upgrading}
-              className="flex items-center gap-1.5 text-sm font-medium text-accent-base hover:underline"
+          {billingEnabled && canCancelSubscription(status) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIntent("cancel")}
+              disabled={!!busy}
             >
-              {upgrading === "manage" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ExternalLink className="h-3.5 w-3.5" />
-              )}
-              {t("subscription.manageSubscription", "Manage Subscription")}
-            </button>
+              {t("subscription.cancelSubscription")}
+            </Button>
           )}
         </div>
 
@@ -238,83 +242,21 @@ const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
 
       {/* Plan comparison */}
       {billingEnabled && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PLAN_ORDER.map((plan) => {
-            const isCurrent = currentPlan === plan;
-            const colors = PLAN_COLORS[plan];
-            const isUpgrade =
-              plan !== "free" &&
-              PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan);
-
-            return (
-              <div
-                key={plan}
-                className={`relative rounded-xl border-2 p-5 ${colors.border} ${colors.bg} ${
-                  isCurrent ? "ring-2 ring-[var(--color-ring)]" : ""
-                }`}
-              >
-                {isCurrent && (
-                  <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-accent-base text-white text-xs rounded-full font-medium">
-                    {t("subscription.currentPlan", "Current Plan")}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 mb-3">
-                  <Crown
-                    className={`h-5 w-5 ${
-                      plan === "business"
-                        ? "text-purple-500 dark:text-purple-400"
-                        : plan === "pro"
-                          ? "text-accent-base"
-                          : "text-content-tertiary"
-                    }`}
-                  />
-                  <h4 className="font-semibold text-content">
-                    {planDisplayName(t, plan)}
-                  </h4>
-                  <span className="ml-auto text-sm font-medium tabular-nums text-content-secondary">
-                    {planMonthlyPrice(plan)}
-                    {t("subscription.perMonth")}
-                  </span>
-                </div>
-
-                <ul className="space-y-2 mb-4">
-                  {planFeatureLines(t, plan).map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-start gap-2 text-sm text-content-secondary"
-                    >
-                      <Check className="mt-0.5 h-3.5 w-3.5 text-success-base shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {isUpgrade && !hasLiveSub && (
-                  <button
-                    onClick={() => handleUpgrade(plan)}
-                    disabled={!!upgrading}
-                    className={`w-full flex items-center justify-center gap-2 py-2 pointer-coarse:min-h-11 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
-                      plan === "business"
-                        ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
-                        : "bg-accent-base hover:bg-accent-base-hover"
-                    } disabled:opacity-50`}
-                  >
-                    {upgrading === plan ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4" />
-                    )}
-                    {t("subscription.upgradeTo", {
-                      plan: planDisplayName(t, plan),
-                    })}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PlanCards
+          status={status}
+          busy={busy}
+          onCheckout={(plan) => void handleUpgrade(plan)}
+          onSwitch={setIntent}
+          onCancel={() => setIntent("cancel")}
+        />
       )}
+      <SubscriptionChangeConfirm
+        intent={intent}
+        status={status}
+        isLoading={actions.pending !== null}
+        onConfirm={() => void confirmIntent()}
+        onClose={() => setIntent(null)}
+      />
     </div>
   );
 };
@@ -336,8 +278,11 @@ export const SettingsPage = () => {
 
   // The provider's return link opens the page on this tab; a click on the tab does not count.
   const [isLandedOnSubscription] = useState(activeTab === "subscription");
-  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(activeTab === "documents");
-  if (activeTab === "documents" && !hasOpenedDocuments) setHasOpenedDocuments(true);
+  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(
+    activeTab === "documents",
+  );
+  if (activeTab === "documents" && !hasOpenedDocuments)
+    setHasOpenedDocuments(true);
 
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);

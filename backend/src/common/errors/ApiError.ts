@@ -57,7 +57,7 @@ export const ApiErrors = {
     ),
   SUBSCRIPTION_ALREADY_EXISTS: () =>
     new ApiErrorResponse(
-      "A subscription already exists. Use the billing portal to change plans.",
+      "A subscription already exists. Change the plan in the subscription settings.",
       "SUBSCRIPTION_ALREADY_EXISTS",
       400,
     ),
@@ -66,6 +66,19 @@ export const ApiErrors = {
       "No active subscription found",
       "SUBSCRIPTION_NOT_FOUND",
       400,
+    ),
+  SUBSCRIPTION_PLAN_UNCHANGED: () =>
+    new ApiErrorResponse(
+      "The subscription is already on this plan",
+      "SUBSCRIPTION_PLAN_UNCHANGED",
+      400,
+    ),
+  /** The action does not apply to the subscription's current billing status. */
+  SUBSCRIPTION_STATE_CONFLICT: () =>
+    new ApiErrorResponse(
+      "This action is not available for the subscription right now",
+      "SUBSCRIPTION_STATE_CONFLICT",
+      409,
     ),
   WEBHOOK_SIGNATURE_INVALID: () =>
     new ApiErrorResponse(

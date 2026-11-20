@@ -14,7 +14,7 @@ import {
   isBillingStatus,
   isLiveBillingStatus,
 } from "../subscription/entities/user-subscription.entity";
-import { CreemClient } from "./creem.client";
+import { CreemClient, type PlanChangeBilling } from "./creem.client";
 import {
   type CreemEvent,
   type CreemSubscription,
@@ -47,6 +47,22 @@ const STATUS_BY_EVENT: Readonly<Record<string, BillingStatus>> = {
 const UNPAID_STATUSES: readonly BillingStatus[] = ["canceled", "paused"];
 
 type PaidPlan = Exclude<PlanName, "free">;
+
+const PLAN_RANK: Readonly<Record<PlanName, number>> = {
+  free: 0,
+  pro: 1,
+  business: 2,
+};
+
+/** Statuses in which the plan can be switched or the subscription cancelled. */
+const CHANGEABLE_STATUSES: readonly BillingStatus[] = ["active", "trialing"];
+const CANCELLABLE_STATUSES: readonly BillingStatus[] = [
+  ...CHANGEABLE_STATUSES,
+  "past_due",
+];
+
+/** A subscription row that is linked to a Creem subscription. */
+type LinkedSubscription = UserSubscription & { creem_subscription_id: string };
 
 interface EventContext {
   eventType: string;
@@ -164,6 +180,100 @@ export class CreemService {
       subscription.creem_customer_id,
     );
     return { url };
+  }
+
+  /**
+   * Moves a live subscription to another paid plan. An upgrade charges the prorated
+   * difference at once; a downgrade switches without a charge or a credit and the lower
+   * price applies from the next period.
+   */
+  async changePlan(userId: string, plan: PaidPlan): Promise<void> {
+    this.assertCreemConfigured();
+    const subscription = await this.requireLinked(userId, CHANGEABLE_STATUSES);
+    if (subscription.plan === plan)
+      throw ApiErrors.SUBSCRIPTION_PLAN_UNCHANGED();
+
+    const billing: PlanChangeBilling =
+      PLAN_RANK[plan] > PLAN_RANK[subscription.plan]
+        ? "proration-charge-immediately"
+        : "proration-none";
+    const updated = await this.creemClient.changeSubscriptionProduct(
+      subscription.creem_subscription_id,
+      this.getProductId(plan),
+      billing,
+    );
+    await this.applyProviderAnswer("api.change-plan", subscription, updated);
+  }
+
+  /** The plan stays until the paid period ends; the hourly downgrade moves it to free then. */
+  async cancelSubscription(userId: string): Promise<void> {
+    this.assertCreemConfigured();
+    const subscription = await this.requireLinked(userId, CANCELLABLE_STATUSES);
+    const updated = await this.creemClient.cancelSubscriptionAtPeriodEnd(
+      subscription.creem_subscription_id,
+    );
+    await this.applyProviderAnswer("api.cancel", subscription, updated);
+  }
+
+  /** Undoes a cancellation that has not taken effect yet. */
+  async resumeSubscription(userId: string): Promise<void> {
+    this.assertCreemConfigured();
+    const subscription = await this.requireLinked(userId, ["scheduled_cancel"]);
+    const updated = await this.creemClient.resumeSubscription(
+      subscription.creem_subscription_id,
+    );
+    await this.applyProviderAnswer("api.resume", subscription, updated);
+  }
+
+  private async requireLinked(
+    userId: string,
+    allowedStatuses: readonly BillingStatus[],
+  ): Promise<LinkedSubscription> {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { user_id: userId },
+    });
+    if (!subscription || !isLinked(subscription)) {
+      throw ApiErrors.SUBSCRIPTION_NOT_FOUND();
+    }
+    if (
+      !subscription.creem_status ||
+      !allowedStatuses.includes(subscription.creem_status)
+    ) {
+      throw ApiErrors.SUBSCRIPTION_STATE_CONFLICT();
+    }
+    return subscription;
+  }
+
+  /**
+   * Stores what Creem answered so the user sees the result without waiting for the
+   * webhook. `creem_event_at` is left alone: the webhook that follows is newer and wins.
+   */
+  private async applyProviderAnswer(
+    action: string,
+    subscription: UserSubscription,
+    data: CreemSubscription,
+  ): Promise<void> {
+    await this.applyUpdate(
+      { eventType: action, eventAt: null },
+      subscription,
+      data,
+      this.stateFrom(subscription, data),
+    );
+  }
+
+  /** Keeps the stored plan and status when the payload carries unknown values. */
+  private stateFrom(
+    subscription: UserSubscription,
+    data: CreemSubscription,
+  ): Pick<UserSubscription, "creem_status" | "plan"> {
+    return {
+      plan:
+        this.resolvePlanFromProductId(referenceId(data.product)) ??
+        subscription.plan,
+      creem_status: isBillingStatus(data.status)
+        ? data.status
+        : subscription.creem_status,
+    };
   }
 
   /**
@@ -318,18 +428,12 @@ export class CreemService {
     const subscription = await this.findBySubscriptionId(context, data.id);
     if (!subscription) return;
 
-    // Keep the existing plan and status when the payload carries unknown values.
-    const plan =
-      this.resolvePlanFromProductId(referenceId(data.product)) ??
-      subscription.plan;
-    const status = isBillingStatus(data.status)
-      ? data.status
-      : subscription.creem_status;
-
-    await this.applyUpdate(context, subscription, data, {
-      plan,
-      creem_status: status,
-    });
+    await this.applyUpdate(
+      context,
+      subscription,
+      data,
+      this.stateFrom(subscription, data),
+    );
   }
 
   /** The plan stays until the hourly downgrade: access runs to the end of the paid period. */
@@ -450,6 +554,12 @@ function findUserId(
     if (typeof userId === "string" && isUUID(userId)) return userId;
   }
   return null;
+}
+
+function isLinked(
+  subscription: UserSubscription,
+): subscription is LinkedSubscription {
+  return Boolean(subscription.creem_subscription_id);
 }
 
 function toDate(value: string | null | undefined): Date | null {

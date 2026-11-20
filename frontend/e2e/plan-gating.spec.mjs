@@ -57,7 +57,7 @@ const enableBilling = (page) =>
     }),
   );
 
-const PURCHASE_BUTTONS = /upgrade to|manage subscription/i;
+const PURCHASE_BUTTONS = /upgrade to|switch to|open plans|manage subscription/i;
 
 const withPlan = async (plan, usage, run, orders = [], { billing = false } = {}) =>
   withPage({ viewport: VIEWPORT }, async (page) => {
@@ -527,6 +527,102 @@ const checkUnknownStatusSellsNothing = (results) =>
     { billing: true },
   );
 
+const PERIOD_END = "2026-12-20T10:00:00.000Z";
+
+/** A paying account changes plan, cancels and resumes without leaving the subscription tab. */
+const checkSubscriptionManagedInApp = (results) =>
+  withPlan(
+    "pro",
+    {},
+    async (page, state) => {
+      const paid = (plan, billingStatus) => ({
+        ...subscriptionStatusFor(plan),
+        billingStatus,
+        currentPeriodEnd: PERIOD_END,
+        hasBillingSubscription: true,
+      });
+      let current = paid("pro", "active");
+      const posted = [];
+      state.handlers.unshift(async (route, { path, method, body }, json) => {
+        if (path === "/subscription/status") return await json(route, current), true;
+        if (method !== "POST" || !path.startsWith("/subscription/")) return false;
+        posted.push(`${path} ${body}`);
+        if (path === "/subscription/change-plan") current = paid(JSON.parse(body).plan, "active");
+        if (path === "/subscription/cancel") current = paid(current.plan, "scheduled_cancel");
+        if (path === "/subscription/resume") current = paid(current.plan, "active");
+        return await json(route, current), true;
+      });
+      const button = (name) => page.getByRole("button", { name, exact: true });
+      await open(page, "/settings?tab=subscription");
+      await button("Switch to Pro").waitFor();
+      results.check(
+        "paying on Start: the tab offers Pro, Free and a cancel button, and no link to the provider",
+        (await button("Switch to Free").count()) === 1 &&
+          (await button("Cancel subscription").count()) === 1 &&
+          (await page.getByText(/manage subscription|billing portal/i).count()) === 0,
+      );
+
+      await button("Switch to Pro").click();
+      const upgrade = page.getByRole("dialog", { name: "Switch to Pro?" });
+      await upgrade.waitFor();
+      results.check(
+        "an upgrade says the saved card is charged now with no payment page, and names the new price",
+        /saved card is charged now, without a payment page/i.test(await upgrade.innerText()) &&
+          /\$19/.test(await upgrade.innerText()),
+        await upgrade.innerText(),
+      );
+      results.check("nothing is sent before the upgrade is confirmed", posted.length === 0);
+      await upgrade.getByRole("button", { name: "Change plan" }).click();
+      await button("Switch to Start").waitFor();
+      results.check(
+        "after the upgrade the message says the saved card was charged",
+        await settle(async () => (await page.getByText(/charged to your saved card/i).count()) > 0),
+      );
+      results.check(
+        "the confirmed upgrade posts the stored plan name and the tab follows the answer",
+        posted.join("|") === '/subscription/change-plan {"plan":"business"}' &&
+          (await button("Switch to Pro").count()) === 0,
+        posted.join("|"),
+      );
+
+      await button("Switch to Start").click();
+      const downgrade = page.getByRole("dialog", { name: "Switch to Start?" });
+      await downgrade.waitFor();
+      results.check(
+        "a downgrade warns that the days left are not refunded",
+        /no refund/i.test(await downgrade.innerText()),
+        await downgrade.innerText(),
+      );
+      await downgrade.getByRole("button", { name: "Cancel", exact: true }).click();
+      results.check("a dismissed downgrade sends nothing", posted.length === 1);
+
+      await button("Cancel subscription").click();
+      const cancel = page.getByRole("dialog", { name: "Cancel the subscription?" });
+      await cancel.waitFor();
+      results.check(
+        "a cancellation says the plan stays until the end of the paid period",
+        /keep Pro until/i.test(await cancel.innerText()),
+        await cancel.innerText(),
+      );
+      await cancel.getByRole("button", { name: "Cancel subscription" }).click();
+      await button("Resume subscription").waitFor();
+      results.check(
+        "a scheduled cancellation offers only its undo: no plan switch, no second cancel",
+        posted.at(-1).startsWith("/subscription/cancel") &&
+          (await page.getByRole("button", { name: /switch to|cancel subscription/i }).count()) === 0,
+      );
+
+      await button("Resume subscription").click();
+      await button("Cancel subscription").waitFor();
+      results.check(
+        "resuming brings the plan buttons back",
+        posted.at(-1).startsWith("/subscription/resume") && (await button("Switch to Start").count()) === 1,
+      );
+    },
+    [],
+    { billing: true },
+  );
+
 export const run = async () => {
   const results = new Results("plan gating");
   await checkFreeAnalytics(results);
@@ -541,5 +637,6 @@ export const run = async () => {
   await checkBillingOffLocks(results);
   await checkTemplateLockNamesItsPlan(results);
   await checkUnknownStatusSellsNothing(results);
+  await checkSubscriptionManagedInApp(results);
   return results;
 };

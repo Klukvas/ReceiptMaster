@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-20
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -419,6 +419,20 @@ together with billing going live: with `BILLING_ENABLED=false` nobody can buy th
      a database failure is a 500 and Creem retries
    - Files: `backend/src/modules/creem/creem.service.ts::handleWebhookEvent()`,
      `creem.webhook.ts` (signature, zod payload schemas), `creem.client.ts` (HTTP calls)
+
+   **Changing or cancelling a live subscription** happens in the app, not in Creem's portal
+   (`POST /subscription/change-plan`, `/cancel`, `/resume` → `CreemService.changePlan()`,
+   `cancelSubscription()`, `resumeSubscription()`):
+   - A plan change is allowed while the status is `active` or `trialing`. Moving up charges
+     the prorated difference at once; moving down switches at once with no charge and no
+     credit, and the lower price applies from the next period
+   - A cancellation is always scheduled for the end of the paid period (`scheduled_cancel`):
+     the plan stays, and the hourly cron moves the account to free after Creem reports
+     `canceled`. It can be undone with resume until then. A `past_due` subscription can be
+     cancelled too
+   - Creem's answer is stored at once, with `creem_event_at` left alone, so the webhook that
+     follows is still newer and wins. When Creem fails, nothing is stored (502)
+   - The portal link remains only for replacing the card after a failed payment
 
 4. **Entitlement Check on Action**
    - On every `createOrder()`, `createProduct()`, or template selection, assert limits

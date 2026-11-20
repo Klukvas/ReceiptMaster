@@ -5,7 +5,6 @@ import {
   Crown,
   Check,
   Download,
-  ExternalLink,
   FileStack,
   FileText,
   Hash,
@@ -25,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -126,6 +126,8 @@ const PlanOfferButton = ({
   );
 };
 
+const SUBSCRIPTION_TAB_PATH = "/settings?tab=subscription";
+
 export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   isOpen,
   onClose,
@@ -134,8 +136,8 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { status } = useSubscription();
-  const { loading, handleUpgrade, handleManage, billingEnabled } =
-    useCheckout();
+  const { loading, handleUpgrade, billingEnabled } = useCheckout();
+  const navigate = useNavigate();
 
   const Icon = REASON_ICONS[reason];
   const title = t(`subscription.reasons.${reason}.title`);
@@ -190,16 +192,13 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         {hasLiveSubscription(status) ? (
           <Button
             variant="primary"
-            onClick={handleManage}
-            disabled={!!loading}
+            onClick={() => {
+              onClose();
+              navigate(SUBSCRIPTION_TAB_PATH);
+            }}
             className="w-full"
           >
-            {loading === "manage" ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <ExternalLink className="h-4 w-4 mr-2" />
-            )}
-            {t("subscription.manageSubscription", "Manage Subscription")}
+            {t("subscription.openPlans")}
           </Button>
         ) : offeredPlans.length > 0 ? (
           <div className="w-full space-y-3">

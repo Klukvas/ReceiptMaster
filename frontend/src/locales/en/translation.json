@@ -1029,7 +1029,6 @@
     "upgrade": "Upgrade",
     "planBadge": "{{plan}} Plan",
     "limitReached": "Limit reached",
-    "manageSubscription": "Manage Subscription",
     "currentPlanLabel": "Your current plan",
     "canceledNotice": "Your subscription will end on {{date}}",
     "pastDueNotice": "Payment failed. Please update your payment method.",
@@ -1160,7 +1159,27 @@
         "title": "Stock insights are not in your plan",
         "description": "The low-stock list and the stock value come with a paid plan."
       }
-    }
+    },
+    "cancelSubscription": "Cancel subscription",
+    "resumeSubscription": "Resume subscription",
+    "switchTo": "Switch to {{plan}}",
+    "changePlanTitle": "Switch to {{plan}}?",
+    "upgradeConfirm": "Your saved card is charged now, without a payment page: the difference for the days left in the paid period, plus tax. After that it is {{price}} a month.",
+    "downgradeConfirm": "The plan and its limits change right away, with no refund for the days left. From the next charge it is {{price}} a month.",
+    "changePlanAction": "Change plan",
+    "cancelTitle": "Cancel the subscription?",
+    "cancelConfirm": "You keep {{plan}} until {{date}}, then the account moves to Free. Nothing more is charged. You can undo the cancellation until that date.",
+    "cancelConfirmNoDate": "You keep {{plan}} until the end of the paid period, then the account moves to Free. Nothing more is charged.",
+    "cancelAction": "Cancel subscription",
+    "keepSubscription": "Keep it",
+    "planChanged": "Plan changed to {{plan}}",
+    "planUpgraded": "Plan changed to {{plan}}; the difference was charged to your saved card",
+    "subscriptionCanceled": "Subscription cancelled",
+    "subscriptionResumed": "Subscription resumed",
+    "changePlanError": "Could not change the plan",
+    "cancelError": "Could not cancel the subscription",
+    "resumeError": "Could not resume the subscription",
+    "openPlans": "Open plans"
   },
   "appError": {
     "title": "Something went wrong",

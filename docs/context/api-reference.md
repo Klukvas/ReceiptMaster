@@ -1,8 +1,8 @@
 # API Reference
 
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-20
 
-**Total Endpoints:** 109 HTTP operations across 17 controllers; 108 operations on 80 paths are in the OpenAPI contract (the signed Creem webhook is excluded from Swagger). This reference covers all controllers exhaustively.
+**Total Endpoints:** 112 HTTP operations across 17 controllers; 111 operations on 83 paths are in the OpenAPI contract (the signed Creem webhook is excluded from Swagger). This reference covers all controllers exhaustively.
 
 ReceiptMaster API follows REST conventions. All endpoints require JWT authentication (Bearer token) unless noted otherwise.
 
@@ -1528,7 +1528,7 @@ goes to Creem as checkout `metadata.userId` (and `request_id`), the account emai
 the checkout. Errors use `ApiErrors`:
 
 - 400 `SUBSCRIPTION_ALREADY_EXISTS` while the user has a live subscription (any status but
-  `canceled`): plan changes go through the portal
+  `canceled`): the plan is changed with `POST /subscription/change-plan`
 - 502 `PAYMENT_PROVIDER_FAILED` on a Creem failure or an unexpected response
 - 503 `BILLING_UNAVAILABLE` when billing is on but the API key or the plan's product id is
   missing (the gap is named in the log only)
@@ -1563,6 +1563,30 @@ Returns a Creem customer portal link (payment method, invoices, cancel). 400
   url: string             // Redirect user here
 }
 ```
+
+The app links to the portal only from the "payment failed" notice, where the card has to be
+replaced. Plan changes and cancellation stay inside the app (below).
+
+### Change Plan, Cancel, Resume (Creem)
+
+All three act on the user's linked Creem subscription and answer **200** with the same body as
+`GET /subscription/status`, read after the change. The row is updated from Creem's answer at
+once (`creem_event_at` untouched), so the status does not wait for the webhook.
+
+| Route | Body | Allowed `billingStatus` | What Creem is asked |
+|---|---|---|---|
+| **POST** `/subscription/change-plan` | `{ plan: "pro" \| "business" }` | `active`, `trialing` | `POST /v1/subscriptions/:id/upgrade`. A higher plan: `proration-charge-immediately` (the difference for the rest of the period is charged now). A lower plan: `proration-none` (no charge, no credit; the lower price from the next period) |
+| **POST** `/subscription/cancel` | none | `active`, `trialing`, `past_due` | `POST /v1/subscriptions/:id/cancel` with `mode: "scheduled"`: the plan stays until the paid period ends |
+| **POST** `/subscription/resume` | none | `scheduled_cancel` | `POST /v1/subscriptions/:id/resume` |
+
+Errors:
+
+- 400 `SUBSCRIPTION_NOT_FOUND`: no linked Creem subscription
+- 400 `SUBSCRIPTION_PLAN_UNCHANGED`: `change-plan` to the plan the user is on
+- 409 `SUBSCRIPTION_STATE_CONFLICT`: the status is not in the allowed column (e.g. a plan
+  change while the cancellation is scheduled: resume first)
+- 502 `PAYMENT_PROVIDER_FAILED`, 503 `BILLING_DISABLED` / `BILLING_UNAVAILABLE` as for checkout;
+  nothing is stored when Creem fails
 
 ---
 

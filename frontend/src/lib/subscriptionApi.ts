@@ -137,7 +137,12 @@ const isBillingStatusOrNull = (value: unknown): value is BillingStatus | null =>
  * first) simply does not send it and gets `fallback`; a field of the wrong type means the
  * body cannot be trusted at all.
  */
-const read = <T>(source: Json, field: string, check: Check<T>, fallback: T): T => {
+const read = <T>(
+  source: Json,
+  field: string,
+  check: Check<T>,
+  fallback: T,
+): T => {
   const value = source[field];
   if (value === undefined) return fallback;
   if (!check(value)) throw new MalformedStatusError(field);
@@ -167,7 +172,12 @@ const parseLimits = (raw: Json): SubscriptionLimits => {
       isCountOrNull,
       defaults.maxOrdersPerMonth,
     ),
-    maxRecipients: read(raw, "maxRecipients", isCountOrNull, defaults.maxRecipients),
+    maxRecipients: read(
+      raw,
+      "maxRecipients",
+      isCountOrNull,
+      defaults.maxRecipients,
+    ),
     allowedTemplateIds: read(
       raw,
       "allowedTemplateIds",
@@ -189,7 +199,12 @@ const parseLimits = (raw: Json): SubscriptionLimits => {
       isCountOrNull,
       defaults.analyticsHistoryDays,
     ),
-    hasAttribution: read(raw, "hasAttribution", isBoolean, defaults.hasAttribution),
+    hasAttribution: read(
+      raw,
+      "hasAttribution",
+      isBoolean,
+      defaults.hasAttribution,
+    ),
     features: Object.fromEntries(
       FEATURE_NAMES.map((feature) => [
         feature,
@@ -218,7 +233,12 @@ export const parseSubscriptionStatus = (raw: unknown): SubscriptionStatus => {
     limits: parseLimits(section(raw, "limits")),
     billingStatus: read(raw, "billingStatus", isBillingStatusOrNull, null),
     currentPeriodEnd: read(raw, "currentPeriodEnd", isStringOrNull, null),
-    hasBillingSubscription: read(raw, "hasBillingSubscription", isBoolean, false),
+    hasBillingSubscription: read(
+      raw,
+      "hasBillingSubscription",
+      isBoolean,
+      false,
+    ),
   };
 };
 
@@ -242,16 +262,53 @@ export const subscriptionApi = {
     const response = await api.post<{ url: string }>("/subscription/portal");
     return response.data;
   },
+  /** Each of the three answers with the status as it is after the change. */
+  changePlan: async (plan: "pro" | "business"): Promise<SubscriptionStatus> => {
+    const response = await api.post<unknown>("/subscription/change-plan", {
+      plan,
+    });
+    return parseSubscriptionStatus(response.data);
+  },
+
+  cancel: async (): Promise<SubscriptionStatus> => {
+    const response = await api.post<unknown>("/subscription/cancel");
+    return parseSubscriptionStatus(response.data);
+  },
+
+  resume: async (): Promise<SubscriptionStatus> => {
+    const response = await api.post<unknown>("/subscription/resume");
+    return parseSubscriptionStatus(response.data);
+  },
 };
 
 /**
  * A canceled subscription stays on record until its paid period ends, but it no longer
- * renews: the user may buy a new one. Any other status is managed in the billing portal.
+ * renews: the user may buy a new one. Any other status is managed on the subscription tab.
  */
 export const hasLiveSubscription = (
   status: SubscriptionStatus | null | undefined,
 ): boolean =>
   !!status?.hasBillingSubscription && status.billingStatus !== "canceled";
+
+/** The plan can be switched or the subscription cancelled only while it renews normally. */
+export const canChangePlan = (
+  status: SubscriptionStatus | null | undefined,
+): boolean =>
+  !!status?.hasBillingSubscription &&
+  (status.billingStatus === "active" || status.billingStatus === "trialing");
+
+export const canCancelSubscription = (
+  status: SubscriptionStatus | null | undefined,
+): boolean => canChangePlan(status) || isPastDue(status);
+
+const isPastDue = (status: SubscriptionStatus | null | undefined): boolean =>
+  !!status?.hasBillingSubscription && status.billingStatus === "past_due";
+
+export const canResumeSubscription = (
+  status: SubscriptionStatus | null | undefined,
+): boolean =>
+  !!status?.hasBillingSubscription &&
+  status.billingStatus === "scheduled_cancel";
 
 /**
  * The one rule for a status that is not known (still loading, or the request failed):
@@ -265,8 +322,10 @@ export const hasLiveSubscription = (
  */
 type MaybeStatus = SubscriptionStatus | null | undefined;
 
-export const planAllows = (status: MaybeStatus, feature: PlanFeature): boolean =>
-  status ? status.limits.features[feature] === true : true;
+export const planAllows = (
+  status: MaybeStatus,
+  feature: PlanFeature,
+): boolean => (status ? status.limits.features[feature] === true : true);
 
 const isCountLimitReached = (used: number, limit: number | null): boolean =>
   limit !== null && used >= limit;

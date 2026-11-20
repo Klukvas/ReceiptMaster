@@ -3,6 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { z } from "zod";
 import { ApiErrors } from "../../common/errors/ApiError";
 import { EnvConfig } from "../../config/env.schema";
+import {
+  type CreemSubscription,
+  creemSubscriptionSchema,
+} from "./creem.webhook";
 
 const PRODUCTION_API_URL = "https://api.creem.io";
 const TEST_API_URL = "https://test-api.creem.io";
@@ -16,6 +20,14 @@ const httpsUrlSchema = z
 const checkoutResponseSchema = z.object({ checkout_url: httpsUrlSchema });
 const portalResponseSchema = z.object({ customer_portal_link: httpsUrlSchema });
 
+/**
+ * How Creem bills a product switch: charge the prorated difference now, or switch without
+ * any charge or credit and bill the new price from the next period.
+ */
+export type PlanChangeBilling =
+  | "proration-charge-immediately"
+  | "proration-none";
+
 export interface CreateCheckoutParams {
   productId: string;
   userId: string;
@@ -23,7 +35,7 @@ export interface CreateCheckoutParams {
   successUrl: string;
 }
 
-/** Thin HTTP client for the two Creem endpoints the app calls. */
+/** Thin HTTP client for the Creem endpoints the app calls. */
 @Injectable()
 export class CreemClient {
   private readonly logger = new Logger(CreemClient.name);
@@ -52,6 +64,37 @@ export class CreemClient {
       { customer_id: customerId },
     );
     return response.customer_portal_link;
+  }
+
+  async changeSubscriptionProduct(
+    subscriptionId: string,
+    productId: string,
+    billing: PlanChangeBilling,
+  ): Promise<CreemSubscription> {
+    return this.post(
+      `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/upgrade`,
+      creemSubscriptionSchema,
+      { product_id: productId, update_behavior: billing },
+    );
+  }
+
+  /** Scheduled: the subscription stays paid for and usable until the period ends. */
+  async cancelSubscriptionAtPeriodEnd(
+    subscriptionId: string,
+  ): Promise<CreemSubscription> {
+    return this.post(
+      `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
+      creemSubscriptionSchema,
+      { mode: "scheduled" },
+    );
+  }
+
+  async resumeSubscription(subscriptionId: string): Promise<CreemSubscription> {
+    return this.post(
+      `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/resume`,
+      creemSubscriptionSchema,
+      {},
+    );
   }
 
   private baseUrl(): string {

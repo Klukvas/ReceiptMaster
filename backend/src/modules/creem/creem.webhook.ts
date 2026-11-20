@@ -7,7 +7,7 @@ const entityReferenceSchema = z.union([
   z.object({ id: z.string() }).passthrough(),
 ]);
 
-const subscriptionSchema = z
+export const creemSubscriptionSchema = z
   .object({
     id: z.string().min(1),
     status: z.string().nullish(),
@@ -23,7 +23,7 @@ const checkoutSchema = z
     id: z.string().min(1),
     product: entityReferenceSchema.nullish(),
     customer: entityReferenceSchema.nullish(),
-    subscription: subscriptionSchema.nullish(),
+    subscription: creemSubscriptionSchema.nullish(),
     metadata: z.record(z.unknown()).nullish(),
   })
   .passthrough();
@@ -39,7 +39,7 @@ const eventSchema = z
   .passthrough();
 
 export type CreemEvent = z.infer<typeof eventSchema>;
-export type CreemSubscription = z.infer<typeof subscriptionSchema>;
+export type CreemSubscription = z.infer<typeof creemSubscriptionSchema>;
 export type CreemCheckout = z.infer<typeof checkoutSchema>;
 type EntityReference = z.infer<typeof entityReferenceSchema>;
 
@@ -61,7 +61,7 @@ export function parseCreemEvent(rawBody: string): CreemEvent {
 }
 
 export function parseCreemSubscription(payload: unknown): CreemSubscription {
-  return subscriptionSchema.parse(payload);
+  return creemSubscriptionSchema.parse(payload);
 }
 
 export function parseCreemCheckout(payload: unknown): CreemCheckout {

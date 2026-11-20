@@ -28,6 +28,9 @@ describe("SubscriptionController", () => {
       createPortalSession: jest
         .fn()
         .mockResolvedValue({ url: "https://creem.io/my-orders/login/session" }),
+      changePlan: jest.fn().mockResolvedValue(undefined),
+      cancelSubscription: jest.fn().mockResolvedValue(undefined),
+      resumeSubscription: jest.fn().mockResolvedValue(undefined),
     };
 
     controller = new SubscriptionController(subscriptionService, creemService);
@@ -82,6 +85,34 @@ describe("SubscriptionController", () => {
       expect(result).toEqual({
         url: "https://creem.io/my-orders/login/session",
       });
+    });
+  });
+
+  describe("managing a live subscription", () => {
+    it("changes the plan and answers with the fresh status", async () => {
+      const result = await controller.changePlan(mockReq, { plan: "business" });
+
+      expect(creemService.changePlan).toHaveBeenCalledWith(
+        "user-1",
+        "business",
+      );
+      expect(subscriptionService.getStatus).toHaveBeenCalledWith("user-1");
+      expect(result).toMatchObject({ plan: "free" });
+    });
+
+    it("cancels and resumes for the signed-in user", async () => {
+      await controller.cancel(mockReq);
+      await controller.resume(mockReq);
+
+      expect(creemService.cancelSubscription).toHaveBeenCalledWith("user-1");
+      expect(creemService.resumeSubscription).toHaveBeenCalledWith("user-1");
+    });
+
+    it("does not read the status when the provider call fails", async () => {
+      creemService.cancelSubscription.mockRejectedValue(new Error("down"));
+
+      await expect(controller.cancel(mockReq)).rejects.toThrow("down");
+      expect(subscriptionService.getStatus).not.toHaveBeenCalled();
     });
   });
 });
