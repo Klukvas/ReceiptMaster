@@ -19,7 +19,7 @@ import {
 import { DocumentPreviewPanel } from "./DocumentPreviewPanel";
 import { DocumentPresets } from "./DocumentPresets";
 import { DocumentTextSection } from "./DocumentTextSection";
-import { DocumentLayoutContext } from "./document-layout";
+import { DocumentLayoutContext, SectionHeadingContext } from "./document-layout";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 import { usePlan } from "../../hooks/usePlan";
 
@@ -140,116 +140,118 @@ export function DocumentEditor({
       ];
   return (
     <DocumentLayoutContext.Provider value={documentOnly ? "dialog" : "page"}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void (onCommit ? onCommit() : model.save());
-        }}
-        className="space-y-5"
-      >
-        <p className="text-sm text-content-secondary">
-          {t(
-            documentOnly
-              ? "document.thisDocumentOnly"
-              : "document.accountDefaults",
-          )}
-        </p>
-        {hasAttribution && (
-          <p
-            data-testid="attribution-note"
-            className="text-sm text-content-secondary"
-          >
-            {t("document.attributionNote")}
-          </p>
-        )}
-        {model.error && model.isConflict && (
-          <div
-            role="alert"
-            className="space-y-2 rounded-lg border border-[var(--color-danger-light)] p-4 text-sm text-danger-base"
-          >
-            <p className="font-medium">{t("document.conflictTitle")}</p>
-            <p>{t("document.conflictHelp")}</p>
-            <Button type="button" variant="outline" onClick={model.reloadSaved}>
-              {t("document.reloadSaved")}
-            </Button>
-          </div>
-        )}
-        <fieldset
-          disabled={model.busy}
-          className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
+      <SectionHeadingContext.Provider value={documentOnly ? "h3" : "h2"}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void (onCommit ? onCommit() : model.save());
+          }}
+          className="space-y-5"
         >
-          <div className="min-w-0 space-y-3 lg:space-y-5">{groups}</div>
-          {/* On a phone the preview comes first, collapsed, so it is found without scrolling past the form. */}
-          <div className="order-first min-w-0 lg:order-none">
-            <DocumentPreviewPanel
-              model={model}
-              defaultOpen={documentOnly}
-              isAvailable={canPreview}
-              isVisible={isVisible}
-              title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
-            />
-          </div>
-        </fieldset>
-        {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
-        {(documentOnly || model.dirty || model.busy || model.error) && (
-          <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
-            {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
-            {model.error && !model.isConflict ? (
-              <span role="alert" className="text-sm text-danger-base">
-                {model.error}
-              </span>
-            ) : (
-              <span role="status" className="text-sm text-content-secondary">
-                {t(
-                  model.dirty
-                    ? "document.unsaved"
-                    : documentOnly
-                      ? "document.readyToCreate"
-                      : "document.saved",
-                )}
-              </span>
+          <p className="text-sm text-content-secondary">
+            {t(
+              documentOnly
+                ? "document.thisDocumentOnly"
+                : "document.accountDefaults",
             )}
-            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={model.discard}
-                disabled={model.busy || !model.dirty}
-              >
-                {t("document.discard")}
-              </Button>
-              <Button
-                type="submit"
-                className="w-full sm:w-auto"
-                disabled={model.busy || (!documentOnly && !model.dirty)}
-              >
-                {!model.busy && commitLabel
-                  ? commitLabel
-                  : t(
-                      model.busy
-                        ? "common.saving"
-                        : documentOnly
-                          ? "document.generateDocument"
-                          : "document.saveChanges",
-                    )}
+          </p>
+          {hasAttribution && (
+            <p
+              data-testid="attribution-note"
+              className="text-sm text-content-secondary"
+            >
+              {t("document.attributionNote")}
+            </p>
+          )}
+          {model.error && model.isConflict && (
+            <div
+              role="alert"
+              className="space-y-2 rounded-lg border border-[var(--color-danger-light)] p-4 text-sm text-danger-base"
+            >
+              <p className="font-medium">{t("document.conflictTitle")}</p>
+              <p>{t("document.conflictHelp")}</p>
+              <Button type="button" variant="outline" onClick={model.reloadSaved}>
+                {t("document.reloadSaved")}
               </Button>
             </div>
-          </div>
-        )}
-        <TemplateCarouselModal
-          isOpen={gallery}
-          language={config.documentLanguage}
-          onClose={() => setGallery(false)}
-          // Designs of a higher plan can be looked at; the carousel will not select them.
-          templates={templates.data?.filter(fitsType) || []}
-          initialTemplateId={config.templateId}
-          onSelectTemplate={(templateId) => {
-            model.update({ ...config, templateId: templateId as TemplateId });
-            setGallery(false);
-          }}
-        />
-      </form>
+          )}
+          <fieldset
+            disabled={model.busy}
+            className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
+          >
+            <div className="min-w-0 space-y-3 lg:space-y-5">{groups}</div>
+            {/* On a phone the preview comes first, collapsed, so it is found without scrolling past the form. */}
+            <div className="order-first min-w-0 lg:order-none">
+              <DocumentPreviewPanel
+                model={model}
+                defaultOpen={documentOnly}
+                isAvailable={canPreview}
+                isVisible={isVisible}
+                title={documentOnly ? t("document.pdfPreviewOrder") : undefined}
+              />
+            </div>
+          </fieldset>
+          {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
+          {(documentOnly || model.dirty || model.busy || model.error) && (
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+              {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
+              {model.error && !model.isConflict ? (
+                <span role="alert" className="text-sm text-danger-base">
+                  {model.error}
+                </span>
+              ) : (
+                <span role="status" className="text-sm text-content-secondary">
+                  {t(
+                    model.dirty
+                      ? "document.unsaved"
+                      : documentOnly
+                        ? "document.readyToCreate"
+                        : "document.saved",
+                  )}
+                </span>
+              )}
+              <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={model.discard}
+                  disabled={model.busy || !model.dirty}
+                >
+                  {t("document.discard")}
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto"
+                  disabled={model.busy || (!documentOnly && !model.dirty)}
+                >
+                  {!model.busy && commitLabel
+                    ? commitLabel
+                    : t(
+                        model.busy
+                          ? "common.saving"
+                          : documentOnly
+                            ? "document.generateDocument"
+                            : "document.saveChanges",
+                      )}
+                </Button>
+              </div>
+            </div>
+          )}
+          <TemplateCarouselModal
+            isOpen={gallery}
+            language={config.documentLanguage}
+            onClose={() => setGallery(false)}
+            // Designs of a higher plan can be looked at; the carousel will not select them.
+            templates={templates.data?.filter(fitsType) || []}
+            initialTemplateId={config.templateId}
+            onSelectTemplate={(templateId) => {
+              model.update({ ...config, templateId: templateId as TemplateId });
+              setGallery(false);
+            }}
+          />
+        </form>
+      </SectionHeadingContext.Provider>
     </DocumentLayoutContext.Provider>
   );
 }

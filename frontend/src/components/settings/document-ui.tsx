@@ -1,6 +1,6 @@
 import { useContext, useId, type ReactNode } from "react";
 import { Disclosure } from "../ui/Disclosure";
-import { DocumentLayoutContext } from "./document-layout";
+import { DocumentLayoutContext, SectionHeadingContext } from "./document-layout";
 
 export const selectClass =
   "w-full rounded-lg border border-[var(--color-border)] bg-elevated px-3 py-2 text-sm text-content focus:ring-2 focus:ring-[var(--color-ring)]";
@@ -22,6 +22,7 @@ export const DocumentSection = ({
 }) => {
   const titleId = useId();
   const layout = useContext(DocumentLayoutContext);
+  const Heading = useContext(SectionHeadingContext);
   if (layout === "dialog")
     return (
       <Disclosure summary={title} defaultOpen={defaultOpen}>
@@ -37,9 +38,9 @@ export const DocumentSection = ({
       className="space-y-4 rounded-xl border border-[var(--color-border)] bg-elevated p-5"
     >
       <div>
-        <h3 id={titleId} className="font-semibold text-content">
+        <Heading id={titleId} className="font-semibold text-content">
           {title}
-        </h3>
+        </Heading>
         {description && (
           <p className="mt-0.5 text-sm text-content-tertiary">{description}</p>
         )}

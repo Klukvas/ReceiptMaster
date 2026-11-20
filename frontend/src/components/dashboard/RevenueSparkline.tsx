@@ -85,9 +85,9 @@ export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
     return (
       <Card>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-content-secondary">
+          <h2 className="text-sm font-medium text-content-secondary">
             {t("dashboard.revenueOverTime", "Revenue Over Time")}
-          </h3>
+          </h2>
           <DaysToggle days={days} onChange={setDays} />
         </div>
         <QueryErrorState
@@ -122,9 +122,9 @@ export const RevenueSparkline = ({ currency }: RevenueSparklineProps) => {
     <Card>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-content-secondary">
+          <h2 className="text-sm font-medium text-content-secondary">
             {t("dashboard.revenueOverTime", "Revenue Over Time")}
-          </h3>
+          </h2>
           {/* Gaps in the line mark unknown days; this flags any excluded line. */}
           <ProfitStatus profit={chartProfit} completeness={completeness} />
         </div>

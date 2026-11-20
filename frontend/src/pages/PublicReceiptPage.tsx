@@ -102,6 +102,8 @@ const ReceiptSkeleton = ({ isVisible }: { isVisible: boolean }) => (
         <div className="bg-elevated rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
           <div className="px-6 py-5 border-b border-[var(--color-border-light)]">
             <div className={`h-7 w-1/2 rounded ${SKELETON_TONE}`} />
+            {/* On a phone the download button sits on its own line under the title. */}
+            <div className={`mt-3 h-8 w-32 rounded sm:hidden ${SKELETON_TONE}`} />
             <div className={`mt-4 h-4 w-1/3 rounded ${SKELETON_TONE}`} />
           </div>
           <div className="px-4 py-4 sm:px-6">
@@ -465,6 +467,8 @@ const PublicReceiptContent = () => {
 export const PublicReceiptPage = () => (
   <>
     <SEO noindex />
-    <PublicReceiptContent />
+    <main>
+      <PublicReceiptContent />
+    </main>
   </>
 );

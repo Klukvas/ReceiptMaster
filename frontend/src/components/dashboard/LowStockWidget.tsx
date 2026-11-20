@@ -41,9 +41,9 @@ export const LowStockWidget = () => {
     <Card>
       <div className="flex items-center gap-2 mb-4">
         <AlertTriangle className="h-4 w-4 text-warning-base" />
-        <h3 className="text-sm font-medium text-content-secondary">
+        <h2 className="text-sm font-medium text-content-secondary">
           {t("dashboard.lowStock", "Low Stock")}
-        </h3>
+        </h2>
       </div>
       {isError ? (
         <QueryErrorState

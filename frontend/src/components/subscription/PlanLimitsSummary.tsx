@@ -43,9 +43,9 @@ export const PlanLimitsSummary = ({ limits }: { limits: SubscriptionLimits }) =>
 
   return (
     <div data-testid="plan-limits-summary" className="mt-4 border-t border-[var(--color-border)] pt-4">
-      <h4 className="mb-2 text-sm font-medium text-content">
+      <h3 className="mb-2 text-sm font-medium text-content">
         {t("subscription.limits.heading")}
-      </h4>
+      </h3>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         {rows.map((row) => (
           <div key={row.key} className="flex justify-between gap-3">

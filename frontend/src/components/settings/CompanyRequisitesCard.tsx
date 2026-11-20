@@ -112,9 +112,9 @@ export function CompanyRequisitesCard() {
       className="rounded-xl border border-[var(--color-border)] bg-elevated p-5 space-y-4"
     >
       <div>
-        <h3 id="company-requisites-heading" className="font-semibold text-content">
+        <h2 id="company-requisites-heading" className="font-semibold text-content">
           {t("settings.requisites.title")}
-        </h3>
+        </h2>
         <p className="text-sm text-content-secondary">{t("settings.requisites.description")}</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

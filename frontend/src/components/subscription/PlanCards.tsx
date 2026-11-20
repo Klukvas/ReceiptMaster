@@ -95,9 +95,9 @@ export const PlanCards = ({
 
             <div className="flex items-center gap-2 mb-3">
               <Crown className={`h-5 w-5 ${CROWN_COLORS[plan]}`} />
-              <h4 className="font-semibold text-content">
+              <h3 className="font-semibold text-content">
                 {planDisplayName(t, plan)}
-              </h4>
+              </h3>
               <span className="ml-auto text-sm font-medium tabular-nums text-content-secondary">
                 {planMonthlyPrice(plan)}
                 {t("subscription.perMonth")}

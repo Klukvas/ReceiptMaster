@@ -173,7 +173,7 @@ export const run = async () => {
     );
 
     const headings = await page
-      .getByRole("heading", { level: 3 })
+      .getByRole("heading", { level: 2 })
       .allInnerTexts();
     const wanted = [
       "Your business",

@@ -26,7 +26,10 @@ node frontend/e2e/run.mjs proxy-audit
 ```
 
 `E2E_CHROME_PATH` is optional; by default the harness uses Playwright's bundled
-Chromium (`npx playwright install chromium` once). `proxy-audit` requires a local `nginx` and `openssl` (override the binary
+Chromium (`npx playwright install chromium` once). `E2E_BROWSER=webkit` runs the
+specs in Safari's engine instead (`npx playwright install webkit` once); CI runs
+Chromium only. In Playwright's WebKit `boundingBox()` of an SVG `<text>` answers
+the whole chart's box, so specs measure chart labels with `getBoundingClientRect`. `proxy-audit` requires a local `nginx` and `openssl` (override the binary
 with `E2E_NGINX_BINARY`), validates the actual proxy configuration, then sends
 synthetic signed webhook bytes and receipt events through polling and WebSocket.
 All generated proxy certificates/logs live under `frontend/e2e/.cache` and its
@@ -75,6 +78,7 @@ server's transform, so they only run against `vite dev`.)
 | `plan-gating` | For a Free and a Start status (`subscriptionStatusFor` in `support/fixtures.mjs`): Free gets the analytics upsell and a sidebar lock, this month's turnover with locked profit / chart / low-stock tiles, locked stock value, logo, signature and stamp, numbering, presets, automatic receipts and document types, read-only suppliers and a recipient limit that stops the create form, and none of those surfaces calls an endpoint the server answers with 402; Start has all of that open, analytics bounded to 90 days (no `1y` preset, `min` on the date inputs, a note) and only the CSV export locked; a lock is a button that opens the upgrade dialog for its reason; analytics requests carry the window's first day and a cleared start date goes back to it; a 402 on product create keeps the form and its values and shows the refusal inline (an unknown code as a generic line); a document whose file was removed has no download, print, share or replacement, also in the voided history; automatic receipts left on are marked inactive and can be switched off; with billing off a lock names no plan and sells nothing. With billing on (the spec swaps `billing-enabled.ts` for the page): a template lock names the plan that has that template, the carousel ignores keys under the upgrade dialog, and an unknown plan status gets no purchase or portal button. The plan limits in `support/fixtures.mjs` are the backend's `PLAN_LIMITS`, evaluated from its source |
 | `ui-helpers` | Node only: action menus (order "More actions", `PortalDropdown`) open below the trigger, flip above near the bottom, clamp into the viewport and scroll when taller than it; chart category labels are cut to one line without splitting a character; margin colours treat exactly 30% / 10% the same everywhere, a price above the database maximum is refused in the form, and low stock is fewer than 10 units |
 | `api-errors` | In en/ru/uk, `parseApiError` returns the locale's `errors.<camelCase>` entry for every `ErrorCode` that has one, and an unknown code still falls back to the backend text; in ru and uk, creating a product whose name is taken (mocked 409 `PRODUCT_ALREADY_EXISTS`) shows the translated message in the form, not the English fallback |
+| `a11y-names` | Names and landmarks (orders status filter, every `<nav>` named and unique, phone top bar a `<header>`, landing logo links, `<main>` on the public document page); 4.5:1 for the active sidebar link and the phone View link in the dark theme; no skipped heading level on dashboard, analytics, settings (documents and subscription tabs) and the phone orders list; landing text on the faint, muted, status and indigo tokens at 4.5:1 in light and dark |
 
 `receipt-progress` waits out the panel's real 8s/20s deadlines, so it takes a
 couple of minutes; the other specs are quick.

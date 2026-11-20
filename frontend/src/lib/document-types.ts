@@ -147,8 +147,8 @@ export const REISSUABLE_DOCUMENT_TYPES: readonly GeneratableType[] = [
 ];
 
 /**
- * Mirror of RETENTION_EXEMPT_TYPES in backend/src/modules/receipts/document-retention.ts: types
- * whose documents are never deleted by the per-type retention cap.
+ * Mirror of RECORD_KEPT_TYPES in backend/src/modules/receipts/document-retention.ts: types
+ * whose record outlives the per-type retention cap (only the file and the public link go).
  */
 export const RETENTION_EXEMPT_DOCUMENT_TYPES: readonly GeneratableType[] = [
   "invoice",

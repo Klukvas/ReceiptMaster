@@ -46,7 +46,7 @@ export const run = async () => {
         await settle(() => page.evaluate((lng) => document.documentElement.lang === lng, expectedLanguage)),
         await page.locator("html").getAttribute("lang"));
       results.check(`${language}: mobile brand link has the product's accessible name`,
-        await page.locator("nav").getByRole("link", { name: "receiptmaster", exact: true }).count() === 1,
+        await page.locator("nav").getByRole("link", { name: "ReceiptMaster", exact: true }).count() === 1,
         await page.locator("nav a.landing-logo").ariaSnapshot());
       const nextLanguage = language === "uk" ? "en" : "uk";
       await page.locator("nav select").selectOption(nextLanguage);

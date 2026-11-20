@@ -80,7 +80,7 @@ export const TopRecipientsList = ({
  <div className="rounded-2xl bg-elevated border border-[var(--color-border-light)] p-5 transition-colors">
  {/* Header */}
  <div className="flex items-center justify-between mb-4">
- <h3 className="text-sm font-semibold text-content">{title}</h3>
+ <h2 className="text-sm font-semibold text-content">{title}</h2>
  <button
  onClick={() => setSortBy(sortBy === 'revenue' ? 'orders' : 'revenue')}
  className="inline-flex items-center gap-1.5 text-xs font-medium text-content-tertiary hover:text-content transition-colors pointer-coarse:min-h-11 pointer-coarse:px-2 pointer-coarse:-mr-2"

@@ -183,9 +183,9 @@ export function NumberingRow({
       }}
       noValidate
     >
-      <h4 id={idOf("title")} className="mb-3 text-sm font-semibold text-content">
+      <h3 id={idOf("title")} className="mb-3 text-sm font-semibold text-content">
         {t(documentLabelKey(type))}
-      </h4>
+      </h3>
       {/* The response replaces the draft, so edits must wait until this save settles. */}
       <fieldset disabled={update.isPending || isLocked} className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
