@@ -3,6 +3,8 @@ import { OrdersService } from "./orders.service";
 import { OrdersDashboardService } from "./orders-dashboard.service";
 import { User } from "../users/entities/user.entity";
 import { HttpStatus } from "@nestjs/common";
+import { ApiErrors } from "../../common/errors/ApiError";
+import { DateRangeDto } from "../../common/dto/date-range.dto";
 
 describe("OrdersController", () => {
   let controller: OrdersController;
@@ -293,6 +295,62 @@ describe("OrdersController", () => {
         mockUser,
         7,
       );
+    });
+
+    it.each(["abc", "0", "-3", "1.5", ""])(
+      "getDailyRevenue falls back to 7 days for days=%p",
+      (raw) => {
+        controller.getDailyRevenue(mockReq, raw);
+
+        expect(dashboardService.getDailyRevenue).toHaveBeenCalledWith(
+          mockUser,
+          7,
+        );
+      },
+    );
+
+    it("getDailyRevenue never asks for more than a year", () => {
+      controller.getDailyRevenue(mockReq, "100000");
+
+      expect(dashboardService.getDailyRevenue).toHaveBeenCalledWith(
+        mockUser,
+        365,
+      );
+    });
+
+    it("a plan refusal from the dashboard service reaches the client unchanged", async () => {
+      const refusal = ApiErrors.PLAN_FEATURE_RESTRICTED("analytics");
+      const dateRange = new DateRangeDto();
+      const refusedRoutes: Array<
+        [keyof OrdersDashboardService, () => unknown]
+      > = [
+        ["getDailyRevenue", () => controller.getDailyRevenue(mockReq, "7")],
+        [
+          "getRevenueByProducts",
+          () => controller.getRevenueByProducts(mockReq, dateRange),
+        ],
+        [
+          "getRevenueByRecipients",
+          () => controller.getRevenueByRecipients(mockReq, dateRange),
+        ],
+        [
+          "getTotalRevenue",
+          () => controller.getTotalRevenue(mockReq, dateRange),
+        ],
+        [
+          "getTurnoverByProducts",
+          () => controller.getTurnoverByProducts(mockReq, dateRange),
+        ],
+        [
+          "getTurnoverByRecipients",
+          () => controller.getTurnoverByRecipients(mockReq, dateRange),
+        ],
+      ];
+
+      for (const [method, callRoute] of refusedRoutes) {
+        dashboardService[method].mockRejectedValue(refusal);
+        await expect(callRoute()).rejects.toBe(refusal);
+      }
     });
 
     it("getOrderStatusSummary should work", () => {

@@ -82,7 +82,7 @@ describe("client address and API rate limit in nginx.conf", () => {
     expect(CONFIG).toMatch(
       /location @rate_limited \{[^}]*"errorCode":"RATE_LIMITED"/,
     );
-    // Socket.IO polling and Paddle's few sender addresses stay outside the limit.
+    // Socket.IO polling and Creem's webhook senders stay outside the limit.
     expect(CONFIG.match(/limit_req zone=/g)).toHaveLength(1);
   });
 });

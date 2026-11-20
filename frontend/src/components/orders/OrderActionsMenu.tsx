@@ -12,7 +12,11 @@ import {
   CheckCircle,
   Eye,
   Loader2,
+  Lock,
 } from "lucide-react";
+import { useSubscription } from "../../hooks/useSubscription";
+import { isDocumentTypeAllowed } from "../../lib/subscriptionApi";
+import { usePlanLockHint, useUpgradePrompt } from "../../hooks/usePlanLock";
 import type { Order } from "../../lib/api";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useMenuPosition } from "../../hooks/useMenuPosition";
@@ -139,6 +143,10 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [creating, setCreating] = useState<CreatableType | null>(null);
+  const { status: subscriptionStatus } = useSubscription();
+  const documentTypeLockHint = usePlanLockHint("documentTypes");
+  const upgradePrompt = useUpgradePrompt();
+  const { open: openUpgradePrompt } = upgradePrompt;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -212,10 +220,18 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
     );
     const createItems: MenuItem[] = creatableTypes.map((type, position) => {
       const meta = DOCUMENT_TYPE_META[type];
+      // A type outside the plan stays listed; choosing it explains which plan has it.
+      const isAllowed = isDocumentTypeAllowed(subscriptionStatus, type);
+      const menuLabel = t("documents.menuItem", { type: t(meta.labelKey) });
       return {
-        icon: meta.icon,
-        label: t("documents.menuItem", { type: t(meta.labelKey) }),
-        onClick: (e) => handleAction(() => setCreating(type), e),
+        icon: isAllowed ? meta.icon : Lock,
+        label: isAllowed ? menuLabel : `${menuLabel} · ${documentTypeLockHint}`,
+        onClick: (e) =>
+          handleAction(
+            () =>
+              isAllowed ? setCreating(type) : openUpgradePrompt("documentTypes"),
+            e,
+          ),
         className: baseItem,
         group: t("documents.createGroup"),
         isDividerBefore: position === 0,
@@ -338,6 +354,9 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
 
     return items;
   }, [
+    subscriptionStatus,
+    documentTypeLockHint,
+    openUpgradePrompt,
     order,
     isDeleting,
     t,
@@ -409,6 +428,7 @@ export const OrderActionsMenu: React.FC<OrderActionsMenuProps> = ({
           }}
         />
       )}
+      {upgradePrompt.modal}
       {creating && (
         <CreateDocumentModal
           order={order}

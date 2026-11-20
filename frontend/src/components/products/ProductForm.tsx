@@ -16,6 +16,10 @@ import {
   MAX_QUANTITY,
 } from "../../lib/product-metrics";
 import { ErrorCode, parseApiError } from "../../lib/api-errors";
+import { planRefusalOf, type PlanRefusal } from "../../lib/plan-refusal";
+import { usePlan } from "../../hooks/usePlan";
+import { PlanLockHint } from "../subscription/PlanLock";
+import { PlanRefusalNotice } from "../subscription/PlanRefusalNotice";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
@@ -45,7 +49,10 @@ const FIELD_IDS = {
   quantity: "product-quantity",
 } as const;
 
-export const ProductForm = ({ product, onClose }: ProductFormProps) => {
+export const ProductForm = ({
+  product,
+  onClose,
+}: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormValues>({
     name: "",
     purchase_price_cents: "",
@@ -56,6 +63,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backendError, setBackendError] = useState<string>("");
+  // A 402 is explained in the form itself, so nothing typed is lost.
+  const [planRefusal, setPlanRefusal] = useState<PlanRefusal | null>(null);
   // The stock a quantity edit replaces: the loaded value, or the server's after
   // a conflict, so saving again is an informed overwrite.
   const [quantityBaseline, setQuantityBaseline] = useState<number | null>(null);
@@ -87,6 +96,8 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     queryKey: ["suppliers"],
     queryFn: () => suppliersApi.getAll({ limit: 100 }),
   });
+
+  const canPickSupplier = usePlan().allows("suppliers");
 
   const supplierOptions = useMemo(() => {
     const suppliers = suppliersData?.data?.data;
@@ -123,6 +134,15 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     }
   };
 
+  // A 402 that slipped past the page's pre-check (the cached plan status was stale).
+  const reportPlanRefusal = (error: unknown): boolean => {
+    const refusal = planRefusalOf(error);
+    if (!refusal) return false;
+    queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+    setPlanRefusal(refusal);
+    return true;
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof productsApi.create>[0]) =>
       productsApi.create(data, { idempotencyKey: keyFor(data) }),
@@ -137,6 +157,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown) => {
+      if (reportPlanRefusal(error)) return;
       const { code, message } = parseApiError(error);
       // A taken name is a problem with that field, not with the form.
       if (code === ErrorCode.PRODUCT_ALREADY_EXISTS) {
@@ -159,6 +180,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
       onClose();
     },
     onError: (error: unknown, { id, data }) => {
+      if (reportPlanRefusal(error)) return;
       const { code, message } = parseApiError(error);
       // Nothing was saved; the form keeps every typed value for a second try.
       if (
@@ -217,6 +239,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
     e.preventDefault();
     setErrors({});
     setBackendError("");
+    setPlanRefusal(null);
     setQuantityConflict(null);
     if (!validateForm()) return;
 
@@ -267,6 +290,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {planRefusal && <PlanRefusalNotice refusal={planRefusal} />}
           {backendError && (
             <div className="p-3 bg-[var(--color-danger-light)] border border-[var(--color-danger-light)] rounded-lg">
               <div className="flex items-center">
@@ -418,6 +442,7 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
                 ({t("common.optional", "optional")})
               </span>
             </label>
+            {canPickSupplier ? (
             <Combobox
               options={supplierOptions}
               value={formData.supplier_id}
@@ -430,6 +455,33 @@ export const ProductForm = ({ product, onClose }: ProductFormProps) => {
               noResultsText={t("common.noResults", "Nothing found")}
               ariaLabel={t("products.supplier", "Supplier")}
             />
+            ) : (
+              <div
+                data-testid="supplier-locked"
+                className="flex flex-wrap items-center gap-2"
+              >
+                {formData.supplier_id && (
+                  <>
+                    <span className="text-sm text-content">
+                      {supplierOptions.find(
+                        (option) => option.value === formData.supplier_id,
+                      )?.label ?? t("products.supplierAssigned")}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setFormData({ ...formData, supplier_id: "" })
+                      }
+                    >
+                      {t("products.removeSupplier")}
+                    </Button>
+                  </>
+                )}
+                <PlanLockHint reason="suppliers" />
+              </div>
+            )}
             {isSuppliersError && (
               <p
                 role="alert"

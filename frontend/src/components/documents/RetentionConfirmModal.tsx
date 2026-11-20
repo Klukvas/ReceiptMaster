@@ -1,5 +1,7 @@
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useSubscription } from "../../hooks/useSubscription";
+import { hasHigherPlan } from "../../lib/plan-catalog";
 import type { RetentionFinding } from "../../lib/document-retention";
 
 type RetentionConfirmModalProps = {
@@ -16,6 +18,13 @@ type RetentionConfirmModalProps = {
  */
 export function RetentionConfirmModal({ finding, typeLabel, onConfirm, onClose }: RetentionConfirmModalProps) {
   const { t } = useTranslation();
+  const { status, billingEnabled } = useSubscription();
+  const isPurge = finding?.kind === "known" && finding.action === "purge";
+  // A higher plan keeps more; not said where there is none to move to.
+  const upgradeHint =
+    billingEnabled && status && hasHigherPlan(status.plan)
+      ? ` ${t("documents.retentionUpgradeHint")}`
+      : "";
   return (
     <ConfirmModal
       isOpen={finding !== null}
@@ -25,16 +34,16 @@ export function RetentionConfirmModal({ finding, typeLabel, onConfirm, onClose }
       title={
         finding?.kind === "unknown"
           ? t("documents.replaceOldestUnknownTitle")
-          : t("documents.replaceOldestTitle")
+          : t(isPurge ? "documents.purgeOldestTitle" : "documents.replaceOldestTitle")
       }
       message={
-        finding?.kind === "known"
-          ? t("documents.replaceOldestMessage", {
+        (finding?.kind === "known"
+          ? t(isPurge ? "documents.purgeOldestMessage" : "documents.replaceOldestMessage", {
               limit: finding.limit,
               number: finding.number,
               type: typeLabel,
             })
-          : t("documents.replaceOldestUnknownMessage", { type: typeLabel })
+          : t("documents.replaceOldestUnknownMessage", { type: typeLabel })) + upgradeHint
       }
       confirmLabel={t("documents.create")}
     />

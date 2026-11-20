@@ -487,11 +487,16 @@ export const receiptsApi = {
       { headers: { "Content-Type": "multipart/form-data" } },
     ),
 
-  /** Retention cap and the document the next one would replace (null while under the cap). */
+  /**
+   * The plan's retention cap (null = everything is kept) and the document the next one would
+   * push out (null while under the cap). `action` says what happens to it: "delete" removes
+   * it entirely, "purge" keeps the record and number but removes the PDF and public link.
+   */
   getRetention: (type?: Receipt["document_type"]) =>
     api.get<{
-      limit: number;
+      limit: number | null;
       count: number;
+      action?: "delete" | "purge";
       replaces: { id: string; number: string; order_id: string } | null;
     }>("/receipts/retention", { params: type ? { type } : undefined }),
 

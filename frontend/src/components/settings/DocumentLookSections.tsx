@@ -19,6 +19,8 @@ import {
   LabelledField,
   selectClass,
 } from "./document-ui";
+import { usePlan } from "../../hooks/usePlan";
+import { PlanLockButton } from "../subscription/PlanLock";
 
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
@@ -203,6 +205,7 @@ export function DocumentBrandSection({
 }) {
   const { t } = useTranslation();
   const caps = template?.capabilities;
+  const isLogoLocked = !usePlan().allows("logo");
   const patch = (value: Partial<DocumentConfig>) =>
     model.update({ ...config, ...value });
   const patchLogo = (value: Partial<DocumentConfig["logo"]>) =>
@@ -290,6 +293,15 @@ export function DocumentBrandSection({
               {logoStatus}
             </p>
             <div className="flex flex-wrap gap-2">
+              {isLogoLocked ? (
+                <PlanLockButton
+                  reason="logo"
+                  subject={
+                    hasLogo ? t("document.logoReplace") : t("document.logoUpload")
+                  }
+                  testId="logo-upload-lock"
+                />
+              ) : (
               <label className="inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-content hover:bg-surface-alt focus-within:ring-2 focus-within:ring-[var(--color-ring)]">
                 {hasLogo ? t("document.logoReplace") : t("document.logoUpload")}
                 <input
@@ -308,6 +320,7 @@ export function DocumentBrandSection({
                   }}
                 />
               </label>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -319,6 +332,9 @@ export function DocumentBrandSection({
             </div>
           </div>
         </div>
+        {isLogoLocked && hasLogo && (
+          <FieldHint>{t("document.logoNotPrintedOnPlan")}</FieldHint>
+        )}
         <CheckField
           label={t("document.showLogo")}
           checked={config.logo.visible}

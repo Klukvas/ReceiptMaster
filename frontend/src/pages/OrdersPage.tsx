@@ -34,7 +34,7 @@ import { Button } from "../components/ui/Button";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCreateIntent } from "../hooks/useCreateIntent";
 import { formatOrderNumber } from "../lib/order-number";
-import { UpgradeModal } from "../components/subscription/UpgradeModal";
+import { useUpgradePrompt } from "../hooks/usePlanLock";
 
 const ORDER_STATUSES = ["draft", "confirmed", "cancelled"] as const;
 
@@ -51,7 +51,7 @@ const orderActionsTrigger = (orderId: string | undefined) =>
 export const OrdersPage = () => {
   const { t } = useTranslation();
   const { status: subscriptionStatus } = useSubscription();
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const upgradePrompt = useUpgradePrompt();
   const [shareReceiptId, setShareReceiptId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // A deep link (e.g. from a recipient) can open the list already searched; the param is
@@ -129,8 +129,8 @@ export const OrdersPage = () => {
 
   const [prefillRecipientId, setPrefillRecipientId] = useState<string>();
   const openCreateOrder = (recipientId?: string) => {
-    if (subscriptionStatus && isOrderLimitReached(subscriptionStatus)) {
-      setUpgradeModalOpen(true);
+    if (isOrderLimitReached(subscriptionStatus)) {
+      upgradePrompt.open("orders");
       return;
     }
     setPrefillRecipientId(recipientId);
@@ -825,11 +825,7 @@ export const OrdersPage = () => {
       )}
 
       {/* Upgrade modal */}
-      <UpgradeModal
-        isOpen={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
-        reason="orders"
-      />
+      {upgradePrompt.modal}
     </div>
   );
 };

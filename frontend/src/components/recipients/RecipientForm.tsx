@@ -20,6 +20,8 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Card } from "../ui/Card";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { planRefusalOf, type PlanRefusal } from "../../lib/plan-refusal";
+import { PlanRefusalNotice } from "../subscription/PlanRefusalNotice";
 import { useHighlightedFields } from "../../hooks/useHighlightedFields";
 import { RecipientRequisitesFields } from "./RecipientRequisitesFields";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -47,7 +49,10 @@ const FIELD_IDS = {
   phone: "recipient-phone",
 } as const;
 
-export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
+export const RecipientForm = ({
+  recipient,
+  onClose,
+}: RecipientFormProps) => {
   const { t } = useTranslation();
   const isSubmittingRef = useRef(false);
   const keyFor = useIdempotencyKey();
@@ -60,6 +65,8 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
   });
 
   const [errors, setErrors] = useState<FieldErrors>({});
+  // A 402 is explained in the form itself, so nothing typed is lost.
+  const [planRefusal, setPlanRefusal] = useState<PlanRefusal | null>(null);
   const highlighted = useHighlightedFields(true);
   const [requisites, setRequisites] = useState<RequisitesDraft>(() =>
     draftFromRecipient(recipient),
@@ -130,10 +137,19 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
       recipientsApi.create(data, { idempotencyKey: keyFor(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipients"] });
+      // The usage bar ("3/10") comes from the plan usage, not from the recipient list.
+      queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
       toast.success(t("recipients.recipientCreated"));
       onClose();
     },
     onError: (error: unknown) => {
+      // A 402 that slipped past the page's pre-check (the cached plan status was stale).
+      const refusal = planRefusalOf(error);
+      if (refusal) {
+        queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
+        setPlanRefusal(refusal);
+        return;
+      }
       const { code, message } = parseApiError(error);
       if (code === ErrorCode.RECIPIENT_ALREADY_EXISTS) {
         showErrors({ email: message });
@@ -181,6 +197,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
     // A fast double click fires twice before the button re-renders as disabled.
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
+    setPlanRefusal(null);
     try {
       if (recipient) {
         await updateMutation.mutateAsync({
@@ -230,6 +247,7 @@ export const RecipientForm = ({ recipient, onClose }: RecipientFormProps) => {
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {planRefusal && <PlanRefusalNotice refusal={planRefusal} />}
           <Input
             id={FIELD_IDS.name}
             label={t("recipients.name")}

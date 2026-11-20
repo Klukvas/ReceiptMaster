@@ -17,14 +17,14 @@ interface StatCardProps {
 
 export const StatCard = ({ name, value, icon: Icon, color, bgColor, href, description, footer }: StatCardProps) => {
  const content = (
- <Card className={href ? 'hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
- {/* Below 360 px two cards share a row and the label no longer fits beside the icon. */}
- <div className="flex flex-col items-start min-[360px]:flex-row min-[360px]:items-center">
- <div className={`p-3 rounded-lg ${bgColor}`}>
+ <Card className={href ? '@container hover:shadow-lg transition-shadow duration-200 cursor-pointer' : ''}>
+ {/* Narrow linked counters drop the icon by their own width; the others stack below 360 px, where the label no longer fits beside it. */}
+ <div className={href ? 'flex items-center' : 'flex flex-col items-start min-[360px]:flex-row min-[360px]:items-center'}>
+ <div className={`shrink-0 p-3 ${href ? 'hidden @[10rem]:block' : ''} rounded-lg ${bgColor}`}>
  <Icon className={`h-6 w-6 ${color}`} />
  </div>
- <div className="mt-3 min-w-0 min-[360px]:mt-0 min-[360px]:ml-4">
- <p className="text-sm font-medium text-content-secondary">{name}</p>
+ <div className={`min-w-0 ${href ? '@[10rem]:ml-4' : 'mt-3 min-[360px]:mt-0 min-[360px]:ml-4'}`}>
+ <p className="break-words text-sm font-medium text-content-secondary">{name}</p>
  <p className="text-2xl font-bold text-content tabular-nums">{value}</p>
  {description && (
  <p className="text-xs text-content-tertiary mt-0.5">{description}</p>

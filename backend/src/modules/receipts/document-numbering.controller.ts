@@ -54,6 +54,7 @@ export class DocumentNumberingController {
   @ApiJsonBody("NumberingUpdateRequest")
   @ApiDataResponse(200, "NumberingSetting", "Saved setting")
   @ApiFailureResponses({
+    402: "The plan has no custom numbering (PLAN_FEATURE_RESTRICTED, `feature: customNumbering`)",
     400: "Invalid prefix, padding, startNumber or resetEveryYear (VALIDATION_ERROR names the field; resetEveryYear needs includeYear)",
     409: "startNumber is below a number already used (NUMBERING_START_TOO_LOW); `minStart` is the lowest allowed (of the current year while the yearly reset is on)",
   })

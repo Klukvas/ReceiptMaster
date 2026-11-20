@@ -10,7 +10,7 @@ import {
   type GeneratableType,
 } from "../lib/document-types";
 import { notifyIssueWarnings } from "../lib/issue-warnings";
-import { parseApiError } from "../lib/api-errors";
+import { parseApiError, pdfErrorMessage } from "../lib/api-errors";
 import i18n from "../lib/i18n";
 import {
   downloadPdf,
@@ -76,9 +76,8 @@ export class ReceiptService {
       downloadPdf(blob, await this.documentFilename(receiptId));
       toast.success(i18n.t("receipts.downloaded"));
     } catch (error) {
-      const apiError = parseApiError(error);
-      console.error("Error downloading receipt:", apiError);
-      toast.error(apiError.message);
+      console.error("Error downloading receipt:", parseApiError(error));
+      toast.error(pdfErrorMessage(error));
     }
   }
 
@@ -103,9 +102,8 @@ export class ReceiptService {
       tab.show(new Blob([response.data], { type: "application/pdf" }));
     } catch (error) {
       tab.close();
-      const apiError = parseApiError(error);
-      console.error("Error opening receipt for printing:", apiError);
-      toast.error(apiError.message);
+      console.error("Error opening receipt for printing:", parseApiError(error));
+      toast.error(pdfErrorMessage(error));
     }
   }
 

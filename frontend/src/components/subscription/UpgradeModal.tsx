@@ -1,82 +1,172 @@
 import React from "react";
 import {
-  Package,
-  ShoppingCart,
-  Palette,
+  BarChart3,
   CreditCard,
-  Loader2,
-  ExternalLink,
-  Check,
   Crown,
+  Check,
+  Download,
+  FileStack,
+  FileText,
+  Hash,
+  History,
+  ImageIcon,
+  Loader2,
+  Package,
+  Palette,
+  PenLine,
+  Save,
+  ShoppingCart,
+  TrendingUp,
+  Truck,
+  Users,
+  Warehouse,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
+import { clsx } from "clsx";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useSubscription } from "../../hooks/useSubscription";
 import { useCheckout } from "../../hooks/useCheckout";
+import { hasLiveSubscription } from "../../lib/subscriptionApi";
+import {
+  planDisplayName,
+  planHeadline,
+  planMonthlyPrice,
+  plansOfferedFor,
+  type PaidPlan,
+  type UpgradeReason,
+} from "../../lib/plan-catalog";
 
-export type UpgradeReason = "products" | "orders" | "templates";
+export type { UpgradeReason };
 
 interface UpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   reason: UpgradeReason;
+  /** The locked template, for the "templates" reason: it decides which plans are offered. */
+  templateId?: string;
 }
 
-const REASON_ICONS: Record<UpgradeReason, React.ReactNode> = {
-  products: <Package className="h-12 w-12 text-warning-base" />,
-  orders: <ShoppingCart className="h-12 w-12 text-warning-base" />,
-  templates: <Palette className="h-12 w-12 text-warning-base" />,
+const REASON_ICONS: Record<UpgradeReason, LucideIcon> = {
+  products: Package,
+  orders: ShoppingCart,
+  recipients: Users,
+  presets: Save,
+  templates: Palette,
+  documentTypes: FileText,
+  retention: FileStack,
+  analyticsHistory: History,
+  analytics: BarChart3,
+  profit: TrendingUp,
+  csvExport: Download,
+  logo: ImageIcon,
+  signoff: PenLine,
+  customNumbering: Hash,
+  autoReceipt: Zap,
+  suppliers: Truck,
+  stockInsights: Warehouse,
 };
 
-const TITLE_KEYS: Record<UpgradeReason, string> = {
-  products: "subscription.upgradeProductsTitle",
-  orders: "subscription.upgradeOrdersTitle",
-  templates: "subscription.upgradeTemplatesTitle",
+const PLAN_BUTTON_STYLES: Record<PaidPlan, { card: string; icon: string }> = {
+  pro: {
+    card: "border-[var(--color-accent-light)] bg-[var(--color-accent-light)] hover:border-accent-base",
+    icon: "text-accent-base",
+  },
+  business: {
+    card: "border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600",
+    icon: "text-purple-600 dark:text-purple-400",
+  },
 };
 
-const NO_BILLING_DESC_KEYS: Record<UpgradeReason, string> = {
-  products: "subscription.limitProductsNoBilling",
-  orders: "subscription.limitOrdersNoBilling",
-  templates: "subscription.limitTemplatesNoBilling",
+const PlanOfferButton = ({
+  plan,
+  loading,
+  onUpgrade,
+}: {
+  plan: PaidPlan;
+  loading: string | null;
+  onUpgrade: (plan: PaidPlan) => void;
+}) => {
+  const { t } = useTranslation();
+  const styles = PLAN_BUTTON_STYLES[plan];
+  return (
+    <button
+      type="button"
+      onClick={() => onUpgrade(plan)}
+      disabled={!!loading}
+      className={clsx(
+        "w-full flex items-center justify-between gap-3 p-4 pointer-coarse:min-h-11 rounded-lg border-2 transition-colors",
+        styles.card,
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <Crown className={clsx("h-5 w-5 shrink-0", styles.icon)} />
+        <div className="text-left">
+          <div className="font-medium text-content">
+            {t("subscription.upgradeTo", { plan: planDisplayName(t, plan) })}
+            <span className="ml-2 text-sm font-normal text-content-secondary">
+              {planMonthlyPrice(plan)}
+              {t("subscription.perMonth")}
+            </span>
+          </div>
+          <div className="text-sm text-content-tertiary">
+            {planHeadline(t, plan)}
+          </div>
+        </div>
+      </div>
+      {loading === plan ? (
+        <Loader2 className={clsx("h-4 w-4 animate-spin", styles.icon)} />
+      ) : (
+        <CreditCard className={clsx("h-4 w-4 shrink-0", styles.icon)} />
+      )}
+    </button>
+  );
 };
 
-const DESC_KEYS: Record<UpgradeReason, string> = {
-  products: "subscription.upgradeProductsDesc",
-  orders: "subscription.upgradeOrdersDesc",
-  templates: "subscription.upgradeTemplatesDesc",
-};
+const SUBSCRIPTION_TAB_PATH = "/settings?tab=subscription";
 
 export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   isOpen,
   onClose,
   reason,
+  templateId,
 }) => {
   const { t } = useTranslation();
   const { status } = useSubscription();
-  const { loading, handleUpgrade, handleManage, billingEnabled } =
-    useCheckout();
+  const { loading, handleUpgrade, billingEnabled } = useCheckout();
+  const navigate = useNavigate();
 
-  const titleKey = TITLE_KEYS[reason];
-  const descKey = DESC_KEYS[reason];
-  const currentPlan = status?.plan ?? "free";
-  const hasPaddleSub = status?.hasPaddleSubscription ?? false;
+  const Icon = REASON_ICONS[reason];
+  const title = t(`subscription.reasons.${reason}.title`);
+  const description = t(`subscription.reasons.${reason}.description`);
+  // Nothing is sold on a guess: an unknown status (loading or failed) could belong to a
+  // paying account, so it gets the explanation only, as with billing switched off.
+  const offeredPlans = status
+    ? plansOfferedFor(reason, status.plan, templateId)
+    : [];
 
-  if (!billingEnabled)
+  if (!billingEnabled || !status)
     return (
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={t(titleKey, "Limit reached")}
+        title={title}
         size="md"
         showCloseButton={false}
       >
         <div className="flex flex-col items-center text-center py-4">
-          <div className="mb-4">{REASON_ICONS[reason]}</div>
+          <div className="mb-4">
+            <Icon className="h-12 w-12 text-warning-base" />
+          </div>
           <p className="text-content-secondary mb-6">
+            {description}{" "}
             {t(
-              NO_BILLING_DESC_KEYS[reason],
-              "You have reached the limit of your current plan. Plan upgrades are not available right now.",
+              billingEnabled
+                ? "subscription.statusUnknown"
+                : "subscription.upgradesUnavailable",
             )}
           </p>
           <Button onClick={onClose}>{t("common.close", "Close")}</Button>
@@ -88,111 +178,45 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t(titleKey, "Upgrade Required")}
+      title={title}
       size="md"
       showCloseButton={false}
     >
       <div className="flex flex-col items-center text-center py-4">
         <div className="mb-4 p-3 bg-[var(--color-warning-light)] rounded-full">
-          {REASON_ICONS[reason]}
+          <Icon className="h-12 w-12 text-warning-base" />
         </div>
 
-        <p className="text-content-secondary mb-6">
-          {t(descKey, "You have reached the limit of your current plan.")}
-        </p>
+        <p className="text-content-secondary mb-6">{description}</p>
 
-        {hasPaddleSub ? (
+        {hasLiveSubscription(status) ? (
           <Button
             variant="primary"
-            onClick={handleManage}
-            disabled={!!loading}
+            onClick={() => {
+              onClose();
+              navigate(SUBSCRIPTION_TAB_PATH);
+            }}
             className="w-full"
           >
-            {loading === "manage" ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <ExternalLink className="h-4 w-4 mr-2" />
-            )}
-            {t("subscription.manageSubscription", "Manage Subscription")}
+            {t("subscription.openPlans")}
           </Button>
-        ) : (
+        ) : offeredPlans.length > 0 ? (
           <div className="w-full space-y-3">
-            {currentPlan === "free" && (
-              <button
-                onClick={() => handleUpgrade("pro")}
-                disabled={!!loading}
-                className="w-full flex items-center justify-between p-4 pointer-coarse:min-h-11 rounded-lg border-2 border-[var(--color-accent-light)] bg-[var(--color-accent-light)] hover:border-accent-base transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Crown className="h-5 w-5 text-accent-base" />
-                  <div className="text-left">
-                    <div className="font-medium text-content">
-                      {t("subscription.upgradeToPro", "Upgrade to Pro")}
-                    </div>
-                    <div className="text-sm text-content-tertiary">
-                      {t(
-                        "subscription.productsLimit",
-                        "Up to {{count}} products",
-                        { count: 100 },
-                      )}{" "}
-                      &middot;{" "}
-                      {t(
-                        "subscription.ordersLimit",
-                        "Up to {{count}} orders/month",
-                        { count: 500 },
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {loading === "pro" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-accent-base" />
-                ) : (
-                  <CreditCard className="h-4 w-4 text-accent-base" />
-                )}
-              </button>
-            )}
-
-            {(currentPlan === "free" || currentPlan === "pro") && (
-              <button
-                onClick={() => handleUpgrade("business")}
-                disabled={!!loading}
-                className="w-full flex items-center justify-between p-4 pointer-coarse:min-h-11 rounded-lg border-2 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Crown className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  <div className="text-left">
-                    <div className="font-medium text-content">
-                      {t(
-                        "subscription.upgradeToBusiness",
-                        "Upgrade to Business",
-                      )}
-                    </div>
-                    <div className="text-sm text-content-tertiary">
-                      {t(
-                        "subscription.unlimitedProducts",
-                        "Unlimited products",
-                      )}{" "}
-                      &middot;{" "}
-                      {t("subscription.unlimitedOrders", "Unlimited orders")}
-                    </div>
-                  </div>
-                </div>
-                {loading === "business" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-purple-600 dark:text-purple-400" />
-                ) : (
-                  <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                )}
-              </button>
-            )}
-
-            {currentPlan === "business" && (
-              <div className="flex items-center gap-2 text-success-base py-2">
-                <Check className="h-5 w-5" />
-                <span className="font-medium">
-                  {t("subscription.alreadyTopPlan", "You're on the top plan!")}
-                </span>
-              </div>
-            )}
+            {offeredPlans.map((plan) => (
+              <PlanOfferButton
+                key={plan}
+                plan={plan}
+                loading={loading}
+                onUpgrade={handleUpgrade}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-success-base py-2">
+            <Check className="h-5 w-5" />
+            <span className="font-medium">
+              {t("subscription.alreadyTopPlan", "You're on the top plan!")}
+            </span>
           </div>
         )}
 

@@ -403,10 +403,13 @@ const checkInvoiceCreation = async (results) => {
         (await days.inputValue()) === String(COMPLETE_COMPANY.defaultPaymentTermDays),
         await days.inputValue(),
       );
-      const designs = await dialog.getByLabel("Document design").locator("option").allInnerTexts();
+      const options = dialog.getByLabel("Document design", { exact: true }).locator("option");
+      const designs = await options.allInnerTexts();
       results.check(
-        `${label}: only designs that can carry an invoice are offered (no thermal, no locked)`,
-        designs.join("|") === "Standard|Classic",
+        `${label}: only designs that can carry an invoice are offered (no thermal); a locked one is listed disabled with the lock hint`,
+        designs.join("|") === "Standard|Classic|Minimal 🔒 Higher plan" &&
+          (await options.nth(2).isDisabled()) &&
+          (await dialog.getByTestId("document-design-locked").getByRole("button").count()) === 1,
         designs.join("|"),
       );
       results.check(`${label}: the dialog fits the viewport`, await hasNoHorizontalOverflow(page), "horizontal overflow");

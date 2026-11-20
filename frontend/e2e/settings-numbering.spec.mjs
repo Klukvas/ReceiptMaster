@@ -12,7 +12,7 @@ import {
   installApiMocks,
   withPage,
 } from "./support/harness.mjs";
-import { Results, settle } from "./support/runner.mjs";
+import { Results, settle, waitFor } from "./support/runner.mjs";
 import { NUMBERING_TYPES, numberingHandlers, numberingSetting, documentHandlers } from "./support/document-mocks.mjs";
 
 const VIEWPORTS = [
@@ -135,6 +135,79 @@ const checkDraftSurvivesTabSwitch = async (results) => {
   });
 };
 
+// Hold the actual save response so disabled-vs-clean cannot be confused with busy.
+const checkPendingSave = async (results) => {
+  for (const { label, viewport } of VIEWPORTS) {
+    for (const fails of [false, true]) {
+      await withNumbering(viewport, {}, async (page, state) => {
+        const invoice = row(page, "invoice");
+        await invoice.waitFor({ state: "visible" });
+        let release;
+        let received = false;
+        const gate = new Promise((resolve) => { release = resolve; });
+        state.handlers.unshift(async (_route, request) => {
+          if (request.method !== "PUT" || request.path !== "/settings/document-numbering/invoice") return false;
+          received = true;
+          await gate;
+          return false;
+        });
+        if (fails) state.numberingFailure = {
+          status: 409,
+          body: { error: "The start number must be at least 77", errorCode: "NUMBERING_START_TOO_LOW", minStart: 77 },
+        };
+        const prefix = invoice.getByLabel("Prefix");
+        const start = invoice.getByLabel("Start from");
+        await prefix.fill("  INV-  ");
+        await start.fill("60");
+        if (viewport.width < 640) await start.press("Enter");
+        else await saveButton(page, "invoice").click();
+        await waitFor(() => received, { label: "held numbering save request" });
+        const outcome = fails ? "refused" : "successful";
+        try {
+          const disabled = await Promise.all([
+            prefix.isDisabled(), start.isDisabled(),
+            invoice.getByLabel("Digits in the number").isDisabled(),
+            invoice.getByLabel("Include the year").isDisabled(),
+            invoice.getByLabel("Start the numbering anew every year").isDisabled(),
+          ]);
+          results.check(`${label}: all numbering fields are protected during a ${outcome} save`, disabled.every(Boolean), JSON.stringify(disabled));
+          results.check(`${label}: busy Save is inert while its response is held`, await saveButton(page, "invoice").isDisabled(), "Save enabled");
+        } finally {
+          release();
+        }
+        await waitFor(async () => (await saveButton(page, "invoice").getAttribute("aria-busy")) !== "true");
+        await waitFor(async () => fails || viewport.width < 640
+          ? await start.evaluate((input) => input === document.activeElement)
+          : await saveButton(page, "invoice").evaluate((button) => button === document.activeElement));
+        results.check(`${label}: focus is restored after the ${outcome} save`,
+          fails || viewport.width < 640
+            ? await start.evaluate((input) => input === document.activeElement)
+            : await saveButton(page, "invoice").evaluate((button) => button === document.activeElement), "focus lost");
+        results.check(`${label}: ${outcome} save sends exactly one request`, state.numberingSaves.length === 1, JSON.stringify(state.numberingSaves));
+        results.check(`${label}: fields become editable after a ${outcome} save`, await prefix.isEnabled() && await start.isEnabled(), "fields stayed disabled");
+        if (fails) {
+          results.check(`${label}: refused save preserves the complete draft and reports the new minimum`,
+            (await prefix.inputValue()) === "  INV-  " && (await start.inputValue()) === "60" &&
+            (await invoice.getByRole("alert").innerText()).includes("at least 77"), await invoice.innerText());
+        } else {
+          results.check(`${label}: successful save adopts normalized server values and clears the saved start`,
+            (await prefix.inputValue()) === "INV-" && (await start.inputValue()) === "" && await saveButton(page, "invoice").isDisabled(), await invoice.innerText());
+          await prefix.fill("OTHER-");
+          await prefix.fill("INV-");
+          results.check(`${label}: reverting to the saved format leaves Save off without another request`,
+            await saveButton(page, "invoice").isDisabled() && state.numberingSaves.length === 1, "reverted form stayed dirty");
+        }
+        await start.fill("500");
+        await saveButton(page, "invoice").click();
+        await waitFor(() => state.numberingSaves.length === 2);
+        await waitFor(async () => (await saveButton(page, "invoice").getAttribute("aria-busy")) !== "true");
+        results.check(`${label}: a new start entered after the ${outcome} save is submitted and shown`,
+          state.numberingSaves[1].body.startNumber === 500 && (await previewOf(page, "invoice")) === `INV-${YEAR}-000500`, JSON.stringify(state.numberingSaves));
+      });
+    }
+  }
+};
+
 const checkSave = async (results) => {
   for (const { label, viewport } of VIEWPORTS) {
     await withNumbering(viewport, {}, async (page, state) => {
@@ -152,6 +225,7 @@ const checkSave = async (results) => {
         JSON.stringify(sent),
       );
       await settle(async () => (await previewOf(page, "invoice")) === `INV-${YEAR}-00043`);
+      await waitFor(async () => (await saveButton(page, "invoice").getAttribute("aria-busy")) !== "true");
       results.check(`${label}: the saved number comes from the server`, (await previewOf(page, "invoice")) === `INV-${YEAR}-00043`, await previewOf(page, "invoice"));
       results.check(`${label}: Save is off again after saving`, await saveButton(page, "invoice").isDisabled(), "enabled");
 
@@ -268,7 +342,7 @@ const checkYearlyReset = async (results) => {
         JSON.stringify({ prefix: "", padding: 6, includeYear: true, resetEveryYear: true }),
       JSON.stringify(state.numberingSaves),
     );
-    await settle(async () => (await saveButton(page, "invoice").isDisabled()));
+    await waitFor(async () => (await saveButton(page, "invoice").getAttribute("aria-busy")) !== "true");
     await yearBox(page, "invoice").uncheck();
     results.check(
       "switching the year off switches the restart off and disables it with a hint",
@@ -365,6 +439,7 @@ export const run = async () => {
   await checkPreview(results);
   await checkClientValidation(results);
   await checkDraftSurvivesTabSwitch(results);
+  await checkPendingSave(results);
   await checkSave(results);
   await checkServerRefusals(results);
   await checkYearlyReset(results);

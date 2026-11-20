@@ -6,7 +6,7 @@ import * as request from "supertest";
 import { DataSource } from "typeorm";
 import { runWithTenant } from "../../src/common/tenancy/tenant-context";
 import { IdempotencyCleanupService } from "../../src/modules/orders/idempotency-cleanup.service";
-import { PaddleService } from "../../src/modules/paddle/paddle.service";
+import { CreemService } from "../../src/modules/creem/creem.service";
 import { ReceiptOutboxService } from "../../src/modules/receipts/receipt-outbox.service";
 import { DocumentStorageMaintenanceService } from "../../src/modules/receipts/services/document-storage-maintenance.service";
 import { TelegramService } from "../../src/modules/telegram/telegram.service";
@@ -298,22 +298,22 @@ describeRestricted("API under the restricted application role (e2e)", () => {
   it("downgrades lapsed subscriptions across tenants", async () => {
     const owner = await tenant("subscription@test.com");
     await admin.query(
-      `INSERT INTO user_subscriptions(user_id, plan, paddle_status, current_period_end)
+      `INSERT INTO user_subscriptions(user_id, plan, creem_status, current_period_end)
        VALUES ($1, 'pro', 'canceled', now() - interval '1 day')
        ON CONFLICT (user_id) DO UPDATE SET plan = EXCLUDED.plan,
-         paddle_status = EXCLUDED.paddle_status,
+         creem_status = EXCLUDED.creem_status,
          current_period_end = EXCLUDED.current_period_end`,
       [owner.id],
     );
 
-    const paddle = app.get(PaddleService, { strict: false });
+    const creem = app.get(CreemService, { strict: false });
     const billing = jest
       .spyOn(
-        paddle as unknown as { isBillingEnabled(): boolean },
+        creem as unknown as { isBillingEnabled(): boolean },
         "isBillingEnabled",
       )
       .mockReturnValue(true);
-    await paddle.downgradeCanceledSubscriptions();
+    await creem.downgradeCanceledSubscriptions();
     billing.mockRestore();
 
     const { rows } = await admin.query(

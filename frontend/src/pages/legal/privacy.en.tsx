@@ -135,11 +135,11 @@ export const privacyEn: LegalContent = {
       <p>
         We do <strong>not</strong> directly collect or store payment card
         information. All payment processing is handled by our payment provider,
-        Paddle.com (Paddle Payments Ltd), which acts as the Merchant of Record.
-        When you purchase a subscription, Paddle collects and processes your
-        payment information according to their own{" "}
+        Creem (Armitage Labs OÜ, Estonia), which acts as the Merchant of Record.
+        When you purchase a subscription, Creem collects and processes your
+        payment information according to its own{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -148,7 +148,7 @@ export const privacyEn: LegalContent = {
         .
       </p>
       <p>
-        From Paddle, we receive only: your Paddle customer ID, subscription
+        From Creem, we receive only: your Creem customer ID, subscription
         ID, subscription status, and billing period dates. We never see your credit card number
         or bank details.
       </p>
@@ -158,7 +158,7 @@ export const privacyEn: LegalContent = {
       <ul>
         <li>Provide, maintain, and improve the Service</li>
         <li>Authenticate your identity and manage your account</li>
-        <li>Process subscriptions and manage billing through Paddle</li>
+        <li>Process subscriptions and manage billing through Creem</li>
         <li>Provide customer support and answer the emails you send us</li>
         <li>Detect and prevent fraud or abuse</li>
         <li>Comply with legal obligations</li>
@@ -199,11 +199,11 @@ export const privacyEn: LegalContent = {
           </thead>
           <tbody>
             <tr>
-              <td>Paddle.com</td>
+              <td>Creem</td>
               <td>Payment processing (Merchant of Record)</td>
               <td>
-                User ID and chosen plan (you enter your email and payment
-                details directly at Paddle's checkout)
+                User ID, account email and chosen plan (you enter your payment
+                details directly at Creem's checkout)
               </td>
             </tr>
             <tr>
@@ -227,7 +227,7 @@ export const privacyEn: LegalContent = {
         </table>
       </div>
       <p>
-        Each third-party service processes data according to their own privacy
+        Each third-party service processes data according to its own privacy
         policy and is bound by applicable data protection regulations.
       </p>
 
@@ -246,14 +246,15 @@ export const privacyEn: LegalContent = {
           are only hidden from you until then.
         </li>
         <li>
-          <strong>Documents:</strong> We keep the 10 most recent generated
-          documents of each of these types: delivery note, quote, sales receipt
-          and packing list. Generating a new one permanently removes the oldest
-          document of the same type: its share link stops working at once and
-          its PDF file is deleted from storage shortly afterwards. Payment
-          invoices, acts of completed work, return notes, and voided and failed
-          documents of any type are not removed under this limit; we keep them,
-          with their numbers, for as long as your account exists. We are not an
+          <strong>Documents:</strong> We keep a limited number of the most recent generated documents of each type;
+          the number depends on your plan and is shown in Settings &rarr;
+          Subscription. Generating a new document over that limit affects the
+          oldest one of the same type. A delivery note, quote, sales receipt or
+          packing list is permanently removed together with its PDF file and
+          public link. A payment invoice, act of completed work or return note
+          keeps its record and number, but its PDF file and public link are
+          removed. Voided and failed documents are not affected by the limit.
+          Removed PDF files are deleted from storage shortly afterwards. We are not an
           archive, so save copies of the documents you are required to keep.
         </li>
         <li>
@@ -261,8 +262,8 @@ export const privacyEn: LegalContent = {
           them or delete your account. After you delete one, the file is erased
           from storage within about 24 hours. The copy embedded in documents
           already generated remains in those documents and in their public
-          links until the document is deleted or removed under the limit of 10
-          documents per type. A failed document whose content was already
+          links until the document is deleted or removed under your plan&apos;s
+          document limit. A failed document whose content was already
           prepared may keep the earlier signature or stamp if you retry it.
           Backup copies are removed when the backups expire.
         </li>
@@ -271,9 +272,9 @@ export const privacyEn: LegalContent = {
           deleted together with your data.
         </li>
         <li>
-          <strong>Billing records:</strong> Paddle, as Merchant of Record,
+          <strong>Billing records:</strong> Creem, as Merchant of Record,
           keeps these as required by applicable tax and accounting laws
-          (typically 5-7 years). We keep only your Paddle customer and
+          (7 years for accounting records under Estonian law). We keep only your Creem customer and
           subscription IDs and the subscription status.
         </li>
       </ul>
@@ -343,7 +344,8 @@ export const privacyEn: LegalContent = {
 
       <h2>11. International Data Transfers</h2>
       <p>
-        Our servers are located in Germany. Paddle (United Kingdom) and, if you
+        Our servers are located in Germany. Creem (Estonia, with service
+        providers in other countries, including the United States) and, if you
         use it, Telegram may process data in other countries as well. Where
         data leaves Ukraine or the European Economic Area (EEA), we rely on the
         transfer safeguards of these providers and their own policies.

@@ -10,6 +10,7 @@ import { UpdateRecipientDto } from "./dto/update-recipient.dto";
 import { PaginationDto, SortOrder } from "../../common/dto/pagination.dto";
 import { PaginatedResponse } from "../../common/interfaces/paginated-response.interface";
 import { User } from "../users/entities/user.entity";
+import { SubscriptionService } from "../subscription/subscription.service";
 import { normalizeEmail } from "../../common/dto/normalized-email";
 import { containsPattern } from "../../common/utils/like-pattern.util";
 import {
@@ -127,24 +128,37 @@ export class RecipientsService {
   constructor(
     @InjectRepository(Recipient)
     private recipientsRepository: Repository<Recipient>,
+    private subscriptionService: SubscriptionService,
   ) {}
 
+  /** One transaction, so the plan's recipient count and the insert commit together. */
   async create(
     createRecipientDto: CreateRecipientDto,
     user: User,
   ): Promise<Recipient> {
-    await this.assertEmailAvailable(
-      this.recipientsRepository.manager,
-      createRecipientDto.email,
-      user,
-    );
-    const recipient = this.recipientsRepository.create({
-      ...createRecipientDto,
-      ...resolveTaxId(createRecipientDto),
-      user_id: user.id,
-    });
     return rejectingDuplicateEmail(createRecipientDto.email, () =>
-      this.recipientsRepository.save(recipient),
+      this.recipientsRepository.manager.transaction((manager) =>
+        this.insertWithinQuota(manager, createRecipientDto, user),
+      ),
+    );
+  }
+
+  private async insertWithinQuota(
+    manager: EntityManager,
+    createRecipientDto: CreateRecipientDto,
+    user: User,
+  ): Promise<Recipient> {
+    await this.assertEmailAvailable(manager, createRecipientDto.email, user);
+    await this.subscriptionService.assertCanCreateRecipientInTx(
+      manager,
+      user.id,
+    );
+    return manager.save(
+      manager.create(Recipient, {
+        ...createRecipientDto,
+        ...resolveTaxId(createRecipientDto),
+        user_id: user.id,
+      }),
     );
   }
 
@@ -173,7 +187,8 @@ export class RecipientsService {
   /**
    * A repeated Idempotency-Key replays the first create instead of adding a duplicate.
    * The email check runs after the key lookup, so a replay of a create that stored an
-   * email returns the stored response instead of a 409 for its own recipient.
+   * email returns the stored response instead of a 409 for its own recipient. The plan
+   * limit is checked there too, so a replay still succeeds once the limit is reached.
    */
   async createWithIdempotencyKey(
     createRecipientDto: CreateRecipientDto,
@@ -190,20 +205,7 @@ export class RecipientsService {
             userId: user.id,
             payload: createRecipientDto,
           },
-          async () => {
-            await this.assertEmailAvailable(
-              manager,
-              createRecipientDto.email,
-              user,
-            );
-            return manager.save(
-              manager.create(Recipient, {
-                ...createRecipientDto,
-                ...resolveTaxId(createRecipientDto),
-                user_id: user.id,
-              }),
-            );
-          },
+          () => this.insertWithinQuota(manager, createRecipientDto, user),
         ),
       ),
     );

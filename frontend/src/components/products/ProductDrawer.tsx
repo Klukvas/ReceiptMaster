@@ -110,16 +110,16 @@ export const ProductDrawer = ({
       <div className="space-y-1">
         {/* Header */}
         <div className="-mx-6 -mt-6 px-6 pt-5 pb-5 bg-gradient-to-b from-surface-alt to-elevated border-b border-[var(--color-border-light)]">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-xl bg-[var(--color-accent-light)] flex items-center justify-center">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0 flex-1 flex items-start gap-4">
+              <div className="h-12 w-12 shrink-0 rounded-xl bg-[var(--color-accent-light)] flex items-center justify-center">
                 <Package className="h-5 w-5 text-accent-base" />
               </div>
-              <div className="min-w-0 pt-0.5">
+              <div className="min-w-0 flex-1 pt-0.5">
                 <h2 className="text-lg font-semibold text-content truncate leading-tight">
                   {product.name}
                 </h2>
-                <div className="mt-1.5 flex items-center gap-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <ProductStockBadge quantity={product.quantity} />
                   <ProductMarginBadge
                     purchasePriceCents={product.purchase_price_cents}
@@ -130,7 +130,7 @@ export const ProductDrawer = ({
             </div>
 
             {/* Context Menu */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
                 aria-label={t("orders.moreActions")}

@@ -1,6 +1,7 @@
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown, Download, FileX } from "lucide-react";
 import type { TFunction } from "i18next";
 import type { Receipt } from "../../lib/api";
+import { isPurgedDocument } from "../../lib/document-actions";
 import { formatDocumentDateTime } from "../../lib/document-date-format";
 import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -19,7 +20,10 @@ const voidedLine = (t: TFunction, document: Receipt, timeZone: string): string =
   return parts.join(" · ");
 };
 
-/** Superseded void documents of one type: read-only, only the PDF can still be downloaded. */
+/**
+ * Superseded void documents of one type: read-only, only the PDF can still be downloaded,
+ * and not even that once the plan's retention limit removed the file.
+ */
 export function VoidedDocumentHistory({ documents, onDownload }: VoidedDocumentHistoryProps) {
   const { t } = useTranslation();
   const timeZone = useDocumentTimeZone();
@@ -46,10 +50,21 @@ export function VoidedDocumentHistory({ documents, onDownload }: VoidedDocumentH
                 </p>
               )}
             </div>
-            <Button size="sm" variant="outline" onClick={() => onDownload(document.id)}>
-              <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              {t("documents.download")}
-            </Button>
+            {isPurgedDocument(document) ? (
+              <p
+                data-testid="document-purged"
+                title={t("documents.purged.note")}
+                className="inline-flex items-center gap-1.5 text-xs text-content-tertiary"
+              >
+                <FileX className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {t("documents.purged.short")}
+              </p>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => onDownload(document.id)}>
+                <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                {t("documents.download")}
+              </Button>
+            )}
           </li>
         ))}
       </ul>

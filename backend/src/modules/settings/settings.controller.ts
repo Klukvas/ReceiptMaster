@@ -227,7 +227,10 @@ export class SettingsController {
   @ApiOperation({ summary: "Toggle auto-generate receipt on confirm" })
   @ApiJsonBody("AutoReceiptRequest")
   @ApiDataResponse(201, "AutoReceiptResponse", "Saved flag")
-  @ApiFailureResponses({ 400: "Invalid body" })
+  @ApiFailureResponses({
+    400: "Invalid body",
+    402: "Enabling needs a plan with auto-receipt (PLAN_FEATURE_RESTRICTED, `feature: autoReceipt`); disabling is always allowed",
+  })
   async updateAutoReceipt(
     @Request() req: { user: User },
     @Body() body: { enabled: boolean },

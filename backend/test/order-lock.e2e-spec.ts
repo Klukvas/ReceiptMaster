@@ -37,6 +37,10 @@ import {
 } from "./helpers/isolated-postgres";
 import { RestrictedAppDatabase } from "./helpers/restricted-app-database";
 import { openMigratedAppDatabase } from "./helpers/migrated-app-database";
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
 
 const FIXTURE_PDF = Buffer.from("%PDF-1.4 order lock fixture");
 
@@ -590,19 +594,25 @@ describeIsolatedPostgres(
 
           const result = await asTenant(() => receipts.getRetention(user));
 
-          expect(result).toEqual({ limit: LIMIT, count: 3, replaces: null });
+          expect(result).toEqual({
+            limit: LIMIT,
+            count: 3,
+            action: "delete",
+            replaces: null,
+          });
         });
 
-        it("counts only invoices for type=invoice but never offers one for replacement", async () => {
+        it("counts only invoices for type=invoice and says the oldest will lose its file, not its row", async () => {
           await generatedOfType(DocumentType.WAYBILL, 2);
-          await generatedOfType(DocumentType.INVOICE, LIMIT);
+          const invoices = await generatedOfType(DocumentType.INVOICE, LIMIT);
 
           const result = await asTenant(() =>
             receipts.getRetention(user, DocumentType.INVOICE),
           );
 
           expect(result.count).toBe(LIMIT);
-          expect(result.replaces).toBeNull();
+          expect(result.action).toBe("purge");
+          expect(result.replaces?.id).toBe(invoices[0].id);
         });
 
         it("replaces the oldest waybill when the waybills are full", async () => {
@@ -620,7 +630,12 @@ describeIsolatedPostgres(
 
           const result = await asTenant(() => receipts.getRetention(user));
 
-          expect(result).toEqual({ limit: LIMIT, count: 0, replaces: null });
+          expect(result).toEqual({
+            limit: LIMIT,
+            count: 0,
+            action: "delete",
+            replaces: null,
+          });
         });
       });
     });

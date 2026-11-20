@@ -1,3 +1,4 @@
+import { ApiErrors } from "../../common/errors/ApiError";
 import { TelegramService } from "./telegram.service";
 import { UserState } from "./interfaces/cart.interface";
 import { OrderStatus as _OrderStatus } from "../orders/entities/order.entity";
@@ -40,6 +41,7 @@ describe("TelegramService", () => {
   let orderItemsRepo: any;
   let dataSource: any;
   let cacheService: any;
+  let subscriptionService: any;
   let httpMock: any;
 
   const originalEnv = process.env;
@@ -79,6 +81,11 @@ describe("TelegramService", () => {
       delByPattern: jest.fn().mockResolvedValue(undefined),
     };
 
+    subscriptionService = {
+      assertCanCreateOrderInTx: jest.fn().mockResolvedValue(undefined),
+      assertCanCreateRecipientInTx: jest.fn().mockResolvedValue(undefined),
+    };
+
     // Reset the shared mock before each test
     mockHttpPost.mockReset();
     mockHttpPost.mockResolvedValue({
@@ -92,6 +99,7 @@ describe("TelegramService", () => {
       orderItemsRepo,
       dataSource,
       cacheService,
+      subscriptionService,
     );
 
     // Access the private http mock
@@ -115,6 +123,7 @@ describe("TelegramService", () => {
             orderItemsRepo,
             dataSource,
             cacheService,
+            subscriptionService,
           ),
       ).toThrow();
     });
@@ -129,6 +138,7 @@ describe("TelegramService", () => {
         orderItemsRepo,
         dataSource,
         cacheService,
+        subscriptionService,
       );
 
       expect(svc).toBeDefined();
@@ -567,6 +577,164 @@ describe("TelegramService", () => {
         } as any),
       ).rejects.toThrow();
     });
+  });
+
+  describe("plan limits of the bot owner", () => {
+    const ownerId = "11111111-1111-4111-8111-111111111111";
+    const product = {
+      id: "p1",
+      name: "Widget",
+      sale_price_cents: 1000,
+      purchase_price_cents: 400,
+      quantity: 10,
+      currency: "UAH",
+    };
+    const dto = {
+      user: { telegram_user_id: "100", first_name: "John" },
+      items: [{ productId: "p1", qty: 1 }],
+    } as any;
+
+    /** One transaction manager; `existingRecipient` null means the buyer is new. */
+    const runInTransaction = (existingRecipient: unknown) => {
+      const repos: Record<string, any> = {
+        Recipient: {
+          findOne: jest.fn().mockResolvedValue(existingRecipient),
+          create: jest.fn((data: any) => data),
+          save: jest.fn((data: any) =>
+            Promise.resolve({ id: "rec-new", ...data }),
+          ),
+        },
+        Product: {
+          find: jest.fn().mockResolvedValue([{ ...product }]),
+          save: jest.fn((data: any) => Promise.resolve(data)),
+        },
+        Order: {
+          create: jest.fn((data: any) => data),
+          save: jest.fn((data: any) =>
+            Promise.resolve({ id: "order-1", ...data }),
+          ),
+        },
+        OrderItem: {
+          create: jest.fn((data: any) => data),
+          save: jest.fn((data: any) => Promise.resolve(data)),
+        },
+      };
+      const manager = {
+        getRepository: jest.fn((entity: any) => repos[entity.name]),
+        query: jest.fn().mockResolvedValue([{ next: 1 }]),
+      };
+      dataSource.transaction.mockImplementation((cb: any) => cb(manager));
+      return { manager, repos };
+    };
+
+    it("checks the monthly quota for the owner inside the transaction", async () => {
+      const { manager } = runInTransaction({ id: "rec-1" });
+
+      await service.createOrderFromTelegram(dto);
+
+      expect(subscriptionService.assertCanCreateOrderInTx).toHaveBeenCalledWith(
+        manager,
+        ownerId,
+      );
+    });
+
+    it("creates neither a recipient nor an order once the monthly quota is used up", async () => {
+      const { repos } = runInTransaction(null);
+      subscriptionService.assertCanCreateOrderInTx.mockRejectedValue(
+        ApiErrors.ORDER_MONTHLY_LIMIT_EXCEEDED(20),
+      );
+
+      await expect(service.createOrderFromTelegram(dto)).rejects.toMatchObject({
+        errorCode: "ORDER_MONTHLY_LIMIT_EXCEEDED",
+      });
+      expect(repos.Recipient.save).not.toHaveBeenCalled();
+      expect(repos.Order.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses a new buyer over the recipient limit and creates no order", async () => {
+      const { repos } = runInTransaction(null);
+      subscriptionService.assertCanCreateRecipientInTx.mockRejectedValue(
+        ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10),
+      );
+
+      await expect(service.createOrderFromTelegram(dto)).rejects.toMatchObject({
+        errorCode: "RECIPIENT_LIMIT_EXCEEDED",
+      });
+      expect(repos.Recipient.save).not.toHaveBeenCalled();
+      expect(repos.Order.save).not.toHaveBeenCalled();
+    });
+
+    it("does not count a returning buyer against the recipient limit", async () => {
+      const { repos } = runInTransaction({
+        id: "rec-1",
+        telegram_user_id: "100",
+        first_name: "John",
+      });
+      subscriptionService.assertCanCreateRecipientInTx.mockRejectedValue(
+        ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10),
+      );
+
+      await service.createOrderFromTelegram(dto);
+
+      expect(
+        subscriptionService.assertCanCreateRecipientInTx,
+      ).not.toHaveBeenCalled();
+      expect(repos.Order.save).toHaveBeenCalled();
+    });
+
+    it.each([
+      ["monthly order", ApiErrors.ORDER_MONTHLY_LIMIT_EXCEEDED(20)],
+      ["recipient", ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10)],
+    ])(
+      "tells the buyer the shop is not taking orders on a %s limit and keeps the cart",
+      async (_name, limitError) => {
+        cacheService.get.mockResolvedValue({
+          userId: 1,
+          state: "reviewing_order",
+          cart: {
+            userId: 1,
+            items: [
+              { productId: "p1", name: "Widget", price: 1000, quantity: 1 },
+            ],
+          },
+        });
+        productsRepo.find.mockResolvedValue([{ ...product }]);
+        productsRepo.findOne.mockResolvedValue({ ...product });
+        runInTransaction(null);
+        subscriptionService.assertCanCreateOrderInTx.mockRejectedValue(
+          limitError,
+        );
+
+        await service.handleWebhook({
+          update_id: 900,
+          callback_query: {
+            id: "cq-limit",
+            from: { id: 1, is_bot: false },
+            message: {
+              message_id: 1,
+              chat: { id: 100, type: "private" },
+              date: 0,
+            },
+            chat_instance: "123",
+            data: "confirm_order",
+          },
+        } as any);
+
+        const sentTexts = mockHttpPost.mock.calls
+          .filter(([path]) => path === "/sendMessage")
+          .map(([, payload]) => payload.text);
+        expect(sentTexts).toEqual([
+          expect.stringContaining("временно не принимает новые заказы"),
+        ]);
+        // The plan's numbers are the owner's business, not the buyer's.
+        expect(sentTexts.join()).not.toMatch(/limit|\d/i);
+        expect(cacheService.set).not.toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ state: "idle" }),
+          expect.anything(),
+        );
+      },
+    );
   });
 
   describe("session management (via handleWebhook)", () => {

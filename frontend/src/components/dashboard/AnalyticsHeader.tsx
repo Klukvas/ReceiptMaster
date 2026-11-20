@@ -1,14 +1,17 @@
 import { Download, Calendar } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { PlanLockButton } from '../subscription/PlanLock';
 
 interface AnalyticsHeaderProps {
  onExportCsv: () => void;
  /** False when the selected period has no rows; the export would be a header-only file. */
  canExport: boolean;
+ /** The plan has no CSV export: the button becomes a lock that explains which plan has it. */
+ isCsvLocked?: boolean;
  periodLabel: string;
 }
 
-export const AnalyticsHeader = ({ onExportCsv, canExport, periodLabel }: AnalyticsHeaderProps) => {
+export const AnalyticsHeader = ({ onExportCsv, canExport, isCsvLocked = false, periodLabel }: AnalyticsHeaderProps) => {
  const { t } = useTranslation();
 
  return (
@@ -26,6 +29,13 @@ export const AnalyticsHeader = ({ onExportCsv, canExport, periodLabel }: Analyti
  <Calendar className="h-3 w-3" />
  {periodLabel}
  </span>
+ {isCsvLocked ? (
+ <PlanLockButton
+ reason="csvExport"
+ subject={t('dashboard.exportCsv', 'Export CSV')}
+ testId="csv-export-lock"
+ />
+ ) : (
  <button
  type="button"
  aria-label={t('dashboard.exportCsv', 'Export CSV')}
@@ -37,6 +47,7 @@ export const AnalyticsHeader = ({ onExportCsv, canExport, periodLabel }: Analyti
  <Download className="h-4 w-4" />
  <span className="hidden sm:inline">{t('dashboard.exportCsv', 'Export CSV')}</span>
  </button>
+ )}
  </div>
  </div>
  );

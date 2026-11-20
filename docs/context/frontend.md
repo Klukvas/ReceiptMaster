@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-16
+**Last Updated:** 2026-11-20
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -20,7 +20,7 @@ frontend/
 │   ├── services/             # Business logic (OrderService, ReceiptService)
 │   ├── hooks/                # Custom React hooks (useOrders, useAuth, useServerPagination, etc.)
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
-│   ├── providers/            # Context providers (PaddleProvider for billing)
+│   ├── providers/            # Context providers (BillingProvider for the billing capability)
 │   ├── lib/                  # Utilities (api.ts, api-errors.ts, chunk-load.ts, i18n.ts)
 │   └── locales/              # i18next translations (en, ru, uk)
 ├── package.json
@@ -58,7 +58,7 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 3. `<ThemeProvider>` — dark/light mode context
 4. `<AuthProvider>` — session + current user context
 5. `<BrowserRouter>` — React Router 7.8 routing
-6. `<PaddleProvider>` — Paddle billing (checkout, subscriptions); inside the router because it is not initialized on the public share route `/r/:token` (`providers/paddle-route.ts`)
+6. `<BillingProvider>` — billing capability flag; inside the router because it does nothing on the public share route `/r/:token` (`providers/billing-route.ts`)
 7. `<Toaster>` — react-hot-toast notifications (top-right; `bottom-center` on phones below `sm`, `hooks/useMediaQuery.ts`, so a toast never covers an open dialog's header and Close; `NotificationToast` follows the same rule)
 
 **Query client config** (lines 73–82):
@@ -307,7 +307,7 @@ An order carries several documents; `lib/document-types.ts` holds the per-type m
 - **Order chip:** `OrderStatusBadge` shows a void chip only if no newer document of that type exists (`isNewestOfType`), so a live return note is not shadowed by an old void one.
 - **Create dialog:** the clock is `useDocumentNow(timeZone)` (refreshes only when the document-zone day changes; re-read at submit so an untouched quote date and the min dates never go stale). After a refusal focus moves to the first bad field (`lib/document-field-focus.ts`); act period errors are per field (`periodFrom` / `periodTo`) and go away as soon as the dates no longer have that problem (`withResolvedPeriodErrors`); return quantities have `aria-describedby` (max hint + error). Requisite banners say what blocks (`requisitesMissingTitle` / `requisitesRefusedTitle`) and what does not; `details.*` entries are labelled as fields of this dialog. Double submit stays guarded by `isSubmittingRef` / `isSendingRef` (the server also returns the first return note for an identical request within 10 s).
 - **Void dialog:** title names the document with the type lower-cased mid-sentence (`Void invoice INV-7`, «Анулювати документ: рахунок на оплату …»), the reason textarea is auto-focused and linked to its error; `focusFallbackId` returns focus to the page/section heading when the opener is gone.
-- **Numbering:** the preview is always "Number example"; "Minimum: N" is the start hint; hints explain prefix (with separator), zero padding (with example), year (counter does not reset yearly) and why the start can only go up. Only the edited row has a delayed `role="status"` (`useSettledValue`). A refused save focuses the field.
+- **Numbering:** the preview is always "Number example"; "Minimum: N" is the start hint; hints explain prefix (automatic hyphen after a letter/digit, or a custom trailing separator), zero padding (with example), year (counter does not reset yearly) and why the start can only go up. Only the edited row has a delayed `role="status"` (`useSettledValue`). A refused save focuses the field.
 - **Signature/stamp:** empty files are refused on the client (`signoff.errors.empty`), 5xx upload errors show a fixed message, the preview sits on a checkerboard and is keyed to the asset id (no revoked/broken image after a replace), `SettingsLoadError` no longer prints raw server text and the second Documents section announces as `status` so a failed tab is one alert.
 - **Issue warnings and rate limits:** `lib/issue-warnings.ts::notifyIssueWarnings` reads the optional `warnings` of an issue response (`SIGNOFF_UNAVAILABLE`, `kinds`) and shows a 12 s toast (`signoff.unavailable.*`); wired into `useCreateDocument`, `ReceiptService` (waybill and retry) and `CustomizeDocumentModal` (replace). `parseApiError` turns `RATE_LIMITED` (+ `retryAfterSeconds`) into `errors.rateLimitedIn` / `errors.rateLimited`.
 - Specs: `e2e/documents-hardening.spec.mjs` (aria-sort, void/failed notes, reversed range, phone sort), plus updated `documents-*`, `settings-*`.
@@ -492,11 +492,10 @@ const { theme, toggleTheme, setTheme } = useTheme()
 
 ### Other Contexts
 
-**PaddleProvider** (`providers/PaddleProvider.tsx`):
-- Initializes Paddle SDK (`@paddle/paddle-js`) only when the explicit build flag and backend capability are both enabled, and never on `/r/:token` (`isPaddleAllowedOn`, case-insensitive like the router, so `/R/<token>` too; the recipient of a share link is not a customer, and the SDK would see the capability URL). Opening an app page later initializes it then. The initialization promise is kept in a ref, so returning from `/r/` (or a StrictMode re-run) reuses it instead of loading the SDK again; the context value is memoized. Spec: `e2e/billing-disabled.spec.mjs`.
-- Token from `VITE_PADDLE_CLIENT_TOKEN` env var
-- Enabled production requires explicit `VITE_PADDLE_ENVIRONMENT=production`; development can use sandbox. Invalid values fail initialization.
-- Exported `usePaddle()` hook provides `paddle` instance for checkout
+**BillingProvider** (`providers/BillingProvider.tsx`):
+- Holds no payment SDK: Creem checkout and the portal are hosted pages the backend returns links to. It only resolves whether billing is on: the build flag `VITE_BILLING_ENABLED` and then the backend capability `GET /billing/config`, never on `/r/:token` (`isBillingAllowedOn`, case-insensitive like the router, so `/R/<token>` too; the recipient of a share link is not a customer). The check promise is kept in a ref, so returning from `/r/` (or a StrictMode re-run) reuses it instead of asking again
+- No provider key or environment is built into the frontend
+- Exported `useBilling()` hook provides `{ billingEnabled, isLoading }`
 - See `useCheckout` hook for usage
 
 ## Cross-Cutting Concerns
@@ -519,11 +518,11 @@ const { t, changeLanguage, currentLanguage, isReady } = useTranslation()
 
 **Convention:** Organize translation keys hierarchically (orders.recipient, settings.receiptTitle, etc.). Check JSON files for the full key structure.
 
-**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the Pro/Business `feat3`) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Paddle and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
+**Landing copy:** every claim on the landing page must be backed by code. The template count (`landing.stats.templatesValue`, `landing.grid.receipts.*`, `landing.templates.title`, the plan cards) must equal `TEMPLATE_METADATA` in `backend/src/modules/receipts/templates/metadata.ts`, and `e2e/locale-parity.spec.mjs` fails when any of them drifts. Plan limits (`landing.pricing.*`) mirror `PLAN_LIMITS` in `backend/src/modules/subscription/config/plans.config.ts`; the prices live in Creem and are not checked. There are no usage statistics, SLA, trial, priority support or webhooks on the page because the product has none. The hero's secondary button only scrolls to `#features`, so it says "See features". Keep copy plain: no internal tech names (Redis, S3, BullMQ) in user-facing text.
 
 **Wording:** user-facing strings outside the landing say "document" (or "waybill" where the waybill is meant) instead of receipt/квитанція/чек; type names are `documentTypes.{waybill,quote,invoice,act,sales_receipt,packing_list,return_note}` (the sales receipt is "Товарний чек" / "Sales receipt"; never name a document "cash/касовий"), requisite labels `documentFields.{seller,buyer,details}.*`, document UI `documents.*`. Code identifiers keep the `receipt*` names. `avgOrderValue` ("Середній чек") is a retail term and stays.
 
-**Public-page behaviour:** `LandingShell` scrolls to the URL hash after mount (plain `<a href="/#features">` links from `/blog` and the legal pages) and the sections carry `scroll-margin-top: 84px` for the sticky nav; smooth scrolling exists only under `prefers-reduced-motion: no-preference` (CSS) and script scrolls use `getScrollBehavior()` (`lib/scroll-behavior.ts`). The blog has posts in `en`/`uk` only: the list follows `uk` or English, and a Russian interface shows `blog.languageNote`. `LegalLayout`'s header carries the language switcher and theme toggle.
+**Public-page behaviour:** `.landing-page` uses `overflow-x: clip` so the landing/blog navigation stays sticky to the viewport, and the navigation sits below auth dialogs/backdrops. `LandingShell` scrolls to the URL hash after mount (plain `<a href="/#features">` links from `/blog` and the legal pages) and the sections carry `scroll-margin-top: 84px` for the sticky nav; smooth scrolling exists only under `prefers-reduced-motion: no-preference` (CSS) and script scrolls use `getScrollBehavior()` (`lib/scroll-behavior.ts`). The blog has posts in `en`/`uk` only: the list follows `uk` or English, and a Russian interface shows `blog.languageNote`. `LegalLayout`'s header carries the language switcher and theme toggle.
 
 ### Legal pages
 
@@ -598,25 +597,24 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   the full commit SHA; production compose requires `IMAGE_TAG` for both services.
   Deployment transfers an allowlisted SHA archive and waits for both builds to succeed; existing production files are preserved.
 - The current release sets `VITE_BILLING_ENABLED=false` and overrides backend
-  `BILLING_ENABLED=false`, so Paddle secrets may be absent. When explicitly enabled,
-  frontend builds require the public client token and production environment; backend
-  production validation requires complete Paddle settings and frontend URL. Example env
+  `BILLING_ENABLED=false`, so Creem secrets may be absent. When explicitly enabled,
+  the frontend build needs only the flag; backend
+  production validation requires complete Creem settings and frontend URL. Example env
   files contain only empty values. Deployment preserves the existing secret environment.
 - `.dockerignore` excludes local `.env*` files from the frontend build context. Every
   dependency comes from the public npm registry, so the image's `yarn install
   --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
   PR verification runs with a `contents: read` workflow token and no secrets;
   publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
-- Nginx proxies the exact unprefixed `/paddle/webhook` URI with its raw request body and
-  `Paddle-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
+- Nginx proxies the exact unprefixed `/creem/webhook` URI with its raw request body and
+  `Creem-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
 
 ### Billing & Checkout
 
-Strict `VITE_BILLING_ENABLED` defaults to false. The provider does not contact Paddle or
-initialize its SDK while disabled. An enabled build first checks the authoritative public
-`/billing/config` capability; only server-enabled billing initializes the SDK. Production
-requires the public token and explicit production environment. Hooks guard programmatic
+Strict `VITE_BILLING_ENABLED` defaults to false. The provider makes no request while
+disabled. An enabled build checks the authoritative public `/billing/config` capability;
+only server-enabled billing shows purchase surfaces. Hooks guard programmatic
 checkout/portal calls too. Disabled UI hides pricing/upgrade/manage actions, while current
 plan and usage remain visible; quota dialogs explain the current plan without purchase
 buttons. `release.json` exposes the immutable image SHA and billing flag for deployment
@@ -627,22 +625,80 @@ verification.
 ```typescript
 const { loading, handleUpgrade, handleManage } = useCheckout()
 
-// Trigger checkout overlay
+// Navigate to the Creem-hosted checkout
 <button onClick={() => handleUpgrade('pro')}>Upgrade to Pro</button>
 ```
 
 **Flow:**
-1. Call `subscriptionApi.checkout(plan)` → backend creates Paddle transaction
-2. Backend returns `transactionId`
-3. Call `paddle.Checkout.open({ transactionId, settings: {...} })`
-4. Paddle opens overlay, user completes payment
-5. Success URL redirects back to `/settings?tab=subscription`
+1. Call `subscriptionApi.checkout(plan)` → backend creates a Creem checkout
+2. Backend returns `checkoutUrl`
+3. `window.location.assign(checkoutUrl)` — the checkout replaces the tab (a popup after an await would be blocked); the button stays busy until the tab unloads
+4. User pays on Creem's page; Creem returns them to `/settings?tab=subscription`
+5. The plan changes when the backend receives the webhook, not on return
+
+`handleManage` does the same with the portal link from `subscriptionApi.portal()`; its only caller
+is the "payment failed" notice, where the card has to be replaced on Creem's side. A `pageshow`
+listener resets the busy state when the page comes back from the back/forward cache.
+
+**A live subscription is managed on the subscription tab, not in the portal.**
+`hooks/useSubscriptionActions.ts` calls `subscriptionApi.changePlan / cancel / resume`; each
+answers with the status after the change, which replaces the `["subscription","status"]` query
+data, so every plan lock follows at once. `components/subscription/PlanCards.tsx` decides the
+button of each plan card ("Switch to <plan>"):
+
+- no live subscription: a higher paid plan opens the checkout (`handleUpgrade`);
+- `active` / `trialing` (`canChangePlan`): every other paid plan switches the subscription, and
+  the Free card cancels it;
+- `scheduled_cancel`, `past_due`, `paused`: no plan buttons. The "subscription will end" notice
+  (shown for `scheduled_cancel` and `canceled`) carries "Resume subscription" while
+  `canResumeSubscription`; a `canceled` subscription still on record can buy again.
+
+"Cancel subscription" sits in the current-plan card (`canCancelSubscription`: also `past_due`).
+Nothing is sent before `SubscriptionChangeConfirm` is confirmed: it says an upgrade is charged
+now, a downgrade is not refunded, and a cancellation keeps the plan until the period end. A
+failed attempt keeps the dialog open.
+
+### Plan limits in the UI
+
+Plans are stored as `free` / `pro` / `business` and **shown as Free / Start / Pro**
+(`planDisplayName` in `lib/plan-catalog.ts` is the only mapping; `subscription.pro` reads "Start").
+What an account may do always comes from `limits` in `GET /subscription/status`; the catalog is a
+display copy for prices and comparison cards, and `e2e/locale-parity.spec.mjs` fails when the
+catalog or the landing pricing cards drift from the backend `PLAN_LIMITS`.
+
+| Piece | Role |
+|---|---|
+| `lib/subscriptionApi.ts` | Status types; `planAllows(status, feature)`; helpers for the recipient, preset and document-type limits |
+| `hooks/usePlan.ts` | `{ limits, allows(feature), isSettled }`. **An unknown status (loading, failed or malformed: `parseSubscriptionStatus` rejects a body it does not recognise) locks nothing**; the server refuses anyway, and `UpgradeModal` then shows text without purchase buttons. Queries to plan-gated endpoints wait for `isSettled`, so a Free account whose status loaded sends no request that would be 402; if the status request itself fails, those requests are sent and refused |
+| `components/subscription/PlanLock.tsx` | `PlanLockButton` and `PlanLockTile`: a locked control stays visible as a real button with a lock and a hint, and opens `UpgradeModal` |
+| `hooks/usePlanLock.tsx` | `useUpgradePrompt()` opens the modal for a reason; `usePlanLockHint(reason)` |
+| `components/subscription/UpgradeModal.tsx` | One modal for every limit and feature: `reason` → `subscription.reasons.<reason>.{title,description}`. Offers come from the catalog. Billing off: text and Close only; a live subscription: "Open plans", which goes to the subscription tab |
+| `lib/plan-refusal.ts` | `planRefusalOf` maps a 402 (`errorCode`, `feature`) to an upgrade reason; an unknown code gives a null reason, shown as "not included in your plan" |
+| `components/subscription/PlanRefusalNotice.tsx` | The inline notice a form shows after a 402, with a link to Settings → Subscription when billing is on |
+| `hooks/useSubscriptionRefresh.ts` | Refetches the status on focus, visibility and back/forward restore (mounted in `Layout`), and re-checks for about 20 s when the page loads on `?tab=subscription` with billing on: the plan changes when the webhook arrives, which can lag the redirect from checkout |
+| `components/subscription/PlanLimitsSummary.tsx` | The current plan's limits in Settings → Subscription |
+
+Gated surfaces: the analytics page and its sidebar item, CSV export, the profit card, sparkline
+and low-stock tile on the home page (`AnalyticsUpsell`, `AnalyticsHistoryNote` for the 90-day
+window), logo, signature and stamp, numbering, presets, auto-receipt, locked templates (shown
+disabled in every picker), document types in `OrderDocuments` and the order actions menu,
+suppliers and the supplier select of the product form, recipients (limit pre-check and usage bar),
+stock value on the products page. A document whose file the plan's limit removed (`purged`) shows
+a "file removed" state without download, share or regenerate.
+
+A 402 from the product, order or recipient form keeps the form and everything typed and shows
+`PlanRefusalNotice` inline; a lock inside a form (the supplier select) is a text hint, not a button.
+Forms never open the upgrade dialog themselves: their focus trap cannot hold a stacked dialog.
+The template carousel owns its upgrade dialog and stops its key listener while it is open.
+The hint on a locked template names the plan that really includes it (`templateIds` per plan in the
+catalog, compared with the backend by `locale-parity`).
 
 **useSubscription hook** (`hooks/useSubscription.ts`):
 - Fetches current plan + usage (e.g., orders count)
-- Exposes: `{ status, plan, ordersUsed, ordersLimit, isExpired, canCreateOrder }`
+- Exposes: `{ status, isLoading, isError, refetch, billingEnabled }`
 - Used by `SettingsPage` to show plan details + upgrade button
 - Used by `OrdersPage` to enforce order limits
+- `ProfilePage` reuses its error/refetch state for the subscription card's localized failure and Retry action
 
 ### Notifications: react-hot-toast
 
@@ -929,11 +985,12 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/lib/api-errors.ts` | Error parsing, error code enum, friendly messages |
 | `src/contexts/AuthContext.tsx` | Login/logout, token storage, user profile |
 | `src/contexts/ThemeContext.tsx` | Dark/light mode toggle + persistence |
-| `src/providers/PaddleProvider.tsx` | Paddle SDK init for billing |
+| `src/providers/BillingProvider.tsx` | Billing capability flag (`useBilling`) |
 | `src/hooks/useOrders.ts` | Orders CRUD + mutations + UI state example |
 | `src/hooks/useServerPagination.ts` | Table pagination, sorting, filtering |
 | `src/hooks/useSimilarProducts.ts` | Debounced server search behind the product form's similar-name hint |
-| `src/hooks/useCheckout.ts` | Paddle checkout flow |
+| `src/hooks/useCheckout.ts` | Creem checkout and portal redirects |
+| `src/hooks/useSubscriptionActions.ts` | In-app plan change, cancellation and resume of a live subscription |
 | `src/hooks/useSubscription.ts` | Current plan + usage limits |
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |
 | `src/services/OrderService.ts` | Business logic, error handling, notifications |
@@ -987,7 +1044,6 @@ Don't test framework wiring (React Router, hooks internals) — test behavior.
   "axios": "^1.11.0",
   "i18next": "^25.6.0",
   "tailwindcss": "^4.1.12",
-  "@paddle/paddle-js": "^1.6.2",
   "socket.io-client": "^4.8.3",
   "lucide-react": "^0.542.0",
   "typescript": "~5.8.3"
@@ -1010,7 +1066,7 @@ The server owns template capabilities, returned by `/settings/templates`. When t
 
 **Preview.** `DocumentPreviewPanel` posts the complete unsaved multipart draft to `/receipts/preview` and displays actual PDF bytes. `useAutoPreview` re-renders it shortly after the last change (2 s quiet, at least 4 s between runs, never two at once, skipped while a custom title is empty or after a failed render until the next edit), because a render is a real PDF on the server and the API allows 30 a minute; a 429 sets `previewPaused` with a message and **Update now**. Preview problems are `previewError` in the panel, not the page-wide `error`. On a phone the panel comes first and collapsed, and renders only once opened. On `SettingsPage` the editor stays mounted behind the Subscription and Advanced tabs, so it gets `isVisible={activeTab === "documents"}` and renders nothing while hidden. Draft changes mark it stale. AbortController, request sequence and draft version guard late responses; old blob URLs are revoked. Navigation links, indexed browser Back/Forward and browser unload warn about unsaved changes; cancelling Back/Forward restores the current route and draft. The guard is `hooks/useUnsavedChangesGuard.ts` (`useUnsavedChangesGuard(isDirty, confirmKey)`, translated question): the design draft (`document.discardConfirm`), `CompanyRequisitesCard` and every `NumberingRow` use it; one set of listeners serves all dirty forms, so leaving asks once (`common.discardUnsavedChanges` when several kinds are unsaved). Opening the PDF in a new tab keeps the draft. Headless Chrome may show a dark native PDF iframe; verification uses valid PDF bytes/text and the *Open the preview in a new tab* link, and does not treat that screenshot as proof of native viewer rendering.
 
-Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. Maximum 20 presets; names and revisions are validated by the server.
+Named presets have explicit Use preset, Save as preset, Update preset and Delete actions. Selecting a preset alone changes neither draft nor defaults. Using one copies it into the draft; only Save changes applies account defaults. The number of presets depends on the plan (`limits.maxPresets`: 0, 3 or 20); names and revisions are validated by the server.
 
 The Orders action menu opens `CustomizeDocumentModal`, using the same editor with **This document only** scope. Generation sends a complete config and optional staged logo without saving defaults. Existing generated documents use explicit `replace`, expected active revision and a share-link replacement warning. Legacy reconstruction requires confirmation. Replacement status is separate from the active generated receipt; order polling recognizes it.
 
@@ -1032,3 +1088,18 @@ Closing Orders customization through Escape, Close or successful generation/retr
 
 `RecipientForm` has a collapsible "Requisites for documents" block (`RecipientRequisitesFields`): legal name, tax id + kind, IBAN, bank, legal address. Validation uses `lib/ua-requisites.ts` (copy of the backend util); an IBAN of the right shape (UA + 27 digits) whose check digits fail shows `recipients.requisites.errors.ibanChecksum` ("check it for a typo"), any other bad IBAN `errors.iban`; create sends filled fields, update only changed ones (`lib/recipient-requisites.ts`), `null` clears. The tax-id kind always follows the number's length on the server (and the DB check requires both or neither), so the kind select is only a consistency check; the form starts on "by length" and there is nothing to reset. `ReceiptService` toasts and the printer prompt use `receipts.*` keys.
 
+
+## Audit regression safeguards
+
+`NumberingRow` disables its complete fieldset while a save is pending, so the response cannot erase a newer edit. The Save button remains outside that fieldset. Success applies the server response; refusal preserves the draft and enables editing again. Keyboard submission returns focus to the original field after success, or to the refused field after an error; clicking Save keeps focus on the button. The browser regression covers delayed success/refusal and subsequent saves.
+
+`HomePage` passes the current interface language to `SEO`, including after a language change, so the HTML language and Open Graph locale match the page. `LandingShell` ignores malformed URL fragments instead of throwing during anchor navigation, and its brand link has an explicit accessible name on mobile.
+
+`public-report-regressions` and `dashboard-profile-regressions` in the browser runner protect these public-page fixes, long-word and identity-card wrapping, and the latest product/order currency labels. Latest dashboard amounts pass the record currency to `formatCurrency`; no currency conversion is performed. The current backend accepts only UAH: USD/EUR regression rows are defensive mock fixtures, not evidence of supported backend currencies.
+
+Linked `StatCard` counters use a local inline-size container query: the decorative icon and its gap appear only when the card content is at least 10rem wide. This preserves the 102px counter/skeleton height in narrow four-column layouts with a sidebar as well as on phones; wider cards retain their icons. Cards without a link (the financial summary and its skeleton) follow the viewport instead: below 360px the icon sits above the label.
+
+`EntityStatCardSkeleton` uses the same 10rem card-content container threshold as the loaded linked counters. On narrow cards it omits the decorative icon and gap and bounds the placeholder widths to the available space. Held-list browser checks assert both loading and loaded width containment and unchanged 102px card heights at 320/375/1024/1280/1440px in en/ru/uk.
+
+
+The follow-up design audit fixes are covered by `e2e/design-audit-fixes.spec.mjs` at 320/375/1440px. Create-order line items stack product information above quantity controls on phones; Edit Order retains its separate wrapping form. Long entity identities can shrink inside drawers and mobile recipient/supplier cards, keeping their action menus reachable. Public document titles wrap even without word breaks and reserve space for Download PDF. Profile edit/password actions stack on phones; a failed subscription status shows the shared localized error and Retry, reusing `useSubscription`'s `isError`/`refetch`. Order selection/bulk confirmation and product deletion counts use i18next plural forms in en/ru/uk; the numbering prefix hint describes the automatic hyphen while retaining the separate trailing-space explanation. The browser checks use synthetic API responses only.

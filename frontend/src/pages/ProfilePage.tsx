@@ -9,6 +9,7 @@ import {
   Package,
   ShoppingCart,
   FileText,
+  Users,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Button } from "../components/ui/Button";
@@ -16,6 +17,7 @@ import { PasswordToggleButton } from "../components/auth/PasswordToggleButton";
 import { useAuth } from "../hooks/useAuth";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
+import { planDisplayName } from "../lib/plan-catalog";
 import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
 import { translatedApiError } from "../lib/api-errors";
@@ -35,7 +37,12 @@ export const ProfilePage: React.FC = () => {
       ? t(known.key, known.options)
       : (translatedApiError(error) ?? t(fallbackKey));
   };
-  const { status: subscription, isLoading: subLoading } = useSubscription();
+  const {
+    status: subscription,
+    isLoading: subLoading,
+    isError: subError,
+    refetch: refetchSubscription,
+  } = useSubscription();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   // Synchronous guard: state updates land after a second click in the same task.
@@ -171,13 +178,13 @@ export const ProfilePage: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Card */}
-          <div className="lg:col-span-1">
+          <div className="min-w-0 lg:col-span-1">
             <div className="bg-elevated rounded-lg shadow-sm border border-[var(--color-border)] p-6">
               <div className="text-center">
                 <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-surface-alt flex items-center justify-center text-2xl font-medium text-content-secondary">
                   {initials || "🧑"}
                 </div>
-                <h2 className="text-xl font-semibold text-content">
+                <h2 className="[overflow-wrap:anywhere] text-xl font-semibold text-content">
                   {user?.email}
                 </h2>
               </div>
@@ -224,6 +231,20 @@ export const ProfilePage: React.FC = () => {
                   <div className="h-4 bg-surface-alt rounded animate-pulse" />
                   <div className="h-4 bg-surface-alt rounded animate-pulse w-2/3" />
                 </div>
+              ) : subError && !subscription ? (
+                <div role="alert" className="space-y-3">
+                  <p className="text-sm text-content">
+                    {t("subscription.loadFailed")}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refetchSubscription()}
+                  >
+                    {t("common.retry")}
+                  </Button>
+                </div>
               ) : subscription ? (
                 <div className="space-y-4">
                   {/* Plan badge */}
@@ -241,7 +262,7 @@ export const ProfilePage: React.FC = () => {
                             : "bg-[var(--color-warning-light)] text-warning-base",
                       )}
                     >
-                      {subscription.plan.toUpperCase()}
+                      {planDisplayName(t, subscription.plan)}
                     </span>
                   </div>
 
@@ -265,6 +286,15 @@ export const ProfilePage: React.FC = () => {
                     />
                   )}
 
+                  {subscription.limits.maxRecipients !== null && (
+                    <LimitRow
+                      icon={<Users className="w-3.5 h-3.5" />}
+                      label={t("profile.recipients")}
+                      current={subscription.usage.recipientsCount}
+                      max={subscription.limits.maxRecipients}
+                    />
+                  )}
+
                   {/* Templates */}
                   {subscription.limits.allowedTemplateIds !== null && (
                     <LimitRow
@@ -274,14 +304,6 @@ export const ProfilePage: React.FC = () => {
                       max={null}
                     />
                   )}
-
-                  {/* Unlimited indicators for paid plans */}
-                  {subscription.limits.maxProducts === null &&
-                    subscription.limits.maxOrdersPerMonth === null && (
-                      <p className="text-xs text-success-base font-medium">
-                        {t("profile.unlimitedAccess", "Unlimited access")}
-                      </p>
-                    )}
                 </div>
               ) : null}
             </div>
@@ -338,7 +360,7 @@ export const ProfilePage: React.FC = () => {
 
                   {/* Action Buttons */}
                   {isEditing && (
-                    <div className="flex justify-end space-x-3 pt-6 border-t border-[var(--color-border)]">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end pt-6 border-t border-[var(--color-border)]">
                       <Button
                         type="button"
                         variant="outline"
@@ -487,7 +509,7 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex justify-end space-x-3 pt-6 border-t border-[var(--color-border)]">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end pt-6 border-t border-[var(--color-border)]">
                       <Button
                         type="button"
                         variant="outline"

@@ -5,7 +5,7 @@ import { PLAN_LIMITS } from "./config/plans.config";
 describe("SubscriptionController", () => {
   let controller: SubscriptionController;
   let subscriptionService: any;
-  let paddleService: any;
+  let creemService: any;
   const mockUser = { id: "user-1", email: "test@example.com" } as User;
   const mockReq = { user: mockUser };
 
@@ -15,22 +15,25 @@ describe("SubscriptionController", () => {
         plan: "free",
         usage: { productsCount: 3, ordersThisMonth: 5 },
         limits: PLAN_LIMITS.free,
-        paddleStatus: null,
+        billingStatus: null,
         currentPeriodEnd: null,
-        hasPaddleSubscription: false,
+        hasBillingSubscription: false,
       }),
     };
 
-    paddleService = {
-      createCheckoutTransaction: jest
+    creemService = {
+      createCheckout: jest
         .fn()
-        .mockResolvedValue({ transactionId: "txn_123" }),
+        .mockResolvedValue({ checkoutUrl: "https://checkout.creem.io/ch_123" }),
       createPortalSession: jest
         .fn()
-        .mockResolvedValue({ url: "https://portal.paddle.com/session" }),
+        .mockResolvedValue({ url: "https://creem.io/my-orders/login/session" }),
+      changePlan: jest.fn().mockResolvedValue(undefined),
+      cancelSubscription: jest.fn().mockResolvedValue(undefined),
+      resumeSubscription: jest.fn().mockResolvedValue(undefined),
     };
 
-    controller = new SubscriptionController(subscriptionService, paddleService);
+    controller = new SubscriptionController(subscriptionService, creemService);
   });
 
   describe("getStatus", () => {
@@ -42,9 +45,9 @@ describe("SubscriptionController", () => {
         plan: "free",
         usage: { productsCount: 3, ordersThisMonth: 5 },
         limits: PLAN_LIMITS.free,
-        paddleStatus: null,
+        billingStatus: null,
         currentPeriodEnd: null,
-        hasPaddleSubscription: false,
+        hasBillingSubscription: false,
       });
     });
   });
@@ -53,18 +56,20 @@ describe("SubscriptionController", () => {
     it("should create checkout transaction for pro plan", async () => {
       const result = await controller.checkout(mockReq, { plan: "pro" });
 
-      expect(paddleService.createCheckoutTransaction).toHaveBeenCalledWith(
+      expect(creemService.createCheckout).toHaveBeenCalledWith(
         "user-1",
         "test@example.com",
         "pro",
       );
-      expect(result).toEqual({ transactionId: "txn_123" });
+      expect(result).toEqual({
+        checkoutUrl: "https://checkout.creem.io/ch_123",
+      });
     });
 
     it("should create checkout transaction for business plan", async () => {
       await controller.checkout(mockReq, { plan: "business" });
 
-      expect(paddleService.createCheckoutTransaction).toHaveBeenCalledWith(
+      expect(creemService.createCheckout).toHaveBeenCalledWith(
         "user-1",
         "test@example.com",
         "business",
@@ -76,10 +81,38 @@ describe("SubscriptionController", () => {
     it("should create portal session and return URL", async () => {
       const result = await controller.portal(mockReq);
 
-      expect(paddleService.createPortalSession).toHaveBeenCalledWith("user-1");
+      expect(creemService.createPortalSession).toHaveBeenCalledWith("user-1");
       expect(result).toEqual({
-        url: "https://portal.paddle.com/session",
+        url: "https://creem.io/my-orders/login/session",
       });
+    });
+  });
+
+  describe("managing a live subscription", () => {
+    it("changes the plan and answers with the fresh status", async () => {
+      const result = await controller.changePlan(mockReq, { plan: "business" });
+
+      expect(creemService.changePlan).toHaveBeenCalledWith(
+        "user-1",
+        "business",
+      );
+      expect(subscriptionService.getStatus).toHaveBeenCalledWith("user-1");
+      expect(result).toMatchObject({ plan: "free" });
+    });
+
+    it("cancels and resumes for the signed-in user", async () => {
+      await controller.cancel(mockReq);
+      await controller.resume(mockReq);
+
+      expect(creemService.cancelSubscription).toHaveBeenCalledWith("user-1");
+      expect(creemService.resumeSubscription).toHaveBeenCalledWith("user-1");
+    });
+
+    it("does not read the status when the provider call fails", async () => {
+      creemService.cancelSubscription.mockRejectedValue(new Error("down"));
+
+      await expect(controller.cancel(mockReq)).rejects.toThrow("down");
+      expect(subscriptionService.getStatus).not.toHaveBeenCalled();
     });
   });
 });

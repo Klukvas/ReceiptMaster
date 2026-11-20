@@ -11,6 +11,7 @@ import {
   X,
   Truck,
   FileText,
+  type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
@@ -22,6 +23,9 @@ import { SidebarGroup } from "./SidebarGroup";
 import { SidebarItem } from "./SidebarItem";
 import { SidebarUser } from "./SidebarUser";
 import { SidebarFooter } from "./SidebarFooter";
+import { usePlan } from "../../hooks/usePlan";
+import { usePlanLockHint } from "../../hooks/usePlanLock";
+import type { PlanFeature } from "../../lib/subscriptionApi";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,7 +34,15 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const navigationGroups = [
+interface NavigationItem {
+  nameKey: string;
+  href: string;
+  icon: LucideIcon;
+  /** The page needs this plan feature; without it the item shows a lock. */
+  feature?: PlanFeature;
+}
+
+const navigationGroups: { labelKey: string; items: NavigationItem[] }[] = [
   {
     labelKey: "navigation.groupMain",
     items: [
@@ -45,7 +57,12 @@ const navigationGroups = [
   {
     labelKey: "navigation.groupInsights",
     items: [
-      { nameKey: "navigation.analytics", href: "/analytics", icon: BarChart3 },
+      {
+        nameKey: "navigation.analytics",
+        href: "/analytics",
+        icon: BarChart3,
+        feature: "analytics",
+      },
     ],
   },
   {
@@ -66,6 +83,8 @@ export const Sidebar = ({
   const { user, logout } = useAuth();
   const { t } = useTranslation();
   const isDesktop = useIsDesktop();
+  const plan = usePlan();
+  const analyticsLockHint = usePlanLockHint("analytics");
   // Below `lg` the sidebar is an off-canvas modal: out of the Tab order while closed,
   // focus-trapped with Escape/Back and a locked page while open.
   const isModalOpen = !isDesktop && isOpen;
@@ -190,6 +209,11 @@ export const Sidebar = ({
                   isActive={location.pathname === item.href}
                   isCollapsed={isCollapsed}
                   onClick={onClose}
+                  lockedHint={
+                    item.feature && !plan.allows(item.feature)
+                      ? analyticsLockHint
+                      : undefined
+                  }
                 />
               ))}
             </SidebarGroup>

@@ -5,10 +5,13 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { NumberingRow } from "./NumberingRow";
 import { SettingsLoadError } from "./SettingsLoadError";
 import { SettingsSection } from "./SettingsSection";
+import { usePlan } from "../../hooks/usePlan";
+import { PlanLockButton } from "../subscription/PlanLock";
 
 export const DocumentNumberingSettings = () => {
   const { t } = useTranslation();
   const { data: settings, isLoading, error, refetch } = useDocumentNumbering();
+  const isLocked = !usePlan().allows("customNumbering");
 
   return (
     <SettingsSection
@@ -23,6 +26,19 @@ export const DocumentNumberingSettings = () => {
         <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <p>{t("numbering.warning")}</p>
       </div>
+      {isLocked && (
+        <div
+          data-testid="numbering-plan-note"
+          className="mb-4 flex flex-wrap items-center gap-2 text-sm text-content-secondary"
+        >
+          <span>{t("numbering.lockedOnPlan")}</span>
+          <PlanLockButton
+            reason="customNumbering"
+            subject={t("numbering.title")}
+            size="sm"
+          />
+        </div>
+      )}
       {error ? (
         <SettingsLoadError retry={refetch} />
       ) : isLoading || !settings ? (
@@ -34,7 +50,11 @@ export const DocumentNumberingSettings = () => {
       ) : (
         <div className="space-y-3">
           {settings.map((setting) => (
-            <NumberingRow key={setting.documentType} setting={setting} />
+            <NumberingRow
+              key={setting.documentType}
+              setting={setting}
+              isLocked={isLocked}
+            />
           ))}
         </div>
       )}

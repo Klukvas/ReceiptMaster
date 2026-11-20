@@ -19,6 +19,10 @@ import {
  type ColumnDef,
 } from"../hooks/useServerPagination";
 import { useTranslation } from"../hooks/useTranslation";
+import { useSubscription } from "../hooks/useSubscription";
+import { isRecipientLimitReached } from "../lib/subscriptionApi";
+import { UsageBar } from "../components/subscription/UsageBar";
+import { useUpgradePrompt } from "../hooks/usePlanLock";
 
 const UUID_PATTERN =
  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,7 +57,18 @@ function useEditIntent(onEdit: (recipient: Recipient) => void) {
 
 export const RecipientsPage = () => {
  const [showForm, setShowForm] = useState(false);
- useCreateIntent(() => setShowForm(true));
+ const { status: subscriptionStatus } = useSubscription();
+ const upgradePrompt = useUpgradePrompt();
+ // The same pre-check as products: at the limit the form does not open at all.
+ const openCreateForm = () => {
+ if (isRecipientLimitReached(subscriptionStatus)) {
+ upgradePrompt.open("recipients");
+ return;
+ }
+ setShowForm(true);
+ };
+ // Wait for the plan status so a deep link cannot skip the recipient limit.
+ useCreateIntent(openCreateForm, subscriptionStatus !== undefined);
  const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(
  null,
  );
@@ -183,6 +198,7 @@ export const RecipientsPage = () => {
  mutationFn: recipientsApi.delete,
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ["recipients"] });
+ queryClient.invalidateQueries({ queryKey: ["subscription", "status"] });
  toast.success(t("recipients.recipientDeleted"));
  setDeleteTarget(null);
  },
@@ -225,9 +241,16 @@ export const RecipientsPage = () => {
  <p className="text-sm text-content-tertiary mt-0.5">
  {t("recipients.subtitle")}
  </p>
+ {subscriptionStatus && (
+ <UsageBar
+ current={subscriptionStatus.usage.recipientsCount}
+ max={subscriptionStatus.limits.maxRecipients}
+ label={t("subscription.recipientsUsage")}
+ />
+ )}
  </div>
  <Button
- onClick={() => setShowForm(true)}
+ onClick={openCreateForm}
  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-base to-accent-base-hover hover:from-accent-base-hover hover:to-accent-base-hover text-white font-medium px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 text-sm"
  >
  <Plus className="w-4 h-4" />
@@ -268,7 +291,7 @@ export const RecipientsPage = () => {
  }
  emptyMessage={t("recipients.noRecipients")}
  emptyAction={
- <Button onClick={() => setShowForm(true)}>
+ <Button onClick={openCreateForm}>
  {t("recipients.createFirstRecipient")}
  </Button>
  }
@@ -284,18 +307,18 @@ export const RecipientsPage = () => {
  )}
  renderCard={(r) => (
  <div className="bg-elevated rounded-xl border border-[var(--color-border)] p-4">
- <div className="flex items-start justify-between mb-3">
+ <div className="flex items-start justify-between gap-2 mb-3">
  <button
  onClick={() => setDrawerRecipient(r)}
- className="flex items-center gap-3 text-left pointer-coarse:min-h-11"
+ className="min-w-0 flex-1 flex items-center gap-3 text-left pointer-coarse:min-h-11"
  >
  <RecipientAvatar
  name={r.name}
  telegramLinked={!!r.telegram_user_id}
  />
- <div className="min-w-0">
+ <div className="min-w-0 flex-1">
  <p
- className="text-sm font-medium text-content truncate max-w-[180px]"
+ className="text-sm font-medium text-content truncate"
  title={r.name}
  >
  {r.name}
@@ -305,6 +328,7 @@ export const RecipientsPage = () => {
  </p>
  </div>
  </button>
+ <div className="shrink-0">
  <RecipientActionsMenu
  recipient={r}
  onView={(rec) => setDrawerRecipient(rec)}
@@ -312,6 +336,7 @@ export const RecipientsPage = () => {
  onDelete={handleDelete}
  isDeleting={deleteMutation.isPending}
  />
+ </div>
  </div>
  <div className="flex items-center gap-4 pt-3 border-t border-[var(--color-border-light)]">
  <div className="flex items-center gap-1.5">
@@ -335,7 +360,10 @@ export const RecipientsPage = () => {
  />
 
  {showForm && (
- <RecipientForm recipient={editingRecipient} onClose={handleFormClose} />
+ <RecipientForm
+ recipient={editingRecipient}
+ onClose={handleFormClose}
+ />
  )}
 
  <RecipientDrawer
@@ -361,6 +389,7 @@ export const RecipientsPage = () => {
  itemName={deleteTarget?.name}
  isLoading={deleteMutation.isPending}
  />
+ {upgradePrompt.modal}
  </div>
  );
 };

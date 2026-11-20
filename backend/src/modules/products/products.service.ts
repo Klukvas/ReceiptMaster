@@ -12,6 +12,7 @@ import { PaginatedResponse } from "../../common/interfaces/paginated-response.in
 import { User } from "../users/entities/user.entity";
 import { Supplier } from "../suppliers/entities/supplier.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { assertPlanFeature } from "../subscription/plan-access";
 import { containsPattern } from "../../common/utils/like-pattern.util";
 import {
   IdempotentCreateResult,
@@ -107,6 +108,22 @@ async function assertOwnSupplier(
   if (!isOwn) throw ApiErrors.SUPPLIER_NOT_FOUND(supplierId);
 }
 
+/**
+ * Linking a product to a supplier is part of the `suppliers` plan feature. Only a new
+ * link is checked: a form that resends the supplier the product already has, or
+ * unlinks it with null, must keep working after a downgrade.
+ */
+async function assertCanLinkSupplier(
+  manager: EntityManager,
+  supplierId: string | null | undefined,
+  currentSupplierId: string | null | undefined,
+  user: User,
+): Promise<void> {
+  if (supplierId === undefined || supplierId === null) return;
+  if (supplierId === currentSupplierId) return;
+  await assertPlanFeature(manager, user.id, "suppliers");
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -162,6 +179,12 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     user: User,
   ): Promise<Product> {
+    await assertCanLinkSupplier(
+      manager,
+      createProductDto.supplier_id,
+      undefined,
+      user,
+    );
     await assertOwnSupplier(manager, createProductDto.supplier_id, user);
     await this.subscriptionService.assertCanCreateProductInTx(manager, user.id);
     const product = manager.create(Product, {
@@ -235,11 +258,17 @@ export class ProductsService {
     assertStockPrecondition(fields.quantity, expectedQuantity);
     const changes = presentFields(fields);
     if (Object.keys(changes).length === 0) return this.findOne(id, user);
-    await assertOwnSupplier(
-      this.productsRepository.manager,
-      fields.supplier_id,
-      user,
-    );
+    const manager = this.productsRepository.manager;
+    if (typeof fields.supplier_id === "string") {
+      const current = await this.findOne(id, user);
+      await assertCanLinkSupplier(
+        manager,
+        fields.supplier_id,
+        current.supplier_id,
+        user,
+      );
+    }
+    await assertOwnSupplier(manager, fields.supplier_id, user);
 
     const query = this.productsRepository
       .createQueryBuilder()
@@ -292,6 +321,7 @@ export class ProductsService {
    * All products share one currency (UAH), so a single total is returned.
    */
   async getInventoryValue(user: User): Promise<InventoryValueDto> {
+    await this.subscriptionService.assertFeature(user.id, "stockInsights");
     // Both factors are int4, and so is their product: widen before multiplying.
     // SUM(bigint) is numeric, which pg returns as a string; Number() keeps the
     // JSON a plain number (exact up to 2^53 cents, about 90 trillion UAH).
@@ -329,6 +359,7 @@ export class ProductsService {
     threshold: number = 10,
     limit: number = 50,
   ): Promise<Product[]> {
+    await this.subscriptionService.assertFeature(user.id, "stockInsights");
     return this.productsRepository
       .createQueryBuilder("product")
       .where("product.user_id = :userId", { userId: user.id })

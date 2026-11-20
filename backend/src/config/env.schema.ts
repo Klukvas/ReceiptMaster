@@ -68,14 +68,14 @@ export const envSchema = z
       z.boolean().default(false),
     ),
 
-    // Paddle Billing
-    PADDLE_API_KEY: z.string().optional(),
-    PADDLE_WEBHOOK_SECRET: z.string().optional(),
-    PADDLE_PRO_PRICE_ID: z.string().optional(),
-    PADDLE_BUSINESS_PRICE_ID: z.string().optional(),
-    PADDLE_ENVIRONMENT: z.preprocess(
+    // Creem billing
+    CREEM_API_KEY: z.string().optional(),
+    CREEM_WEBHOOK_SECRET: z.string().optional(),
+    CREEM_PRO_PRODUCT_ID: z.string().optional(),
+    CREEM_BUSINESS_PRODUCT_ID: z.string().optional(),
+    CREEM_ENVIRONMENT: z.preprocess(
       (value) => (value === "" ? undefined : value),
-      z.enum(["sandbox", "production"]).optional(),
+      z.enum(["test", "production"]).optional(),
     ),
     FRONTEND_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -92,10 +92,10 @@ export const envSchema = z
       });
     if (!config.BILLING_ENABLED) return;
     for (const key of [
-      "PADDLE_API_KEY",
-      "PADDLE_WEBHOOK_SECRET",
-      "PADDLE_PRO_PRICE_ID",
-      "PADDLE_BUSINESS_PRICE_ID",
+      "CREEM_API_KEY",
+      "CREEM_WEBHOOK_SECRET",
+      "CREEM_PRO_PRODUCT_ID",
+      "CREEM_BUSINESS_PRODUCT_ID",
     ] as const) {
       if (!config[key]?.trim())
         context.addIssue({
@@ -104,10 +104,10 @@ export const envSchema = z
           message: "Required in production",
         });
     }
-    if (config.PADDLE_ENVIRONMENT !== "production")
+    if (config.CREEM_ENVIRONMENT !== "production")
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["PADDLE_ENVIRONMENT"],
+        path: ["CREEM_ENVIRONMENT"],
         message: "Must explicitly be production",
       });
   });

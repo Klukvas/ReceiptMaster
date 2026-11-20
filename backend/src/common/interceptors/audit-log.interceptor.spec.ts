@@ -319,10 +319,10 @@ describe("AuditLogInterceptor", () => {
     it.each([
       ["TelegramController", "/tg/webhook"],
       ["TelegramController", "/tg/order"],
-      ["PaddleController", "/paddle/webhook"],
+      ["CreemController", "/creem/webhook"],
       // Express matches routes case-insensitively, so these reach the same handlers.
       ["TelegramController", "/TG/Webhook"],
-      ["PaddleController", "/PADDLE/webhook"],
+      ["CreemController", "/CREEM/webhook"],
     ])("records %s %s without its body", (controllerName, path) => {
       const entry = logged(
         controllerName,

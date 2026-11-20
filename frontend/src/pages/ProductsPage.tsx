@@ -22,7 +22,9 @@ import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { isProductLimitReached } from "../lib/subscriptionApi";
 import { UsageBar } from "../components/subscription/UsageBar";
-import { UpgradeModal } from "../components/subscription/UpgradeModal";
+import { PlanLockTile } from "../components/subscription/PlanLock";
+import { useUpgradePrompt } from "../hooks/usePlanLock";
+import { planAllows } from "../lib/subscriptionApi";
 import { useCreateIntent } from "../hooks/useCreateIntent";
 
 // Long enough to read which products were skipped before it goes away.
@@ -37,11 +39,14 @@ export const ProductsPage = () => {
   }>({ isOpen: false, product: null });
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const upgradePrompt = useUpgradePrompt();
+  const { open: openUpgradePrompt } = upgradePrompt;
   const [drawerProduct, setDrawerProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { status: subscriptionStatus } = useSubscription();
+  const { status: subscriptionStatus, isLoading: isSubscriptionLoading } =
+    useSubscription();
+  const hasStockInsights = planAllows(subscriptionStatus, "stockInsights");
 
   const columns: ColumnDef<Product>[] = useMemo(
     () => [
@@ -130,6 +135,8 @@ export const ProductsPage = () => {
   const { data: stockValue } = useQuery({
     queryKey: ["products", "stock-value"],
     queryFn: async () => (await productsApi.getStockValue()).data,
+    // The endpoint answers 402 without stock insights, so it waits for the plan.
+    enabled: !isSubscriptionLoading && hasStockInsights,
   });
 
   const deleteMutation = useMutation({
@@ -188,12 +195,12 @@ export const ProductsPage = () => {
   };
 
   const handleCreateProduct = useCallback(() => {
-    if (subscriptionStatus && isProductLimitReached(subscriptionStatus)) {
-      setUpgradeModalOpen(true);
+    if (isProductLimitReached(subscriptionStatus)) {
+      openUpgradePrompt("products");
       return;
     }
     setShowForm(true);
-  }, [subscriptionStatus]);
+  }, [subscriptionStatus, openUpgradePrompt]);
   // Wait for the plan status so a deep link cannot skip the product limit.
   useCreateIntent(handleCreateProduct, subscriptionStatus !== undefined);
 
@@ -250,6 +257,14 @@ export const ProductsPage = () => {
       </div>
 
       {/* Inventory value — how much money is sitting in stock */}
+      {!hasStockInsights && (
+        <PlanLockTile
+          reason="stockInsights"
+          testId="stock-value-lock"
+          title={t("products.stockValueLockedTitle")}
+          description={t("products.stockValueLocked")}
+        />
+      )}
       {stockValue && stockValue.productCount > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-2xl border border-[var(--color-border)] bg-elevated px-5 py-4">
@@ -370,7 +385,10 @@ export const ProductsPage = () => {
 
       {/* Product form modal */}
       {showForm && (
-        <ProductForm product={editingProduct} onClose={handleFormClose} />
+        <ProductForm
+          product={editingProduct}
+          onClose={handleFormClose}
+        />
       )}
 
       {/* Single delete confirmation */}
@@ -406,11 +424,7 @@ export const ProductsPage = () => {
       />
 
       {/* Upgrade modal */}
-      <UpgradeModal
-        isOpen={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
-        reason="products"
-      />
+      {upgradePrompt.modal}
     </div>
   );
 };

@@ -326,6 +326,7 @@ describeIsolatedPostgres(
             db.app.getRepository(OrderItem),
             db.app,
             memoryCache,
+            subscription,
           );
         } finally {
           process.env = saved;

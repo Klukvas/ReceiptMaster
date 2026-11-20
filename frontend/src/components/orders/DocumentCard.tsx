@@ -1,8 +1,9 @@
-import { Ban, Download, Printer, RefreshCw, Share2 } from "lucide-react";
+import { Ban, Download, FileX, Printer, RefreshCw, Share2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Receipt } from "../../lib/api";
 import { formatDocumentDateTime } from "../../lib/document-date-format";
 import { documentLabelKey, isMultiplePerOrder } from "../../lib/document-types";
+import { isPurgedDocument } from "../../lib/document-actions";
 import { useDocumentTimeZone } from "../../hooks/useDocumentTimeZone";
 import { useTranslation } from "../../hooks/useTranslation";
 import { Button } from "../ui/Button";
@@ -55,6 +56,31 @@ function GeneratedActions({ document, actions }: { document: Receipt; actions: D
   );
 }
 
+/** A document whose file the retention limit removed: it can still be voided, nothing else. */
+function PurgedActions({ document, actions }: { document: Receipt; actions: DocumentCardActions }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2">
+      <p
+        data-testid="document-purged"
+        className="flex items-start gap-1.5 text-xs text-content-secondary"
+      >
+        <FileX className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t("documents.purged.note")}
+      </p>
+      <Button
+        size="sm"
+        variant="outline"
+        className="text-danger-base"
+        onClick={() => actions.onVoid(document)}
+      >
+        <Ban className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+        {t("documents.void")}
+      </Button>
+    </div>
+  );
+}
+
 type DocumentCardProps = {
   document: Receipt;
   actions: DocumentCardActions;
@@ -90,7 +116,17 @@ export function DocumentCard({
         </div>
         <DocumentStatusBadge status={document.status} replacementStatus={document.replacement_status} />
       </div>
-      {document.status === "generated" && <GeneratedActions document={document} actions={actions} />}
+      {document.status === "generated" &&
+        (isPurgedDocument(document) ? (
+          <PurgedActions document={document} actions={actions} />
+        ) : (
+          <GeneratedActions document={document} actions={actions} />
+        ))}
+      {document.status === "void" && isPurgedDocument(document) && (
+        <p data-testid="document-purged" className="text-xs text-content-secondary">
+          {t("documents.purged.note")}
+        </p>
+      )}
       {document.status === "void" && (
         <VoidedDocumentNote
           document_type={document.document_type}

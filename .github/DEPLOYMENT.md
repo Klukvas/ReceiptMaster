@@ -9,7 +9,7 @@ Verification includes CI's `test-release-gate` job, which runs
 script against fake Docker plus real `docker compose config` rendering and never contacts
 production. A failure there stops image publication and therefore deployment.
 The current release deliberately has payments disabled: `BILLING_ENABLED=false` on the
-backend and `VITE_BILLING_ENABLED=false` in the frontend image. Paddle secrets are not
+backend and `VITE_BILLING_ENABLED=false` in the frontend image. Creem secrets are not
 required for this release. Existing plan records and quota enforcement remain active.
 
 The workflow uses the existing trusted `APP_HOST`, `SSH_USER`, `SSH_KEY` and Docker Hub
@@ -71,6 +71,18 @@ additive database migration and verified backup remain; never automatically run 
 migration. A real restore requires a separately reviewed operation. Backup validation
 proves archive readability, not a completed restore rehearsal.
 
+**Plan limits ship with billing.** The same release tightens the free plan for every account
+(one template, three document types, no logo, analytics or suppliers). Do not deploy it with
+`BILLING_ENABLED=false`: users would meet limits they cannot pay to lift.
+`AddReceiptContentPurgedAt1794200000000` is additive.
+
+**Exception: the Creem release.** `ReplaceBillingProviderColumns1794100000000` drops the
+previous billing provider's columns from `user_subscriptions`, so it is not additive. The
+automatic rollback restores images that select those columns: subscription reads, and with
+them order and product creation, fail until the migration is reverted by hand
+(`migration:revert`, which re-creates the columns empty). Treat a failed deploy of this
+release as needing that manual step.
+
 The script reports the application's database role from the backend's own connection: its
 name, superuser and bypass flags, and how many objects it owns. An owner or superuser
 bypasses RLS. Until `REQUIRE_RESTRICTED_APP_ROLE` is set this is a warning; afterwards it
@@ -80,8 +92,10 @@ operator runbook, and integration tests cover the scripts it uses.
 ## Enabling payments later
 
 This requires an explicit configuration/release change. Set strict backend/frontend flags
-to true, securely configure backend `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`,
-`PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
-`PADDLE_ENVIRONMENT=production`. Supply the public frontend client token and explicit
-production environment during its image build. Keep secrets out of chat and source control.
-The frontend also requires the server capability to be enabled before initializing Paddle.
+to true, securely configure backend `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`,
+`CREEM_PRO_PRODUCT_ID`, `CREEM_BUSINESS_PRODUCT_ID`, and explicitly
+`CREEM_ENVIRONMENT=production`. In the Creem dashboard point the webhook at
+`https://<host>/creem/webhook`. The frontend needs no provider key: checkout and the billing
+portal are Creem-hosted pages the backend returns links to. Keep secrets out of chat and
+source control. The frontend also requires the server capability to be enabled before it
+shows any purchase surface.

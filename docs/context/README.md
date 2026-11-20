@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-18
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -16,12 +16,12 @@ should not need to read all four to be productive.
 
 ReceiptMaster is a **multi-tenant SaaS** for order management, invoice/receipt PDF generation,
 and business analytics. Users create orders for recipients, generate branded receipt PDFs
-(async), and have plan limits (Free / Pro / Business). Paddle payments are explicitly disabled
+(async), and have plan limits (Free / Pro / Business). Creem payments are explicitly disabled
 by default; existing entitlements and quotas still apply.
 
 | Layer | Stack |
 |---|---|
-| **Frontend** | React 19 + TypeScript, Vite, Tailwind CSS v4, React Router 7, TanStack React Query 5, i18next (en/ru/uk), Axios, Paddle.js |
+| **Frontend** | React 19 + TypeScript, Vite, Tailwind CSS v4, React Router 7, TanStack React Query 5, i18next (en/ru/uk), Axios |
 | **Backend** | NestJS 10, TypeORM 0.3 + PostgreSQL, Passport + JWT, BullMQ + Redis (jobs), Zod (env), Swagger |
 | **Infra** | Docker Compose, single Hetzner server, Nginx, S3 (receipt storage), Telegram (notifications) |
 | **Repo** | Yarn workspaces monorepo (`backend/`, `frontend/`) — Node 20 |
@@ -37,7 +37,7 @@ Multi-tenancy is enforced by `user_id` scoping **plus** post-auth tenant context
 |---|---|
 | A backend module, guard, interceptor, job, auth, tenancy, "how do we do X in Nest" | [**backend-patterns.md**](./backend-patterns.md) |
 | A domain flow — orders, receipt/PDF generation, billing, subscriptions, notifications | [**business-logic.md**](./business-logic.md) |
-| Calling / changing an HTTP endpoint (all 113 routes, 112 in the OpenAPI contract, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
+| Calling / changing an HTTP endpoint (all 109 HTTP operations, 108 on 80 paths in the OpenAPI contract, request/response shapes, webhooks) | [**api-reference.md**](./api-reference.md) |
 | Any frontend work — pages, routing, data fetching, hooks, contexts, checkout, i18n, order documents (quote/invoice/act/sales receipt/packing list/return note), requisites forms, the `/documents` list, document numbering and signature/stamp settings | [**frontend.md**](./frontend.md) |
 
 Common combinations: a **full-stack feature** → `backend-patterns` + `frontend` + `api-reference`;
@@ -54,7 +54,7 @@ market/
 │   └── src/
 │       ├── main.ts, app.module.ts
 │       ├── modules/         # orders, products, receipts, recipients, settings,
-│       │                    #   subscription, suppliers, users, paddle, telegram
+│       │                    #   subscription, suppliers, users, creem, telegram
 │       ├── common/          # guards, interceptors, filters, pipes, subscribers,
 │       │                    #   tenancy (ALS/interceptor/query runners), idempotency (keyed creates),
 │       │                    #   middleware, services, utils, entities, dto
@@ -72,7 +72,7 @@ market/
 │   │   │                    #   (stale-chunk reload guard for AppErrorBoundary)
 │   │   ├── hooks/           # useOrders, useCheckout, useReceiptSocket, useServerPagination, …
 │   │   ├── contexts/        # AuthContext, ThemeContext
-│   │   └── providers/       # PaddleProvider
+│   │   └── providers/       # BillingProvider
 │   └── e2e/                 # browser regression suite (`node frontend/e2e/run.mjs`)
 │                            #   — see frontend/e2e/README.md
 ├── docker-compose*.yml      # dev / self-built prod / production variants
@@ -115,12 +115,12 @@ Typed documents (everything but the waybill) live in `backend/src/modules/receip
 | `templates/translations/document-labels.ts` | `DOCUMENT_LABELS` (all wording of the blocks, uk/ru/en, key parity checked), `STYLE_LABEL_OVERRIDES` (receipt-only style labels per type), `TAX_ID_LABELS` |
 | `return-note.ts`, `return-note-ledger.ts` | return-note lines and source (`ReturnSource`), the `order_items.returned_qty` ledger, duplicate-submit detection |
 | `order-lock.ts` | `LOCKING_DOCUMENT_TYPES` and `syncOrderLock` (kept equal to the specs' `locking` by a test) |
-| `document-retention.ts` | `DOCUMENTS_RETAINED_PER_TYPE` and the types exempt from the per-type cap |
+| `document-retention.ts` | Which document types are deleted and which only lose their file when the plan's per-type limit is passed |
 
 ### Adding a document type
 
 1. Add the value to `DocumentType` (`entities/receipt.entity.ts`) with a migration for the Postgres enum, and decide whether the partial unique index (one live row per order and type) applies.
-2. Add its spec to `DOCUMENT_TYPE_SPECS` (`document-types.ts`); add it to `LOCKING_DOCUMENT_TYPES` (`order-lock.ts`) if `locking`, to `REISSUABLE_DOCUMENT_TYPES` if a void frees the slot, and to the retention exemptions (`document-retention.ts`) if its rows must never be evicted.
+2. Add its spec to `DOCUMENT_TYPE_SPECS` (`document-types.ts`); add it to `LOCKING_DOCUMENT_TYPES` (`order-lock.ts`) if `locking`, to `REISSUABLE_DOCUMENT_TYPES` if a void frees the slot, and to `RECORD_KEPT_TYPES` (`document-retention.ts`) if its row must outlive the plan's limit and lose only its file.
 3. Add its `details` schema (`document-schemas.ts`) and freezing (`frozen-document.ts`), and any new view field in `services/document-view.ts`; templates read only view flags, never the type.
 4. Add every new label to all three languages of `DOCUMENT_LABELS` and an entry to `STYLE_LABEL_OVERRIDES` (`document-labels.ts`).
 5. Mirror the type in the frontend (`frontend/src/lib/document-types.ts`, locales); `frontend/e2e/document-types-parity.spec.mjs` compares the two.

@@ -19,6 +19,9 @@ import { CustomizeDocumentModal } from "./CustomizeDocumentModal";
 import { DocumentCard } from "./DocumentCard";
 import { VoidedDocumentHistory } from "./VoidedDocumentHistory";
 import { VoidDocumentModal } from "./VoidDocumentModal";
+import { useSubscription } from "../../hooks/useSubscription";
+import { isDocumentTypeAllowed } from "../../lib/subscriptionApi";
+import { PlanLockButton } from "../subscription/PlanLock";
 
 type OrderDocumentsProps = {
   order: Order;
@@ -34,6 +37,7 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
   const [replacing, setReplacing] = useState<Receipt | null>(null);
   const [voiding, setVoiding] = useState<Receipt | null>(null);
   const queryClient = useQueryClient();
+  const { status: subscriptionStatus } = useSubscription();
 
   const { inFlightIds: retryingIds, runOnce } = useInFlightIds();
   const retry = (document: Receipt) =>
@@ -56,12 +60,24 @@ export function OrderDocuments({ order, onDownload, onPrint, onShare }: OrderDoc
           {t("documents.sectionTitle")}
         </h3>
         <div className="flex flex-wrap gap-2">
-          {creatable.map((type) => (
+          {creatable.map((type) =>
+            isDocumentTypeAllowed(subscriptionStatus, type) ? (
             <Button key={type} size="sm" variant="outline" onClick={() => setCreating(type)}>
               <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               {t("documents.addButton", { type: t(DOCUMENT_TYPE_META[type].labelKey) })}
             </Button>
-          ))}
+            ) : (
+              // Not in the plan: the type stays listed, locked, instead of vanishing.
+              <PlanLockButton
+                key={type}
+                reason="documentTypes"
+                size="sm"
+                testId={`document-type-lock-${type}`}
+                subject={t("documents.addButton", { type: t(DOCUMENT_TYPE_META[type].labelKey) })}
+                label={t(DOCUMENT_TYPE_META[type].labelKey)}
+              />
+            ),
+          )}
         </div>
       </div>
       {documents.length > 0 ? (

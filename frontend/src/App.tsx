@@ -5,7 +5,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AppToaster } from "./components/common/AppToaster";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { PaddleProvider } from "./providers/PaddleProvider";
+import { BillingProvider } from "./providers/BillingProvider";
 import { useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/layout/Layout";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -211,11 +211,11 @@ function App() {
         <ThemeProvider>
           <AuthProvider>
             <Router>
-              {/* Inside the router: Paddle must not load on the public share page. */}
-              <PaddleProvider>
+              {/* Inside the router: the provider skips the public share page by path. */}
+              <BillingProvider>
                 <ScrollToTop />
                 <AppRoutes />
-              </PaddleProvider>
+              </BillingProvider>
             </Router>
             <AppToaster />
           </AuthProvider>

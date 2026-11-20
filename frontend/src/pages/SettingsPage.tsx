@@ -6,9 +6,6 @@ import {
   Wrench,
   Settings,
   CreditCard,
-  Crown,
-  Check,
-  ExternalLink,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
@@ -24,6 +21,20 @@ import { UsageBar } from "../components/subscription/UsageBar";
 import { useTranslation } from "../hooks/useTranslation";
 import { useSubscription } from "../hooks/useSubscription";
 import { useCheckout } from "../hooks/useCheckout";
+import { useSubscriptionRefreshOnOpen } from "../hooks/useSubscriptionRefresh";
+import {
+  canCancelSubscription,
+  canResumeSubscription,
+} from "../lib/subscriptionApi";
+import { isHigherPlan, planDisplayName } from "../lib/plan-catalog";
+import { useSubscriptionActions } from "../hooks/useSubscriptionActions";
+import { PlanCards } from "../components/subscription/PlanCards";
+import { PLAN_COLORS } from "../components/subscription/plan-colors";
+import {
+  SubscriptionChangeConfirm,
+  type SubscriptionIntent,
+} from "../components/subscription/SubscriptionChangeConfirm";
+import { PlanLimitsSummary } from "../components/subscription/PlanLimitsSummary";
 
 type SettingsTab = "documents" | "subscription" | "advanced";
 
@@ -40,31 +51,7 @@ const LEGACY_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
   language: "documents",
 };
 
-type PlanKey = "free" | "pro" | "business";
-
-const PLAN_COLORS: Record<
-  PlanKey,
-  { border: string; bg: string; badge: string }
-> = {
-  free: {
-    border: "border-[var(--color-border)]",
-    bg: "bg-elevated",
-    badge: "bg-surface-alt text-content-secondary",
-  },
-  pro: {
-    border: "border-[var(--color-accent-light)]",
-    bg: "bg-[var(--color-accent-light)]",
-    badge: "bg-[var(--color-accent-light)] text-accent-base",
-  },
-  business: {
-    border: "border-purple-200 dark:border-purple-800",
-    bg: "bg-purple-50/30 dark:bg-purple-900/10",
-    badge:
-      "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
-  },
-};
-
-const SubscriptionTab = () => {
+const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
   const { t } = useTranslation();
   const { status, isLoading, isError, refetch } = useSubscription();
   const {
@@ -73,11 +60,31 @@ const SubscriptionTab = () => {
     handleManage,
     billingEnabled,
   } = useCheckout();
+  // Without billing there is no checkout or portal to come back from.
+  useSubscriptionRefreshOnOpen(isLandingTab && billingEnabled);
 
   const currentPlan = status?.plan ?? "free";
-  const paddleStatus = status?.paddleStatus;
+  const billingStatus = status?.billingStatus;
   const periodEnd = status?.currentPeriodEnd;
-  const hasPaddleSub = status?.hasPaddleSubscription ?? false;
+  const hasBillingSub = status?.hasBillingSubscription ?? false;
+  const actions = useSubscriptionActions();
+  const [intent, setIntent] = useState<SubscriptionIntent | null>(null);
+  const busy = upgrading ?? actions.pending;
+
+  const confirmIntent = async () => {
+    if (!intent) return;
+    const isDone =
+      intent === "cancel"
+        ? await actions.cancel()
+        : await actions.changePlan(intent, {
+            isUpgrade: isHigherPlan(intent, currentPlan),
+          });
+    // A failed attempt keeps the dialog open so it can be retried.
+    if (isDone) setIntent(null);
+  };
+  // Creem reports a cancellation at period end as scheduled_cancel until it takes effect.
+  const isEnding =
+    billingStatus === "canceled" || billingStatus === "scheduled_cancel";
 
   if (isLoading) {
     return (
@@ -113,37 +120,6 @@ const SubscriptionTab = () => {
     );
   }
 
-  // M3: Drive feature lists from API response limits instead of hardcoding
-  const planFeatures = (plan: PlanKey): string[] => {
-    if (plan === "business") {
-      return [
-        t("subscription.unlimitedProducts", "Unlimited products"),
-        t("subscription.unlimitedOrders", "Unlimited orders"),
-        t("subscription.allTemplates", "All templates"),
-      ];
-    }
-    if (plan === "pro") {
-      return [
-        t("subscription.productsLimit", "Up to {{count}} products", {
-          count: 100,
-        }),
-        t("subscription.ordersLimit", "Up to {{count}} orders/month", {
-          count: 500,
-        }),
-        t("subscription.allTemplates", "All templates"),
-      ];
-    }
-    return [
-      t("subscription.productsLimit", "Up to {{count}} products", {
-        count: 10,
-      }),
-      t("subscription.ordersLimit", "Up to {{count}} orders/month", {
-        count: 20,
-      }),
-      t("subscription.freeTemplates", "4 basic templates"),
-    ];
-  };
-
   return (
     <div className="space-y-6">
       {!billingEnabled && (
@@ -155,7 +131,7 @@ const SubscriptionTab = () => {
         </p>
       )}
       {/* Status notices */}
-      {billingEnabled && paddleStatus === "canceled" && periodEnd && (
+      {billingEnabled && isEnding && periodEnd && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-warning-light)] border border-[var(--color-warning-light)]">
           <AlertTriangle className="h-5 w-5 text-warning-base shrink-0" />
           <p className="text-sm text-warning-base">
@@ -167,10 +143,25 @@ const SubscriptionTab = () => {
               },
             )}
           </p>
+          {canResumeSubscription(status) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+              onClick={() => void actions.resume()}
+              disabled={!!busy}
+            >
+              {actions.pending === "resume" && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              {t("subscription.resumeSubscription")}
+            </Button>
+          )}
         </div>
       )}
 
-      {billingEnabled && paddleStatus === "past_due" && (
+      {billingEnabled && billingStatus === "past_due" && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[var(--color-danger-light)] border border-[var(--color-danger-light)]">
           <AlertTriangle className="h-5 w-5 text-danger-base shrink-0" />
           <p className="text-sm text-danger-base">
@@ -179,7 +170,7 @@ const SubscriptionTab = () => {
               "Payment failed. Please update your payment method.",
             )}
           </p>
-          {billingEnabled && hasPaddleSub && (
+          {billingEnabled && hasBillingSub && (
             <button
               onClick={handleManage}
               className="ml-auto text-sm font-medium text-danger-base underline"
@@ -200,22 +191,19 @@ const SubscriptionTab = () => {
             <span
               className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${PLAN_COLORS[currentPlan]?.badge}`}
             >
-              {t(`subscription.${currentPlan}`, currentPlan)}
+              {planDisplayName(t, currentPlan)}
             </span>
           </div>
-          {billingEnabled && hasPaddleSub && (
-            <button
-              onClick={handleManage}
-              disabled={!!upgrading}
-              className="flex items-center gap-1.5 text-sm font-medium text-accent-base hover:underline"
+          {billingEnabled && canCancelSubscription(status) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIntent("cancel")}
+              disabled={!!busy}
             >
-              {upgrading === "manage" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ExternalLink className="h-3.5 w-3.5" />
-              )}
-              {t("subscription.manageSubscription", "Manage Subscription")}
-            </button>
+              {t("subscription.cancelSubscription")}
+            </Button>
           )}
         </div>
 
@@ -231,13 +219,20 @@ const SubscriptionTab = () => {
               max={status.limits.maxOrdersPerMonth}
               label={t("subscription.ordersUsage", "Orders this month")}
             />
+            <UsageBar
+              current={status.usage.recipientsCount}
+              max={status.limits.maxRecipients}
+              label={t("subscription.recipientsUsage")}
+            />
           </div>
         )}
 
+        {status && <PlanLimitsSummary limits={status.limits} />}
+
         {billingEnabled &&
-          hasPaddleSub &&
+          hasBillingSub &&
           periodEnd &&
-          paddleStatus === "active" && (
+          billingStatus === "active" && (
             <p className="mt-4 text-xs text-content-tertiary">
               {t("subscription.nextRenewal", "Next renewal")}:{" "}
               {formatDateOnly(periodEnd)}
@@ -247,83 +242,21 @@ const SubscriptionTab = () => {
 
       {/* Plan comparison */}
       {billingEnabled && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {(["free", "pro", "business"] as const).map((plan) => {
-            const isCurrent = currentPlan === plan;
-            const colors = PLAN_COLORS[plan];
-            const isUpgrade =
-              (currentPlan === "free" &&
-                (plan === "pro" || plan === "business")) ||
-              (currentPlan === "pro" && plan === "business");
-
-            return (
-              <div
-                key={plan}
-                className={`relative rounded-xl border-2 p-5 ${colors.border} ${colors.bg} ${
-                  isCurrent ? "ring-2 ring-[var(--color-ring)]" : ""
-                }`}
-              >
-                {isCurrent && (
-                  <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-accent-base text-white text-xs rounded-full font-medium">
-                    {t("subscription.currentPlan", "Current Plan")}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 mb-3">
-                  <Crown
-                    className={`h-5 w-5 ${
-                      plan === "business"
-                        ? "text-purple-500 dark:text-purple-400"
-                        : plan === "pro"
-                          ? "text-accent-base"
-                          : "text-content-tertiary"
-                    }`}
-                  />
-                  <h3 className="font-semibold text-content">
-                    {t(`subscription.${plan}`, plan)}
-                  </h3>
-                </div>
-
-                <ul className="space-y-2 mb-4">
-                  {planFeatures(plan).map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-center gap-2 text-sm text-content-secondary"
-                    >
-                      <Check className="h-3.5 w-3.5 text-success-base shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {isUpgrade && !hasPaddleSub && (
-                  <button
-                    onClick={() => handleUpgrade(plan)}
-                    disabled={!!upgrading}
-                    className={`w-full flex items-center justify-center gap-2 py-2 pointer-coarse:min-h-11 px-4 rounded-lg text-sm font-medium text-white transition-colors ${
-                      plan === "business"
-                        ? "bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
-                        : "bg-accent-base hover:bg-accent-base-hover"
-                    } disabled:opacity-50`}
-                  >
-                    {upgrading === plan ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4" />
-                    )}
-                    {plan === "pro"
-                      ? t("subscription.upgradeToPro", "Upgrade to Pro")
-                      : t(
-                          "subscription.upgradeToBusiness",
-                          "Upgrade to Business",
-                        )}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PlanCards
+          status={status}
+          busy={busy}
+          onCheckout={(plan) => void handleUpgrade(plan)}
+          onSwitch={setIntent}
+          onCancel={() => setIntent("cancel")}
+        />
       )}
+      <SubscriptionChangeConfirm
+        intent={intent}
+        status={status}
+        isLoading={actions.pending !== null}
+        onConfirm={() => void confirmIntent()}
+        onClose={() => setIntent(null)}
+      />
     </div>
   );
 };
@@ -343,8 +276,13 @@ export const SettingsPage = () => {
   const setActiveTab = (tab: SettingsTab) =>
     setSearchParams({ tab }, { replace: true });
 
-  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(activeTab === "documents");
-  if (activeTab === "documents" && !hasOpenedDocuments) setHasOpenedDocuments(true);
+  // The provider's return link opens the page on this tab; a click on the tab does not count.
+  const [isLandedOnSubscription] = useState(activeTab === "subscription");
+  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(
+    activeTab === "documents",
+  );
+  if (activeTab === "documents" && !hasOpenedDocuments)
+    setHasOpenedDocuments(true);
 
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
@@ -500,7 +438,9 @@ export const SettingsPage = () => {
           </div>
         )}
 
-        {activeTab === "subscription" && <SubscriptionTab />}
+        {activeTab === "subscription" && (
+          <SubscriptionTab isLandingTab={isLandedOnSubscription} />
+        )}
 
         {activeTab === "advanced" && <AutoReceiptSetting />}
       </div>
