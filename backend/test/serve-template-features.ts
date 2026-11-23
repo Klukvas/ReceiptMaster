@@ -11,6 +11,7 @@ import {
 } from "../src/modules/receipts/templates/metadata";
 import { runWithTenant } from "../src/common/tenancy/tenant-context";
 import { GENERATABLE_TYPES } from "../src/modules/receipts/document-types";
+import { PLAN_LIMITS } from "../src/modules/subscription/config/plans.config";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { resolve, join } from "path";
@@ -74,8 +75,10 @@ async function main(): Promise<void> {
   server.get("/api/v1/subscription/status", (_req, res) =>
     res.json({
       plan: "business",
-      usage: { productsCount: 0, ordersThisMonth: 0 },
-      limits: { maxProducts: null, maxOrdersPerMonth: null },
+      usage: { productsCount: 0, ordersThisMonth: 0, recipientsCount: 0 },
+      limits: PLAN_LIMITS.business,
+      billingStatus: null,
+      currentPeriodEnd: null,
       hasBillingSubscription: false,
     }),
   );
