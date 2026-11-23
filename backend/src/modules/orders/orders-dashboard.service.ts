@@ -16,11 +16,28 @@ import {
   profitCompleteness,
 } from "./dashboard-profit";
 import {
+  AnalyticsWindow,
+  DEFAULT_DAILY_DAYS,
+  DashboardMetric,
+  RequestedRange,
+  capDailyDays,
+  resolveAnalyticsWindow,
+} from "./dashboard-plan-window";
+import { ApiErrors } from "../../common/errors/ApiError";
+import { PlanLimits } from "../subscription/config/plans.config";
+import { readPlanLimits } from "../subscription/plan-access";
+import {
   DailyRevenueDto,
   RevenueByProductDto,
   RevenueByRecipientDto,
   TotalRevenueDto,
 } from "./dto/dashboard-response.dto";
+
+function assertAllowed(window: AnalyticsWindow): RequestedRange {
+  if (window.isAllowed === false)
+    throw ApiErrors.PLAN_FEATURE_RESTRICTED(window.feature);
+  return { startDate: window.startDate, endDate: window.endDate };
+}
 
 /**
  * Cached dashboard aggregates over confirmed orders. Read-only: OrdersService
@@ -33,6 +50,28 @@ export class OrdersDashboardService {
     private dataSource: DataSource,
     private cacheService: CacheService,
   ) {}
+
+  private planLimits(user: User): Promise<PlanLimits> {
+    return readPlanLimits(this.dataSource.manager, user.id);
+  }
+
+  /**
+   * The range the caller's plan may read, or a 402. Runs before the cache key is built:
+   * the key is made of the range the plan allows, so two plans share an entry only when
+   * they are allowed the very same query, and a refused plan never reaches the cache.
+   * That is why the plan itself is not part of the key. The plan is read uncached on
+   * purpose, so an upgrade or downgrade applies to the next request.
+   */
+  private async allowedRange(
+    user: User,
+    metric: DashboardMetric,
+    requested: RequestedRange,
+  ): Promise<RequestedRange> {
+    const limits = await this.planLimits(user);
+    return assertAllowed(
+      resolveAnalyticsWindow(limits, metric, requested, new Date()),
+    );
+  }
 
   private async cachedDashboard<T>(
     key: string,
@@ -47,9 +86,13 @@ export class OrdersDashboardService {
 
   async getRevenueByProducts(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<RevenueByProductDto[]> {
+    const { startDate, endDate } = await this.allowedRange(user, "profit", {
+      startDate: requestedStart,
+      endDate: requestedEnd,
+    });
     const cacheKey = dashboardCacheKey(
       "revenueByProducts",
       user.id,
@@ -104,9 +147,13 @@ export class OrdersDashboardService {
 
   async getRevenueByRecipients(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<RevenueByRecipientDto[]> {
+    const { startDate, endDate } = await this.allowedRange(user, "profit", {
+      startDate: requestedStart,
+      endDate: requestedEnd,
+    });
     const cacheKey = dashboardCacheKey(
       "revenueByRecipients",
       user.id,
@@ -162,9 +209,13 @@ export class OrdersDashboardService {
 
   async getTotalRevenue(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<TotalRevenueDto> {
+    const { startDate, endDate } = await this.allowedRange(user, "profit", {
+      startDate: requestedStart,
+      endDate: requestedEnd,
+    });
     const cacheKey = dashboardCacheKey(
       "totalRevenue",
       user.id,
@@ -222,8 +273,8 @@ export class OrdersDashboardService {
   // Методы для общего оборота (общая выручка без вычета себестоимости)
   async getTurnoverByProducts(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<
     Array<{
       product_id: string;
@@ -233,6 +284,14 @@ export class OrdersDashboardService {
       currency: string;
     }>
   > {
+    const { startDate, endDate } = await this.allowedRange(
+      user,
+      "turnoverBreakdown",
+      {
+        startDate: requestedStart,
+        endDate: requestedEnd,
+      },
+    );
     const cacheKey = dashboardCacheKey(
       "turnoverByProducts",
       user.id,
@@ -286,8 +345,8 @@ export class OrdersDashboardService {
 
   async getTurnoverByRecipients(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<
     Array<{
       recipient_id: string;
@@ -297,6 +356,14 @@ export class OrdersDashboardService {
       currency: string;
     }>
   > {
+    const { startDate, endDate } = await this.allowedRange(
+      user,
+      "turnoverBreakdown",
+      {
+        startDate: requestedStart,
+        endDate: requestedEnd,
+      },
+    );
     const cacheKey = dashboardCacheKey(
       "turnoverByRecipients",
       user.id,
@@ -350,13 +417,21 @@ export class OrdersDashboardService {
 
   async getTotalTurnover(
     user: User,
-    startDate?: Date,
-    endDate?: Date,
+    requestedStart?: Date,
+    requestedEnd?: Date,
   ): Promise<{
     total_turnover_cents: number;
     total_orders: number;
     currency: string;
   }> {
+    const { startDate, endDate } = await this.allowedRange(
+      user,
+      "totalTurnover",
+      {
+        startDate: requestedStart,
+        endDate: requestedEnd,
+      },
+    );
     const cacheKey = dashboardCacheKey(
       "totalTurnover",
       user.id,
@@ -405,8 +480,11 @@ export class OrdersDashboardService {
 
   async getDailyRevenue(
     user: User,
-    days: number = 7,
+    requestedDays: number = DEFAULT_DAILY_DAYS,
   ): Promise<DailyRevenueDto[]> {
+    const limits = await this.planLimits(user);
+    assertAllowed(resolveAnalyticsWindow(limits, "profit", {}, new Date()));
+    const days = capDailyDays(limits, requestedDays);
     const cacheKey = dashboardCacheKey("dailyRevenue", user.id, days);
     return this.cachedDashboard(cacheKey, async () => {
       const results = await this.dataSource.query(

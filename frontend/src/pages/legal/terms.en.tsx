@@ -114,13 +114,14 @@ export const termsEn: LegalContent = {
       <ul>
         <li>
           The Service is not an archive of your accounting records. It keeps
-          the 10 most recent generated documents of each of these types:
-          delivery note, quote, sales receipt and packing list. Generating a
-          new one permanently removes the oldest document of the same type,
-          together with its PDF file and public link. Payment invoices, acts of
-          completed work, return notes, and voided and failed documents of any
-          type are not removed under this limit and are kept for as long as
-          your account exists. You are responsible for saving copies of the
+          a limited number of the most recent generated documents of each type;
+          the number depends on your plan and is shown in Settings &rarr;
+          Subscription. Generating a new document over that limit affects the
+          oldest one of the same type. A delivery note, quote, sales receipt or
+          packing list is permanently removed together with its PDF file and
+          public link. A payment invoice, act of completed work or return note
+          keeps its record and number, but its PDF file and public link are
+          removed. Voided and failed documents are not affected by the limit. You are responsible for saving copies of the
           documents you are required to keep.
         </li>
         <li>
@@ -153,32 +154,32 @@ export const termsEn: LegalContent = {
 
       <h2>4. Subscription Plans and Billing</h2>
       <p>
-        ReceiptMaster offers subscription plans (Free, Pro, Business) with
+        ReceiptMaster offers subscription plans (Free, Start, Pro) with
         varying features and usage limits. Paid subscriptions are billed on a
         recurring basis (monthly or annually) depending on the plan selected.
       </p>
       <p>
         <strong>Payment Processing:</strong> All payments are processed by{" "}
         <a
-          href="https://www.paddle.com"
+          href="https://www.creem.io"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Paddle.com
+          Creem
         </a>
         , which acts as the Merchant of Record for all transactions. By
-        purchasing a subscription, you also agree to Paddle's{" "}
+        purchasing a subscription, you also agree to Creem's{" "}
         <a
-          href="https://www.paddle.com/legal/terms"
+          href="https://www.creem.io/buyer-terms"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Terms of Use
+          Buyer Terms of Service
         </a>
         {" "}
         and{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -199,7 +200,7 @@ export const termsEn: LegalContent = {
 
       <h2>5. Cancellation</h2>
       <p>
-        You may cancel your subscription at any time through the Paddle billing
+        You may cancel your subscription at any time through the Creem billing
         portal accessible from your account settings. Upon cancellation:
       </p>
       <ul>
@@ -217,10 +218,10 @@ export const termsEn: LegalContent = {
 
       <h2>6. Refunds</h2>
       <p>
-        All sales are final. We generally do not offer refunds for subscription
-        payments, though limited exceptions may apply. Please review our{" "}
-        <Link to="/refund-policy">Refund Policy</Link> for complete details,
-        including exceptional circumstances.
+        We generally do not offer refunds for subscription payments. This does
+        not affect a right of withdrawal you may have as a consumer, and limited
+        exceptions apply. Please review our{" "}
+        <Link to="/refund-policy">Refund Policy</Link> for complete details.
       </p>
 
       <h2>7. Acceptable Use</h2>

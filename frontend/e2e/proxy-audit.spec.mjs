@@ -26,7 +26,7 @@ export const run = async () => {
     request.on("end", () => {
       received.push({
         path: request.url,
-        signature: request.headers["paddle-signature"],
+        signature: request.headers["creem-signature"],
         body: Buffer.concat(chunks).toString(),
       });
       response.writeHead(200, { "content-type": "application/json" });
@@ -115,12 +115,12 @@ export const run = async () => {
         }
       });
       const body =
-        '{ "event_type": "subscription.updated", "data": {"id":"test"} }\n';
-      const response = await client.post(`${url}/paddle/webhook`, {
+        '{ "eventType": "subscription.update", "object": {"id":"test"} }\n';
+      const response = await client.post(`${url}/creem/webhook`, {
         data: body,
         headers: {
           "content-type": "application/json",
-          "paddle-signature": "ts=fixture;h1=fixture",
+          "creem-signature": "f1x7u2e",
         },
       });
       results.check(
@@ -128,8 +128,8 @@ export const run = async () => {
         response.ok() &&
           received.some(
             (item) =>
-              item.path === "/paddle/webhook" &&
-              item.signature === "ts=fixture;h1=fixture" &&
+              item.path === "/creem/webhook" &&
+              item.signature === "f1x7u2e" &&
               item.body === body,
           ),
         JSON.stringify(received),

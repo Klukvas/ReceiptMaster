@@ -2,19 +2,19 @@ import { Link } from"react-router-dom";
 import { clsx } from"clsx";
 import { Crown } from"lucide-react";
 import { useSubscription } from"../../hooks/useSubscription";
+import { useTranslation } from "../../hooks/useTranslation";
+import { planDisplayName } from "../../lib/plan-catalog";
+import type { PlanName } from "../../lib/subscriptionApi";
 
-const PLAN_STYLES: Record<string, { label: string; className: string }> = {
+const PLAN_STYLES: Record<PlanName, { className: string }> = {
  free: {
- label:"Free",
  className:"bg-surface-alt text-content-secondary",
  },
  pro: {
- label:"Pro",
  className:
 "bg-[var(--color-accent-light)] text-accent-base",
  },
  business: {
- label:"Business",
  className:
 "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
  },
@@ -33,6 +33,7 @@ export const SidebarUser = ({
 }: SidebarUserProps) => {
  const initials = email?.[0]?.toUpperCase() ||"U";
  const { status } = useSubscription();
+ const { t } = useTranslation();
  // While the status is unknown (loading or failed) no plan badge is shown: "Free" would be a guess.
  const plan = status?.plan;
  const planStyle = plan ? (PLAN_STYLES[plan] ?? PLAN_STYLES.free) : undefined;
@@ -71,7 +72,7 @@ export const SidebarUser = ({
   planStyle.className,
   )}
   >
-  {planStyle.label}
+  {plan && planDisplayName(t, plan)}
   </span>
  )}
  </div>

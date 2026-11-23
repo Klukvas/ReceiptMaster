@@ -7,6 +7,8 @@ import { CacheService } from "../../../common/services/cache.service";
 describe("SettingsService", () => {
   let service: SettingsService;
   let settingsRepo: any;
+  // The subscription row the plan check reads; null is an account without one (free).
+  let subscription: { plan: string } | null;
 
   const mockSettings: Partial<UserSettings> = {
     id: "settings-1",
@@ -28,7 +30,9 @@ describe("SettingsService", () => {
   };
 
   beforeEach(async () => {
+    subscription = { plan: "business" };
     settingsRepo = {
+      manager: { findOne: jest.fn(() => Promise.resolve(subscription)) },
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue(mockSettings),
       upsert: jest.fn().mockResolvedValue({}),
@@ -530,6 +534,33 @@ describe("SettingsService", () => {
         ["userId"],
       );
       expect(cache.del).toHaveBeenCalledWith("settings:user-1");
+    });
+
+    it.each([
+      ["the free plan", { plan: "free" }],
+      ["an account without a subscription row", null],
+    ])("refuses enabling on %s", async (_name, row) => {
+      subscription = row;
+
+      await expect(
+        service.setAutoGenerateReceipt("user-1", true),
+      ).rejects.toMatchObject({
+        statusCode: 402,
+        errorCode: "PLAN_FEATURE_RESTRICTED",
+        details: { feature: "autoReceipt" },
+      });
+      expect(settingsRepo.upsert).not.toHaveBeenCalled();
+    });
+
+    it("lets an account without the feature switch it off", async () => {
+      subscription = { plan: "free" };
+
+      await service.setAutoGenerateReceipt("user-1", false);
+
+      expect(settingsRepo.upsert).toHaveBeenCalledWith(
+        { autoGenerateReceipt: false, userId: "user-1" },
+        ["userId"],
+      );
     });
   });
 

@@ -28,6 +28,10 @@ const EVIDENCE_DIR =
   join(tmpdir(), "receiptmaster-template-features", "fix3");
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 import sharp = require("sharp");
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
 
 type Row = Record<string, unknown>;
 function deferred() {

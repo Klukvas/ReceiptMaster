@@ -10,7 +10,10 @@ export type DocumentType = Receipt["document_type"];
 export type DocumentStatus = Receipt["status"];
 
 /** A row of GET /receipts: the document plus the order it belongs to (null if unavailable). */
-export type DocumentListItem = components["schemas"]["DocumentListItem"];
+export type DocumentListItem = components["schemas"]["DocumentListItem"] & {
+  /** The plan's retention limit removed the file: the row stays, with no PDF or public link. */
+  purged?: boolean;
+};
 
 export type DocumentSortField =
   | "created_at"

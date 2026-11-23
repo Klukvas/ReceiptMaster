@@ -105,7 +105,8 @@ export const useOrders = () => {
       .getRetention()
       .then((response) => response.data)
       .catch(() => null);
-    if (!retention) return null;
+    // limit null: the plan keeps every document.
+    if (!retention || retention.limit === null) return null;
     return retention.count + newReceipts > retention.limit
       ? retention.limit
       : null;
@@ -267,7 +268,7 @@ export const useOrders = () => {
       .getRetention()
       .then((response) => response.data)
       .catch(() => null);
-    if (retention?.replaces) {
+    if (retention?.replaces && retention.limit !== null) {
       setReceiptReplacement({
         orderId,
         number: retention.replaces.number,

@@ -5,12 +5,12 @@ import { SubscriptionController } from "./subscription.controller";
 import { UserSubscription } from "./entities/user-subscription.entity";
 import { Product } from "../products/entities/product.entity";
 import { Order } from "../orders/entities/order.entity";
-import { PaddleModule } from "../paddle/paddle.module";
+import { CreemModule } from "../creem/creem.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserSubscription, Product, Order]),
-    PaddleModule,
+    CreemModule,
   ],
   controllers: [SubscriptionController],
   providers: [SubscriptionService],

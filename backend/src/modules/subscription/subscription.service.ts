@@ -5,8 +5,16 @@ import { ApiErrors } from "../../common/errors/ApiError";
 import {
   UserSubscription,
   PlanName,
+  BillingStatus,
 } from "./entities/user-subscription.entity";
-import { PLAN_LIMITS, PlanLimits } from "./config/plans.config";
+import { PLAN_LIMITS, PlanFeature, PlanLimits } from "./config/plans.config";
+import {
+  assertPlanFeature,
+  isTemplateAllowed,
+  planDefaults,
+  readPlanLimits,
+} from "./plan-access";
+import { Recipient } from "../recipients/entities/recipient.entity";
 import { Product } from "../products/entities/product.entity";
 import { Order, OrderStatus } from "../orders/entities/order.entity";
 
@@ -15,11 +23,12 @@ export interface SubscriptionStatus {
   usage: {
     productsCount: number;
     ordersThisMonth: number;
+    recipientsCount: number;
   };
   limits: PlanLimits;
-  paddleStatus: string | null;
+  billingStatus: BillingStatus | null;
   currentPeriodEnd: string | null;
-  hasPaddleSubscription: boolean;
+  hasBillingSubscription: boolean;
 }
 
 @Injectable()
@@ -45,7 +54,7 @@ export class SubscriptionService {
       .createQueryBuilder()
       .insert()
       .into(UserSubscription)
-      .values({ user_id: userId, plan: "free" })
+      .values({ user_id: userId, plan: planDefaults.withoutSubscription })
       .orIgnore()
       .execute();
 
@@ -77,22 +86,28 @@ export class SubscriptionService {
 
   async getStatus(userId: string): Promise<SubscriptionStatus> {
     const subscription = await this.getOrCreate(userId);
-    const limits = PLAN_LIMITS[subscription.plan];
+    // A plan name this build does not know reads as free, like every other plan check.
+    const limits = PLAN_LIMITS[subscription.plan] ?? PLAN_LIMITS.free;
 
-    const [productsCount, ordersThisMonth] = await Promise.all([
-      this.countProducts(userId),
-      this.countOrdersThisMonth(userId),
-    ]);
+    const [productsCount, ordersThisMonth, recipientsCount] = await Promise.all(
+      [
+        this.countProducts(userId),
+        this.countOrdersThisMonth(userId),
+        this.dataSource.manager.count(Recipient, {
+          where: { user_id: userId },
+        }),
+      ],
+    );
 
     return {
       plan: subscription.plan,
-      usage: { productsCount, ordersThisMonth },
+      usage: { productsCount, ordersThisMonth, recipientsCount },
       limits,
-      paddleStatus: subscription.paddle_status ?? null,
+      billingStatus: subscription.creem_status ?? null,
       currentPeriodEnd: subscription.current_period_end
         ? subscription.current_period_end.toISOString()
         : null,
-      hasPaddleSubscription: !!subscription.paddle_subscription_id,
+      hasBillingSubscription: !!subscription.creem_subscription_id,
     };
   }
 
@@ -110,10 +125,7 @@ export class SubscriptionService {
       "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
       ["product-quota", userId],
     );
-    const subscription = await manager.findOne(UserSubscription, {
-      where: { user_id: userId },
-    });
-    const limits = PLAN_LIMITS[subscription?.plan ?? "free"];
+    const limits = await readPlanLimits(manager, userId);
 
     if (limits.maxProducts === null) return;
 
@@ -146,11 +158,7 @@ export class SubscriptionService {
       "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
       ["order-monthly-quota", userId],
     );
-    const subscription = await manager.findOne(UserSubscription, {
-      where: { user_id: userId },
-    });
-    const plan = subscription?.plan ?? "free";
-    const limits = PLAN_LIMITS[plan];
+    const limits = await readPlanLimits(manager, userId);
 
     if (limits.maxOrdersPerMonth === null) return;
 
@@ -172,19 +180,56 @@ export class SubscriptionService {
     }
   }
 
-  async getAllowedTemplateIds(userId: string): Promise<string[] | null> {
-    const subscription = await this.getOrCreate(userId);
-    return PLAN_LIMITS[subscription.plan].allowedTemplateIds;
+  /**
+   * Quota check for a recipient insert in the caller's transaction, serialized per user the
+   * same way as products. Recipients are hard-deleted, so the count is exact.
+   */
+  async assertCanCreateRecipientInTx(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<void> {
+    await manager.query(
+      "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+      ["recipient-quota", userId],
+    );
+    const limits = await readPlanLimits(manager, userId);
+    if (limits.maxRecipients === null) return;
+
+    const count = await manager.count(Recipient, {
+      where: { user_id: userId },
+    });
+    if (count >= limits.maxRecipients) {
+      throw ApiErrors.RECIPIENT_LIMIT_EXCEEDED(limits.maxRecipients);
+    }
+  }
+
+  /** The account's limits; a missing subscription row reads as the free plan. */
+  getPlanLimits(
+    userId: string,
+    manager: EntityManager = this.dataSource.manager,
+  ): Promise<PlanLimits> {
+    return readPlanLimits(manager, userId);
+  }
+
+  assertFeature(
+    userId: string,
+    feature: PlanFeature,
+    manager: EntityManager = this.dataSource.manager,
+  ): Promise<void> {
+    return assertPlanFeature(manager, userId, feature);
+  }
+
+  async getAllowedTemplateIds(
+    userId: string,
+  ): Promise<readonly string[] | null> {
+    return (await this.getPlanLimits(userId)).allowedTemplateIds;
   }
 
   async assertCanUseTemplate(
     userId: string,
     templateId: string,
   ): Promise<void> {
-    const allowed = await this.getAllowedTemplateIds(userId);
-    if (allowed === null) return;
-
-    if (!allowed.includes(templateId)) {
+    if (!isTemplateAllowed(await this.getPlanLimits(userId), templateId)) {
       throw ApiErrors.TEMPLATE_PLAN_RESTRICTED(templateId);
     }
   }

@@ -4,8 +4,9 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { ThrottlerGuard } from "@nestjs/throttler";
 import * as request from "supertest";
-import { PaddleController } from "./paddle.controller";
-import { PaddleService } from "./paddle.service";
+import { CreemController } from "./creem.controller";
+import { CreemService } from "./creem.service";
+import { CreemClient } from "./creem.client";
 import { SubscriptionController } from "../subscription/subscription.controller";
 import { SubscriptionService } from "../subscription/subscription.service";
 import { UserSubscription } from "../subscription/entities/user-subscription.entity";
@@ -21,8 +22,8 @@ describe("billing disabled HTTP boundary", () => {
   };
   const paidStatus = {
     plan: "business",
-    paddleStatus: "active",
-    hasPaddleSubscription: true,
+    billingStatus: "active",
+    hasBillingSubscription: true,
     usage: { productsCount: 12, ordersThisMonth: 25 },
     limits: {
       maxProducts: null,
@@ -32,9 +33,10 @@ describe("billing disabled HTTP boundary", () => {
   };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [PaddleController, SubscriptionController],
+      controllers: [CreemController, SubscriptionController],
       providers: [
-        PaddleService,
+        CreemService,
+        CreemClient,
         { provide: ConfigService, useValue: { get: () => false } },
         { provide: getRepositoryToken(UserSubscription), useValue: repository },
         {
@@ -74,18 +76,17 @@ describe("billing disabled HTTP boundary", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(paidStatus);
   });
-  it.each([
-    "/subscription/checkout",
-    "/subscription/portal",
-    "/paddle/webhook",
-  ])("rejects %s without touching subscription data", async (path) => {
-    const response = await request(app.getHttpServer())
-      .post(path)
-      .send({ plan: "pro" });
-    expect(response.status).toBe(503);
-    expect(response.body.errorCode).toBe("BILLING_DISABLED");
-    expect(repository.findOne).not.toHaveBeenCalled();
-    expect(repository.update).not.toHaveBeenCalled();
-    expect(repository.createQueryBuilder).not.toHaveBeenCalled();
-  });
+  it.each(["/subscription/checkout", "/subscription/portal", "/creem/webhook"])(
+    "rejects %s without touching subscription data",
+    async (path) => {
+      const response = await request(app.getHttpServer())
+        .post(path)
+        .send({ plan: "pro" });
+      expect(response.status).toBe(503);
+      expect(response.body.errorCode).toBe("BILLING_DISABLED");
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+      expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+    },
+  );
 });

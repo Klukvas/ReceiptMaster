@@ -1,15 +1,23 @@
 import type { Receipt } from "./api-types";
 
 type ActionSubject = Pick<Receipt, "status" | "pdf_url"> &
-  Partial<Pick<Receipt, "replacement_status">>;
+  Partial<Pick<Receipt, "replacement_status" | "purged">>;
+
+/**
+ * The plan's retention limit removed the file: the record and number stay, but there is
+ * nothing to download, print, share or regenerate (the server answers 410 to each).
+ */
+export const isPurgedDocument = (document: { purged?: boolean }): boolean =>
+  document.purged === true;
 
 /** A voided document keeps its PDF when it was generated before the void. */
 export const canDownloadDocument = (document: ActionSubject): boolean =>
-  document.status === "generated" ||
-  (document.status === "void" && Boolean(document.pdf_url));
+  !isPurgedDocument(document) &&
+  (document.status === "generated" ||
+    (document.status === "void" && Boolean(document.pdf_url)));
 
 export const canShareDocument = (document: ActionSubject): boolean =>
-  document.status === "generated";
+  !isPurgedDocument(document) && document.status === "generated";
 
 /** Only a finished document can be voided: not one that is generating, failed, or being replaced. */
 export const canVoidDocument = (document: ActionSubject): boolean =>

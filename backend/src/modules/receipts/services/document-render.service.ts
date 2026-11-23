@@ -13,6 +13,11 @@ import { SignoffSource } from "../../../common/services/signoff-image";
 import { DocumentSignoffService } from "../../settings/services/document-signoff.service";
 import { DOCUMENT_LABELS } from "../templates/translations/document-labels";
 import {
+  FULL_BRANDING,
+  PlanBranding,
+  withAttribution,
+} from "../templates/attribution";
+import {
   PlaywrightPdfGenerator,
   PdfOptions,
 } from "./playwright-pdf-generator.service";
@@ -211,11 +216,15 @@ export class DocumentRenderService {
     document?: DocumentContext,
     signoffSource: SignoffSource = {},
     now: Date = new Date(),
+    branding: PlanBranding = FULL_BRANDING,
   ) {
     await this.templates.ready;
     const caps = getTemplateCapabilities(config.templateId);
-    // A style without a signature block ignores the account's images entirely.
-    const signoff: SignoffSource = caps.signoff ? signoffSource : {};
+    // A style without a signature block ignores the account's images entirely, and so
+    // does a plan without them: the stored images stay, they are just not printed.
+    const signoff: SignoffSource =
+      caps.signoff && branding.allowsSignoff ? signoffSource : {};
+    const printedLogo = branding.allowsLogo ? logo : undefined;
     if (document)
       assertTemplateSupportsDocument(document.request.type, config.templateId);
     const visibleCompany = Object.fromEntries(
@@ -290,9 +299,9 @@ export class DocumentRenderService {
       number,
       // The document blocks print the tax id, IBAN and SWIFT themselves.
       { ...visibleCompany, ...documentData?.headerCompany },
-      Boolean(config.logo.visible && logo),
-      config.logo.visible && logo
-        ? `data:image/png;base64,${logo.toString("base64")}`
+      Boolean(config.logo.visible && printedLogo),
+      config.logo.visible && printedLogo
+        ? `data:image/png;base64,${printedLogo.toString("base64")}`
         : undefined,
       title,
       config.documentLanguage,
@@ -316,7 +325,7 @@ export class DocumentRenderService {
       config.logo.alignment === "auto"
         ? "display:contents"
         : `display:flex;justify-content:${{ left: "flex-start", center: "center", right: "flex-end" }[config.logo.alignment]};width:${caps.logo.maxWidth}px;max-width:100%;flex:0 1 ${caps.logo.maxWidth}px`;
-    const html = await this.templates.renderTemplate(
+    const templateHtml = await this.templates.renderTemplate(
       config.templateId as ReceiptTemplate,
       {
         ...data,
@@ -371,6 +380,10 @@ export class DocumentRenderService {
         total: hidesPrices ? "" : money(order.total_cents),
       },
     );
+    // Part of the frozen HTML and its hash: the document keeps the line it was issued with.
+    const html = branding.hasAttribution
+      ? withAttribution(templateHtml, config.documentLanguage)
+      : templateHtml;
     const publicProjection: PublicProjection = {
       companyInfo: { ...visibleCompany, receiptTitle: title },
       order: {
@@ -409,6 +422,7 @@ export class DocumentRenderService {
     draft: DocumentDraft,
     order: Order,
     file?: Express.Multer.File,
+    branding: PlanBranding = FULL_BRANDING,
   ): Promise<Buffer> {
     const userPreviews = this.previewsByUser.get(userId) ?? 0;
     if (
@@ -431,6 +445,8 @@ export class DocumentRenderService {
         getTemplateCapabilities(draft.config.templateId).signoff
           ? (await this.signoffs?.load(userId))?.source
           : undefined,
+        undefined,
+        branding,
       );
       return await this.renderer.generatePdf(html, snapshot.options);
     } finally {

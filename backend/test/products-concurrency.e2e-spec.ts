@@ -28,6 +28,10 @@ import {
   RestrictedAppDatabase,
   openRestrictedAppDatabase,
 } from "./helpers/restricted-app-database";
+import { useFreePlanWithoutSubscription } from "./helpers/plan-overrides";
+
+// The quota tests below are about accounts without a subscription row on the free plan.
+useFreePlanWithoutSubscription();
 
 // Services run as a restricted role inside the production tenant query context,
 // so RLS applies to every statement exactly as it does behind the HTTP guards.

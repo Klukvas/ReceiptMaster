@@ -75,7 +75,8 @@ export const TemplateSelector = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [carouselOpen, setCarouselOpen] = useState(false);
   const [carouselInitialTemplate, setCarouselInitialTemplate] = useState("");
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  // The template whose lock (or 402) opened the upgrade dialog; it decides the plan offered.
+  const [lockedTemplateId, setLockedTemplateId] = useState<string | null>(null);
   const {
     data: designData,
     isLoading: isLoadingCurrent,
@@ -125,9 +126,9 @@ export const TemplateSelector = () => {
         t("settings.templateUpdated", "Template updated successfully"),
       );
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, templateId) => {
       if (isAxiosError(error) && error.response?.status === 402) {
-        setUpgradeModalOpen(true);
+        setLockedTemplateId(templateId);
         return;
       }
       toast.error(parseApiError(error).message);
@@ -138,7 +139,7 @@ export const TemplateSelector = () => {
     if (updateTemplateMutation.isPending || designError || !designData) return;
     const template = templates?.find((tpl) => tpl.id === templateId);
     if (template?.locked) {
-      setUpgradeModalOpen(true);
+      setLockedTemplateId(templateId);
       return;
     }
     setSelectedTemplate(templateId);
@@ -375,9 +376,10 @@ export const TemplateSelector = () => {
       />
 
       <UpgradeModal
-        isOpen={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
+        isOpen={lockedTemplateId !== null}
+        onClose={() => setLockedTemplateId(null)}
         reason="templates"
+        templateId={lockedTemplateId ?? undefined}
       />
     </SettingsSection>
   );

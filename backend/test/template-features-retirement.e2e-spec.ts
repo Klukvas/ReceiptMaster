@@ -15,6 +15,11 @@ import {
 import { DocumentArtifact } from "../src/modules/receipts/entities/document-artifact.entity";
 import { DocumentAsset } from "../src/modules/settings/entities/document-asset.entity";
 import { Order } from "../src/modules/orders/entities/order.entity";
+import { useRetentionLimit } from "./helpers/plan-overrides";
+
+// Retention is the free plan's ten here; the fixtures still need every document type.
+useRetentionLimit();
+
 type Row = Record<string, unknown>;
 function deferred() {
   let resolve: () => void = () => undefined;
@@ -321,6 +326,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
         TENANT,
         DocumentType.WAYBILL,
         "promoted",
+        10,
       )
       .finally(() => locks.release("E"));
     const results = await Promise.allSettled([repair, eviction]);
@@ -362,6 +368,7 @@ describe("FIX4 actual service receipt retirement wait-for graph", () => {
         TENANT,
         DocumentType.WAYBILL,
         "promoted",
+        10,
       ),
     ]);
     saveTrace("refetch", locks, results);

@@ -6,10 +6,32 @@ import { Toaster } from "react-hot-toast";
 import { SettingsPage } from "../../src/pages/SettingsPage";
 import { OrderActionsMenu } from "../../src/components/orders/OrderActionsMenu";
 import { api, type Order } from "../../src/lib/api";
+import {
+  AuthContext,
+  type AuthContextType,
+} from "../../src/contexts/AuthContext.types";
 import i18n from "../../src/lib/i18n";
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
+// The settings page reads the account's plan, which is asked for only when signed in. The
+// real AuthProvider would verify a stored session against endpoints the fixture lacks.
+const notInFixture = async (): Promise<void> => {
+  throw new Error("Auth actions are not part of the document fixture");
+};
+const SIGNED_IN: AuthContextType = {
+  user: null,
+  token: null,
+  login: notInFixture,
+  register: notInFixture,
+  changePassword: notInFixture,
+  logout: notInFixture,
+  isLoading: false,
+  isAuthenticated: true,
+  hasProfileLoadError: false,
+  retryLoadProfile: notInFixture,
+  refreshProfile: notInFixture,
+};
 function Fixture() {
   const [order, setOrder] = useState<Order>();
   useEffect(() => {
@@ -47,7 +69,9 @@ if (!element) throw new Error("Missing fixture root");
 createRoot(element).render(
   <BrowserRouter>
     <QueryClientProvider client={queryClient}>
-      <Fixture />
+      <AuthContext.Provider value={SIGNED_IN}>
+        <Fixture />
+      </AuthContext.Provider>
     </QueryClientProvider>
   </BrowserRouter>,
 );

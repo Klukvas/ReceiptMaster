@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, Logger } from "@nestjs/common";
 import { nextOrderNumber } from "../orders/order-number";
-import { ApiErrors } from "../../common/errors/ApiError";
+import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
 import { InjectRepository, InjectDataSource } from "@nestjs/typeorm";
 import { Repository, DataSource, In, EntityManager, MoreThan } from "typeorm";
 import axios, { AxiosInstance } from "axios";
@@ -19,6 +19,20 @@ import { runWithTenant } from "../../common/tenancy/tenant-context";
 import { CacheService } from "../../common/services/cache.service";
 import { dashboardCachePattern } from "../orders/dashboard-cache";
 import { snapshotCost } from "../orders/order-item-cost";
+import { SubscriptionService } from "../subscription/subscription.service";
+
+/** Plan limits of the shop owner: the buyer can do nothing about them, so no detail is shown. */
+const OWNER_LIMIT_ERROR_CODES: ReadonlySet<string> = new Set([
+  ApiErrors.ORDER_MONTHLY_LIMIT_EXCEEDED(0).errorCode,
+  ApiErrors.RECIPIENT_LIMIT_EXCEEDED(0).errorCode,
+]);
+
+function isOwnerLimitError(error: unknown): error is ApiErrorResponse {
+  return (
+    error instanceof ApiErrorResponse &&
+    OWNER_LIMIT_ERROR_CODES.has(error.errorCode)
+  );
+}
 
 // Session TTL in seconds (4 hours) — Redis handles expiration
 const SESSION_TTL_SECONDS = 4 * 60 * 60;
@@ -37,6 +51,7 @@ export class TelegramService {
     @InjectRepository(OrderItem) private orderItemsRepo: Repository<OrderItem>,
     @InjectDataSource() private dataSource: DataSource,
     private readonly cacheService: CacheService,
+    private readonly subscriptionService: SubscriptionService,
   ) {
     this.botToken = process.env.TELEGRAM_BOT_TOKEN || "";
     if (!this.botToken) {
@@ -332,6 +347,13 @@ export class TelegramService {
     }
 
     return this.dataSource.transaction(async (manager: EntityManager) => {
+      // The monthly quota lock comes before the product row locks, the order web
+      // order creation takes them in, and before a recipient is added for nothing.
+      await this.subscriptionService.assertCanCreateOrderInTx(
+        manager,
+        this.botOwnerUserId,
+      );
+
       // 1) Recipient (find-or-create) by telegram_user_id, linked to bot owner
       const recipient = await this.findOrCreateRecipient(manager, dto.user);
 
@@ -451,6 +473,11 @@ export class TelegramService {
     const name = nameParts.length
       ? nameParts.join(" ")
       : `Telegram User ${user.telegram_user_id}`;
+
+    await this.subscriptionService.assertCanCreateRecipientInTx(
+      manager,
+      this.botOwnerUserId,
+    );
 
     // Create recipient linked to bot owner
     recipient = manager.getRepository(Recipient).create({
@@ -993,12 +1020,22 @@ export class TelegramService {
         { parse_mode: "Markdown" },
       );
     } catch (error) {
-      this.logger.error("Error confirming order:", error);
+      if (isOwnerLimitError(error)) {
+        this.logger.warn(
+          `Telegram order refused by the owner's plan limit: ${error.errorCode}`,
+        );
+      } else {
+        this.logger.error("Error confirming order:", error);
+      }
 
       let errorMessage =
         "❌ Произошла ошибка при создании заказа. Попробуйте снова.";
 
-      if (error instanceof BadRequestException) {
+      if (isOwnerLimitError(error)) {
+        // The cart is kept, so the buyer can confirm again once the owner has room.
+        errorMessage =
+          "❌ Магазин временно не принимает новые заказы. Попробуйте позже или свяжитесь с продавцом.";
+      } else if (error instanceof BadRequestException) {
         // If it's a product shortage error, show details
         errorMessage = `❌ *Ошибка заказа:*\n\n${error.message}\n\n🛒 Проверьте наличие товаров и обновите корзину.`;
       } else if (error.message?.includes("Недостаточно товара")) {

@@ -40,6 +40,8 @@ import { LowStockWidget } from "../components/dashboard/LowStockWidget";
 import { OnboardingModal } from "../components/onboarding/OnboardingModal";
 import { useTranslation } from "../hooks/useTranslation";
 import { useAuth } from "../hooks/useAuth";
+import { usePlan } from "../hooks/usePlan";
+import { PlanLockTile } from "../components/subscription/PlanLock";
 
 const WIDGET_QUERY_ROOTS = ["lowStockProducts", "orderStatusSummary", "dailyRevenue"] as const;
 
@@ -49,6 +51,12 @@ export const DashboardHomePage = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  // Without analytics the plan shows this month's turnover and the order summary only; the
+  // other dashboard endpoints answer 402, so they are not asked (nor before the plan is known).
+  const plan = usePlan();
+  const hasAnalytics = plan.allows("analytics");
+  const hasProfit = hasAnalytics && plan.allows("profit");
+  const hasStockInsights = hasAnalytics && plan.allows("stockInsights");
 
   // Onboarding
   const { data: onboardingStatus } = useQuery({
@@ -109,6 +117,7 @@ export const DashboardHomePage = () => {
   const { data: totalRevenue, isLoading: revenueLoading, isError: totalRevenueFailed } = useQuery({
     queryKey: ["totalRevenue"],
     queryFn: () => dashboardApi.getTotalRevenue(),
+    enabled: plan.isSettled && hasProfit,
   });
 
   const { data: totalTurnover, isLoading: turnoverLoading, isError: totalTurnoverFailed } = useQuery({
@@ -215,6 +224,15 @@ export const DashboardHomePage = () => {
           </>
         ) : (
           <>
+            {!hasProfit ? (
+              <PlanLockTile
+                reason="profit"
+                testId="home-profit-lock"
+                icon={<DollarSign aria-hidden className="h-4 w-4 text-success-base" />}
+                title={t("home.totalRevenue")}
+                description={t("home.locked.profit")}
+              />
+            ) : (
             <StatCard
               name={t("home.totalRevenue")}
               value={
@@ -241,8 +259,9 @@ export const DashboardHomePage = () => {
               color="text-success-base"
               bgColor="bg-[var(--color-success-light)]"
             />
+            )}
             <StatCard
-              name={t("home.totalTurnover")}
+              name={t(hasAnalytics ? "home.totalTurnover" : "home.turnoverThisMonth")}
               value={
                 totalTurnoverFailed
                   ? UNKNOWN_VALUE
@@ -251,7 +270,11 @@ export const DashboardHomePage = () => {
                       totalTurnover?.data?.currency,
                     )
               }
-              description={t("home.turnoverDescription")}
+              description={t(
+                hasAnalytics
+                  ? "home.turnoverDescription"
+                  : "home.turnoverThisMonthDescription",
+              )}
               icon={TrendingUp}
               color="text-accent-base"
               bgColor="bg-[var(--color-accent-light)]"
@@ -263,17 +286,40 @@ export const DashboardHomePage = () => {
       {/* Charts row: sparkline + order status donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RevenueSparkline
-            currency={
-              totalRevenue?.data?.currency ?? totalTurnover?.data?.currency
-            }
-          />
+          {!hasAnalytics ? (
+            <PlanLockTile
+              reason="analytics"
+              testId="home-sparkline-lock"
+              className="h-full"
+              icon={<TrendingUp aria-hidden className="h-4 w-4 text-accent-base" />}
+              title={t("home.locked.sparklineTitle")}
+              description={t("home.locked.sparkline")}
+            />
+          ) : (
+            plan.isSettled && (
+              <RevenueSparkline
+                currency={
+                  totalRevenue?.data?.currency ?? totalTurnover?.data?.currency
+                }
+              />
+            )
+          )}
         </div>
         <OrderStatusSummary />
       </div>
 
       {/* Low stock widget */}
-      <LowStockWidget />
+      {!hasStockInsights ? (
+        <PlanLockTile
+          reason={hasAnalytics ? "stockInsights" : "analytics"}
+          testId="home-low-stock-lock"
+          icon={<Package aria-hidden className="h-4 w-4 text-warning-base" />}
+          title={t("home.locked.lowStockTitle")}
+          description={t("home.locked.lowStock")}
+        />
+      ) : (
+        plan.isSettled && <LowStockWidget />
+      )}
 
       {/* Latest data */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -287,7 +333,7 @@ export const DashboardHomePage = () => {
               <div className="min-w-0">
                 <p className="font-medium text-content">{product.name}</p>
                 <p className="text-sm text-content-tertiary tabular-nums">
-                  {formatCurrency(product.sale_price_cents)}
+                  {formatCurrency(product.sale_price_cents, product.currency)}
                 </p>
               </div>
               <div className="shrink-0 whitespace-nowrap text-sm text-content-tertiary tabular-nums">
@@ -341,7 +387,7 @@ export const DashboardHomePage = () => {
             </div>
             <div className="shrink-0 text-right">
               <p className="font-medium text-content tabular-nums">
-                {formatCurrency(order.total_cents)}
+                {formatCurrency(order.total_cents, order.currency)}
               </p>
               <p className="text-sm text-content-tertiary">
                 {t(`orders.${order.status}`, order.status)}

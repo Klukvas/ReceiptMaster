@@ -1,3 +1,15 @@
+// The plan lookup needs a database; these suites are about the document flow, so the
+// account is on the top plan unless a test sets another one.
+jest.mock("../subscription/plan-access", () => {
+  const actual = jest.requireActual("../subscription/plan-access");
+  const { PLAN_LIMITS } = jest.requireActual(
+    "../subscription/config/plans.config",
+  );
+  return {
+    ...actual,
+    readPlanLimits: jest.fn(async () => PLAN_LIMITS.business),
+  };
+});
 import { QueryFailedError } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import { getQueueToken } from "@nestjs/bullmq";
@@ -9,7 +21,6 @@ import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { legacyConfig } from "../settings/document-config";
 import { DocumentConfigService } from "../settings/services/document-config.service";
 import type { User } from "../users/entities/user.entity";
-import { DOCUMENTS_RETAINED_PER_TYPE } from "./document-retention";
 import {
   DocumentType,
   Receipt,
@@ -548,7 +559,7 @@ describe("ReceiptsService goods return notes", () => {
   describe("retention", () => {
     it("never evicts anything when a note row is created, and never touches the ledger", async () => {
       const manager = wireTransaction({
-        count: jest.fn().mockResolvedValue(DOCUMENTS_RETAINED_PER_TYPE),
+        count: jest.fn().mockResolvedValue(10),
         find: jest.fn().mockResolvedValue([{ id: "old-0", user_id: user.id }]),
       });
       ledger.lines.get("item-a").returned = 2;

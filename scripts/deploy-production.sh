@@ -4,14 +4,14 @@ set -euo pipefail
 exec python3 - "$@" <<'PY'
 import contextlib, fcntl, hashlib, json, os, pathlib, re, subprocess, sys, time, urllib.request, urllib.parse
 
-EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'AddAutoGenerateReceipt1792200000000', 'AddOrderItemUnitCost1792300000000', 'BackfillOrderItemUnitCost1792310000000', 'HashRefreshTokens1792400000000', 'BackfillProductSupplierFromJoinTable1792500000000', 'AddOrderNumber1792600000000', 'PerAccountReceiptNumbers1792700000000', 'AddIdempotencyPayloadHash1792800000000', 'AddReceiptDocumentType1792850000000', 'DocumentCounters1792900000000', 'AddCounterpartyRequisites1793000000000', 'ReissueVoidedDocuments1793100000000', 'ReissueVoidedQuotes1793200000000', 'AddOrderItemReturnedQty1793300000000', 'DocumentNumberingFormat1793400000000', 'DocumentSignoffAssets1793500000000', 'DocumentArtifactCreatedAt1793600000000', 'DocumentCounterYear1793700000000', 'RecipientEmailUnique1793800000000', 'SuppliersRowLevelSecurity1793900000000', 'UserTokenVersion1794000000000']
+EXPECTED_MIGRATIONS = ['DocumentConfiguration1792100000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'AddAutoGenerateReceipt1792200000000', 'AddOrderItemUnitCost1792300000000', 'BackfillOrderItemUnitCost1792310000000', 'HashRefreshTokens1792400000000', 'BackfillProductSupplierFromJoinTable1792500000000', 'AddOrderNumber1792600000000', 'PerAccountReceiptNumbers1792700000000', 'AddIdempotencyPayloadHash1792800000000', 'AddReceiptDocumentType1792850000000', 'DocumentCounters1792900000000', 'AddCounterpartyRequisites1793000000000', 'ReissueVoidedDocuments1793100000000', 'ReissueVoidedQuotes1793200000000', 'AddOrderItemReturnedQty1793300000000', 'DocumentNumberingFormat1793400000000', 'DocumentSignoffAssets1793500000000', 'DocumentArtifactCreatedAt1793600000000', 'DocumentCounterYear1793700000000', 'RecipientEmailUnique1793800000000', 'SuppliersRowLevelSecurity1793900000000', 'UserTokenVersion1794000000000', 'ReplaceBillingProviderColumns1794100000000', 'AddReceiptContentPurgedAt1794200000000']
 # Production runs as the restricted application role since 2026-10-31; a release now fails if that regresses.
 REQUIRE_RESTRICTED_APP_ROLE = True
 COMPOSE_NETWORK = 'marketflow-network'
 PUBLIC_ORIGIN = 'https://receiptmaster.org'
 RETAINED_RELEASES = 3
 IMAGE_CLEANUP_SECONDS = 120
-KNOWN_MIGRATIONS = ['AddAutoGenerateReceipt1792200000000', 'AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddCounterpartyRequisites1793000000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddIdempotencyPayloadHash1792800000000', 'AddOnboardingCompleted1761800000000', 'AddOrderItemReturnedQty1793300000000', 'AddOrderItemUnitCost1792300000000', 'AddOrderNumber1792600000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptDocumentType1792850000000', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'BackfillOrderItemUnitCost1792310000000', 'BackfillProductSupplierFromJoinTable1792500000000', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DocumentArtifactCreatedAt1793600000000', 'DocumentConfiguration1792100000000', 'DocumentCounterYear1793700000000', 'DocumentCounters1792900000000', 'DocumentNumberingFormat1793400000000', 'DocumentSignoffAssets1793500000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'DropPaymentStatusFromOrders1762400000000', 'HashRefreshTokens1792400000000', 'MakeReceiptTitleNullable1762800000000', 'PerAccountReceiptNumbers1792700000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RecipientEmailUnique1793800000000', 'ReissueVoidedDocuments1793100000000', 'ReissueVoidedQuotes1793200000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'SuppliersRowLevelSecurity1793900000000', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002', 'UserTokenVersion1794000000000']
+KNOWN_MIGRATIONS = ['AddAutoGenerateReceipt1792200000000', 'AddBrandedProformaSettings1762300000000', 'AddCompositeIndexes1761500000000', 'AddCounterpartyRequisites1793000000000', 'AddFailedReceiptStatus1762900000000', 'AddHeaderTextToUserSettings1761349000000', 'AddIdempotencyPayloadHash1792800000000', 'AddOnboardingCompleted1761800000000', 'AddOrderItemReturnedQty1793300000000', 'AddOrderItemUnitCost1792300000000', 'AddOrderNumber1792600000000', 'AddOrderSoftDeletePaymentLock1761500000001', 'AddPaddleIndexes1762200000000', 'AddPerformanceIndexes1762000000000', 'AddProductQuantity1700000000006', 'AddProductSoftDelete1762500000000', 'AddPublicTokenToReceipts1762100000000', 'AddRLSPolicies1761500000006', 'AddReceiptContentPurgedAt1794200000000', 'AddReceiptDocumentType1792850000000', 'AddReceiptHtmlTemplateVoid1761500000002', 'AddReceiptProcessingStatus1761500000005', 'AddReceiptProgressAndError1761600000000', 'AddReceiptTitleToUserSettings1761341614540', 'AddSupplierToProduct1762600000000', 'AddTelegramFields1700000000005', 'AddTemplateLanguageToUserSettings1761347647993', 'AddUserRelationsToOrdersAndReceipts1761232571111', 'AddUserRelationsToProductsAndRecipients1761176062970', 'BackfillOrderItemUnitCost1792310000000', 'BackfillProductSupplierFromJoinTable1792500000000', 'CreateAuditLogsTable1761500000004', 'CreateIdempotencyKeysTable1761400000000', 'CreateRefreshTokensTable1761500000003', 'CreateSuppliersTable1761700000000', 'CreateTables1700000000000', 'CreateUserSettingsTable1761338524008', 'CreateUserSubscriptionsTable1761900000000', 'CreateUsersTable1700000000001', 'DocumentArtifactCreatedAt1793600000000', 'DocumentConfiguration1792100000000', 'DocumentCounterYear1793700000000', 'DocumentCounters1792900000000', 'DocumentNumberingFormat1793400000000', 'DocumentSignoffAssets1793500000000', 'DocumentStorageLeases1792100000001', 'DocumentUploadFencing1792100000002', 'DropPaymentStatusFromOrders1762400000000', 'HashRefreshTokens1792400000000', 'MakeReceiptTitleNullable1762800000000', 'PerAccountReceiptNumbers1792700000000', 'ReceiptCapabilitiesAndOutbox1792000000000', 'RecipientEmailUnique1793800000000', 'ReissueVoidedDocuments1793100000000', 'ReissueVoidedQuotes1793200000000', 'RemoveFirstNameLastNameFromUsers1700000000005', 'ReplaceBillingProviderColumns1794100000000', 'SeedAdminBusinessSubscription1762700000000', 'SeedDefaultAdmin1700000000004', 'SuppliersRowLevelSecurity1793900000000', 'UpdateCurrencyToUAH1700000000003', 'UpdateProductsTable1700000000002', 'UserTokenVersion1794000000000']
 
 def run(args, *, data=None, capture=True, timeout=300):
     result = subprocess.run(args, input=data, stdout=subprocess.PIPE if capture else None,
@@ -70,12 +70,32 @@ def migration_command(compose, code, identity, app_role, check_only=False, run_i
     if check_only: flags += ['-e', 'RELEASE_CHECK_ONLY=true']
     return compose + ['run', '--rm', '--no-deps', '-T', '--name', name, '--entrypoint', 'node'] + flags + ['migrate', '-e', code]
 
-def release_override(images):
+BILLING_SECRETS = ('CREEM_API_KEY', 'CREEM_WEBHOOK_SECRET', 'CREEM_PRO_PRODUCT_ID', 'CREEM_BUSINESS_PRODUCT_ID')
+
+def billing_environment(billing):
+    if not billing:
+        return {'BILLING_ENABLED': 'false'}
+    # The server's Compose file predates Creem, so the release maps the keys from the server's own environment file.
+    return {'BILLING_ENABLED': 'true', 'CREEM_ENVIRONMENT': 'production', **{key: '${' + key + '}' for key in BILLING_SECRETS}}
+
+def require_billing_configuration(envfiles):
+    # Names only: a value is never printed. A later file overrides an earlier one, as in Compose.
+    values = {}
+    for path in envfiles:
+        for line in path.read_text().splitlines():
+            key, separator, value = line.strip().removeprefix('export ').partition('=')
+            if separator and not key.startswith('#'):
+                values[key.strip()] = value.strip().strip('\'"')
+    missing = [key for key in BILLING_SECRETS if not values.get(key)]
+    if missing:
+        raise RuntimeError('Billing is enabled but the production environment lacks ' + ', '.join(missing))
+
+def release_override(images, billing=False):
     # The server's Compose file is not updated by releases, so role separation and the public origin live here.
     # Credentials stay ${...} placeholders: this file is kept on disk and must never hold a secret.
     # postgres and db-backup are only ever recreated by an operator; --no-deps keeps the release off them.
     return {'services': {
-        'backend': {'image': images['backend'], 'environment': {'BILLING_ENABLED': 'false', 'AUTO_RUN_MIGRATIONS': 'false', 'FRONTEND_URL': PUBLIC_ORIGIN}},
+        'backend': {'image': images['backend'], 'environment': {**billing_environment(billing), 'AUTO_RUN_MIGRATIONS': 'false', 'FRONTEND_URL': PUBLIC_ORIGIN}},
         'frontend': {'image': images['frontend']},
         'postgres': {'environment': {
             'POSTGRES_USER': '${POSTGRES_BOOTSTRAP_USER:-postgres}',
@@ -299,11 +319,14 @@ def precheck(workdir, check_lock=True):
     print('PRECHECK PASS: project, existing environment, retained images, database tools and baseline health')
     return backend, frontend, pg, redis, project, actual_workdir, configs, envfiles, next(iter(networks)), history, database_identity
 
-phase, workdir, sha, run_id, registry = sys.argv[1:]
-if phase not in ('precheck', 'deploy') or not re.fullmatch('[0-9a-f]{40}', sha) or not re.fullmatch('[0-9]+-[0-9]+', run_id) or not re.fullmatch('[a-z0-9_-]+', registry):
+phase, workdir, sha, run_id, registry, *billing_flag = sys.argv[1:]
+if billing_flag not in ([], ['true'], ['false']) or phase not in ('precheck', 'deploy') or not re.fullmatch('[0-9a-f]{40}', sha) or not re.fullmatch('[0-9]+-[0-9]+', run_id) or not re.fullmatch('[a-z0-9_-]+', registry):
     raise SystemExit('Invalid release arguments')
 try:
+    billing = billing_flag == ['true']
     state = precheck(workdir)
+    if billing:
+        require_billing_configuration(state[7])
     if phase == 'precheck':
         raise SystemExit(0)
     backend, frontend, pg, redis, project, work, configs, envfiles, network, history, database_identity = state
@@ -319,6 +342,8 @@ try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = precheck(str(work), check_lock=False)
         backend, frontend, pg, redis, project, work, configs, envfiles, network, history, database_identity = state
+        if billing:
+            require_billing_configuration(envfiles)
         old_images = {'backend': backend['Image'], 'frontend': frontend['Image']}
         for service, image in old_images.items():
             run(['docker', 'tag', image, 'receiptmaster-rollback-' + service + ':' + run_id])
@@ -329,7 +354,7 @@ try:
             if labels.get('org.opencontainers.image.version') != sha:
                 raise RuntimeError('Published image version mismatch')
         override = release / 'release.override.json'
-        override.write_text(json.dumps(release_override(images)))
+        override.write_text(json.dumps(release_override(images, billing)))
         base = ['docker', 'compose', '--project-name', project, '--project-directory', str(work)] + sum((['--env-file', str(path)] for path in envfiles), [])
         original = base + sum((['-f', path] for path in configs), [])
         new = original + ['-f', str(override)]
@@ -390,11 +415,11 @@ await assertRuntimePrivileges();
                 try:
                     health('https://receiptmaster.org/api/v1/health')
                     with open_https('https://receiptmaster.org/api/v1/billing/config', timeout=12) as response:
-                        if json.load(response).get('billingEnabled') is not False:
-                            raise RuntimeError('Billing must be disabled')
+                        if json.load(response).get('billingEnabled') is not billing:
+                            raise RuntimeError('Billing capability differs from the release')
                     with open_https('https://receiptmaster.org/release.json?release=' + sha, timeout=12) as response:
                         marker = json.load(response)
-                        if marker.get('sha') != sha or marker.get('billingEnabled') is not False:
+                        if marker.get('sha') != sha or marker.get('billingEnabled') is not billing:
                             raise RuntimeError('Public frontend release version mismatch')
                     with open_https('https://receiptmaster.org/?release=' + sha, timeout=12) as response:
                         html = response.read().decode()
@@ -409,7 +434,7 @@ await assertRuntimePrivileges();
                 except Exception:
                     if time.time() >= deadline: raise RuntimeError('Release health deadline exceeded')
                     time.sleep(3)
-            print('DEPLOY PASS: immutable image pair, billing disabled, API/dependencies, TLS frontend/JS health')
+            print('DEPLOY PASS: immutable image pair, billing ' + ('enabled' if billing else 'disabled') + ', API/dependencies, TLS frontend/JS health')
         except Exception as deploy_error:
             rollback_after_failure(deploy_error, stopped and not isinstance(deploy_error, MigrationCompletionUnknown), original, release, old_images)
         # rollback_after_failure always raises, so only a verified release reaches this line.

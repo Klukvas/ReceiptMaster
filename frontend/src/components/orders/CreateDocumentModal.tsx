@@ -48,6 +48,9 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { selectClass } from "../settings/document-ui";
 import { Button } from "../ui/Button";
 import { RetentionConfirmModal } from "../documents/RetentionConfirmModal";
+import { PlanLockButton } from "../subscription/PlanLock";
+import { useSubscription } from "../../hooks/useSubscription";
+import { PLAN_ORDER, easiestTemplateToUnlock } from "../../lib/plan-catalog";
 import { Modal } from "../ui/Modal";
 import { ActDetailsFields, InvoiceDetailsFields, QuoteDetailsFields } from "./DocumentDetailsFields";
 import { RequisitesNotice } from "./RequisitesNotice";
@@ -102,6 +105,12 @@ export function CreateDocumentModal({
   const createDocument = useCreateDocument();
   const queryClient = useQueryClient();
   const design = useTemplateChoice(type);
+  const { status: planStatus } = useSubscription();
+  // One lock stands for every locked design; it names the plan that opens the first of them.
+  const lockedDesignId = easiestTemplateToUnlock(
+    design.lockedOptions.map((option) => option.id),
+    planStatus?.plan ?? PLAN_ORDER[0],
+  );
   const signoff = useSignoff();
   const willPrintSignoff =
     Boolean(signoff.data?.signature || signoff.data?.stamp) &&
@@ -366,7 +375,32 @@ export function CreateDocumentModal({
                 {templateDisplayName(t, option)}
               </option>
             ))}
+            {design.lockedOptions.map((option) => (
+              <option key={option.id} value={option.id} disabled>
+                {templateDisplayName(t, option)} 🔒 {t("document.templateLocked")}
+              </option>
+            ))}
           </select>
+          {design.lockedOptions.length > 0 && (
+            <div
+              data-testid="document-design-locked"
+              className="flex flex-wrap items-center gap-2 text-xs text-content-tertiary"
+            >
+              <span>
+                {t("documents.designsLocked", {
+                  count: design.lockedOptions.length,
+                })}
+              </span>
+              <PlanLockButton
+                reason="templates"
+                templateId={lockedDesignId}
+                subject={t("documents.designsLocked", {
+                  count: design.lockedOptions.length,
+                })}
+                size="sm"
+              />
+            </div>
+          )}
           {design.isAccountDesignUnfit && (
             <p className="text-xs text-content-tertiary">{t("documents.designFallback")}</p>
           )}

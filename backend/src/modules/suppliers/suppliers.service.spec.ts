@@ -5,11 +5,15 @@ import { Supplier } from "./entities/supplier.entity";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
+import { UserSubscription } from "../subscription/entities/user-subscription.entity";
 
 describe("SuppliersService", () => {
   let service: SuppliersService;
   let suppliersRepo: any;
   let txManager: any;
+  // What the managers read: the account's subscription row and a stored idempotency key.
+  let subscription: { plan: string } | null;
+  let storedKey: unknown;
   const mockUser = { id: "user-1" } as User;
 
   const mockSupplier: Partial<Supplier> = {
@@ -48,16 +52,22 @@ describe("SuppliersService", () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
+    subscription = { plan: "business" };
+    storedKey = null;
+    const findOne = (entity: unknown) =>
+      Promise.resolve(entity === UserSubscription ? subscription : storedKey);
+
     txManager = {
       queryRunner: { isTransactionActive: true },
       query: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
+      findOne: jest.fn(findOne),
       delete: jest.fn(),
       insert: jest.fn().mockResolvedValue({}),
       getRepository: jest.fn().mockReturnValue(suppliersRepo),
       save: jest.fn((data) => Promise.resolve({ id: "sup-1", ...data })),
     };
     suppliersRepo.manager = {
+      findOne: jest.fn(findOne),
       transaction: jest.fn((work) => work(txManager)),
     };
 
@@ -119,12 +129,12 @@ describe("SuppliersService", () => {
     });
 
     it("replays the stored response without saving", async () => {
-      txManager.findOne.mockResolvedValue({
+      storedKey = {
         id: "row-1",
         response: { id: "sup-1", name: "New Supplier" },
         payload_hash: null,
         expires_at: new Date(Date.now() + 60_000),
-      });
+      };
 
       const result = await service.createWithIdempotencyKey(
         dto,
@@ -139,13 +149,31 @@ describe("SuppliersService", () => {
       expect(txManager.save).not.toHaveBeenCalled();
     });
 
-    it("refuses the key when the body differs from the first request", async () => {
-      txManager.findOne.mockResolvedValue({
+    it("replays the stored response after the plan lost suppliers", async () => {
+      subscription = { plan: "free" };
+      storedKey = {
+        id: "row-1",
+        response: { id: "sup-1", name: "New Supplier" },
+        payload_hash: null,
+        expires_at: new Date(Date.now() + 60_000),
+      };
+
+      const result = await service.createWithIdempotencyKey(
+        dto,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result.replayed).toBe(true);
+    });
+
+    it("refuses when the body differs from the first request", async () => {
+      storedKey = {
         id: "row-1",
         response: { id: "sup-1" },
         payload_hash: "0".repeat(64),
         expires_at: new Date(Date.now() + 60_000),
-      });
+      };
 
       await expect(
         service.createWithIdempotencyKey(dto, mockUser, "key-1"),
@@ -247,6 +275,47 @@ describe("SuppliersService", () => {
       await expect(
         service.update("unknown", { name: "Test" } as any, mockUser),
       ).rejects.toThrow(ApiErrorResponse);
+    });
+  });
+
+  describe("plan feature", () => {
+    const restricted = {
+      statusCode: 402,
+      errorCode: "PLAN_FEATURE_RESTRICTED",
+      details: { feature: "suppliers" },
+    };
+
+    it.each([
+      ["the free plan", { plan: "free" }],
+      ["an account without a subscription row", null],
+    ])("refuses creating and updating on %s", async (_name, row) => {
+      subscription = row;
+      suppliersRepo.findOne.mockResolvedValue({ ...mockSupplier });
+
+      await expect(
+        service.create({ name: "S" } as any, mockUser),
+      ).rejects.toMatchObject(restricted);
+      await expect(
+        service.createWithIdempotencyKey({ name: "S" } as any, mockUser, "k"),
+      ).rejects.toMatchObject(restricted);
+      await expect(
+        service.update("sup-1", { name: "Updated" } as any, mockUser),
+      ).rejects.toMatchObject(restricted);
+      expect(suppliersRepo.save).not.toHaveBeenCalled();
+      expect(txManager.save).not.toHaveBeenCalled();
+    });
+
+    it("still lists, reads and deletes on the free plan", async () => {
+      subscription = { plan: "free" };
+      suppliersRepo.findOne.mockResolvedValue({ ...mockSupplier });
+
+      await expect(service.findAll({}, mockUser)).resolves.toMatchObject({
+        total: 1,
+      });
+      await expect(service.findOne("sup-1", mockUser)).resolves.toBeDefined();
+      await service.remove("sup-1", mockUser);
+
+      expect(suppliersRepo.remove).toHaveBeenCalled();
     });
   });
 

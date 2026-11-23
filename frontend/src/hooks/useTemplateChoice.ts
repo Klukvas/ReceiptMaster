@@ -6,7 +6,8 @@ import { useDocumentTemplates } from "./useDocumentTemplates";
 
 /**
  * The designs one document type can use (the backend lists them per style in
- * `capabilities.documentTypes`; locked ones are left out) and the one picked.
+ * `capabilities.documentTypes`) and the one picked. Designs of a higher plan are
+ * returned apart as `lockedOptions`: shown disabled, never selectable.
  * The account's own design is the default when it fits, else the first that does.
  */
 export function useTemplateChoice(type: GeneratableType) {
@@ -14,10 +15,11 @@ export function useTemplateChoice(type: GeneratableType) {
   const account = useQuery(documentConfigQuery);
   const [chosenId, setChosenId] = useState<string | null>(null);
 
-  const options = (templates.data ?? []).filter(
-    (template) =>
-      !template.locked && template.capabilities.documentTypes.includes(type),
+  const fitting = (templates.data ?? []).filter((template) =>
+    template.capabilities.documentTypes.includes(type),
   );
+  const options = fitting.filter((template) => !template.locked);
+  const lockedOptions = fitting.filter((template) => template.locked);
   const accountId = account.data?.config.templateId;
   const defaultId =
     options.find((option) => option.id === accountId)?.id ??
@@ -29,6 +31,7 @@ export function useTemplateChoice(type: GeneratableType) {
 
   return {
     options,
+    lockedOptions,
     selectedId,
     choose: setChosenId,
     isLoading: templates.isLoading,

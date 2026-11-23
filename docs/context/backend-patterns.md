@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-12
+**Last Updated:** 2026-11-23
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -687,7 +687,7 @@ export class AuditLogInterceptor implements NestInterceptor {
 - Sanitizes the body recursively: passwords/tokens and counterparty/bank requisites (any key containing `iban`, `taxId`, `legalName`, `legalAddress`, `bankName`, `vatId`, `signatory`, `contractRef`, `companyAddress`, snake or camel case) are stored as `***`, so `audit_logs` shows that a field changed but not its value
 - A multipart document request carries its JSON in one `payload` string field; the interceptor parses it first so the same masking applies inside (a `payload` that is not JSON is stored as `***`, never raw)
 - Personal data is masked too, by where the key sits: a recipient's `name`/`email`/`phone`/`address` (the top level of a `RecipientsController` body, or any object under a `recipient`/`recipients` key), a supplier's `name`/`email`/`phone`/`address`/`contactPerson`/`notes` (the top level of a `SuppliersController` body, or under `supplier`/`suppliers`), `companyEmail`/`companyPhone`/`*swift*` and `recipientName|Email|Phone|Address` anywhere, `reason`/`completionText`/`paymentTerms`/`deliveryTerms` inside `details`, and the top-level `reason` of a void body (any `void*` handler). These personal-data keys are masked whatever the JSON type of the value (string, number, object); only `null`/absent values and booleans stay readable, so the visibility switches of a document configuration still show. A product `name` stays readable
-- Webhook calls (all of `TelegramController` and `PaddleController`, i.e. `/tg/*` and `/paddle/*` outside the API prefix) are recorded without a body (`newValues` empty). Matched by controller class, not by path, because Express routes are case-insensitive (`/TG/webhook` reaches the same handler)
+- Webhook calls (all of `TelegramController` and `CreemController`, i.e. `/tg/*` and `/creem/*` outside the API prefix) are recorded without a body (`newValues` empty). Matched by controller class, not by path, because Express routes are case-insensitive (`/TG/webhook` reaches the same handler)
 - Runs after the handler returns (in `tap()`), so it has the response data. The change is committed
   by then, so building the entry is wrapped in try/catch: a failure is logged and the client still
   gets its success, never a 500 for a write that happened
@@ -744,7 +744,7 @@ error is logged once with `error`, `errorCode`, `status`, `detail` (the original
 
 Two non-`HttpException` errors are client errors and mapped before the generic 500:
 - `ThrottlerException` from the stock `ThrottlerGuard` (login, register, refresh, public links,
-  Paddle) becomes `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }`, the seconds read
+  Creem) becomes `429 { error, errorCode: "RATE_LIMITED", retryAfterSeconds }`, the seconds read
   from the `Retry-After` header the guard set (60 if absent), the same body as `UserThrottlerGuard`
 - express body-parser errors (`http-errors` objects with `expose: true` and a 4xx `status`): a body
   above the size limit (`type: "entity.too.large"`) is `413 PAYLOAD_TOO_LARGE`, any other keeps its
@@ -843,7 +843,7 @@ export interface ReceiptGenerationJobData {
 }
 ```
 
-`ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`) in the validated job tenant. `ReceiptSnapshotService` resolves authoritative configuration, captures transaction/recipient data, normalizes/loads immutable logos and compiles final HTML **before** durable intent. No S3 or Chromium work runs under a database lock. A short transaction rechecks account/preset revisions, locked source fingerprints (the order fingerprint, `orderFingerprint`, covers only what prints: lines, totals, recipient contacts and status; not `updated_at` or `is_locked`, which a concurrent promotion of another document of the order moves), entitlement and order eligibility, then stores one pending candidate plus the identifier-only outbox entry. Tenant quota enforcement remains serialized; `DOCUMENTS_RETAINED_PER_TYPE = 10` (counted per `document_type`) retains the existing eligible eviction policy.
+`ReceiptGenerationProcessor` runs sequentially (`concurrency: 1`) in the validated job tenant. `ReceiptSnapshotService` resolves authoritative configuration, captures transaction/recipient data, normalizes/loads immutable logos and compiles final HTML **before** durable intent. No S3 or Chromium work runs under a database lock. A short transaction rechecks account/preset revisions, locked source fingerprints (the order fingerprint, `orderFingerprint`, covers only what prints: lines, totals, recipient contacts and status; not `updated_at` or `is_locked`, which a concurrent promotion of another document of the order moves), entitlement and order eligibility, then stores one pending candidate plus the identifier-only outbox entry. Tenant quota enforcement remains serialized; the plan's `documentsRetainedPerType` (counted per `document_type`) drives retention at promotion; see `business-logic.md`, *Retention cap*.
 
 `ReceiptArtifactService` renders only stored HTML and complete PDF options, then uploads to an immutable attempt key. Promotion checks tenant, generation, pending identity, expected active revision, an order status the receipt's own type allows (`specFor(type).allowedOrderStatuses`, so a quotation promotes on a DRAFT order) and, for locking types, a locked order and non-void lifecycle, switching all active artifact/config/template/public metadata together. It never writes public-token fields. A generated document stays generated and publicly downloadable during replacement, with separate `replacement_status`/`replacement_error`. Failed candidates remain retryable; explicit new config on a failed generation replaces its design, while a plain retry reuses the frozen candidate. The outbox recognizes replacements and reconciles exhausted jobs without destroying active PDFs.
 
@@ -855,7 +855,7 @@ Counterparty requisites (migration `AddCounterpartyRequisites1793000000000`) add
 
 Snapshot/HTML/pending-asset entity columns use `select: false`; internal services explicitly select them. Receipt controllers return an allowlist, and nested order receipts cannot load the large private columns by default. Public metadata explicitly selects and projects frozen visible values; it never queries live settings for new documents.
 
-`DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded logos and PDFs have a 24-hour grace; a released signature or stamp has `SIGNOFF_RELEASE_GRACE_MS` (10 minutes, `document-storage-sweep.ts`) and `release()` schedules the tenant's sweep for when it ends, because issued documents carry the image bytes in their frozen HTML and nothing reads a released one. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving the per-type cap `DOCUMENTS_RETAINED_PER_TYPE = 10`. Legacy local filesystem files are not processed by immutable object-storage cleanup.
+`DocumentConfigService` owns validated V1 configuration and preset persistence, optimistic revisions, narrow legacy-setting adapters and authoritative entitlement reads. `DocumentAssetsService` normalizes to a compact PNG (600 px longest side, at most 512 KiB), reserves a leased tenant asset, uploads a unique key, then attaches the pointer/config in a short transaction. Removal detaches; it never eagerly deletes. `DocumentStorageMaintenanceService` runs every minute, claiming at most ten due tenant IDs from the identifier/timing-only `document_storage_sweeps` queue, then enters each tenant context. It collects at most 25 logos and 25 PDFs per tenant, rechecking account/preset/active/pending logo references and active PDF paths under asset/lease locks before marking deleting. Attach rejects deleting state under the same locks. S3 deletion runs after the claim transaction; failures retain deleting intent for retry (tenant sweeps recur hourly). Leases and detached/superseded logos and PDFs have a 24-hour grace; a released signature or stamp has `SIGNOFF_RELEASE_GRACE_MS` (10 minutes, `document-storage-sweep.ts`) and `release()` schedules the tenant's sweep for when it ends, because issued documents carry the image bytes in their frozen HTML and nothing reads a released one. `DocumentArtifactsService` reserves intent before each immutable PDF upload; promotion/repair attach the ready lease and retire the former PDF in the pointer-switch transaction. Confirmed losing attempts and failed uploads expire; ambiguous commits are never eagerly deleted, and the collector retains referenced objects. Eviction schedules retirement and drops active/pending pointers transactionally, preserving the plan's per-type cap. Legacy local filesystem files are not processed by immutable object-storage cleanup.
 
 The additive `1792300000000-AddOrderItemUnitCost` migration adds nullable `order_items.unit_cost_cents`
 with `CHK_order_items_unit_cost_non_negative` (`IS NULL OR >= 0`) and no default; on its own it left
@@ -1033,11 +1033,12 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(32),  // Required, no default
   JWT_EXPIRES_IN: z.string().default("24h"),
 
-  // Paddle Billing
-  PADDLE_API_KEY: z.string().optional(),
-  PADDLE_WEBHOOK_SECRET: z.string().optional(),
-  PADDLE_PRO_PRICE_ID: z.string().optional(),
-  PADDLE_BUSINESS_PRICE_ID: z.string().optional(),
+  // Creem billing
+  CREEM_API_KEY: z.string().optional(),
+  CREEM_WEBHOOK_SECRET: z.string().optional(),
+  CREEM_PRO_PRODUCT_ID: z.string().optional(),
+  CREEM_BUSINESS_PRODUCT_ID: z.string().optional(),
+  CREEM_ENVIRONMENT: z.enum(["test", "production"]).optional(), // "" counts as unset
 
   // Telegram Bot
   TELEGRAM_BOT_TOKEN: z.string().optional(),
@@ -1071,11 +1072,11 @@ ConfigModule.forRoot({
 ```
 
 Production always requires `FRONTEND_URL` to be the bare `https` origin customers reach, with no
-path or trailing slash, whether billing is on or off. Public receipt links and the Paddle checkout URL are
+path or trailing slash, whether billing is on or off. Public receipt links and the Creem checkout return URL are
 built from it, and both consumers keep a `http://localhost:5173` fallback that only development and
-test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `PADDLE_API_KEY`,
-`PADDLE_WEBHOOK_SECRET`, `PADDLE_PRO_PRICE_ID`, `PADDLE_BUSINESS_PRICE_ID`, and explicitly
-`PADDLE_ENVIRONMENT=production`. Missing values or sandbox mode fail startup. Development/test
+test can reach. Production with `BILLING_ENABLED=true` additionally requires nonempty `CREEM_API_KEY`,
+`CREEM_WEBHOOK_SECRET`, `CREEM_PRO_PRODUCT_ID`, `CREEM_BUSINESS_PRODUCT_ID`, and explicitly
+`CREEM_ENVIRONMENT=production`. Missing values or test mode fail startup. Development/test
 may leave billing disabled. `.env.example` lists empty configuration keys; production image
 selection uses an explicit immutable `IMAGE_TAG`. Test-mode boot ignores `.env` files.
 If a required variable is missing, the app fails to start with a clear error.
@@ -1291,14 +1292,27 @@ Use these instead of ad-hoc handling when a DTO or query touches the same kind o
 
 ### Explicit billing capability and releases
 
+**Plan checks.** Read the plan through `subscription/plan-access.ts` (`readPlanLimits`,
+`assertPlanFeature`, `isTemplateAllowed`, `isDocumentTypeAllowed`) with the `EntityManager` the code
+already holds, or through `SubscriptionService` where it is injected. Never compare plan names:
+add a limit or a feature flag to `PLAN_LIMITS` and test that. A count limit is checked inside the
+creating transaction under a per-user advisory lock (`assertCanCreate*InTx`). Unit specs with a
+mocked manager either return a `UserSubscription` row from `findOne` or mock `readPlanLimits`;
+the database suites run with `test/helpers/paid-plan-default.ts`, which makes an account without
+a subscription row top-plan (`planDefaults.withoutSubscription`), so a suite about free limits
+sets it back to `"free"` or inserts a row.
+
 `BILLING_ENABLED` accepts only boolean true/false or exact strings `true`/`false`,
-defaulting to false. Empty optional Paddle settings are accepted while OFF; ON production
-requires complete keys, prices and explicit production environment.
-`PaddleService` guards SDK construction, payment creation/portal, signature verification,
+defaulting to false. Empty optional Creem settings are accepted while OFF; ON production
+requires complete keys, product IDs and explicit production environment.
+`CreemService` guards payment creation/portal, signature verification,
 direct webhook handling and scheduled subscription downgrades. Stored entitlements and
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
+A release turns payments on only when the repository variable `BILLING_ENABLED` is `true`: the
+frontend image is built with billing on, the release override maps the Creem keys from the
+server's environment file, and the release fails unless production then reports billing on.
 
 The server's Compose file and `.env` are not updated by releases, so anything the new backend needs
 from them belongs in `release_override()` in that script. `FRONTEND_URL` is set there as the literal
@@ -1407,7 +1421,7 @@ Never index an allowlist literal with `sortBy` (`MAP[sortBy] || default`): `cons
 
 ## Retention, numbers and the documents list: where the rules live
 
-- Eviction by the ten-per-type cap runs only at a successful first promotion (`ReceiptArtifactService`); creating a `PROCESSING` row never deletes anything. `document-retention.ts::isRetentionExempt` lists the types that are never evicted (invoice, act, return note); `getRetention` reports no replacement for them.
+- Retention by the plan's per-type cap runs only at a successful first promotion (`ReceiptArtifactService.enforceRetention`), one document per promotion; creating a `PROCESSING` row never retires anything. `document-retention.ts::retentionAction` says which types are deleted and which keep their row and lose only their file (invoice, act, return note); `getRetention` reports the action with the document it would hit.
 - A counter is never raised to the integer maximum: `raiseCounterToIssued` and the yearly first-draw lookup accept issued values up to `MAX_ACCEPTED_ISSUED_VALUE` (`MAX_COUNTER_VALUE - 1`, `receipt-number-sql.ts`), so the next draw still fits the `integer` column. A draw that would pass `MAX_COUNTER_VALUE` (SQLSTATE 22003) is refused with 409 `DOCUMENT_NUMBERS_EXHAUSTED` instead of a 500.
 - `ReceiptsService` takes `ReceiptSnapshotService`, `ReceiptArtifactService`, `DocumentConfigService` and `DocumentRenderService` as required dependencies (no `@Optional()`); hand-built instances in specs pass them (or `undefined` where a suite never reaches them). Same-key generations are serialized once, by `generationMutex` in `generateDocument`; there is no second inner lock.
 - `ReceiptsService.runGeneration` releases a drawn number only for failures before the document transaction or inside it, never for a number-index collision (23505) or a failed `COMMIT`; a collision triggers `raiseCounterToIssued` and one retry (`NumberCollisionRepaired`). `nextDocumentNumber(manager, userId, type, { timeZone, now? })` takes the document's time zone; `ReceiptSnapshotService.prepare` hands it the resolved `formatting.timeZone`.

@@ -29,15 +29,15 @@ export const cookiePolicyEn: LegalContent = {
 
       <h3>2.1 Third-Party Cookies</h3>
       <p>
-        When billing is enabled and you open the Paddle checkout overlay,
-        Paddle may set cookies for payment processing and fraud prevention.
+        When billing is enabled and you pay, you are taken to the checkout page
+        hosted by Creem on its own site, where Creem may set cookies for payment processing and fraud prevention.
         These cookies are governed by{" "}
         <a
-          href="https://www.paddle.com/legal/privacy"
+          href="https://www.creem.io/privacy"
           target="_blank"
           rel="noopener noreferrer"
         >
-          Paddle's Privacy Policy
+          Creem's Privacy Notice
         </a>
         .
       </p>
@@ -96,7 +96,7 @@ export const cookiePolicyEn: LegalContent = {
       </ul>
       <p>
         Because the Service sets no cookies of its own, blocking cookies does not
-        affect it, although blocking Paddle's cookies may prevent the checkout
+        affect it, although blocking Creem's cookies may prevent the checkout
         from working. Clearing your browser's site data for receiptmaster.org
         signs you out and resets your saved preferences.
       </p>

@@ -1,6 +1,6 @@
 # Business Logic & Domain Model
 
-**Last Updated:** 2026-11-11
+**Last Updated:** 2026-11-20
 
 This document describes the core business flows, entities, and rules that govern ReceiptMaster.
 
@@ -12,7 +12,7 @@ User (subscription owner)
 ├── many Recipients      (owned by user, scoped to tenant)
 ├── many Orders          (created by user)
 ├── many Receipts        (generated from orders)
-└── one UserSubscription (plan, Paddle integration)
+└── one UserSubscription (plan, Creem integration)
 
 Order
 ├── one Recipient        (to)
@@ -142,7 +142,7 @@ Files: `backend/src/modules/orders/orders.service.ts::cancel()`,
 
 ### 2. Receipt & Invoice PDF Generation
 
-**Retention cap:** an account keeps its 10 most recent generated documents **of each document type** (`DOCUMENTS_RETAINED_PER_TYPE` in `receipts/document-retention.ts`, the single source of the number). The cap is enforced when a document is **promoted** to `GENERATED` (`ReceiptArtifactService`, under the tenant lock), never when its row is created: promoting the 11th document of a type retires the oldest one of that same type and its public link stops working, while a generation that fails costs nobody their place. **Invoices, acts and return notes are exempt** (`document-retention.ts::isRetentionExempt`): deleting an invoice or act would free its one-per-order slot (the same order could be invoiced twice under another number) and a return note is the record behind the quantities counted on the order lines, so their rows are never evicted and the cap is not enforced for them; `GET /receipts/retention` reports `replaces: null` for them. The cap still applies to the waybill, sales receipt, packing list and quotation; documents of other types are never counted or evicted by it. Every evictable type (waybill, sales receipt, packing list, quote) has its own ten. Before a manual "Generate Receipt" at the cap the UI asks for confirmation, naming the receipt that will be replaced (`GET /receipts/retention`, which accepts `?type=`, default `waybill`); Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks: it evicts silently.
+**Retention cap:** an account keeps a number of generated documents **of each document type** set by its plan (`PlanLimits.documentsRetainedPerType`: 10, 100, or all). The cap is enforced when a document is **promoted** to `GENERATED` (`ReceiptArtifactService.enforceRetention`, under the tenant lock), never when its row is created, so a generation that fails costs nobody their place. **One promotion retires at most one document** (`RETIRED_PER_PROMOTION`): an account far over the cap (after a downgrade, or for a type that had no cap before plans set one) stops growing instead of losing everything above the cap with its next document; types the plan cannot create are never trimmed. What "retire" means depends on the type (`document-retention.ts::retentionAction`). **Waybill, sales receipt, packing list and quotation are deleted** (`evictOverCap`): the row goes with its PDF, number and public link. **Invoice, act and return note are purged** (`purgeOverCap`): deleting an invoice or act would free its one-per-order slot (the same order could be invoiced twice under another number) and a return note is the record behind the quantities counted on the order lines, so the row stays with its number and `active_snapshot`, while the PDF, frozen HTML, logo lease, pending replacement and `public_token` go and `receipts.content_purged_at` is set. A purged record no longer counts towards the cap; its download, share and regeneration answer 410 `DOCUMENT_CONTENT_PURGED`, projections carry `purged: true`, and it can still be voided. A record whose replacement is being rendered is skipped for that promotion, and a queued candidate is dropped if its record was purged meanwhile. `GET /receipts/retention` (`?type=`, default `waybill`) returns `{ limit, count, action, replaces }` with `limit: null` on a plan that keeps everything; before a manual generation at the cap the UI asks for confirmation, naming the document that will be replaced or lose its file; Confirm / bulk Approve with auto-generate on show a notice afterwards instead. The backend itself never asks.
 
 **Document numbers** (`"2026-000007"` by default) are per account **and per document type**: `receipts/receipt-number.ts::nextDocumentNumber(manager, userId, type)` upserts the `(user_id, document_type)` row of `document_counters` in one statement (`INSERT … ON CONFLICT DO UPDATE … RETURNING value, prefix, padding, include_year`, so concurrent generations queue on that row, including the first insert, and never collide; a number is never reused, even after the retention cap evicts its document). It returns `{ number, value }`: the format is read in the same statement as the value, so a prefix change racing a draw yields a whole old or whole new number. Uniqueness is `(user_id, document_type, number)`; nothing looks a document up by number (public links use `public_token`, the API uses ids), and the download file name carries the type: `receipt-<number>.pdf` for a waybill, `<type>-<number>.pdf` for every other type (`invoice-…`, `act-…`, `quote-…`, `sales_receipt-…`, `packing_list-…`, `return_note-…`; `receipts.service.ts`), so equal numbers of two types never share a file name. An invoice and a waybill may both be `2026-000001`.
 
@@ -188,9 +188,9 @@ auto-generated (only the waybill is, on confirm). The invoice, act, sales receip
 
 **Tax codes and the act's VAT id.** The parties block prints a seller's or buyer's code only when its kind is known (`taxIdKind` is `edrpou` or `rnokpp`, so the label «ЄДРПОУ» / «РНОКПП» is true); a code of unknown kind is hidden rather than printed under no label (`document-view.ts`). The act now requires `seller.vatId` from a VAT payer, like the invoice, sales receipt and quotation (`requiresVatIdForPayer: true` in `document-types.ts`); a missing one is `422 DOCUMENT_REQUISITES_MISSING` with `seller.vatId` in `fields`.
 
-**Sales receipt (товарний чек) and packing list (пакувальний лист):** both CONFIRMED-only, all plans, locking, never auto-generated, styles `standard`/`classic`/`minimal`/`corporate` only (`thermal`/`delivery` are `DOCUMENT_TEMPLATE_UNSUPPORTED`), no `details`. The sales receipt is explicitly **not a fiscal document**: it prints the notice "Не є фіскальним документом і не замінює розрахунковий документ РРО/ПРРО" / "Не является фискальным документом и не заменяет расчётный документ РРО/ПРРО" / "Not a fiscal receipt; does not replace a settlement document issued by a cash register (RRO/PRRO)." above the parties (the forbidden-wording spec exempts exactly this English sentence through its `ALLOWED_SENTENCES` list; any other "cash" or "fiscal receipt" still fails), does not replace a РРО/ПРРО receipt and is never called a cash or fiscal receipt anywhere (a spec scans labels, templates and locales for those words). It has seller/buyer parties, the invoice's items, totals, VAT lines (payer: "У тому числі ПДВ (20%)", non-payer "Без ПДВ") and amount in words, no payment block, and a single seller signature captioned "Підпис" without a seal. Hard requisite: `seller.name` (plus `seller.vatId` for a VAT payer); warnings `seller.taxId`, `seller.vatPayer`. The packing list is a **no-money** document (`layout.money === false`): shipper/consignee parties (the consignee's address is the delivery address, then the legal one), items with quantities only, a summary "Найменувань / Загальна кількість", no VAT line of the seller, signatures "Відправив"/"Отримав" (with the "посада, ПІБ" line under the consignee's). Hard requisite: `seller.name` only. `DocumentView.hidesItemPrices` makes the four styles drop the price and amount columns (`{{#unless document.hidesItemPrices}}`), and `DocumentRenderService.prepare` passes empty price strings to the template, so no price reaches the frozen HTML (and therefore the PDF). The public projection of a packing list is built with `money: false`: no `subtotal_cents`/`total_cents`, items reduced to `product_name` and `qty` (the same stripping the `delivery` style gets). Fixed headings: Товарний чек / Товарный чек / Sales Receipt; Пакувальний лист / Упаковочный лист / Packing List. A packing list locks its order although it carries no money.
+**Sales receipt (товарний чек) and packing list (пакувальний лист):** both CONFIRMED-only, locking (the sales receipt is on every plan, the packing list not on free), never auto-generated, styles `standard`/`classic`/`minimal`/`corporate` only (`thermal`/`delivery` are `DOCUMENT_TEMPLATE_UNSUPPORTED`), no `details`. The sales receipt is explicitly **not a fiscal document**: it prints the notice "Не є фіскальним документом і не замінює розрахунковий документ РРО/ПРРО" / "Не является фискальным документом и не заменяет расчётный документ РРО/ПРРО" / "Not a fiscal receipt; does not replace a settlement document issued by a cash register (RRO/PRRO)." above the parties (the forbidden-wording spec exempts exactly this English sentence through its `ALLOWED_SENTENCES` list; any other "cash" or "fiscal receipt" still fails), does not replace a РРО/ПРРО receipt and is never called a cash or fiscal receipt anywhere (a spec scans labels, templates and locales for those words). It has seller/buyer parties, the invoice's items, totals, VAT lines (payer: "У тому числі ПДВ (20%)", non-payer "Без ПДВ") and amount in words, no payment block, and a single seller signature captioned "Підпис" without a seal. Hard requisite: `seller.name` (plus `seller.vatId` for a VAT payer); warnings `seller.taxId`, `seller.vatPayer`. The packing list is a **no-money** document (`layout.money === false`): shipper/consignee parties (the consignee's address is the delivery address, then the legal one), items with quantities only, a summary "Найменувань / Загальна кількість", no VAT line of the seller, signatures "Відправив"/"Отримав" (with the "посада, ПІБ" line under the consignee's). Hard requisite: `seller.name` only. `DocumentView.hidesItemPrices` makes the four styles drop the price and amount columns (`{{#unless document.hidesItemPrices}}`), and `DocumentRenderService.prepare` passes empty price strings to the template, so no price reaches the frozen HTML (and therefore the PDF). The public projection of a packing list is built with `money: false`: no `subtotal_cents`/`total_cents`, items reduced to `product_name` and `qty` (the same stripping the `delivery` style gets). Fixed headings: Товарний чек / Товарный чек / Sales Receipt; Пакувальний лист / Упаковочный лист / Packing List. A packing list locks its order although it carries no money.
 
-**Quotation (комерційна пропозиція, `quote`):** an offer, not a bill. Order status DRAFT or CONFIRMED (CANCELLED is `ORDER_CANNOT_BE_MODIFIED`), **non-locking** (the order stays editable; issuing a quotation on a draft and then editing the order leaves the frozen quotation as it was, replace it to refresh), all plans, never auto-generated, styles `standard`/`classic`/`minimal`/`corporate` only. Own number counter (`YYYY-NNNNNN`), file `quote-<number>.pdf`, heading Комерційна пропозиція / Коммерческое предложение / Quotation. `details` (strict; unknown keys such as `dueDate` or `paymentTermDays` are a 400): `validUntil` (calendar date), `paymentTerms`, `deliveryTerms` (trimmed text, 1..300 chars, `QUOTE_TERMS_MAX_LENGTH`). `frozen-document.ts::resolveQuoteDetails`: without `validUntil` the server uses issue date + 14 days (`QUOTE_DEFAULT_VALIDITY_DAYS`, `validUntilSource: "default"`, else `"request_date"`); the issue date is the calendar day in `formatting.timeZone` (an account without saved formatting gets `DEFAULT_DOCUMENT_TIME_ZONE = "Europe/Kyiv"` from `legacyConfig`, never the server's own zone, so 23:30 UTC on 2 Nov is already 3 Nov); the date must be neither before the issue date nor later than issue date + 365 days (`QUOTE_MAX_VALIDITY_DAYS`), otherwise `400 VALIDATION_ERROR` ("Validation error for details.validUntil: must not be earlier than the issue date" / "…: must be within 365 days of the issue date"), always in preflight, so no number is burned. The resolved details live in `active_snapshot.document.details` (no DB column); a replacement carries them over unchanged (`carryOver.details`), a FAILED retry re-resolves them from the new request. Requisites: hard `seller.name` (plus `seller.vatId` for a VAT payer), warnings `seller.taxId`, `seller.legalForm`, `seller.vatPayer`; no IBAN, no buyer requirement. Layout: supplier/buyer parties, the notice "Комерційна пропозиція не є рахунком. Для оплати буде виставлено рахунок." / "Коммерческое предложение не является счётом. Для оплаты будет выставлен счёт." / "This quotation is not an invoice. An invoice will be issued for payment." (`quoteNotice`) above them, items, totals with the VAT lines like an invoice but the last line is "Загальна вартість" (`offerTotal`, set through `layout.grandTotalLabel`; the invoice keeps "Всього до сплати", the sales receipt prints the neutral "Всього" / `saleTotal`, the return note "Вартість повернутого товару"), amount in words, **no payment block**, then "Пропозиція дійсна до" and the optional "Умови оплати" / "Умови поставки" (`DocumentView.offer`, printed by the `documentClosing` partial under `{{#if document.offer}}`), one supplier signature "Від Постачальника" with "Підпис / М.П.". It is reissuable (`REISSUABLE_DOCUMENT_TYPES`), so voiding frees the slot and the order may carry the voided row plus a live one. Cancelling the order (DRAFT or CONFIRMED) voids a live quotation with the other documents (`order_cancelled`, link revoked). Deleting the order (`remove` / `deleteBatch`) does not void anything but revokes the public link of every document the order carries (`ReceiptsService.revokePublicLinksForOrders`, `public_token = null`, same transaction, before the soft delete). Voiding a quotation never unlocks an order that a waybill or invoice still locks. **Stale quotation:** because the quotation is non-locking, a DRAFT order can be edited after it was issued and the frozen PDF then no longer matches the order; the product does not void or refresh it. The frontend warns instead (before saving in the edit form, and with a notice after), telling the user to void the quotation and issue a new one (`orders.staleQuoteWarning` / `orders.staleQuoteSaved`). The create dialog counts the suggested validity date from "today" in the account's `formatting.timeZone` (fallback `Europe/Kyiv`), matching the server's issue date. User-facing wording for `deliveryTerms` is «Умови поставки» / «Условия поставки» / "Delivery terms", as in the PDF. The Terms of Service and Privacy Policy describe the quotation as an informational offer, not an invoice, primary document or basis for payment/accounting, and list it among the stored types (10 per type).
+**Quotation (комерційна пропозиція, `quote`):** an offer, not a bill. Order status DRAFT or CONFIRMED (CANCELLED is `ORDER_CANNOT_BE_MODIFIED`), **non-locking** (the order stays editable; issuing a quotation on a draft and then editing the order leaves the frozen quotation as it was, replace it to refresh), not on the free plan, never auto-generated, styles `standard`/`classic`/`minimal`/`corporate` only. Own number counter (`YYYY-NNNNNN`), file `quote-<number>.pdf`, heading Комерційна пропозиція / Коммерческое предложение / Quotation. `details` (strict; unknown keys such as `dueDate` or `paymentTermDays` are a 400): `validUntil` (calendar date), `paymentTerms`, `deliveryTerms` (trimmed text, 1..300 chars, `QUOTE_TERMS_MAX_LENGTH`). `frozen-document.ts::resolveQuoteDetails`: without `validUntil` the server uses issue date + 14 days (`QUOTE_DEFAULT_VALIDITY_DAYS`, `validUntilSource: "default"`, else `"request_date"`); the issue date is the calendar day in `formatting.timeZone` (an account without saved formatting gets `DEFAULT_DOCUMENT_TIME_ZONE = "Europe/Kyiv"` from `legacyConfig`, never the server's own zone, so 23:30 UTC on 2 Nov is already 3 Nov); the date must be neither before the issue date nor later than issue date + 365 days (`QUOTE_MAX_VALIDITY_DAYS`), otherwise `400 VALIDATION_ERROR` ("Validation error for details.validUntil: must not be earlier than the issue date" / "…: must be within 365 days of the issue date"), always in preflight, so no number is burned. The resolved details live in `active_snapshot.document.details` (no DB column); a replacement carries them over unchanged (`carryOver.details`), a FAILED retry re-resolves them from the new request. Requisites: hard `seller.name` (plus `seller.vatId` for a VAT payer), warnings `seller.taxId`, `seller.legalForm`, `seller.vatPayer`; no IBAN, no buyer requirement. Layout: supplier/buyer parties, the notice "Комерційна пропозиція не є рахунком. Для оплати буде виставлено рахунок." / "Коммерческое предложение не является счётом. Для оплаты будет выставлен счёт." / "This quotation is not an invoice. An invoice will be issued for payment." (`quoteNotice`) above them, items, totals with the VAT lines like an invoice but the last line is "Загальна вартість" (`offerTotal`, set through `layout.grandTotalLabel`; the invoice keeps "Всього до сплати", the sales receipt prints the neutral "Всього" / `saleTotal`, the return note "Вартість повернутого товару"), amount in words, **no payment block**, then "Пропозиція дійсна до" and the optional "Умови оплати" / "Умови поставки" (`DocumentView.offer`, printed by the `documentClosing` partial under `{{#if document.offer}}`), one supplier signature "Від Постачальника" with "Підпис / М.П.". It is reissuable (`REISSUABLE_DOCUMENT_TYPES`), so voiding frees the slot and the order may carry the voided row plus a live one. Cancelling the order (DRAFT or CONFIRMED) voids a live quotation with the other documents (`order_cancelled`, link revoked). Deleting the order (`remove` / `deleteBatch`) does not void anything but revokes the public link of every document the order carries (`ReceiptsService.revokePublicLinksForOrders`, `public_token = null`, same transaction, before the soft delete). Voiding a quotation never unlocks an order that a waybill or invoice still locks. **Stale quotation:** because the quotation is non-locking, a DRAFT order can be edited after it was issued and the frozen PDF then no longer matches the order; the product does not void or refresh it. The frontend warns instead (before saving in the edit form, and with a notice after), telling the user to void the quotation and issue a new one (`orders.staleQuoteWarning` / `orders.staleQuoteSaved`). The create dialog counts the suggested validity date from "today" in the account's `formatting.timeZone` (fallback `Europe/Kyiv`), matching the server's issue date. User-facing wording for `deliveryTerms` is «Умови поставки» / «Условия поставки» / "Delivery terms", as in the PDF. The Terms of Service and Privacy Policy describe the quotation as an informational offer, not an invoice, primary document or basis for payment/accounting, and list it among the stored types (10 per type).
 
 **Goods return note (накладна на повернення товару, `return_note`):** records goods that come back under a CONFIRMED order. **Informational only**: it does not change product stock, is not a fiscal document and is not a «розрахунок коригування» to a tax invoice (the Terms say so), does not lock the order, and is never auto-generated. `POST /receipts/orders/:orderId/documents` takes `details: { lines: [{ orderItemId, qty }], reason? }` (api-reference). **Several live notes per order** are allowed (partial returns), so none of the one-live-row-per-type logic applies: every request inserts a new row, existing notes never produce `DOCUMENT_ALREADY_EXISTS`, and the partial unique index excludes the type. **Ledger:** `order_items.returned_qty` (migration `AddOrderItemReturnedQty1793300000000`, `CHECK 0 <= returned_qty <= qty`) is the units already taken back by non-void notes; issuing a note increments it for its lines inside the issuing transaction (guarded atomically, so parallel notes cannot over-return: `422 RETURN_QUANTITY_EXCEEDED` with the short lines), and **voiding a note decrements it again**, so the quantities can be returned by a new note. **A note that ends `failed` also gives its quantities back**: the status change and the guarded release run in one transaction, exactly once (`receipts/receipt-failure.ts`, called by both the worker failure path and the outbox reconciliation); failure is final (no retry, `regenerate` on a failed return note returns 409 «issue a new one»), and voiding a failed note does not release a second time. A failure with no readable frozen lines logs a warning and releases nothing. Void and failure release through one function, `releaseReturnNoteQuantities` (`return-note-ledger.ts`); a line whose guarded release finds less returned than the note holds (the ledger disagrees with an issued note) is logged at **error** level with the note, order, user and item ids and quantities, and the void or failure still goes ahead. **Cancelling the order keeps the quantities.** **Return notes are never evicted**: the 10-per-type cap does not apply to them (see *Retention cap*), so no note row is ever deleted by it and the returned quantities always keep their record. The note freezes the returned lines (priced per piece; a line returned in full keeps its stored total), the reason text and the source it is made against (newest issued waybill, else newest issued invoice, else the order). The basis says what the **source document's own PDF says**: its printed heading (a waybill's own title, e.g. «Видаткова накладна», or «Інвойс» on one issued before that default changed, or «Накладна на відвантаження» from the `delivery` style, read from its frozen `publicProjection.companyInfo.receiptTitle`, so changing the default never rewrites the basis of an existing note; an invoice's frozen `document.title`) and its printed date (a waybill prints the order date, taken from its frozen order in its own time zone; an invoice's frozen `document.issueDate`, never recomputed from the row's creation time). A source without a usable snapshot falls back to the generic label («Видаткова накладна» / «Расходная накладная» / "Delivery note", «Рахунок на оплату») and the row's creation date; an order basis is unchanged (`ReturnSource.title` in `return-note.ts`, `resolveReturnSource` in `return-note-ledger.ts`). The reason is stored with the frozen document and printed in the PDF (disclosed in the Privacy Policy). The frontend offers the note while any line has `qty - returned_qty > 0`, lists every note as its own card, and shows no retry for a failed one (see frontend.md).
 
@@ -211,7 +211,7 @@ File: `backend/src/modules/receipts/entities/receipt.entity.ts`
 **High-Level Process:**
 
 1. **Prepare and freeze outside locks.** Resolve authoritative account defaults or a preset plus validated document overrides. Capture transaction/recipient values, title provenance, contact visibility, document language and formatting. Load immutable normalized logo bytes and compile final HTML with embedded fonts/logo and complete PDF options.
-2. **Commit durable intent.** Revalidate authoritative revisions and locked order/recipient inputs in a short transaction. Create/reuse the unique order receipt, save one pending candidate, and insert an identifier-only outbox entry. Quota enforcement is serialized; the existing ten-generated-documents-per-type eviction policy remains. Publish to Redis after commit.
+2. **Commit durable intent.** Revalidate authoritative revisions and locked order/recipient inputs in a short transaction. Create/reuse the unique order receipt, save one pending candidate, and insert an identifier-only outbox entry. Quota enforcement is serialized; the plan's per-type retention is applied later, at promotion (see *Retention cap*). Publish to Redis after commit.
 3. **Render the frozen candidate.** BullMQ retries use stored HTML/options only; changes to settings, logos, recipients or templates do not change a queued candidate. Each attempt uploads to a fresh immutable key. Promotion atomically checks tenant/generation/pending/active-version/order/lifecycle and switches the entire active document.
 4. **Retry and replacement.** Initial generation uses PROCESSING/FAILED. A generated document keeps its active PDF and public availability during replacement, with separate processing/failed replacement status. A failed candidate stays retryable and the old artifact is never deleted first. A default failed-generation retry reuses its frozen candidate; an explicitly supplied new configuration prepares a new design while retaining captured transaction inputs. Legacy jobs without frozen candidates require explicit owner reconstruction. Empty-body regeneration now reproduces frozen content; applying current/new design requires explicit `replace`. This deliberately changes the former current-settings regeneration behavior. Missing active files repair only from trustworthy frozen HTML/options; temporary download failures do not cause reconstruction. Legacy missing snapshots require explicit owner-confirmed reconstruction, and historical fidelity is not invented. Share revocation and concurrent void cannot be undone by promotion. The order part of the commit-time recheck compares only what the document prints (lines, totals, recipient contacts, status), so promoting another document of the same order meanwhile (which locks the order and moves `updated_at`) does not fail the generation with "Order changed".
 
@@ -252,9 +252,11 @@ Files: `backend/src/modules/receipts/templates/` (contains HTML templates)
 
 **Plan-Based Restrictions:**
 
-- Free plan: STANDARD, COMPACT, MINIMAL, THERMAL templates
-- Pro plan: all templates
-- Business plan: all 15 templates
+- free: `standard` only
+- pro ("Start"): 10 templates
+- business ("Pro"): all 15 templates
+
+See *Plans & Limits* for the list and for what happens to a saved template the plan lost.
 
 File: `backend/src/modules/subscription/config/plans.config.ts`
 
@@ -295,45 +297,84 @@ both public metadata and PDF paths return 404 after revocation/voiding. Delayed 
 updates only PDF fields and cannot restore an old token/status. Concurrent share creation uses
 one winning token and cannot attach a token to an already voided receipt.
 
-### 3. Subscription & Billing (Paddle)
+### 3. Subscription & Billing (Creem)
 
 Payments are an explicit capability: strict `BILLING_ENABLED` defaults to false. The
 current release disables new payments, portal management, webhook processing and the
 scheduled canceled-subscription downgrade. Existing free/paid plans, stored subscription
 data, usage reads and quota enforcement are preserved. Disabled payment endpoints return
-503 `BILLING_DISABLED`; no SDK is constructed. Enabling billing in production requires
-complete Paddle credentials, price IDs, frontend URL and explicit production environment.
+503 `BILLING_DISABLED`; Creem is never called. Enabling billing in production requires
+complete Creem credentials, product IDs, frontend URL and explicit production environment.
 
 
 **Entities:**
 
-- `UserSubscription`: Plan, Paddle subscription ID, billing cycle dates
-- `Product`: User's products (not to be confused with Paddle products; these are the items being sold)
+- `UserSubscription`: Plan, Creem customer/subscription IDs and status (`creem_*` columns, status typed as `BillingStatus`), `creem_event_at` (time of the last applied webhook event), end of the paid period. Created by `1794100000000-ReplaceBillingProviderColumns`, which also drops the previous provider's columns. That migration is **not additive**: the deploy keeps migrations when it rolls images back, and the earlier images select the dropped columns, so a rollback of this release also needs the migration reverted (its `down` re-creates them empty)
+- `Product`: User's products (not to be confused with Creem products, which are the Pro and Business plans; these are the items being sold)
 - `Order`: Transactions recorded in ReceiptMaster
 
 **Plans & Limits:**
 
 File: `backend/src/modules/subscription/config/plans.config.ts`
 
-```typescript
-export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
-  free: {
-    maxProducts: 10,           // Can create up to 10 products
-    maxOrdersPerMonth: 20,    // Up to 20 orders/month
-    allowedTemplates: ["standard", "compact", "minimal", "thermal"],
-  },
-  pro: {
-    maxProducts: 100,
-    maxOrdersPerMonth: 500,
-    allowedTemplates: null, // all templates
-  },
-  business: {
-    maxProducts: null,        // Unlimited
-    maxOrdersPerMonth: null,  // Unlimited
-    allowedTemplates: [/* all 15 */],
-  },
-};
-```
+The stored plan names are `free` / `pro` / `business`; they are **sold as Free / Start / Pro**
+(`pro` = Start, $9; `business` = Pro, $19). Stored values were not renamed, so a rollback stays safe.
+
+| | free | pro ("Start") | business ("Pro") |
+|---|---|---|---|
+| Orders per month | 20 | 150 | 1500 |
+| Products | 10 | 500 | unlimited |
+| Recipients | 10 | 300 | unlimited |
+| Templates | `standard` | 10 (adds compact, minimal, thermal, classic, corporate, modern, wave, delivery, proforma) | all 15 |
+| Document types | waybill, invoice, sales receipt | all 7 | all 7 |
+| Generated documents kept per type | 10 | 100 | all |
+| Presets | 0 | 3 | 20 |
+| Analytics history | none (home shows turnover of the current UTC month) | 90 days | all |
+| Features (`features`) | none | all but `csvExport` | all |
+| "Made with ReceiptMaster" line (`hasAttribution`) | yes | no | no |
+
+Features are `analytics`, `profit`, `csvExport` (UI only: the CSV is built in the browser), `logo`,
+`signoff`, `customNumbering`, `autoReceipt`, `suppliers`, `stockInsights`.
+
+**Where the plan is read.** `subscription/plan-access.ts` (`readPlan`, `readPlanLimits`,
+`assertPlanFeature`) works with any `EntityManager`, so a check runs inside the caller's
+transaction without new dependencies; `SubscriptionService` wraps the same functions. A missing
+subscription row is the free plan and no row is created by a check. Refusals are HTTP 402:
+`PRODUCT_LIMIT_EXCEEDED`, `ORDER_MONTHLY_LIMIT_EXCEEDED`, `RECIPIENT_LIMIT_EXCEEDED`,
+`PRESET_LIMIT_EXCEEDED`, `TEMPLATE_PLAN_RESTRICTED`, `DOCUMENT_TYPE_PLAN_RESTRICTED`,
+`PLAN_FEATURE_RESTRICTED` (`feature` names what is missing).
+
+**What each gate does:**
+
+- *Counts* (products, recipients, orders) are checked in the creating transaction under a
+  per-user advisory lock. Web and Telegram creation both check; an idempotent replay returns the
+  stored response before the check. Data above a lower plan's limit stays; only new creates stop.
+- *Templates.* Picking a template outside the plan is refused. A saved default that the plan no
+  longer includes (after a downgrade or a change of the table) is **not** an error: generation,
+  the draft preview and the test receipt fall back to `standard`
+  (`document-config.service.ts::templateWithinPlan`) and other settings stay editable
+  (`assertTemplateChange` checks only a change of template, for the account and for a preset).
+- *Document types* are checked in `ReceiptsService.generateDocument` and on a `replace`
+  regeneration; redrawing the frozen content of an existing document stays allowed.
+- *Logo, signature, stamp.* Uploading needs the feature, including a logo sent with one
+  document; already stored images are kept but not
+  printed on a plan without it (`templates/attribution.ts::planBranding`, applied in
+  `DocumentRenderService.prepare`). The same place appends the service line on a plan with
+  `hasAttribution`. Issued documents are frozen and never change.
+- *Numbering, auto-receipt, suppliers.* Changing a numbering format, turning auto-receipt on, and
+  creating or editing a supplier or linking a new one to a product need the feature. Existing
+  formats and suppliers stay and can be read and removed; auto-receipt is silently skipped on a
+  plan without it. `quantity` and `purchase_price_cents` are never gated: orders depend on them.
+  `GET /products/low-stock` and `/products/stock-value` need `stockInsights`.
+- *Analytics* (`orders/dashboard-plan-window.ts`). Without `analytics` only `status-summary` and
+  `total-turnover` answer, the latter forced to the current UTC month; the other six dashboard
+  routes are 402. With `analyticsHistoryDays` = N the range covers N calendar days ending
+  today (UTC), the same span as the daily series, and
+  `daily-revenue` `days` is capped. Refusal and clamping happen before the cache key is built.
+- *Presets.* Creating one past `maxPresets` is 402; a plan with none cannot generate from a preset.
+
+**Rollout.** These limits apply to every account, including existing free ones. They must ship
+together with billing going live: with `BILLING_ENABLED=false` nobody can buy the higher plan.
 
 **Subscription Lifecycle:**
 
@@ -342,16 +383,56 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
    - Granted default admin user subscription at startup (via seed data)
 
 2. **User Upgrades to Pro**
-   - Clicks "Upgrade" in app
-   - Redirected to Paddle checkout (external)
-   - After payment, Paddle sends webhook
+   - Clicks "Upgrade" in app; the backend creates a Creem checkout for the plan's product
+     with `metadata.userId` and returns `checkoutUrl`
+   - The tab navigates to the Creem-hosted checkout (there is no overlay or frontend SDK);
+     Creem returns the user to `/settings?tab=subscription`
+   - A second checkout is refused while a subscription is live (any status but `canceled`).
+     The guard only sees what a webhook already stored: two checkouts opened before the first
+     payment lands can both be paid. Activation then logs an error naming both subscription
+     ids, and one has to be cancelled in Creem by hand
+   - The redirect back grants nothing: only webhooks change the plan
 
-3. **Paddle Webhook Received**
-   - Event type: `subscription.created` or `subscription.updated`
-   - Webhook signature verified using PADDLE_WEBHOOK_SECRET
-   - Extract `subscription_id`, `status`, `billing_cycle` (start/end dates)
-   - Update UserSubscription record
-   - File: `backend/src/modules/paddle/paddle.service.ts::handleWebhookEvent()`
+3. **Creem Webhook Received** (`POST /creem/webhook`)
+   - `creem-signature` is the hex HMAC-SHA256 of the raw body with `CREEM_WEBHOOK_SECRET`
+   - `checkout.completed`, `subscription.active`, `subscription.paid`, `subscription.trialing`:
+     the plan comes from the product id (`CREEM_PRO_PRODUCT_ID` / `CREEM_BUSINESS_PRODUCT_ID`).
+     The row is found by `metadata.userId` (must be a UUID) or, for renewals without metadata,
+     by the already linked `creem_subscription_id`. An unknown product grants nothing.
+     `checkout.completed` falls back to the checkout's own metadata when the nested
+     subscription's names no user.
+   - **Ordering:** every applied event stores its `created_at` in `creem_event_at`; an event
+     older than that is ignored. Creem retries a failed delivery for hours, so without this a
+     retried payment would revive a cancelled subscription, or an old subscription's event
+     would take the row back from a newer purchase. The cron keeps `creem_event_at`.
+   - `subscription.update`: plan, status and period end are synced; unknown values keep the
+     stored ones
+   - `subscription.scheduled_cancel` (cancel at period end), `subscription.canceled` and
+     `subscription.paused`: only the status and period end change. The plan stays until the
+     hourly cron `downgradeCanceledSubscriptions` finds `creem_status` `canceled` or `paused`
+     with `current_period_end` in the past (or unknown) and resets the row to free
+   - `subscription.past_due` / `subscription.unpaid`: status `past_due`, plan kept while Creem
+     retries the payment
+   - Other events are logged only. Events are not deduplicated by id: a redelivery of the
+     last applied event writes the same state again
+   - A payload with an unexpected shape is logged and acknowledged (a retry cannot fix it);
+     a database failure is a 500 and Creem retries
+   - Files: `backend/src/modules/creem/creem.service.ts::handleWebhookEvent()`,
+     `creem.webhook.ts` (signature, zod payload schemas), `creem.client.ts` (HTTP calls)
+
+   **Changing or cancelling a live subscription** happens in the app, not in Creem's portal
+   (`POST /subscription/change-plan`, `/cancel`, `/resume` → `CreemService.changePlan()`,
+   `cancelSubscription()`, `resumeSubscription()`):
+   - A plan change is allowed while the status is `active` or `trialing`. Moving up charges
+     the prorated difference at once; moving down switches at once with no charge and no
+     credit, and the lower price applies from the next period
+   - A cancellation is always scheduled for the end of the paid period (`scheduled_cancel`):
+     the plan stays, and the hourly cron moves the account to free after Creem reports
+     `canceled`. It can be undone with resume until then. A `past_due` subscription can be
+     cancelled too
+   - Creem's answer is stored at once, with `creem_event_at` left alone, so the webhook that
+     follows is still newer and wins. When Creem fails, nothing is stored (502)
+   - The portal link remains only for replacing the card after a failed payment
 
 4. **Entitlement Check on Action**
    - On every `createOrder()`, `createProduct()`, or template selection, assert limits
@@ -361,40 +442,40 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
      reading the plan without creating a subscription row (no row = free)
    - Throws 402 (Payment Required) if limit exceeded or template restricted
 
-**Paddle Configuration:**
+**Creem Configuration:**
 
 File: `backend/src/config/env.schema.ts`
 
 ```
-PADDLE_API_KEY                 # For server-side API calls
-PADDLE_WEBHOOK_SECRET          # For signature verification
-PADDLE_PRO_PRICE_ID            # Paddle product price for Pro plan
-PADDLE_BUSINESS_PRICE_ID       # Paddle product price for Business plan
-PADDLE_ENVIRONMENT             # "sandbox" or "production"
+CREEM_API_KEY                  # For server-side API calls (x-api-key)
+CREEM_WEBHOOK_SECRET           # For signature verification
+CREEM_PRO_PRODUCT_ID           # Creem product for the Pro plan
+CREEM_BUSINESS_PRODUCT_ID      # Creem product for the Business plan
+CREEM_ENVIRONMENT              # "test" (test-api.creem.io) or "production" (api.creem.io)
 ```
 
 **Webhook Handling:**
 
-File: `backend/src/modules/paddle/paddle.controller.ts`
+File: `backend/src/modules/creem/creem.controller.ts`
 
 ```typescript
-@Post("paddle/webhook")
+@Post("creem/webhook")
 @HttpCode(HttpStatus.OK)
 async webhook(
   @Req() req: RawBodyRequest<Request>,
-  @Headers("paddle-signature") signature?: string,
+  @Headers("creem-signature") signature?: string,
 ) {
   // Step 1: Verify signature (if invalid, return 400 — don't retry)
-  const event = await this.paddleService.verifyWebhook(rawBody, signature);
+  const event = this.creemService.verifyWebhook(rawBody, signature);
 
-  // Step 2: Process event (if error, return 500 — Paddle retries)
-  await this.paddleService.handleWebhookEvent(event);
+  // Step 2: Process event (if error, return 500 — Creem retries)
+  await this.creemService.handleWebhookEvent(event);
 
   return { ok: true };
 }
 ```
 
-**Important:** Signature verification must pass, or the webhook is rejected (400). Processing errors return 500, and Paddle retries.
+**Important:** Signature verification must pass, or the webhook is rejected (400). Processing errors return 500, and Creem retries.
 
 ---
 
@@ -625,7 +706,7 @@ bucket (nginx's address).
 
 File: `backend/src/modules/products/entities/product.entity.ts`
 
-- User-owned catalog of items being sold (SKUs, not Paddle products)
+- User-owned catalog of items being sold (SKUs, not Creem products)
 - Name, price (in cents), currency
 - Used when creating OrderItems
 - Scoped to tenant via `user_id`
@@ -831,7 +912,7 @@ Files:
        │               └─── 1:N ────→ Receipt
        │
        ├─── 1:1 ────→ UserSubscription
-       │               └─── (paddle_subscription_id, paddle_status, plan)
+       │               └─── (creem_subscription_id, creem_status, plan)
        │
        └─── 1:1 ────→ UserSettings
                        └─── (receipt_template_id, logo_url, language)
@@ -909,9 +990,7 @@ Files:
    - Template must be allowed by user's plan
 
 4. **Subscription Entitlements:**
-   - Free plan: max 10 products, 20 orders/month, 4 templates
-   - Pro plan: max 100 products, 500 orders/month, all templates
-   - Business plan: unlimited everything
+   - See the table in *Plans & Limits*: counts, templates, document types, retention and features
 
 5. **Tenant Isolation:**
    - Every query must filter by `user_id`
@@ -952,4 +1031,4 @@ Blank/null/whitespace stored receipt titles use the selected document language a
 
 Branded alone uses the configured accent (`#3B82F6` when unset); Proforma alone displays payment/delivery terms. All nine company fields survive partial company updates. Logo replacement validates and normalizes PNG/JPEG/GIF/static SVG to PNG before overwriting the existing fixed key; a failed upload does not pre-delete the previous logo. Footer title/subtitle save together atomically.
 
-The ten-generated-documents-per-type limit is rechecked under the tenant lock at each successful initial promotion, including multiple already queued candidates. Only eligible oldest generated documents of the promoted document's type are evicted; processing/failed receipts and other tenants are preserved. Eviction first chooses oldest rows, locks the orders of evicted locking documents in id order, then locks/refetches the receipt IDs in stable order before retiring any PDF/logo lease and deleting tenant-scoped pointers and recounting `orders.is_locked` of those orders. Repair and promotion acquire their current receipt row before PDF lease locks. Order-file deletion explicitly requires the tenant and takes tenant → order → receipt-batch → lease locks, with no tenant lock added after an order lock. Replacements do not consume another slot. Outbox terminal reconciliation cannot overwrite a promoted or changed candidate. Late uploads retain durable cleanup intent until settlement, while only live unexpired uploading leases consume the 25 concurrent-upload slots, with per-object backoff and independent PDF/logo sweeps; there is no eager deletion after ambiguous commits. Automatic logos retain each original template cap and spacing, including Corporate 80 px with 10 px bottom margin.
+The plan's per-type document limit is rechecked under the tenant lock at each successful initial promotion, including multiple already queued candidates, one retirement per promotion. Only the eligible oldest generated document of the promoted document's type is deleted or purged; processing/failed receipts and other tenants are preserved. Eviction first chooses oldest rows, locks the orders of evicted locking documents in id order, then locks/refetches the receipt IDs in stable order before retiring any PDF/logo lease and deleting tenant-scoped pointers and recounting `orders.is_locked` of those orders. Repair and promotion acquire their current receipt row before PDF lease locks. Order-file deletion explicitly requires the tenant and takes tenant → order → receipt-batch → lease locks, with no tenant lock added after an order lock. Replacements do not consume another slot. Outbox terminal reconciliation cannot overwrite a promoted or changed candidate. Late uploads retain durable cleanup intent until settlement, while only live unexpired uploading leases consume the 25 concurrent-upload slots, with per-object backoff and independent PDF/logo sweeps; there is no eager deletion after ambiguous commits. Automatic logos retain each original template cap and spacing, including Corporate 80 px with 10 px bottom margin.

@@ -12,6 +12,7 @@ import { CacheService } from "../../common/services/cache.service";
 import { ApiErrorResponse } from "../../common/errors/ApiError";
 import { User } from "../users/entities/user.entity";
 import { SubscriptionService } from "../subscription/subscription.service";
+import { PLAN_LIMITS } from "../subscription/config/plans.config";
 import { SettingsService } from "../settings/services/settings.service";
 
 // Numbering has its own spec; here the order simply gets the next number.
@@ -30,6 +31,7 @@ describe("OrdersService", () => {
   let receiptsService: any;
   let cacheService: any;
   let settingsService: any;
+  let getPlanLimits: jest.Mock;
   const mockUser = { id: "user-1" } as User;
 
   const mockOrder: Partial<Order> = {
@@ -90,6 +92,8 @@ describe("OrdersService", () => {
       delByPattern: jest.fn().mockResolvedValue(undefined),
     };
 
+    getPlanLimits = jest.fn().mockResolvedValue(PLAN_LIMITS.business);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
@@ -110,6 +114,7 @@ describe("OrdersService", () => {
           useValue: {
             assertCanCreateOrder: jest.fn(),
             assertCanCreateOrderInTx: jest.fn(),
+            getPlanLimits,
           },
         },
       ],
@@ -322,6 +327,28 @@ describe("OrdersService", () => {
         "order-1",
         mockUser,
       );
+    });
+
+    it("skips silently when the plan no longer has auto-receipt", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      getPlanLimits.mockResolvedValue(PLAN_LIMITS.free);
+      lockedOrderTransaction(mockOrder);
+
+      const result = await service.confirm("order-1", mockUser);
+
+      expect(result.status).toBe(OrderStatus.CONFIRMED);
+      expect(receiptsService.generateReceipt).not.toHaveBeenCalled();
+    });
+
+    it("still confirms the order when the plan cannot be read", async () => {
+      settingsService.getAutoGenerateReceipt.mockResolvedValue(true);
+      getPlanLimits.mockRejectedValue(new Error("db down"));
+      lockedOrderTransaction(mockOrder);
+
+      const result = await service.confirm("order-1", mockUser);
+
+      expect(result.status).toBe(OrderStatus.CONFIRMED);
+      expect(receiptsService.generateReceipt).not.toHaveBeenCalled();
     });
 
     it("still confirms the order when receipt generation fails", async () => {

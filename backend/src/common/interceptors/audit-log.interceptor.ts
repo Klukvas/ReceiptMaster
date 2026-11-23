@@ -11,12 +11,12 @@ import { AuditLogService } from "../services/audit-log.service";
 const AUDIT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
- * Webhooks from Telegram and Paddle carry third-party payloads (chat messages, customer
+ * Webhooks from Telegram and Creem carry third-party payloads (chat messages, customer
  * and payment data) that the audit log has no use for; only the call itself is recorded.
  * Matched by controller, not by path: Express routes are case-insensitive, so `/TG/webhook`
  * reaches the same handler and a path rule would have to mirror that.
  */
-const WEBHOOK_CONTROLLERS = new Set(["TelegramController", "PaddleController"]);
+const WEBHOOK_CONTROLLERS = new Set(["TelegramController", "CreemController"]);
 
 /** Bodies whose top level is a person or a business contact: its contact fields are personal data. */
 const BODY_SCOPE_BY_CONTROLLER: Readonly<Record<string, MaskScope>> = {

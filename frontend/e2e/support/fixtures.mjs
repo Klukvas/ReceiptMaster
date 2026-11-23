@@ -1,6 +1,9 @@
 // Deterministic API fixtures for the e2e regression suite.
 // Kept intentionally small: only the shapes the exercised screens actually read.
 
+import { fileURLToPath } from "node:url";
+import { loadTsModule } from "./transpile.mjs";
+
 export const USER = {
   id: "user-1",
   email: "e2e@example.com",
@@ -8,18 +11,29 @@ export const USER = {
   created_at: "2026-01-01T00:00:00.000Z",
 };
 
-export const SUBSCRIPTION_STATUS = {
-  plan: "business",
-  usage: { productsCount: 3, ordersThisMonth: 1 },
-  limits: {
-    maxProducts: null,
-    maxOrdersPerMonth: null,
-    allowedTemplateIds: null,
-  },
-  paddleStatus: null,
+// The three plans as `GET /subscription/status` reports their limits: the backend's own
+// PLAN_LIMITS, evaluated from its source, so the fixtures cannot drift from what is enforced.
+const { PLAN_LIMITS } = loadTsModule(
+  fileURLToPath(
+    new URL(
+      "../../../backend/src/modules/subscription/config/plans.config.ts",
+      import.meta.url,
+    ),
+  ),
+);
+
+/** A subscription status for one of the stored plans: "free", "pro" (Start) or "business" (Pro). */
+export const subscriptionStatusFor = (plan, usage = {}) => ({
+  plan,
+  usage: { productsCount: 3, ordersThisMonth: 1, recipientsCount: 1, ...usage },
+  limits: PLAN_LIMITS[plan],
+  billingStatus: null,
   currentPeriodEnd: null,
-  hasPaddleSubscription: false,
-};
+  hasBillingSubscription: false,
+});
+
+// The top plan, so specs that are not about plans see everything unlocked.
+export const SUBSCRIPTION_STATUS = subscriptionStatusFor("business");
 
 // Long names on purpose: a narrow viewport must not be widened by dropdown content.
 export const PRODUCTS = [

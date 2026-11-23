@@ -15,7 +15,6 @@
     "e2e": "node e2e/run.mjs"
   },
   "dependencies": {
-    "@paddle/paddle-js": "^1.6.2",
     "@tanstack/react-query": "^5.86.0",
     "axios": "^1.11.0",
     "class-variance-authority": "^0.7.1",

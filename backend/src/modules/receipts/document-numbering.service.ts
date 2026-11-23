@@ -8,6 +8,7 @@ import {
 } from "./dto/update-numbering.dto";
 import { DocumentType } from "./entities/receipt.entity";
 import { accountTimeZone } from "./account-time-zone";
+import { assertPlanFeature } from "../subscription/plan-access";
 import {
   DEFAULT_NUMBER_FORMAT,
   NumberFormat,
@@ -132,6 +133,7 @@ export class DocumentNumberingService {
    * Saves the format and, when asked, raises the counter. One transaction that takes the
    * counter row before the user row, the order `BUMP_WAYBILL_COUNTER` takes them in, so a
    * concurrent draw can neither deadlock with it nor slip a lower number past the check.
+   * Changing the format is a plan feature; reading it (`list`) is not.
    */
   async update(
     userId: string,
@@ -139,6 +141,7 @@ export class DocumentNumberingService {
     dto: UpdateNumberingDto,
   ): Promise<NumberingSetting> {
     return this.dataSource.transaction(async (manager) => {
+      await assertPlanFeature(manager, userId, "customNumbering");
       // Materializes the row so the FOR UPDATE below has something to lock.
       await manager.query(
         `INSERT INTO "document_counters" ("user_id", "document_type")

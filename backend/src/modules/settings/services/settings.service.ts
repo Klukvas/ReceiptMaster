@@ -5,6 +5,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { UserSettings } from "../entities/user-settings.entity";
 import { CacheService } from "../../../common/services/cache.service";
+import { assertPlanFeature } from "../../subscription/plan-access";
 import {
   DEFAULT_PRIMARY_COLOR,
   resolveReceiptTitle,
@@ -278,6 +279,14 @@ export class SettingsService {
     userId: string,
     enabled: boolean,
   ): Promise<void> {
+    // Only switching it on is gated: a downgraded account must be able to switch it off.
+    if (enabled) {
+      await assertPlanFeature(
+        this.userSettingsRepository.manager,
+        userId,
+        "autoReceipt",
+      );
+    }
     await this.patchSettings(userId, { autoGenerateReceipt: enabled });
   }
 

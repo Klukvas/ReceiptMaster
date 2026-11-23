@@ -117,6 +117,11 @@ export class Receipt {
   @Column({ type: "varchar", length: 64, nullable: true, unique: true })
   public_token?: string | null;
 
+  /** Set when the plan's document limit removed this record's file; the row is kept. */
+  @ApiHideProperty()
+  @Column({ type: "timestamptz", nullable: true })
+  content_purged_at?: Date | null;
+
   @ApiHideProperty()
   @Column({ type: "uuid", nullable: true })
   generation_id?: string;

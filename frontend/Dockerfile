@@ -16,20 +16,15 @@ ARG RELEASE_SHA=development
 ARG VITE_API_URL
 ARG VITE_API_KEY
 ARG VITE_BILLING_ENABLED=false
-ARG VITE_PADDLE_CLIENT_TOKEN
-ARG VITE_PADDLE_ENVIRONMENT=production
 
 # Передаём переменные окружения для Vite во время сборки
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_API_KEY=${VITE_API_KEY}
 ENV VITE_BILLING_ENABLED=${VITE_BILLING_ENABLED}
-ENV VITE_PADDLE_CLIENT_TOKEN=${VITE_PADDLE_CLIENT_TOKEN}
-ENV VITE_PADDLE_ENVIRONMENT=${VITE_PADDLE_ENVIRONMENT}
 
 # Собираем приложение
 RUN case "$VITE_BILLING_ENABLED" in \
-      false) ;; \
-      true) test -n "$VITE_PADDLE_CLIENT_TOKEN" && test "$VITE_PADDLE_ENVIRONMENT" = "production" ;; \
+      true|false) ;; \
       *) echo "VITE_BILLING_ENABLED must be true or false" >&2; exit 1 ;; \
     esac && ./node_modules/.bin/vite build && \
     printf '{"sha":"%s","billingEnabled":%s}\n' "$RELEASE_SHA" "$VITE_BILLING_ENABLED" > dist/release.json

@@ -415,7 +415,7 @@ const SelectedProductCard = ({
  `}
     >
       {/* Top row: product info + qty stepper + remove */}
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start">
         {/* Product info */}
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-medium text-content truncate">
@@ -437,7 +437,7 @@ const SelectedProductCard = ({
         </div>
 
         {/* Quantity stepper */}
-        <div className="flex-shrink-0 flex items-center gap-2">
+        <div className="flex-shrink-0 flex items-center gap-2 self-end sm:self-auto">
           <div className="flex items-center h-8 pointer-coarse:h-[2.875rem] rounded-lg border border-[var(--color-border)] bg-surface-alt overflow-hidden">
             <button
               type="button"

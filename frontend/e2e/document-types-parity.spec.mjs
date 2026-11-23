@@ -57,10 +57,10 @@ export const run = async () => {
 
   // The create dialog falls back to a generic "may replace the oldest" warning when the retention
   // lookup fails; it must not warn for a type the backend never deletes.
-  const { isRetentionExempt } = loadTsModule(BACKEND_RETENTION, BACKEND_STUBS);
-  const backendExempt = Object.keys(specs).filter((type) => isRetentionExempt(type));
+  const { retentionAction } = loadTsModule(BACKEND_RETENTION, BACKEND_STUBS);
+  const backendExempt = Object.keys(specs).filter((type) => retentionAction(type) === "purge");
   results.check(
-    "same set of retention-exempt types (never deleted by the per-type cap)",
+    "same set of retention-exempt types (the cap removes only their file, never the record)",
     sorted(backendExempt) === sorted(frontend.RETENTION_EXEMPT_DOCUMENT_TYPES),
     `${backendExempt} vs ${frontend.RETENTION_EXEMPT_DOCUMENT_TYPES}`,
   );

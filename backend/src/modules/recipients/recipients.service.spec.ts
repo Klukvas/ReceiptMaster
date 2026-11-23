@@ -3,7 +3,8 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { RecipientsService } from "./recipients.service";
 import { Recipient } from "./entities/recipient.entity";
 import { Order } from "../orders/entities/order.entity";
-import { ApiErrorResponse } from "../../common/errors/ApiError";
+import { ApiErrorResponse, ApiErrors } from "../../common/errors/ApiError";
+import { SubscriptionService } from "../subscription/subscription.service";
 import { User } from "../users/entities/user.entity";
 import { SortOrder } from "../../common/dto/pagination.dto";
 import { UpdateRecipientDto } from "./dto/update-recipient.dto";
@@ -18,6 +19,7 @@ const uniqueEmailViolation = () =>
 describe("RecipientsService", () => {
   let service: RecipientsService;
   let recipientsRepo: any;
+  let subscriptionService: { assertCanCreateRecipientInTx: jest.Mock };
   const mockUser = { id: "user-1" } as User;
 
   const mockRecipient: Partial<Recipient> = {
@@ -54,14 +56,22 @@ describe("RecipientsService", () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
     // The email pre-check reads through the manager; route it to the same mock.
+    // create() runs in a transaction; its manager writes through the same mocks.
     recipientsRepo.manager = {
       findOne: jest.fn((_entity, options) => recipientsRepo.findOne(options)),
+      create: jest.fn((_entity, data) => recipientsRepo.create(data)),
+      save: jest.fn((data) => recipientsRepo.save(data)),
+      transaction: jest.fn((run) => run(recipientsRepo.manager)),
+    };
+    subscriptionService = {
+      assertCanCreateRecipientInTx: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RecipientsService,
         { provide: getRepositoryToken(Recipient), useValue: recipientsRepo },
+        { provide: SubscriptionService, useValue: subscriptionService },
       ],
     }).compile();
 
@@ -78,6 +88,23 @@ describe("RecipientsService", () => {
         expect.objectContaining({ ...dto, user_id: "user-1" }),
       );
       expect(result).toBeDefined();
+      expect(
+        subscriptionService.assertCanCreateRecipientInTx,
+      ).toHaveBeenCalledWith(recipientsRepo.manager, "user-1");
+    });
+
+    it("saves nothing once the plan's recipient limit is reached", async () => {
+      subscriptionService.assertCanCreateRecipientInTx.mockRejectedValue(
+        ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10),
+      );
+
+      await expect(
+        service.create({ name: "Jane" } as any, mockUser),
+      ).rejects.toMatchObject({
+        statusCode: 402,
+        errorCode: "RECIPIENT_LIMIT_EXCEEDED",
+      });
+      expect(recipientsRepo.save).not.toHaveBeenCalled();
     });
   });
 
@@ -115,6 +142,54 @@ describe("RecipientsService", () => {
       });
       expect(manager.query.mock.calls[0][1][0]).toMatch(/^recipient:/);
       expect(manager.insert).toHaveBeenCalledTimes(1);
+      expect(
+        subscriptionService.assertCanCreateRecipientInTx,
+      ).toHaveBeenCalledWith(manager, "user-1");
+    });
+
+    it("refuses a new recipient over the plan limit and stores no key", async () => {
+      const manager = transactionManager(null);
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+      subscriptionService.assertCanCreateRecipientInTx.mockRejectedValue(
+        ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10),
+      );
+
+      await expect(
+        service.createWithIdempotencyKey(
+          { name: "Jane" } as any,
+          mockUser,
+          "key-1",
+        ),
+      ).rejects.toMatchObject({ errorCode: "RECIPIENT_LIMIT_EXCEEDED" });
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it("replays a stored create even when the plan limit is now reached", async () => {
+      const manager = transactionManager({
+        id: "row-1",
+        response: { id: "rec-1", name: "Jane" },
+        expires_at: new Date(Date.now() + 60_000),
+      });
+      recipientsRepo.manager = {
+        transaction: jest.fn((run) => run(manager)),
+      };
+      subscriptionService.assertCanCreateRecipientInTx.mockRejectedValue(
+        ApiErrors.RECIPIENT_LIMIT_EXCEEDED(10),
+      );
+
+      const result = await service.createWithIdempotencyKey(
+        { name: "Jane" } as any,
+        mockUser,
+        "key-1",
+      );
+
+      expect(result.replayed).toBe(true);
+      expect(
+        subscriptionService.assertCanCreateRecipientInTx,
+      ).not.toHaveBeenCalled();
     });
 
     it("replays a stored response without saving a second recipient", async () => {

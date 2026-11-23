@@ -1,4 +1,4 @@
-import { usePaddle } from "../../providers/PaddleProvider";
+import { useBilling } from "../../providers/BillingProvider";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Moon, Sun, Menu, X } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -19,7 +19,7 @@ interface LandingShellProps {
 
 export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { billingEnabled } = usePaddle();
+  const { billingEnabled } = useBilling();
   const { isAuthenticated } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,7 +45,13 @@ export const LandingShell: React.FC<LandingShellProps> = ({ children }) => {
   // fonts settle, because they reflow the text above the target.
   useEffect(() => {
     if (!hash) return;
-    const id = decodeURIComponent(hash.slice(1));
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      // A malformed URL fragment must not take down the whole landing page.
+      return;
+    }
     const jumpToTarget = () =>
       document
         .getElementById(id)

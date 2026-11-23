@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { documentLabelKey } from "../../lib/document-types";
 import {
@@ -52,18 +52,30 @@ const ANNOUNCE_DELAY_MS = 800;
 const PADDING_EXAMPLE_VALUE = 7;
 const INVALID_PREVIEW = "—";
 
-const focusField = (id: string) => {
-  // The field is re-rendered with its error first; focusing after that keeps the caret there.
-  setTimeout(() => document.getElementById(id)?.focus(), 0);
-};
-
 const borderOf = (hasError: boolean) =>
   hasError ? "border-[var(--color-danger)]" : "border-[var(--color-border)]";
 
 /** One document type's numbering: prefix, zero padding, year and an optional higher start number. */
-export function NumberingRow({ setting }: { setting: NumberingSetting }) {
+export function NumberingRow({
+  setting,
+  isLocked = false,
+}: {
+  setting: NumberingSetting;
+  /** The plan has no custom numbering: the format stays readable, nothing can be edited. */
+  isLocked?: boolean;
+}) {
   const { t } = useTranslation();
   const update = useUpdateDocumentNumbering();
+  const focusAfterSave = useRef<{ id: string; required: boolean } | null>(null);
+  useEffect(() => {
+    if (update.isPending) return;
+    const target = focusAfterSave.current;
+    focusAfterSave.current = null;
+    // Disabling a focused input for an Enter-submit moves focus to the body.
+    if (target && (target.required || document.activeElement === document.body)) {
+      document.getElementById(target.id)?.focus();
+    }
+  }, [update.isPending]);
   const [form, setForm] = useState<RowForm>(() => formOf(setting));
   const [serverErrors, setServerErrors] = useState<ServerErrors>({});
   // A refused start can reveal a higher minimum than the loaded setting (numbers issued meanwhile).
@@ -121,6 +133,10 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
 
   const save = () => {
     if (!canSave) return;
+    const activeId = document.activeElement?.id;
+    focusAfterSave.current = activeId?.startsWith(`numbering-${type}-`)
+      ? { id: activeId, required: false }
+      : null;
     setServerErrors({});
     update.mutate(
       {
@@ -146,7 +162,10 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
           if (refusal.minStart !== undefined) setRefusedMinStart(refusal.minStart);
           if (refusal.field) {
             setServerErrors({ [refusal.field]: refusal.message });
-            focusField(idOf(refusal.field === "startNumber" ? "start" : refusal.field));
+            focusAfterSave.current = {
+              id: idOf(refusal.field === "startNumber" ? "start" : refusal.field),
+              required: true,
+            };
           } else toast.error(refusal.message);
         },
       },
@@ -167,7 +186,8 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
       <h3 id={idOf("title")} className="mb-3 text-sm font-semibold text-content">
         {t(documentLabelKey(type))}
       </h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* The response replaces the draft, so edits must wait until this save settles. */}
+      <fieldset disabled={update.isPending || isLocked} className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label htmlFor={idOf("prefix")} className={LABEL_CLASS}>
             {t("numbering.prefix")}
@@ -288,7 +308,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
           </p>
           <FieldError id={idOf("reset-error")} message={errorOf("resetEveryYear")} />
         </div>
-      </div>
+      </fieldset>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-content-secondary">
           {t("numbering.preview")}:{" "}
@@ -299,7 +319,7 @@ export function NumberingRow({ setting }: { setting: NumberingSetting }) {
         <span role="status" className="sr-only" data-testid={`numbering-announce-${type}`}>
           {isDirty ? `${t("numbering.preview")}: ${announcedPreview}` : ""}
         </span>
-        <Button type="submit" size="sm" disabled={!canSave} loading={update.isPending} softDisabled>
+        <Button type="submit" size="sm" disabled={!canSave || isLocked} loading={update.isPending} softDisabled>
           {t("common.save")}
         </Button>
       </div>

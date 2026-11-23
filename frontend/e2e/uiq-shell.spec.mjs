@@ -4,18 +4,16 @@
 // ConfirmModal are accessible and safe while a request is running.
 
 import { BASE_URL, createState, installApiMocks, withPage } from "./support/harness.mjs";
-import { SUBSCRIPTION_STATUS } from "./support/fixtures.mjs";
+import { subscriptionStatusFor } from "./support/fixtures.mjs";
 import { Results } from "./support/runner.mjs";
 
 const DESKTOP = { viewport: { width: 1280, height: 900 } };
 const PHONE = { viewport: { width: 375, height: 812 } };
 
-const FREE_AT_LIMIT = {
-  ...SUBSCRIPTION_STATUS,
-  plan: "free",
-  usage: { productsCount: 10, ordersThisMonth: 4 },
-  limits: { maxProducts: 10, maxOrdersPerMonth: 20, allowedTemplateIds: null },
-};
+const FREE_AT_LIMIT = subscriptionStatusFor("free", {
+  productsCount: 10,
+  ordersThisMonth: 4,
+});
 
 const json = (route, status, body) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });

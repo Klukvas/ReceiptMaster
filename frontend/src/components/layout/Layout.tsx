@@ -4,6 +4,7 @@ import { Menu, LogOut } from "lucide-react";
 import { clsx } from "clsx";
 import { useAuth } from "../../hooks/useAuth";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useSubscriptionRefreshOnReturn } from "../../hooks/useSubscriptionRefresh";
 import { Sidebar } from "./Sidebar";
 import { OfflineBanner } from "./OfflineBanner";
 import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
@@ -59,6 +60,7 @@ export const Layout = ({ children }: LayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
+  useSubscriptionRefreshOnReturn();
 
   useEffect(() => {
     const previous = lastShownPathname;

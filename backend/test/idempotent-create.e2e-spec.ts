@@ -31,6 +31,10 @@ import {
   RestrictedAppDatabase,
   openRestrictedAppDatabase,
 } from "./helpers/restricted-app-database";
+import { useFreePlanWithoutSubscription } from "./helpers/plan-overrides";
+
+// The quota tests below are about accounts without a subscription row on the free plan.
+useFreePlanWithoutSubscription();
 
 // Services run as a restricted role inside the production tenant query context.
 // Concurrent requests are parked on the real advisory lock (an admin transaction
@@ -56,7 +60,10 @@ describeIsolatedPostgres(
         app,
       );
       products = new ProductsService(app.getRepository(Product), subscription);
-      recipients = new RecipientsService(app.getRepository(Recipient));
+      recipients = new RecipientsService(
+        app.getRepository(Recipient),
+        subscription,
+      );
       orders = new OrdersService(
         app.getRepository(Order),
         app.getRepository(OrderItem),

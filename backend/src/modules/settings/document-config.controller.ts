@@ -120,8 +120,8 @@ export class DocumentConfigController {
   @ApiDataResponse(201, "DocumentPresetResponse", "Created preset")
   @ApiFailureResponses({
     400: "Invalid draft, envelope or logo",
-    402: "Template not available on the current plan",
-    409: "Maximum 20 presets, or a preset with this name already exists",
+    402: "The plan's preset limit is reached (PRESET_LIMIT_EXCEEDED), or the logo or template is outside the plan",
+    409: "A preset with this name already exists",
     413: TOO_LARGE,
   })
   async create(

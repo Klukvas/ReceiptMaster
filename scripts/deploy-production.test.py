@@ -6,12 +6,13 @@ import json
 import pathlib
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
 
 SCRIPT = pathlib.Path(__file__).with_name('deploy-production.sh').read_text().split("<<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
-PREFIX = SCRIPT.split('phase, workdir, sha, run_id, registry =', 1)[0]
+PREFIX = SCRIPT.split('phase, workdir, sha, run_id, registry,', 1)[0]
 MAIN = SCRIPT[len(PREFIX):]
 
 class ReleasePrecheckTests(unittest.TestCase):
@@ -253,7 +254,7 @@ class ReleasePrecheckTests(unittest.TestCase):
         with patch.dict(os.environ,{'IMAGE_TAG':'checked-original','DOCKERHUB_USERNAME':'checked-registry'}):
             command = ['docker','compose','--project-name','context-fixture','--project-directory',str(self.work),'--env-file',str(envfile),'-f',str(config)]
             before = resolve(command)
-            scope = {'os':os,'json':json,'project':'context-fixture','work':self.work,'envfiles':[envfile],'configs':[str(config)],'release':self.work,'sha':'b'*40,'registry':'new-registry','old_images':{'backend':'old-backend','frontend':'old-frontend'},'release_override':self.ns['release_override']}
+            scope = {'os':os,'json':json,'project':'context-fixture','work':self.work,'envfiles':[envfile],'configs':[str(config)],'release':self.work,'sha':'b'*40,'registry':'new-registry','old_images':{'backend':'old-backend','frontend':'old-frontend'},'billing':False,'release_override':self.ns['release_override']}
             exec(compile(ast.Module(body=selected,type_ignores=[]),'<actual-release-command-construction>','exec'),scope)
             after = resolve(scope['original'])
             deployed = resolve(scope['new'])
@@ -299,6 +300,23 @@ class ReleasePrecheckTests(unittest.TestCase):
         text = json.dumps(self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'}))
         self.assertIn('${DB_OWNER_PASSWORD:-${DB_PASSWORD}}',text)
         self.assertIn('${DB_BACKUP_PASSWORD:-${DB_PASSWORD}}',text)
+    def test_billing_stays_off_unless_the_release_asks_for_it(self):
+        backend = self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'})['services']['backend']['environment']
+        self.assertEqual(backend['BILLING_ENABLED'],'false')
+        self.assertFalse([key for key in backend if key.startswith('CREEM_')])
+    def test_billing_release_maps_the_keys_as_placeholders(self):
+        backend = self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'}, True)['services']['backend']['environment']
+        self.assertEqual(backend['BILLING_ENABLED'],'true')
+        self.assertEqual(backend['CREEM_ENVIRONMENT'],'production')
+        for key in self.ns['BILLING_SECRETS']: self.assertEqual(backend[key],'${' + key + '}')
+    def test_billing_release_needs_every_key_in_the_server_environment(self):
+        complete = ''.join(key + '=synthetic\n' for key in self.ns['BILLING_SECRETS'])
+        first = self.work / 'first.env'; first.write_text(complete)
+        self.ns['require_billing_configuration']([first])
+        emptied = self.work / 'second.env'; emptied.write_text('CREEM_WEBHOOK_SECRET=""\n# CREEM_API_KEY=commented\n')
+        with self.assertRaises(RuntimeError) as caught: self.ns['require_billing_configuration']([first, emptied])
+        self.assertEqual(str(caught.exception),'Billing is enabled but the production environment lacks CREEM_WEBHOOK_SECRET')
+        self.assertNotIn('synthetic',str(caught.exception))
     def test_release_gives_the_backend_the_public_origin(self):
         services = self.ns['release_override']({'backend':'new-backend','frontend':'new-frontend'})['services']
         self.assertEqual(services['backend']['environment']['FRONTEND_URL'],'https://receiptmaster.org')
@@ -675,7 +693,7 @@ class ReleaseFlowCleanupTests(unittest.TestCase):
         (self.earlier / 'release.override.json').write_text('{}')
         self.ns = {'__file__': 'deploy-production.sh'}; exec(compile(PREFIX, '<release>', 'exec'), self.ns)
         self.commands = []; self.fails = lambda args: False; self.lock_held_during_cleanup = None
-        self.running = dict(self.OLD); self.public_sha = self.SHA; self.output = ''
+        self.running = dict(self.OLD); self.public_sha = self.SHA; self.output = ''; self.billing = []; self.public_billing = False
         self.listing = '\n'.join(['klukvas/receiptmaster-backend:' + self.SHA + ' sha256:new', 'klukvas/receiptmaster-frontend:' + self.SHA + ' sha256:new', 'klukvas/receiptmaster-backend:' + 'f' * 40 + ' sha256:stale']).encode()
         def container(name, env=()): return {'Id': name, 'Image': self.OLD.get(name, 'sha256:' + name), 'Config': {'Env': list(env)}}
         state = (container('backend', ['DB_USERNAME=rm_app']), container('frontend'), container('postgres'), container('redis'), 'existing', self.work, [str(self.earlier / 'release.override.json')], [self.work / '.env'], 'existing-network', [], 'a' * 32)
@@ -686,8 +704,8 @@ class ReleaseFlowCleanupTests(unittest.TestCase):
             def __exit__(self, *args): return False
             def read(self): return self.body
         def open_https(url, **kwargs):
-            if 'billing/config' in url: return Response(b'{"billingEnabled": false}')
-            if 'release.json' in url: return Response(json.dumps({'sha': self.public_sha, 'billingEnabled': False}).encode())
+            if 'billing/config' in url: return Response(json.dumps({'billingEnabled': self.public_billing}).encode())
+            if 'release.json' in url: return Response(json.dumps({'sha': self.public_sha, 'billingEnabled': self.public_billing}).encode())
             return Response(b'<script type="module" src="/assets/app.js"></script>')
         def docker_exec(args, **kwargs):
             if args[-1].endswith('-Fc'): kwargs['stdout'].write(b'archive')
@@ -716,7 +734,7 @@ class ReleaseFlowCleanupTests(unittest.TestCase):
     def deploy(self, phase='deploy'):
         output = io.StringIO()
         try:
-            with patch.object(sys, 'argv', ['-', phase, str(self.work), self.SHA, self.RUN, 'klukvas']), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            with patch.object(sys, 'argv', ['-', phase, str(self.work), self.SHA, self.RUN, 'klukvas'] + self.billing), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
                 exec(compile(MAIN, '<release>', 'exec'), self.ns)
         finally:
             self.output = output.getvalue()
@@ -732,6 +750,27 @@ class ReleaseFlowCleanupTests(unittest.TestCase):
         self.assertLess(self.output.index('DEPLOY PASS'), self.output.index('IMAGE CLEANUP: removed 1 of 1'))
         self.assertEqual(self.cleanup_commands()[-1], ['docker','rmi','klukvas/receiptmaster-backend:' + 'f' * 40])
         self.assertTrue(self.lock_held_during_cleanup)
+    def test_billing_release_passes_only_when_production_reports_billing_on(self):
+        (self.work / '.env').write_text(''.join(key + '=synthetic\n' for key in self.ns['BILLING_SECRETS']))
+        self.billing = ['true']; self.public_billing = True
+        self.deploy()
+        self.assertIn('billing enabled', self.output)
+        self.assertEqual(json.loads(self.override.read_text())['services']['backend']['environment']['BILLING_ENABLED'], 'true')
+        self.assertNotIn('synthetic', self.override.read_text())
+    def test_billing_release_with_billing_still_off_in_production_rolls_back(self):
+        (self.work / '.env').write_text(''.join(key + '=synthetic\n' for key in self.ns['BILLING_SECRETS']))
+        self.billing = ['true']; self.ns['time'] = types.SimpleNamespace(time=iter([0, 200, 400, 600, 800, 1000]).__next__, monotonic=time.monotonic, sleep=lambda seconds: None)
+        self.assert_release_failed_without_cleanup()
+    def test_billing_release_without_keys_blocks_before_any_change(self):
+        (self.work / '.env').write_text('CREEM_API_KEY=synthetic\n')
+        self.billing = ['true']
+        self.assert_release_failed_without_cleanup()
+        self.assertIn('CREEM_WEBHOOK_SECRET', self.output)
+        self.assertEqual(self.commands, [])
+    def test_unknown_billing_flag_is_refused(self):
+        self.billing = ['yes']
+        with self.assertRaises(SystemExit) as caught: self.deploy()
+        self.assertEqual(caught.exception.code, 'Invalid release arguments')
     def test_cleanup_keeps_every_release_directory(self):
         self.deploy()
         self.assertTrue((self.earlier / 'release.override.json').is_file())

@@ -42,6 +42,56 @@ export const ApiErrors = {
       "BILLING_DISABLED",
       503,
     ),
+  /** Billing is on but its configuration is incomplete; the detail goes to the log only. */
+  BILLING_UNAVAILABLE: () =>
+    new ApiErrorResponse(
+      "Payments are currently unavailable",
+      "BILLING_UNAVAILABLE",
+      503,
+    ),
+  PAYMENT_PROVIDER_FAILED: () =>
+    new ApiErrorResponse(
+      "Payment provider request failed",
+      "PAYMENT_PROVIDER_FAILED",
+      502,
+    ),
+  SUBSCRIPTION_ALREADY_EXISTS: () =>
+    new ApiErrorResponse(
+      "A subscription already exists. Change the plan in the subscription settings.",
+      "SUBSCRIPTION_ALREADY_EXISTS",
+      400,
+    ),
+  SUBSCRIPTION_NOT_FOUND: () =>
+    new ApiErrorResponse(
+      "No active subscription found",
+      "SUBSCRIPTION_NOT_FOUND",
+      400,
+    ),
+  SUBSCRIPTION_PLAN_UNCHANGED: () =>
+    new ApiErrorResponse(
+      "The subscription is already on this plan",
+      "SUBSCRIPTION_PLAN_UNCHANGED",
+      400,
+    ),
+  /** The action does not apply to the subscription's current billing status. */
+  SUBSCRIPTION_STATE_CONFLICT: () =>
+    new ApiErrorResponse(
+      "This action is not available for the subscription right now",
+      "SUBSCRIPTION_STATE_CONFLICT",
+      409,
+    ),
+  WEBHOOK_SIGNATURE_INVALID: () =>
+    new ApiErrorResponse(
+      "Invalid webhook signature",
+      "WEBHOOK_SIGNATURE_INVALID",
+      400,
+    ),
+  WEBHOOK_PAYLOAD_INVALID: () =>
+    new ApiErrorResponse(
+      "Invalid webhook payload",
+      "WEBHOOK_PAYLOAD_INVALID",
+      400,
+    ),
   // User errors
   USER_ALREADY_EXISTS: (email: string) =>
     new ApiErrorResponse(
@@ -300,6 +350,44 @@ export const ApiErrors = {
       `Template "${templateId}" is not available on your current plan`,
       "TEMPLATE_PLAN_RESTRICTED",
       402,
+    ),
+
+  RECIPIENT_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Recipient limit exceeded. Your plan allows up to ${limit} recipients`,
+      "RECIPIENT_LIMIT_EXCEEDED",
+      402,
+      { limit },
+    ),
+  PRESET_LIMIT_EXCEEDED: (limit: number) =>
+    new ApiErrorResponse(
+      `Preset limit exceeded. Your plan allows up to ${limit} presets`,
+      "PRESET_LIMIT_EXCEEDED",
+      402,
+      { limit },
+    ),
+  DOCUMENT_TYPE_PLAN_RESTRICTED: (type: string) =>
+    new ApiErrorResponse(
+      `Document type "${type}" is not available on your current plan`,
+      "DOCUMENT_TYPE_PLAN_RESTRICTED",
+      402,
+      { documentType: type },
+    ),
+  /** `feature` is machine-readable so the client can name what the plan lacks. */
+  PLAN_FEATURE_RESTRICTED: (feature: string) =>
+    new ApiErrorResponse(
+      "This feature is not available on your current plan",
+      "PLAN_FEATURE_RESTRICTED",
+      402,
+      { feature },
+    ),
+  /** The record stays, but its PDF was removed when the plan's document limit was passed. */
+  DOCUMENT_CONTENT_PURGED: (id: string) =>
+    new ApiErrorResponse(
+      "This document's file is no longer stored",
+      "DOCUMENT_CONTENT_PURGED",
+      410,
+      { id },
     ),
 
   // General errors
