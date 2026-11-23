@@ -1,6 +1,6 @@
 # Production release
 
-Last Updated: 2026-10-31
+Last Updated: 2026-11-23
 
 A trusted push to `main` runs verification, then publishes the frontend and backend
 Docker Hub images under the same full commit SHA. Pull requests cannot publish or deploy.
@@ -8,9 +8,10 @@ Verification includes CI's `test-release-gate` job, which runs
 `python3 scripts/deploy-production.test.py` on every pull request and push. It drives this
 script against fake Docker plus real `docker compose config` rendering and never contacts
 production. A failure there stops image publication and therefore deployment.
-The current release deliberately has payments disabled: `BILLING_ENABLED=false` on the
-backend and `VITE_BILLING_ENABLED=false` in the frontend image. Creem secrets are not
-required for this release. Existing plan records and quota enforcement remain active.
+Payments follow the repository variable `BILLING_ENABLED`. Unless it is exactly `true`, the
+release sets `BILLING_ENABLED=false` on the backend and builds the frontend image with
+`VITE_BILLING_ENABLED=false`, and Creem secrets are not required. Plan records and quota
+enforcement are active either way. See *Enabling payments* below.
 
 The workflow uses the existing trusted `APP_HOST`, `SSH_USER`, `SSH_KEY` and Docker Hub
 configuration. It does not rewrite production `.env`, reset a repository, remove orphan
@@ -31,7 +32,7 @@ is not repaired automatically.
 3. The script takes a host lock, repeats discovery, captures actual old image IDs and
    retains local rollback tags. It pulls and checks both new image SHA labels. Existing
    Compose files remain the base; a release-local override supplies the two images,
-   disabled billing, `AUTO_RUN_MIGRATIONS=false`, the public `FRONTEND_URL`, the one-shot
+   the billing flag (with the Creem keys as placeholders when it is on), `AUTO_RUN_MIGRATIONS=false`, the public `FRONTEND_URL`, the one-shot
    `migrate` service and the `postgres`/`db-backup` credential mapping. Credentials stay
    `${...}` placeholders, never values. The backend refuses to start in production without
    that origin, so public receipt links cannot silently point at localhost.
@@ -51,7 +52,7 @@ is not repaired automatically.
    table and sequence. No automatic DOWN, role provisioning or data cleanup occurs.
 6. Only backend and frontend are recreated, with `--no-deps --no-build --pull never`.
    The frontend is recreated to refresh nginx's backend DNS. Success requires API DB/
-   Redis/storage health, billing capability false, public TLS frontend and JS asset,
+   Redis/storage health, the billing capability the release asked for, public TLS frontend and JS asset,
    cache-busted `release.json` matching the SHA, and running image identities.
 7. Only after that success, still under the host lock, it removes old application images. The
    last three released pairs and the captured old pair stay, with all of their tags. Removal is
@@ -89,13 +90,21 @@ bypasses RLS. Until `REQUIRE_RESTRICTED_APP_ROLE` is set this is a warning; afte
 blocks the release. The script never provisions roles; `backend/db/roles/README.md` is the
 operator runbook, and integration tests cover the scripts it uses.
 
-## Enabling payments later
+## Enabling payments
 
-This requires an explicit configuration/release change. Set strict backend/frontend flags
-to true, securely configure backend `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`,
-`CREEM_PRO_PRODUCT_ID`, `CREEM_BUSINESS_PRODUCT_ID`, and explicitly
-`CREEM_ENVIRONMENT=production`. In the Creem dashboard point the webhook at
-`https://<host>/creem/webhook`. The frontend needs no provider key: checkout and the billing
+1. On the production host add `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`,
+   `CREEM_PRO_PRODUCT_ID` and `CREEM_BUSINESS_PRODUCT_ID` (live values) to the environment
+   file the stack already uses. Nothing restarts: the running configuration does not read them.
+2. In the Creem dashboard (live mode) point the webhook at `https://<host>/creem/webhook`.
+3. Set the repository variable `BILLING_ENABLED` to `true`.
+4. Push to `main`.
+
+The release then builds the frontend with billing on, and the override sets
+`BILLING_ENABLED=true`, `CREEM_ENVIRONMENT=production` and maps the four keys from the
+server's environment file. The precheck stops before any change if a key is missing or
+empty, naming the key and never its value. The release passes only if the public API and
+`release.json` both report billing on; otherwise it rolls back. Removing the variable and
+releasing again turns payments off. The frontend needs no provider key: checkout and the billing
 portal are Creem-hosted pages the backend returns links to. Keep secrets out of chat and
 source control. The frontend also requires the server capability to be enabled before it
 shows any purchase surface.

@@ -1,6 +1,6 @@
 # Backend Patterns & Architecture
 
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-23
 
 This document describes how the ReceiptMaster backend is structured, the patterns used, and how to build new features.
 
@@ -1310,6 +1310,9 @@ direct webhook handling and scheduled subscription downgrades. Stored entitlemen
 quota enforcement remain independent. See `.github/DEPLOYMENT.md` and
 `scripts/deploy-production.sh` for locked additive migration, verified backup, immutable
 app-only deployment and retained-image rollback without production env rewrites.
+A release turns payments on only when the repository variable `BILLING_ENABLED` is `true`: the
+frontend image is built with billing on, the release override maps the Creem keys from the
+server's environment file, and the release fails unless production then reports billing on.
 
 The server's Compose file and `.env` are not updated by releases, so anything the new backend needs
 from them belongs in `release_override()` in that script. `FRONTEND_URL` is set there as the literal

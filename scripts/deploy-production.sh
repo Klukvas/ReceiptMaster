@@ -70,12 +70,32 @@ def migration_command(compose, code, identity, app_role, check_only=False, run_i
     if check_only: flags += ['-e', 'RELEASE_CHECK_ONLY=true']
     return compose + ['run', '--rm', '--no-deps', '-T', '--name', name, '--entrypoint', 'node'] + flags + ['migrate', '-e', code]
 
-def release_override(images):
+BILLING_SECRETS = ('CREEM_API_KEY', 'CREEM_WEBHOOK_SECRET', 'CREEM_PRO_PRODUCT_ID', 'CREEM_BUSINESS_PRODUCT_ID')
+
+def billing_environment(billing):
+    if not billing:
+        return {'BILLING_ENABLED': 'false'}
+    # The server's Compose file predates Creem, so the release maps the keys from the server's own environment file.
+    return {'BILLING_ENABLED': 'true', 'CREEM_ENVIRONMENT': 'production', **{key: '${' + key + '}' for key in BILLING_SECRETS}}
+
+def require_billing_configuration(envfiles):
+    # Names only: a value is never printed. A later file overrides an earlier one, as in Compose.
+    values = {}
+    for path in envfiles:
+        for line in path.read_text().splitlines():
+            key, separator, value = line.strip().removeprefix('export ').partition('=')
+            if separator and not key.startswith('#'):
+                values[key.strip()] = value.strip().strip('\'"')
+    missing = [key for key in BILLING_SECRETS if not values.get(key)]
+    if missing:
+        raise RuntimeError('Billing is enabled but the production environment lacks ' + ', '.join(missing))
+
+def release_override(images, billing=False):
     # The server's Compose file is not updated by releases, so role separation and the public origin live here.
     # Credentials stay ${...} placeholders: this file is kept on disk and must never hold a secret.
     # postgres and db-backup are only ever recreated by an operator; --no-deps keeps the release off them.
     return {'services': {
-        'backend': {'image': images['backend'], 'environment': {'BILLING_ENABLED': 'false', 'AUTO_RUN_MIGRATIONS': 'false', 'FRONTEND_URL': PUBLIC_ORIGIN}},
+        'backend': {'image': images['backend'], 'environment': {**billing_environment(billing), 'AUTO_RUN_MIGRATIONS': 'false', 'FRONTEND_URL': PUBLIC_ORIGIN}},
         'frontend': {'image': images['frontend']},
         'postgres': {'environment': {
             'POSTGRES_USER': '${POSTGRES_BOOTSTRAP_USER:-postgres}',
@@ -299,11 +319,14 @@ def precheck(workdir, check_lock=True):
     print('PRECHECK PASS: project, existing environment, retained images, database tools and baseline health')
     return backend, frontend, pg, redis, project, actual_workdir, configs, envfiles, next(iter(networks)), history, database_identity
 
-phase, workdir, sha, run_id, registry = sys.argv[1:]
-if phase not in ('precheck', 'deploy') or not re.fullmatch('[0-9a-f]{40}', sha) or not re.fullmatch('[0-9]+-[0-9]+', run_id) or not re.fullmatch('[a-z0-9_-]+', registry):
+phase, workdir, sha, run_id, registry, *billing_flag = sys.argv[1:]
+if billing_flag not in ([], ['true'], ['false']) or phase not in ('precheck', 'deploy') or not re.fullmatch('[0-9a-f]{40}', sha) or not re.fullmatch('[0-9]+-[0-9]+', run_id) or not re.fullmatch('[a-z0-9_-]+', registry):
     raise SystemExit('Invalid release arguments')
 try:
+    billing = billing_flag == ['true']
     state = precheck(workdir)
+    if billing:
+        require_billing_configuration(state[7])
     if phase == 'precheck':
         raise SystemExit(0)
     backend, frontend, pg, redis, project, work, configs, envfiles, network, history, database_identity = state
@@ -319,6 +342,8 @@ try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = precheck(str(work), check_lock=False)
         backend, frontend, pg, redis, project, work, configs, envfiles, network, history, database_identity = state
+        if billing:
+            require_billing_configuration(envfiles)
         old_images = {'backend': backend['Image'], 'frontend': frontend['Image']}
         for service, image in old_images.items():
             run(['docker', 'tag', image, 'receiptmaster-rollback-' + service + ':' + run_id])
@@ -329,7 +354,7 @@ try:
             if labels.get('org.opencontainers.image.version') != sha:
                 raise RuntimeError('Published image version mismatch')
         override = release / 'release.override.json'
-        override.write_text(json.dumps(release_override(images)))
+        override.write_text(json.dumps(release_override(images, billing)))
         base = ['docker', 'compose', '--project-name', project, '--project-directory', str(work)] + sum((['--env-file', str(path)] for path in envfiles), [])
         original = base + sum((['-f', path] for path in configs), [])
         new = original + ['-f', str(override)]
@@ -390,11 +415,11 @@ await assertRuntimePrivileges();
                 try:
                     health('https://receiptmaster.org/api/v1/health')
                     with open_https('https://receiptmaster.org/api/v1/billing/config', timeout=12) as response:
-                        if json.load(response).get('billingEnabled') is not False:
-                            raise RuntimeError('Billing must be disabled')
+                        if json.load(response).get('billingEnabled') is not billing:
+                            raise RuntimeError('Billing capability differs from the release')
                     with open_https('https://receiptmaster.org/release.json?release=' + sha, timeout=12) as response:
                         marker = json.load(response)
-                        if marker.get('sha') != sha or marker.get('billingEnabled') is not False:
+                        if marker.get('sha') != sha or marker.get('billingEnabled') is not billing:
                             raise RuntimeError('Public frontend release version mismatch')
                     with open_https('https://receiptmaster.org/?release=' + sha, timeout=12) as response:
                         html = response.read().decode()
@@ -409,7 +434,7 @@ await assertRuntimePrivileges();
                 except Exception:
                     if time.time() >= deadline: raise RuntimeError('Release health deadline exceeded')
                     time.sleep(3)
-            print('DEPLOY PASS: immutable image pair, billing disabled, API/dependencies, TLS frontend/JS health')
+            print('DEPLOY PASS: immutable image pair, billing ' + ('enabled' if billing else 'disabled') + ', API/dependencies, TLS frontend/JS health')
         except Exception as deploy_error:
             rollback_after_failure(deploy_error, stopped and not isinstance(deploy_error, MigrationCompletionUnknown), original, release, old_images)
         # rollback_after_failure always raises, so only a verified release reaches this line.

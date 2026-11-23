@@ -467,7 +467,7 @@ jobs:
             RELEASE_SHA=${{ github.sha }}
             VITE_API_URL=${{ secrets.FRONTEND_API_URL }}
             VITE_API_KEY=${{ secrets.FRONTEND_API_KEY }}
-            VITE_BILLING_ENABLED=false
+            VITE_BILLING_ENABLED=${{ vars.BILLING_ENABLED == 'true' && 'true' || 'false' }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/receiptmaster-frontend:${{ github.sha }}
           labels: |
@@ -530,7 +530,7 @@ jobs:
           script_stop: true
           script: |
             set -eu
-            printf '%s' '${{ steps.release.outputs.precheck }}' | base64 -d | bash -s -- precheck /opt/market/market '${{ github.sha }}' '${{ github.run_id }}-${{ github.run_attempt }}' '${{ secrets.DOCKERHUB_USERNAME }}'
+            printf '%s' '${{ steps.release.outputs.precheck }}' | base64 -d | bash -s -- precheck /opt/market/market '${{ github.sha }}' '${{ github.run_id }}-${{ github.run_attempt }}' '${{ secrets.DOCKERHUB_USERNAME }}' '${{ vars.BILLING_ENABLED == 'true' && 'true' || 'false' }}'
 
       - name: Transfer unique allowlisted release
         uses: appleboy/scp-action@v0.1.7
@@ -556,4 +556,4 @@ jobs:
             sha256sum --check release.tar.gz.sha256
             test "$(tar -tzf release.tar.gz | sort | tr '\n' ' ')" = 'deploy-production.sh docker-compose.production.yml release.sha '
             tar -xzf release.tar.gz
-            bash deploy-production.sh deploy /opt/market/market '${{ github.sha }}' '${{ github.run_id }}-${{ github.run_attempt }}' '${{ secrets.DOCKERHUB_USERNAME }}'
+            bash deploy-production.sh deploy /opt/market/market '${{ github.sha }}' '${{ github.run_id }}-${{ github.run_attempt }}' '${{ secrets.DOCKERHUB_USERNAME }}' '${{ vars.BILLING_ENABLED == 'true' && 'true' || 'false' }}'
