@@ -1,6 +1,7 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { SITE_URL, DEFAULT_DESCRIPTION } from "./constants";
+import { SUPPORT_EMAIL } from "../../lib/support";
 
 interface JsonLdProps {
   readonly data: Record<string, unknown>;
@@ -29,7 +30,7 @@ export const OrganizationJsonLd: React.FC = () => (
       logo: `${SITE_URL}/logo-icon.svg`,
       contactPoint: {
         "@type": "ContactPoint",
-        email: "fluxlab@flux-lab.dev",
+        email: SUPPORT_EMAIL,
         contactType: "customer support",
       },
     }}

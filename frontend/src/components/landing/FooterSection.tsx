@@ -2,6 +2,7 @@ import { useBilling } from "../../providers/BillingProvider";
 import React from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "../../hooks/useTranslation";
+import { SUPPORT_EMAIL } from "../../lib/support";
 
 const FluxLabBadge = () => (
   <a
@@ -94,6 +95,8 @@ export const FooterSection: React.FC = React.memo(() => {
         <Link to="/terms">{t("landing.footer.terms")}</Link>
         <Link to="/refund-policy">{t("landing.footer.refundPolicy")}</Link>
         <Link to="/cookie-policy">{t("landing.footer.cookiePolicy")}</Link>
+        {/* The address itself, not a "Contact" label: the payment provider checks that it is visible here. */}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <span className="landing-footer-copy">

@@ -32,7 +32,7 @@ export const privacyEn: LegalContent = {
         <li>
           <strong>Email:</strong>
           {" "}
-          <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>
+          <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>
         </li>
       </ul>
 
@@ -313,7 +313,7 @@ export const privacyEn: LegalContent = {
       </ul>
       <p>
         To exercise any of these rights, contact us at{" "}
-        <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>. We will
+        <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>. We will
         respond to your request within 30 days.
       </p>
 
@@ -376,7 +376,7 @@ export const privacyEn: LegalContent = {
         <li>
           <strong>Email:</strong>
           {" "}
-          <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>
+          <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>
         </li>
         <li>
           <strong>Operator:</strong> FOP Pavlenko Andrii Volodymyrovych

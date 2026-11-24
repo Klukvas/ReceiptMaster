@@ -119,14 +119,14 @@ export const refundPolicyUk: LegalContent = {
       <p>
         Якщо ви вважаєте, що ваш випадок підпадає під виняток, зв’яжіться з нами протягом 7
         днів з моменту списання за адресою{" "}
-        <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>, вказавши
+        <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>, вказавши
         email вашого облікового запису та опис проблеми.
       </p>
 
       <h2>6. Як подати запит на повернення</h2>
       <p>
         Напишіть нам на{" "}
-        <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>, вказавши
+        <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>, вказавши
         email вашого облікового запису та причину. Ми вирішуємо, чи підпадає
         запит під цю політику; саме повернення виконує Creem на той спосіб
         оплати, яким ви платили. Creem також може повернути платіж самостійно,
@@ -155,7 +155,7 @@ export const refundPolicyUk: LegalContent = {
       <ul>
         <li>
           <strong>Email:</strong>{" "}
-          <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>
+          <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>
         </li>
         <li>
           <strong>Оператор:</strong> FOP Pavlenko Andrii Volodymyrovych
