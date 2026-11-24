@@ -6,6 +6,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useSubscriptionRefreshOnReturn } from "../../hooks/useSubscriptionRefresh";
 import { Sidebar } from "./Sidebar";
+import { SUPPORT_EMAIL } from "../../lib/support";
 import { OfflineBanner } from "./OfflineBanner";
 import { ReceiptProgressPanel } from "../receipts/ReceiptProgressPanel";
 
@@ -176,7 +177,7 @@ export const Layout = ({ children }: LayoutProps) => {
                   {t("landing.footer.cookiePolicy")}
                 </Link>
                 <a
-                  href="mailto:fluxlab@flux-lab.dev"
+                  href={`mailto:${SUPPORT_EMAIL}`}
                   className={FOOTER_LINK_CLASS}
                 >
                   {t("landing.footer.contact")}

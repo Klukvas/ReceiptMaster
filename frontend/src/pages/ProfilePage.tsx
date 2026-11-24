@@ -22,10 +22,9 @@ import { authApi } from "../lib/api";
 import toast from "react-hot-toast";
 import { translatedApiError } from "../lib/api-errors";
 import { profileError } from "../lib/profile-errors";
+import { SUPPORT_EMAIL } from "../lib/support";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, exceedsPasswordBytes } from "../lib/password-policy";
 import { PasswordBytesHint } from "../components/auth/PasswordBytesHint";
-
-const SUPPORT_EMAIL = "fluxlab@flux-lab.dev";
 
 export const ProfilePage: React.FC = () => {
   const { user, refreshProfile, changePassword } = useAuth();

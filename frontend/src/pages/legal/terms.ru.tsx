@@ -362,7 +362,7 @@ export const termsRu: LegalContent = {
       <ul>
         <li>
           <strong>Электронная почта:</strong>{" "}
-          <a href="mailto:fluxlab@flux-lab.dev">fluxlab@flux-lab.dev</a>
+          <a href="mailto:receiptmaster-support@flux-lab.dev">receiptmaster-support@flux-lab.dev</a>
         </li>
         <li>
           <strong>Оператор:</strong> FOP Pavlenko Andrii Volodymyrovych
