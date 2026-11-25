@@ -45,7 +45,7 @@ E2E_BASE_URL=http://127.0.0.1:5232 node e2e/run.mjs mobile-product-dropdown
 E2E_BASE_URL=http://127.0.0.1:5232 node e2e/run.mjs receipt-progress
 ```
 
-(The unit specs — `dropdown-position`, `receipt-socket-url` and the unit half of `api-errors` —
+(The unit specs — `dropdown-position`, `receipt-socket-url`, `blog-prerender` and the unit half of `api-errors` —
 and the guard checks at the end of `chunk-recovery` import TypeScript modules through the dev
 server's transform, so they only run against `vite dev`.)
 
@@ -54,7 +54,8 @@ server's transform, so they only run against `vite dev`.)
 | Spec | Guards |
 |---|---|
 | `order-audit` | Hidden selections after search/date/amount filters, sorting and loading; bounded catalogue search/pagination past record 100; selected edit-ID hydration; zero/empty custom prices; currency labels and mixed-currency rejection; visible edit errors without losing values |
-| `infra-audit` | Trusted publication guards, matching immutable image tags, billing build/runtime references, and proxy locations |
+| `infra-audit` | Trusted publication guards, matching immutable image tags, billing build/runtime references, proxy locations, and that the blog prerender step is built into the image and served by nginx |
+| `blog-prerender` | The functions that compose a prerendered HTML file (head/body split, problems that fail the build, template replacement), and the handover from a prerendered blog page to the live app: no spinner, scroll position kept, the build's head tags replaced, post date independent of the time zone |
 | `proxy-audit` | Native Nginx syntax, webhook byte/header preservation, and receipt events over both transport modes |
 | `dropdown-position` | `computeDropdownPosition` clamps, caps and flips the product selector popup so it always fits the visible viewport |
 | `mobile-product-dropdown` | At 320px and 375px — and with the on-screen keyboard shrinking the viewport — opening the product selector causes no horizontal overflow and leaves every option reachable and selectable |

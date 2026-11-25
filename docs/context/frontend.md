@@ -1,6 +1,6 @@
 # ReceiptMaster Frontend — Agent Onboarding
 
-**Last Updated:** 2026-11-20
+**Last Updated:** 2026-11-25
 **Stack:** React 19.1, TypeScript ~5.8, Vite 7.1, Tailwind CSS v4, TanStack React Query 5.86
 
 This document teaches an AI coding agent how the ReceiptMaster frontend works and how to build features here.
@@ -22,8 +22,10 @@ frontend/
 │   ├── contexts/             # React Context (AuthContext, ThemeContext)
 │   ├── providers/            # Context providers (BillingProvider for the billing capability)
 │   ├── lib/                  # Utilities (api.ts, api-errors.ts, chunk-load.ts, i18n.ts)
+│   ├── prerender/            # Static HTML for the blog: routes, build-time renderer, document composition, browser takeover
 │   └── locales/              # i18next translations (en, ru, uk)
 ├── package.json
+├── prerender.mjs             # Second half of `yarn build`: writes the prerendered pages into dist/
 ├── vite.config.ts
 ├── tailwind.config.js
 └── tsconfig.app.json
@@ -32,7 +34,7 @@ frontend/
 ## Bootstrap & Routing
 
 ### Entry Point: `main.tsx`
-- Renders React app into `#root`
+- Renders React app into `#root`, after `preloadPrerenderedPage` (see "Prerendered pages (blog)"; resolves at once for every other page)
 - Loads i18n (lines 4–5) **before** `<App />`
 - Strict mode on for dev
 - Wraps `<App />` in `AppErrorBoundary`, so nothing that throws while rendering leaves a blank page
@@ -81,8 +83,8 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 | `/settings` | `SettingsPage` | Yes | Layout | One **Documents** tab (design editor, then requisites, numbering and signature/stamp), Subscription and Advanced. Tabs follow the ARIA tabs pattern (arrow keys, Home/End, roving tabindex) with a fade on the right while tabs are scrolled out of view. The sticky save bar of `DocumentEditor` appears only when there is a draft, a save in progress or an error (always in the "Customize document" modal); a successful save shows a toast. `--color-ring` is opaque so the focus indicator stays above 3:1 |
 | `/profile` | `ProfilePage` | Yes | Layout | User profile. There is no self-service account deletion yet: "Request deletion" opens a `mailto:` to the support address from the privacy policy |
 | `/r/:token` | `PublicReceiptPage` | No | None | Public receipt share link; rendered with `<SEO noindex />` (a capability URL, kept out of search results; `public/robots.txt` must not disallow `/r/`, or crawlers never see the noindex) |
-| `/blog` | `BlogListPage` | No | None | Blog listing |
-| `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown) |
+| `/blog` | `BlogListPage` | No | None | Blog listing; prerendered at build time |
+| `/blog/:slug` | `BlogPostPage` | No | None | Blog post (markdown); prerendered at build time |
 | `/terms`, `/privacy`, `/refund-policy`, `/cookie-policy` | Legal pages | No | None | Follow the interface language (en/ru/uk; any other language shows English) — see "Legal pages" |
 | `*` | `NotFoundPage` | No | Layout when signed in | 404 fallback: `NotFoundRoute` in `App.tsx` renders it inside `Layout` (sidebar kept, button goes to `/dashboard`, `isInLayout`) for a signed-in user and standalone for visitors (`/` link) |
 
@@ -109,6 +111,59 @@ and a reload is the way out. Errors in event handlers and queries never reach it
 - `OfflineBanner` (`layout/OfflineBanner.tsx`, `hooks/useOnlineStatus.ts`): a sticky `role="status"` notice (`common.offlineNotice`) below the mobile header while `navigator.onLine` is false; loaded data stays readable, changes cannot be saved. The live region stays mounted
 - Collapsed desktop sidebar keeps the theme and language switchers as icon buttons (`layout/SidebarCompactControls.tsx`; labelled, with a tooltip; the language button cycles en, ru, uk)
 - Authenticated routes use `AuthenticatedPage` in `App.tsx` (`ProtectedRoute` + `Layout` + its own `Suspense`), so a lazy page chunk shows `ContentSpinner` inside the shell. `PageSpinner`/`ContentSpinner` paint after 200 ms and are `role="status"` with sr-only text
+
+### Prerendered pages (blog)
+
+`/blog` and every `/blog/:slug` are also written out as static HTML at build time, so crawlers
+and link previews that run no JavaScript get the article text and the page's own `<title>`, meta,
+canonical and hreflang tags. `yarn build` is `vite build && node prerender.mjs`; plain `vite dev`
+and a bare `vite build` produce no prerendered pages and behave as before.
+
+| File | Role |
+|---|---|
+| `src/prerender/routes.tsx` | The prerendered routes: path constants, `prerenderedRouteElements` (the `<Route>`s that both `App.tsx` and the build mount, so they cannot drift), `findPrerenderedRoute` |
+| `src/lib/preloadable-page.tsx` | `preloadablePage`: a lazy page whose chunk can be loaded before rendering (`React.lazy` always suspends on its first render) |
+| `src/prerender/render.tsx` | Build-time entry: `prerenderTargets` (the URLs and their language) and `renderToDocument(template, target)` |
+| `src/prerender/document.ts` | Pure string functions that know the document shape: `splitRenderedDocument`, `findRenderProblems`, `composePage` |
+| `prerender.mjs` | Bundles `render.tsx` for Node, renders each target, writes `dist/<path>/index.html` |
+| `src/prerender/takeover.ts`, `PrerenderedRoutePage.tsx`, `head.ts` | The browser side: handing the static page over to the live app |
+
+- **Which URLs:** `/blog` in English, plus one page per post in `content/blog` in the post's
+  language (`BlogPost.lang`, `en` or `uk`). A new post is prerendered without further changes
+  (it still has to be added to `public/sitemap.xml` by hand).
+- **Rendering:** `prerender.mjs` builds `render.tsx` with Vite's SSR build into
+  `node_modules/.prerender` (as `.mjs`, with `react-helmet-async` bundled in, so loading it does
+  not depend on Node guessing the module type; removed afterwards). `renderToDocument` renders
+  the same route elements with `renderToString` inside a signed-out, light-theme provider stub.
+  It renders a whole document so React collects the head tags that `<Helmet>` emits (plain
+  elements on React 19) apart from the markup; JSON-LD scripts stay in the body. Anything a
+  prerendered page imports must load without `window`/`document` (`lib/i18n.ts` guards its
+  `document` access for this).
+- **Output:** `composePage` builds each file from `dist/index.html`: `<html lang>` set, the
+  block between the `seo:default:start`/`end` comments in `index.html` replaced by the page's
+  tags (each marked `data-prerendered`), and the markup put into `#root`. The build fails when a
+  page comes out without exactly one title, without a canonical link or `<h1>`, with a robots
+  `noindex` (a post that rendered as "not found"), or with an unsafe path. nginx serves the
+  files at the URLs without a trailing slash (see "Production image and proxy configuration").
+- **In the browser** the app does not hydrate; it replaces the markup on its first commit.
+  `main.tsx` first awaits `preloadPrerenderedPage`, which loads the page chunk when `#root`
+  already has content, so that first commit is the live page and no spinner or layout shift
+  appears in between. Until then the static page's buttons do nothing. `PrerenderedRoutePage`
+  (the element of every prerendered route) then calls `resetPrerenderedHead`: React adds a
+  page's head tags next to the prerendered ones rather than reusing them, so the marked copies
+  are removed, except the `<title>`, which is reset to the default and kept as the fallback for
+  pages that set none. `ScrollToTop` scrolls only on navigation, not on first load (on any
+  route), so a reader who scrolled the static page is not thrown back up.
+- What the visitor sees can differ from the prerender until the swap: the static page is
+  signed-out, light-theme chrome in the content's language, and `/blog` is the English list
+  (a Ukrainian interface gets the Ukrainian list once the app mounts). Post dates are formatted
+  in UTC (`components/blog/format-post-date.ts`) so they read the same in the build and in
+  every visitor's time zone.
+- **Tests:** `e2e/blog-prerender.spec.mjs` covers the document functions and the handover (on
+  a page composed with `composePage` from the dev index.html, since the dev server prerenders
+  nothing); `infra-audit` checks that the build script, the Dockerfile and nginx agree.
+- To prerender another public page: add it to the routes in `routes.tsx`, list its URL(s) in
+  `prerenderTargets`, and make sure it renders an `<SEO>` and an `<h1>`.
 
 ## Data Layer
 
@@ -606,6 +661,11 @@ event actually arriving — it can be blocked, dropped, or missed across a recon
   --frozen-lockfile` takes no package token (no build arg, secret mount or `.npmrc`).
   PR verification runs with a `contents: read` workflow token and no secrets;
   publish/deploy credentials are confined to main-push jobs (`infra-audit` checks both).
+- The image runs `yarn build`, which includes the prerender step. `location /` is
+  `try_files $uri $uri/index.html /index.html`: a file, then a prerendered page
+  (`dist/blog/<slug>/index.html` answers `/blog/<slug>` with no trailing-slash redirect, which
+  `$uri/` would cause), then the app. `infra-audit` checks the build script, the Dockerfile and
+  this rule together.
 - Nginx proxies the exact unprefixed `/creem/webhook` URI with its raw request body and
   `Creem-Signature` header. `/socket.io/` proxies polling and WebSocket Upgrade traffic
   directly to the backend. `/receipts` is the socket namespace, not the transport path.
@@ -995,6 +1055,9 @@ Reusable, framework-agnostic components. `Button`, `Card`, `Input`, `Modal`, `Sk
 | `src/hooks/useReceiptSocket.ts` | WebSocket connection for receipt progress |
 | `src/services/OrderService.ts` | Business logic, error handling, notifications |
 | `src/lib/i18n.ts` | i18next config + language detection |
+| `src/prerender/routes.tsx` | Routes that are also built as static HTML (the blog) |
+| `prerender.mjs` + `src/prerender/render.tsx` | Build step that writes those pages into `dist/` |
+| `src/prerender/document.ts` | Composition of a prerendered HTML file from the built index.html |
 | `src/components/layout/Layout.tsx` | Sidebar, header, receipt progress panel |
 | `src/components/auth/ProtectedRoute.tsx` | Auth guard for routes |
 | `src/pages/OrdersPage.tsx` | Example CRUD page (fetch, filter, create, edit, delete) |
