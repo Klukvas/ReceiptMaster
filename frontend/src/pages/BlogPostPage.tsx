@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft } from "lucide-react";
 import { BlogLayout } from "../components/blog/BlogLayout";
+import { formatPostDate } from "../components/blog/format-post-date";
 import { getPostBySlug } from "../../content/blog";
 import { useTranslation } from "../hooks/useTranslation";
 import { SEO } from "../components/seo/SEO";
@@ -25,7 +26,6 @@ export const BlogPostPage: React.FC = () => {
   const { t, currentLanguage } = useTranslation();
   const post = slug ? getPostBySlug(slug) : undefined;
   const isUk = post ? post.lang === "uk" : currentLanguage === "uk";
-  const dateLocale = isUk ? "uk-UA" : "en-US";
 
   if (!post) {
     return (
@@ -90,11 +90,7 @@ export const BlogPostPage: React.FC = () => {
             </Link>
           </div>
           <time className="text-sm text-content-tertiary" dateTime={post.date}>
-            {new Date(post.date).toLocaleDateString(dateLocale, {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {formatPostDate(post.date, post.lang)}
           </time>
         </div>
 

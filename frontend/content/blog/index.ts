@@ -29,7 +29,7 @@ export interface BlogPost {
   category: string;
   description: string;
   content: string;
-  lang: string;
+  lang: 'en' | 'uk';
 }
 
 function parseFrontmatter(raw: string): BlogPost {
