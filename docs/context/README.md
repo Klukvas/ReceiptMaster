@@ -1,6 +1,6 @@
 # ReceiptMaster — Agent Context
 
-**Last Updated:** 2026-11-18
+**Last Updated:** 2026-11-25
 
 Start here. This folder is the engineering context set for **AI coding agents** working on
 ReceiptMaster. Read the one or two documents relevant to your task (routing table below) — you
@@ -72,7 +72,9 @@ market/
 │   │   │                    #   (stale-chunk reload guard for AppErrorBoundary)
 │   │   ├── hooks/           # useOrders, useCheckout, useReceiptSocket, useServerPagination, …
 │   │   ├── contexts/        # AuthContext, ThemeContext
-│   │   └── providers/       # BillingProvider
+│   │   ├── providers/       # BillingProvider
+│   │   └── prerender/       # blog pages as static HTML: route list, build renderer, takeover
+│   ├── prerender.mjs        # build step after `vite build` (see frontend.md, "Prerendered pages")
 │   └── e2e/                 # browser regression suite (`node frontend/e2e/run.mjs`)
 │                            #   — see frontend/e2e/README.md
 ├── docker-compose*.yml      # dev / self-built prod / production variants

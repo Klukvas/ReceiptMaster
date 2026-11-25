@@ -138,5 +138,19 @@ export const run = async () => {
     ),
     "Missing transport proxy",
   );
+  // The blog is prerendered by the second half of the build script. An image built with a
+  // bare `vite build`, or a proxy that never looks for <path>/index.html, would ship it as an
+  // empty shell again without any error.
+  results.check(
+    "prerendered pages are built into the image and served at their URLs",
+    JSON.parse(read("../package.json")).scripts.build.includes(
+      "node prerender.mjs",
+    ) &&
+      dockerfile.includes("yarn build") &&
+      /location \/\s*\{[^}]*try_files \$uri \$uri\/index\.html \/index\.html;/s.test(
+        nginx,
+      ),
+    "Prerender step or its nginx lookup is missing",
+  );
   return results;
 };

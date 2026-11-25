@@ -3,3 +3,5 @@ export const languages = [
   { code: 'ru', name: 'Русский', shortName: 'RU', flag: '🇷🇺' },
   { code: 'uk', name: 'Українська', shortName: 'UK', flag: '🇺🇦' },
 ] as const;
+
+export type LanguageCode = (typeof languages)[number]['code'];

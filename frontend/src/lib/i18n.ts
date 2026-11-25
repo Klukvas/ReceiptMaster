@@ -38,6 +38,8 @@ i18n
   });
 
 const syncHtmlLang = (language: string) => {
+  // No document while the build prerenders pages; it writes each page's `lang` itself.
+  if (typeof document === "undefined") return;
   document.documentElement.lang = language.split("-")[0];
 };
 

@@ -12,6 +12,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ContentSpinner, PageSpinner } from "./components/common/PageSpinner";
 import { HomePage } from "./pages/HomePage";
+import { prerenderedRouteElements } from "./prerender/routes";
 
 // Lazy-loaded page components for code splitting
 const DashboardHomePage = React.lazy(() =>
@@ -63,12 +64,6 @@ const CookiePolicyPage = React.lazy(() =>
   import("./pages/CookiePolicyPage").then((m) => ({
     default: m.CookiePolicyPage,
   })),
-);
-const BlogListPage = React.lazy(() =>
-  import("./pages/BlogListPage").then((m) => ({ default: m.BlogListPage })),
-);
-const BlogPostPage = React.lazy(() =>
-  import("./pages/BlogPostPage").then((m) => ({ default: m.BlogPostPage })),
 );
 const NotFoundPage = React.lazy(() =>
   import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
@@ -192,8 +187,7 @@ const AppRoutes: React.FC = () => {
           }
         />
         <Route path="/r/:token" element={<PublicReceiptPage />} />
-        <Route path="/blog" element={<BlogListPage />} />
-        <Route path="/blog/:slug" element={<BlogPostPage />} />
+        {prerenderedRouteElements}
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/refund-policy" element={<RefundPolicyPage />} />

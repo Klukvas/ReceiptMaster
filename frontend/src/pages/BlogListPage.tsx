@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { BlogLayout } from "../components/blog/BlogLayout";
+import { formatPostDate } from "../components/blog/format-post-date";
 import { getPostsByLang } from "../../content/blog";
 import { useTranslation as useI18nTranslation } from "react-i18next";
 import { SEO } from "../components/seo/SEO";
@@ -79,14 +80,7 @@ export const BlogListPage: React.FC = () => {
                 className="text-xs text-content-tertiary"
                 dateTime={post.date}
               >
-                {new Date(post.date).toLocaleDateString(
-                  lang === "uk" ? "uk-UA" : "en-US",
-                  {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  },
-                )}
+                {formatPostDate(post.date, lang)}
               </time>
             </div>
             <h2 className="text-lg font-semibold text-content group-hover:text-accent-base transition-colors mb-2 tracking-tight">

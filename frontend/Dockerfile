@@ -26,7 +26,7 @@ ENV VITE_BILLING_ENABLED=${VITE_BILLING_ENABLED}
 RUN case "$VITE_BILLING_ENABLED" in \
       true|false) ;; \
       *) echo "VITE_BILLING_ENABLED must be true or false" >&2; exit 1 ;; \
-    esac && ./node_modules/.bin/vite build && \
+    esac && yarn build && \
     printf '{"sha":"%s","billingEnabled":%s}\n' "$RELEASE_SHA" "$VITE_BILLING_ENABLED" > dist/release.json
 
 # Production stage with nginx
