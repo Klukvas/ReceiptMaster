@@ -9,6 +9,7 @@ import inventoryTrackingGuide from './inventory-tracking-guide.md?raw';
 import revenueAnalytics from './revenue-analytics.md?raw';
 import digitalInvoicingEu from './digital-invoicing-eu.md?raw';
 import customerManagementCrm from './customer-management-crm.md?raw';
+import actOfCompletedWork from './act-of-completed-work.md?raw';
 
 // Ukrainian
 import gettingStartedUk from './getting-started-uk.md?raw';
@@ -21,6 +22,7 @@ import inventoryTrackingGuideUk from './inventory-tracking-guide-uk.md?raw';
 import revenueAnalyticsUk from './revenue-analytics-uk.md?raw';
 import digitalInvoicingEuUk from './digital-invoicing-eu-uk.md?raw';
 import customerManagementCrmUk from './customer-management-crm-uk.md?raw';
+import actOfCompletedWorkUk from './act-of-completed-work-uk.md?raw';
 
 export interface BlogPost {
   slug: string;
@@ -62,9 +64,11 @@ const ALL_POSTS: string[] = [
   gettingStarted, pdfReceiptTemplates, automateBusinessFinances,
   sha256ReceiptVerification, orderManagementTips, multiLanguageReceipts,
   inventoryTrackingGuide, revenueAnalytics, digitalInvoicingEu, customerManagementCrm,
+  actOfCompletedWork,
   gettingStartedUk, pdfReceiptTemplatesUk, automateBusinessFinancesUk,
   sha256ReceiptVerificationUk, orderManagementTipsUk, multiLanguageReceiptsUk,
   inventoryTrackingGuideUk, revenueAnalyticsUk, digitalInvoicingEuUk, customerManagementCrmUk,
+  actOfCompletedWorkUk,
 ];
 
 export const blogPosts: BlogPost[] = ALL_POSTS

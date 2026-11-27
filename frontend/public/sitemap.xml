@@ -86,6 +86,13 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/customer-management-crm"/>
     <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/customer-management-crm-uk"/>
   </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/act-of-completed-work</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/act-of-completed-work"/>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/act-of-completed-work-uk"/>
+  </url>
 
   <!-- Blog posts (Ukrainian) -->
   <url>
@@ -157,6 +164,13 @@
     <priority>0.6</priority>
     <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/customer-management-crm-uk"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/customer-management-crm"/>
+  </url>
+  <url>
+    <loc>https://receiptmaster.org/blog/act-of-completed-work-uk</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://receiptmaster.org/blog/act-of-completed-work-uk"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://receiptmaster.org/blog/act-of-completed-work"/>
   </url>
 
   <!-- Legal pages -->
