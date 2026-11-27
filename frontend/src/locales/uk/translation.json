@@ -592,7 +592,13 @@
       },
       "discardConfirm": "Скасувати незбережені зміни реквізитів?"
     },
-    "tabDocuments": "Документи"
+    "tabDocuments": "Документи",
+    "documentSections": {
+      "label": "Розділи налаштувань документів",
+      "company": "Реквізити",
+      "design": "Оформлення",
+      "numbering": "Нумерація"
+    }
   },
   "receipts": {
     "generatingReceipt": "Документ створюється...",

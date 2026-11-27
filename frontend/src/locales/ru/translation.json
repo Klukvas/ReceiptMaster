@@ -592,7 +592,13 @@
       },
       "discardConfirm": "Отменить несохранённые изменения реквизитов?"
     },
-    "tabDocuments": "Документы"
+    "tabDocuments": "Документы",
+    "documentSections": {
+      "label": "Разделы настроек документов",
+      "company": "Реквизиты",
+      "design": "Оформление",
+      "numbering": "Нумерация"
+    }
   },
   "receipts": {
     "generatingReceipt": "Документ создаётся...",

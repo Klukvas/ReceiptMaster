@@ -578,7 +578,13 @@
       },
       "discardConfirm": "Discard unsaved requisites changes?"
     },
-    "tabDocuments": "Documents"
+    "tabDocuments": "Documents",
+    "documentSections": {
+      "label": "Documents sections",
+      "company": "Company details",
+      "design": "Design",
+      "numbering": "Numbering"
+    }
   },
   "receipts": {
     "generatingReceipt": "Generating document...",

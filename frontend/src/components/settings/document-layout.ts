@@ -14,3 +14,18 @@ export const DocumentLayoutContext = createContext<DocumentLayout>("page");
  */
 export type SectionHeadingTag = "h2" | "h3";
 export const SectionHeadingContext = createContext<SectionHeadingTag>("h3");
+
+/** The setting groups of the document editor; the settings page shows a few at a time. */
+export const DOCUMENT_GROUPS = [
+  "business",
+  "template",
+  "brand",
+  "text",
+  "format",
+  "presets",
+] as const;
+export type DocumentGroup = (typeof DOCUMENT_GROUPS)[number];
+
+/** Sub-tabs of the Documents settings tab, in display order (`?section=` in the URL). */
+export const DOCUMENTS_SECTIONS = ["company", "design", "numbering"] as const;
+export type DocumentsSection = (typeof DOCUMENTS_SECTIONS)[number];

@@ -156,41 +156,57 @@ export const run = async () => {
     page.setDefaultTimeout(8000);
     const previews = await install(page, createState());
     await page.goto(`${BASE_URL}/settings?tab=receipt`);
-    await page.getByLabel("Company Name", { exact: true }).waitFor();
+    await page.getByLabel("Template", { exact: true }).waitFor();
 
-    const tabs = await page.getByRole("tab").allInnerTexts();
+    const tabsIn = (name) =>
+      page.getByRole("tablist", { name }).getByRole("tab").allInnerTexts();
+    const tabs = await tabsIn("Settings sections");
     results.check(
       "one Documents tab replaces Company Info, Receipt Design and Language",
       tabs.map((value) => value.trim()).join("|") ===
         "Documents|Subscription|Advanced",
       tabs.join("|"),
     );
+    const sections = await tabsIn("Documents sections");
     results.check(
-      "an old ?tab=receipt link opens the Documents page",
+      "Documents splits into Company details, Design and Numbering sub-tabs",
+      sections.map((value) => value.trim()).join("|") ===
+        "Company details|Design|Numbering",
+      sections.join("|"),
+    );
+    results.check(
+      "an old ?tab=receipt link opens the Design sub-tab of Documents",
       (await page
         .getByRole("tab", { name: "Documents" })
-        .getAttribute("aria-selected")) === "true",
+        .getAttribute("aria-selected")) === "true" &&
+        (await page
+          .getByRole("tab", { name: "Design" })
+          .getAttribute("aria-selected")) === "true",
     );
 
-    const headings = await page
-      .getByRole("heading", { level: 2 })
-      .allInnerTexts();
-    const wanted = [
-      "Your business",
-      "Customer details",
-      "Template and title",
-      "Colour and logo",
-      "Texts on the document",
-      "Language and formats",
-    ];
-    const positions = wanted.map((title) => headings.indexOf(title));
-    results.check(
-      "the page reads as plain sections in order",
-      positions.every(
+    const visibleHeadings = () =>
+      page.getByRole("heading", { level: 2 }).evaluateAll((nodes) =>
+        nodes
+          .filter((node) => node.checkVisibility())
+          .map((node) => node.textContent.trim()),
+      );
+    const inOrder = (headings, wanted) => {
+      const positions = wanted.map((title) => headings.indexOf(title));
+      return positions.every(
         (position, index) =>
           position >= 0 && (index === 0 || position > positions[index - 1]),
-      ),
-      headings.join("|"),
+      );
+    };
+    const designHeadings = await visibleHeadings();
+    results.check(
+      "the Design sub-tab reads as plain sections in order, without the business details",
+      inOrder(designHeadings, [
+        "Template and title",
+        "Colour and logo",
+        "Texts on the document",
+        "Language and formats",
+      ]) && !designHeadings.includes("Your business"),
+      designHeadings.join("|"),
     );
 
     const closed = async (summary) =>
@@ -199,9 +215,8 @@ export const run = async () => {
         .locator("xpath=ancestor::details")
         .evaluate((element) => element.open));
     results.check(
-      "optional things start folded: bank details, logo size, fine-tuning, saved sets",
-      (await closed("Tax and bank details (optional)")) &&
-        (await closed("Logo size and position")) &&
+      "optional things start folded: logo size, fine-tuning, saved sets",
+      (await closed("Logo size and position")) &&
         (await closed("Fine-tune dates, time and currency")) &&
         (await closed("Saved sets of settings")),
     );
@@ -246,6 +261,31 @@ export const run = async () => {
       "the preview renders by itself, without pressing anything",
       previews.count >= 1,
     );
+
+    await page.getByRole("tab", { name: "Company details" }).click();
+    await page.getByLabel("Company Name", { exact: true }).waitFor();
+    // The requisites card has its own request, so its heading can arrive after the editor's.
+    await page
+      .getByRole("heading", { name: "Requisites for documents" })
+      .waitFor();
+    const companyHeadings = await visibleHeadings();
+    results.check(
+      "the Company details sub-tab holds the business, customer, requisites and signature cards",
+      inOrder(companyHeadings, [
+        "Your business",
+        "Customer details",
+        "Requisites for documents",
+      ]) && !companyHeadings.includes("Template and title"),
+      companyHeadings.join("|"),
+    );
+    results.check(
+      "bank details start folded",
+      await closed("Tax and bank details (optional)"),
+    );
+    results.check(
+      "the unsaved design change survives the switch to Company details",
+      await page.getByText("You have unsaved changes", { exact: true }).isVisible(),
+    );
   });
 
   await withPage(desktop, async (page) => {
@@ -275,8 +315,8 @@ export const run = async () => {
   await withPage({ viewport: { width: 390, height: 844 } }, async (page) => {
     page.setDefaultTimeout(8000);
     const previews = await install(page, createState());
-    await page.goto(`${BASE_URL}/settings`);
-    await page.getByLabel("Company Name", { exact: true }).waitFor();
+    await page.goto(`${BASE_URL}/settings?tab=documents&section=design`);
+    await page.locator('input[name="document-title-mode"]').first().waitFor();
     await page.waitForTimeout(800);
     const titleOptions = await page
       .locator('input[name="document-title-mode"]')

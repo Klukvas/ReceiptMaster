@@ -99,6 +99,14 @@ const open = async (page, path) => {
 const called = (state, paths) =>
   state.requests.filter((request) => paths.some((path) => request.endsWith(` ${path}`)));
 
+/** Opens every documents sub-tab once; a visited sub-tab stays mounted, only hidden. */
+const visitDocumentSections = async (page) => {
+  for (const section of ["company", "design", "numbering"]) {
+    await page.locator(`#documents-section-${section}`).click();
+    await page.waitForLoadState("networkidle");
+  }
+};
+
 const isShown = (page, testId) =>
   settle(async () => (await page.getByTestId(testId).count()) > 0);
 
@@ -156,6 +164,7 @@ const checkFreeHome = (results) =>
 const checkFreeSettings = (results) =>
   withPlan("free", {}, async (page) => {
     await open(page, "/settings?tab=documents");
+    await visitDocumentSections(page);
     for (const testId of [
       "attribution-note",
       "logo-upload-lock",
@@ -171,6 +180,7 @@ const checkFreeSettings = (results) =>
         return (await prefix.count()) > 0 && (await prefix.isDisabled());
       }),
     );
+    await page.locator("#documents-section-design").click();
     await page.getByText("Saved sets of settings", { exact: true }).first().click();
     results.check("free: presets show the upsell", await isShown(page, "presets-upsell"));
     results.check(
@@ -300,6 +310,7 @@ const checkStart = (results) =>
 
     await open(page, "/settings?tab=documents");
     await page.getByTestId("signoff-signature").waitFor();
+    await visitDocumentSections(page);
     results.check(
       "start: logo, signature, stamp and numbering are open",
       (await page.locator("[data-plan-lock]").count()) === 0 &&
@@ -443,7 +454,7 @@ const checkTemplateLockNamesItsPlan = (results) =>
         await json(route, { data: LOCKED_TEMPLATES });
         return true;
       });
-      await open(page, "/settings?tab=documents");
+      await open(page, "/settings?tab=documents&section=design");
       await page.getByRole("button", { name: "See template previews" }).click();
       const carousel = page.locator('[aria-labelledby="carousel-dialog-title"]');
       const lock = carousel.getByTestId("carousel-template-lock");

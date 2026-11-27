@@ -29,7 +29,7 @@ const withNumbering = async (viewport, stateOverrides, run) =>
     Object.assign(state, stateOverrides);
     state.handlers = [...numberingHandlers(state), ...documentHandlers(state)];
     await installApiMocks(page, state);
-    await page.goto(`${BASE_URL}/settings?tab=documents`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE_URL}/settings?tab=documents&section=numbering`, { waitUntil: "domcontentloaded" });
     return run(page, state);
   });
 
@@ -129,6 +129,15 @@ const checkDraftSurvivesTabSwitch = async (results) => {
     await invoice.waitFor({ state: "visible" });
     results.check(
       "a numbering draft survives a trip to another settings tab",
+      (await invoice.getByLabel("Prefix").inputValue()) === "DRAFT-",
+      await invoice.getByLabel("Prefix").inputValue(),
+    );
+    await page.locator("#documents-section-design").click();
+    await invoice.waitFor({ state: "hidden" });
+    await page.locator("#documents-section-numbering").click();
+    await invoice.waitFor({ state: "visible" });
+    results.check(
+      "a numbering draft survives a trip to another documents sub-tab",
       (await invoice.getByLabel("Prefix").inputValue()) === "DRAFT-",
       await invoice.getByLabel("Prefix").inputValue(),
     );
@@ -424,7 +433,7 @@ const checkUkrainianExample = async (results) => {
     state.handlers = [...numberingHandlers(state), ...documentHandlers(state)];
     await installApiMocks(page, state);
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "uk"));
-    await page.goto(`${BASE_URL}/settings?tab=documents`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE_URL}/settings?tab=documents&section=numbering`, { waitUntil: "domcontentloaded" });
     const hint = row(page, "invoice").locator("#numbering-invoice-prefix-hint");
     await hint.waitFor({ state: "visible" });
     // The example follows the row's own format (6 digits, with the year), not a fixed "0001".
