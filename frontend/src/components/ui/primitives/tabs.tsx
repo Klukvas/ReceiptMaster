@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "./cn";
+import { tabAfterKey } from "../../../lib/tab-keys";
 
 /* ------------------------------------------------------------------ */
 /*  Tabs (root)                                                        */
@@ -58,23 +59,14 @@ const TabsList = React.forwardRef<
         '[role="tab"]:not([disabled])',
       ),
     );
-    const index = tabs.indexOf(target);
-    if (index === -1) return;
+    if (!tabs.includes(target)) return;
 
-    let next = -1;
-    if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
-    else if (e.key === "ArrowLeft")
-      next = (index - 1 + tabs.length) % tabs.length;
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = tabs.length - 1;
-
-    if (next !== -1) {
-      e.preventDefault();
-      const nextTab = tabs[next];
-      nextTab.focus();
-      const nextValue = nextTab.getAttribute("data-value");
-      if (nextValue) onValueChange(nextValue);
-    }
+    const nextTab = tabAfterKey(e.key, tabs, target);
+    if (!nextTab) return;
+    e.preventDefault();
+    nextTab.focus();
+    const nextValue = nextTab.getAttribute("data-value");
+    if (nextValue) onValueChange(nextValue);
   };
 
   return (

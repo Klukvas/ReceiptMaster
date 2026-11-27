@@ -2,17 +2,21 @@ import { Skeleton } from "../ui/Skeleton";
 import type { DocumentGroup } from "./document-layout";
 
 /**
- * The editor's sections (your business, customer details, template and title, colour and logo,
+ * The editor's sections (your business, tax and bank, customer details, template and title, colour and logo,
  * texts, language and formats, saved sets) at 375 px and at 1280 px. Their real height depends on
  * the account (a template that prints terms, filled bank details), so the design groups sit between
  * a sparse and a filled-in account, within about 6% of both. That keeps the sub-tab from jumping,
- * and the requisites card below from moving, when the configuration arrives.
+ * and the signature card below from moving, when the configuration arrives.
  */
 const SECTION_HEIGHTS: Readonly<Record<DocumentGroup, readonly string[]>> = {
-  // Your business and the customer details are two cards. Business is sized with the bank details
-  // folded (a new account): when they are open, the extra height is at the card's bottom, below the
-  // fold, so the top of the Company details sub-tab does not move.
-  business: ["h-[842px] lg:h-[482px]", "h-[280px] lg:h-[188px]"],
+  // Your business, the tax, bank and signatory card, and the customer details. Business is sized
+  // with the bank details folded (a new account): when they are open, the extra height is at the
+  // card's bottom, below the fold, so the top of the Company details sub-tab does not move.
+  business: [
+    "h-[842px] lg:h-[482px]",
+    "h-[780px] lg:h-[461px]",
+    "h-[280px] lg:h-[188px]",
+  ],
   template: ["h-[319px] lg:h-[307px]"],
   brand: ["h-[638px] lg:h-[553px]"],
   text: ["h-[430px] lg:h-[386px]"],

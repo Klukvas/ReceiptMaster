@@ -339,6 +339,17 @@ a:focus-visible {
   }
 }
 
+/* A sticky Save bar covers the bottom of the screen: a field that takes focus scrolls into view
+   above it, not under it (WCAG 2.4.11). On a phone the bar stacks its buttons and is taller. */
+html:has([data-sticky-save-bar]) {
+  scroll-padding-bottom: 10rem;
+}
+@media (min-width: 640px) {
+  html:has([data-sticky-save-bar]) {
+    scroll-padding-bottom: 6rem;
+  }
+}
+
 /* Tabular nums for financial data */
 .tabular-nums {
   font-variant-numeric: tabular-nums;

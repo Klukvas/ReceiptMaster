@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   type DocumentConfig,
   type DocumentTemplate,
@@ -56,9 +57,12 @@ export function DocumentCompanySection({
   config,
   onChange,
   template,
+  requisites,
 }: {
   config: DocumentConfig;
   onChange: (value: DocumentConfig) => void;
+  /** The seller requisites card: on the settings page it follows the business card it completes. */
+  requisites?: ReactNode;
   /** The chosen template, which decides what it can show; undefined while templates load. */
   template?: DocumentTemplate;
 }) {
@@ -139,6 +143,8 @@ export function DocumentCompanySection({
           </div>
         </Disclosure>
       </DocumentSection>
+
+      {requisites}
 
       <DocumentSection
         title={t("document.sectionCustomer")}

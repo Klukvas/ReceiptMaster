@@ -29,3 +29,7 @@ export type DocumentGroup = (typeof DOCUMENT_GROUPS)[number];
 /** Sub-tabs of the Documents settings tab, in display order (`?section=` in the URL). */
 export const DOCUMENTS_SECTIONS = ["company", "design", "numbering"] as const;
 export type DocumentsSection = (typeof DOCUMENTS_SECTIONS)[number];
+
+export const DOCUMENTS_SECTION_PANEL_ID = "documents-section-panel";
+export const documentsSectionTabId = (section: DocumentsSection) =>
+  `documents-section-${section}`;

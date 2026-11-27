@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import {
@@ -19,12 +19,14 @@ import { isPresetLimitReached } from "../../lib/subscriptionApi";
 import { hasHigherPlan } from "../../lib/plan-catalog";
 import { PlanLockButton, PlanLockTile } from "../subscription/PlanLock";
 import { LockedPresetList } from "./LockedPresetList";
+import { DocumentLayoutContext } from "./document-layout";
 
 /** The most presets any plan stores; the cap while the plan is still unknown. */
 const MAX_PRESETS_ANY_PLAN = 20;
 
 export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
   const { t } = useTranslation();
+  const isOnSettingsPage = useContext(DocumentLayoutContext) === "page";
   const [selected, setSelected] = useState("");
   const [loaded, setLoaded] = useState<Preset>();
   const [name, setName] = useState("");
@@ -136,6 +138,12 @@ export function DocumentPresets({ model }: { model: DocumentDraftModel }) {
       <p className="text-sm text-content-tertiary">
         {t("document.presetsHelp")}
       </p>
+      {/* On the settings page the company fields sit on another sub-tab, out of sight. */}
+      {isOnSettingsPage && (
+        <p className="text-sm text-content-tertiary">
+          {t("document.presetsIncludeCompany")}
+        </p>
+      )}
       {status && (
         <p className="text-xs text-content-tertiary tabular-nums">
           {t("document.presetsUsed", {

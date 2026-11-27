@@ -49,7 +49,7 @@ const checkSettingsCard = async (results) => {
       "/settings?tab=company&highlight=seller.iban,seller.legalForm",
       { company },
       async (page, state) => {
-        await page.getByRole("heading", { name: "Requisites for documents" }).waitFor({ state: "visible" });
+        await page.getByRole("heading", { name: "Tax, bank and signatory" }).waitFor({ state: "visible" });
         const iban = byId(page, "requisite-seller.iban");
         const legalForm = byId(page, "requisite-seller.legalForm");
         await settle(() => iban.evaluate((el) => el === document.activeElement));
@@ -68,7 +68,7 @@ const checkSettingsCard = async (results) => {
         results.check(`${label}: the page fits the viewport`, await hasNoHorizontalOverflow(page), "horizontal overflow");
 
         await page.getByLabel("VAT number (10 or 12 digits)").fill("123");
-        await page.getByRole("button", { name: "Save requisites" }).click();
+        await page.getByRole("button", { name: "Save changes" }).click();
         results.check(
           `${label}: a malformed VAT number is refused on the client`,
           (await page.getByText("The VAT number must have 10 or 12 digits").count()) === 1 &&
@@ -78,7 +78,7 @@ const checkSettingsCard = async (results) => {
 
         await page.getByLabel("VAT number (10 or 12 digits)").fill("");
         await page.getByLabel("Legal form").fill("LLC");
-        await page.getByRole("button", { name: "Save requisites" }).click();
+        await page.getByRole("button", { name: "Save changes" }).click();
         await settle(() => (state.companySaves ?? []).length === 1);
         const [saved] = state.companySaves ?? [];
         results.check(
@@ -92,19 +92,69 @@ const checkSettingsCard = async (results) => {
   }
 };
 
+/** Records design saves (PUT /settings/document-config) and answers them as stored. */
+const recordConfigSaves = (state) => {
+  const configSaves = [];
+  state.handlers = [
+    async (route, { path, method, body }, json) => {
+      if (path !== "/settings/document-config" || method !== "PUT") return false;
+      configSaves.push(body);
+      const payload = JSON.parse(/name="payload"\r\n\r\n([\s\S]*?)\r\n--/.exec(body)[1]);
+      await json(route, { data: { revision: 2, config: payload.config } });
+      return true;
+    },
+    ...state.handlers,
+  ];
+  return configSaves;
+};
+
+const checkOneSave = async (results) => {
+  await withApp(VIEWPORTS[0].viewport, "/settings?tab=documents&section=company", {}, async (page, state) => {
+    const configSaves = recordConfigSaves(state);
+    await page.getByRole("heading", { name: "Tax, bank and signatory" }).waitFor({ state: "visible" });
+    const headings = await page.locator("h2").evaluateAll((all) =>
+      all.filter((h) => h.offsetParent !== null).map((h) => h.textContent.trim()),
+    );
+    results.check(
+      "the requisites card follows the business card it completes",
+      headings.indexOf("Tax, bank and signatory") === headings.indexOf("Your business") + 1,
+      headings.join("|"),
+    );
+    results.check(
+      "the requisites card has no Save of its own",
+      (await page.getByRole("button", { name: /save/i }).count()) === 0,
+      String(await page.getByRole("button", { name: /save/i }).count()),
+    );
+
+    await page.getByLabel("Company Name", { exact: true }).fill("Aurora Two");
+    await page.getByLabel("Legal form").fill("PE");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await settle(() => configSaves.length === 1 && (state.companySaves ?? []).length === 1);
+    results.check(
+      "one Save stores the business card and the requisites",
+      configSaves.length === 1 &&
+        configSaves[0].includes('"companyName":"Aurora Two"') &&
+        state.companySaves?.[0]?.companyLegalForm === "PE",
+      `${configSaves.length} design / ${JSON.stringify(state.companySaves)}`,
+    );
+
+    await page.getByLabel("VAT number (10 or 12 digits)").fill("123");
+    await page.getByRole("tab", { name: "Design", exact: true }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    results.check(
+      "a malformed requisite saved from Design brings Company details back with the error, sending nothing",
+      (await settle(async () => (await page.getByRole("tab", { name: "Company details" }).getAttribute("aria-selected")) === "true")) &&
+        (await page.getByText("The VAT number must have 10 or 12 digits").isVisible()) &&
+        configSaves.length === 1 &&
+        state.companySaves.length === 1,
+      `${configSaves.length} / ${state.companySaves.length}`,
+    );
+  });
+};
+
 const checkCompanyTaxIdField = async (results) => {
   await withApp(VIEWPORTS[0].viewport, "/settings?tab=company", {}, async (page, state) => {
-    const configSaves = [];
-    state.handlers = [
-      async (route, { path, method, body }, json) => {
-        if (path !== "/settings/document-config" || method !== "PUT") return false;
-        configSaves.push(body);
-        const payload = JSON.parse(/name="payload"\r\n\r\n([\s\S]*?)\r\n--/.exec(body)[1]);
-        await json(route, { data: { revision: 2, config: payload.config } });
-        return true;
-      },
-      ...state.handlers,
-    ];
+    const configSaves = recordConfigSaves(state);
     // The label names the codes the field holds; the VAT number (ІПН) has its own field.
     const taxId = page.getByRole("textbox", { name: "EDRPOU / RNOKPP", exact: true });
     await taxId.waitFor({ state: "visible" });
@@ -183,6 +233,7 @@ const checkRecipientForm = async (results) => {
 export const run = async () => {
   const results = new Results("requisites forms");
   await checkSettingsCard(results);
+  await checkOneSave(results);
   await checkCompanyTaxIdField(results);
   await checkRecipientForm(results);
   return results;

@@ -4,6 +4,7 @@ import {
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { designSaveTarget, type SaveTarget } from "../../hooks/useDocumentsSave";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -51,10 +52,16 @@ export function DocumentEditor({
   commitLabel,
   isVisible = true,
   visibleGroups,
+  saveTarget,
+  companyRequisites,
 }: {
   model: DocumentDraftModel;
   /** On the settings page: the groups of the current sub-tab. All of them when left out. */
   visibleGroups?: readonly DocumentGroup[];
+  /** What the Save bar saves when it is more than the design draft (the settings page). */
+  saveTarget?: SaveTarget;
+  /** The seller requisites card, shown under the business card (the settings page). */
+  companyRequisites?: ReactNode;
   /** False while the editor is mounted but hidden behind another tab; the preview then stays idle. */
   isVisible?: boolean;
   /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
@@ -75,6 +82,7 @@ export function DocumentEditor({
   const config = model.config;
   const isLoading = !config && !model.query.isError;
   const showSkeleton = useDelayedFlag(isLoading, LOADING_CUE_DELAY_MS);
+  const target = saveTarget ?? designSaveTarget(model);
   if (!config)
     return model.query.isError ? (
       <div role="status" className="rounded-xl bg-elevated p-6">
@@ -140,6 +148,7 @@ export function DocumentEditor({
       config={config}
       onChange={model.update}
       template={template}
+      requisites={companyRequisites}
     />
   );
   const presetsGroup = <DocumentPresets key="presets" model={model} />;
@@ -166,7 +175,7 @@ export function DocumentEditor({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void (onCommit ? onCommit() : model.save());
+            void (onCommit ? onCommit() : target.save());
           }}
           className="space-y-5"
         >
@@ -202,7 +211,7 @@ export function DocumentEditor({
             </div>
           )}
           <fieldset
-            disabled={model.busy}
+            disabled={target.isBusy}
             className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
           >
             <div className="min-w-0 space-y-3 lg:space-y-5">{groups}</div>
@@ -218,8 +227,11 @@ export function DocumentEditor({
             </div>
           </fieldset>
           {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
-          {(documentOnly || model.dirty || model.busy || model.error) && (
-            <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+          {(documentOnly || target.isDirty || target.isBusy || model.error) && (
+            <div
+              data-sticky-save-bar
+              className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm"
+            >
               {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
               {model.error && !model.isConflict ? (
                 <span role="alert" className="text-sm text-danger-base">
@@ -228,7 +240,7 @@ export function DocumentEditor({
               ) : (
                 <span role="status" className="text-sm text-content-secondary">
                   {t(
-                    model.dirty
+                    target.isDirty
                       ? "document.unsaved"
                       : documentOnly
                         ? "document.readyToCreate"
@@ -241,20 +253,20 @@ export function DocumentEditor({
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
-                  onClick={model.discard}
-                  disabled={model.busy || !model.dirty}
+                  onClick={target.discard}
+                  disabled={target.isBusy || !target.isDirty}
                 >
                   {t("document.discard")}
                 </Button>
                 <Button
                   type="submit"
                   className="w-full sm:w-auto"
-                  disabled={model.busy || (!documentOnly && !model.dirty)}
+                  disabled={target.isBusy || (!documentOnly && !target.isDirty)}
                 >
-                  {!model.busy && commitLabel
+                  {!target.isBusy && commitLabel
                     ? commitLabel
                     : t(
-                        model.busy
+                        target.isBusy
                           ? "common.saving"
                           : documentOnly
                             ? "document.generateDocument"

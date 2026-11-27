@@ -99,13 +99,19 @@ const open = async (page, path) => {
 const called = (state, paths) =>
   state.requests.filter((request) => paths.some((path) => request.endsWith(` ${path}`)));
 
-/** Opens every documents sub-tab once; a visited sub-tab stays mounted, only hidden. */
-const visitDocumentSections = async (page) => {
-  for (const section of ["company", "design", "numbering"]) {
-    await page.locator(`#documents-section-${section}`).click();
-    await page.waitForLoadState("networkidle");
-  }
+/** Opens a documents sub-tab and waits for something only that sub-tab shows. */
+const openDocumentSection = async (page, section, ready) => {
+  await page.locator(`#documents-section-${section}`).click();
+  await ready.first().waitFor({ state: "visible" });
 };
+
+/** The plan locks on the open sub-tab (hidden sub-tabs may keep theirs mounted). */
+const visibleLocks = (page) =>
+  page
+    .locator("[data-plan-lock]")
+    .evaluateAll((nodes) =>
+      nodes.filter((node) => node.checkVisibility()).map((node) => node.dataset.planLock),
+    );
 
 const isShown = (page, testId) =>
   settle(async () => (await page.getByTestId(testId).count()) > 0);
@@ -164,15 +170,10 @@ const checkFreeHome = (results) =>
 const checkFreeSettings = (results) =>
   withPlan("free", {}, async (page) => {
     await open(page, "/settings?tab=documents");
-    await visitDocumentSections(page);
-    for (const testId of [
-      "attribution-note",
-      "logo-upload-lock",
-      "signoff-signature-lock",
-      "signoff-stamp-lock",
-      "numbering-plan-note",
-    ])
-      results.check(`free: settings shows ${testId}`, await isShown(page, testId));
+    for (const testId of ["attribution-note", "signoff-signature-lock", "signoff-stamp-lock"])
+      results.check(`free: Company details shows ${testId}`, await isShown(page, testId));
+
+    await openDocumentSection(page, "numbering", page.getByTestId("numbering-plan-note"));
     results.check(
       "free: numbering stays readable but cannot be edited",
       await settle(async () => {
@@ -180,7 +181,9 @@ const checkFreeSettings = (results) =>
         return (await prefix.count()) > 0 && (await prefix.isDisabled());
       }),
     );
-    await page.locator("#documents-section-design").click();
+
+    await openDocumentSection(page, "design", page.getByTestId("logo-upload-lock"));
+    results.check("free: Design shows attribution-note", await isShown(page, "attribution-note"));
     await page.getByText("Saved sets of settings", { exact: true }).first().click();
     results.check("free: presets show the upsell", await isShown(page, "presets-upsell"));
     results.check(
@@ -310,12 +313,15 @@ const checkStart = (results) =>
 
     await open(page, "/settings?tab=documents");
     await page.getByTestId("signoff-signature").waitFor();
-    await visitDocumentSections(page);
+    const locks = [...(await visibleLocks(page))];
+    await openDocumentSection(page, "design", page.getByText("Saved sets of settings", { exact: true }));
+    locks.push(...(await visibleLocks(page)));
+    await openDocumentSection(page, "numbering", page.locator('input[id$="prefix"]'));
+    locks.push(...(await visibleLocks(page)));
     results.check(
-      "start: logo, signature, stamp and numbering are open",
-      (await page.locator("[data-plan-lock]").count()) === 0 &&
-        (await page.getByTestId("attribution-note").count()) === 0,
-      await page.locator("[data-plan-lock]").evaluateAll((nodes) => nodes.map((node) => node.dataset.planLock).join(",")),
+      "start: logo, signature, stamp and numbering are open on every documents sub-tab",
+      locks.length === 0 && (await page.getByTestId("attribution-note").count()) === 0,
+      locks.join(","),
     );
     await open(page, "/settings?tab=subscription");
     await page.getByTestId("plan-limits-summary").waitFor();

@@ -139,7 +139,8 @@ const headingOrder = async (results) => {
   const pages = [
     [DESKTOP, "/dashboard", "Profit Over Time"],
     [DESKTOP, "/analytics", "Profit by Product"],
-    [DESKTOP, "/settings", "Requisites for documents"],
+    // The design is not mocked here, so the editor (and the requisites card inside it) shows its load error.
+    [DESKTOP, "/settings", "Signature and stamp"],
     [DESKTOP, "/settings?tab=subscription", "Your current plan"],
     [PHONE, "/orders", "Aurora Coffee Bar"],
   ];

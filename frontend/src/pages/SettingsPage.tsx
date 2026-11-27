@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
 import { DocumentsTab } from "../components/settings/DocumentsTab";
+import { tabAfterKey } from "../lib/tab-keys";
 import {
   DOCUMENTS_SECTIONS,
   type DocumentsSection,
@@ -52,6 +53,10 @@ const LEGACY_TAB_ALIASES: Readonly<Record<string, DocumentsSection>> = {
   receipt: "design",
   language: "design",
 };
+
+// Own keys only: the URL is user input, and "?tab=constructor" must not reach the prototype.
+const legacySectionOf = (tab: string): DocumentsSection | undefined =>
+  Object.hasOwn(LEGACY_TAB_ALIASES, tab) ? LEGACY_TAB_ALIASES[tab] : undefined;
 
 const isDocumentsSection = (value: string): value is DocumentsSection =>
   (DOCUMENTS_SECTIONS as readonly string[]).includes(value);
@@ -272,7 +277,7 @@ export const SettingsPage = () => {
   // H3: Validate tab query parameter against known values
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab") ?? "";
-  const legacySection = LEGACY_TAB_ALIASES[tabParam];
+  const legacySection = legacySectionOf(tabParam);
   const aliasedTab = legacySection ? "documents" : (tabParam as SettingsTab);
   const activeTab: SettingsTab = VALID_TABS.includes(aliasedTab)
     ? aliasedTab
@@ -345,22 +350,15 @@ export const SettingsPage = () => {
 
   // Roving tabindex: arrows, Home and End move between tabs, as in the ARIA tabs pattern.
   const handleTabKeyDown = (event: React.KeyboardEvent) => {
-    const keys = tabs.map((tab) => tab.key);
-    const current = keys.indexOf(activeTab);
-    const target =
-      event.key === "ArrowRight"
-        ? (current + 1) % keys.length
-        : event.key === "ArrowLeft"
-          ? (current - 1 + keys.length) % keys.length
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? keys.length - 1
-              : -1;
-    if (target === -1) return;
+    const target = tabAfterKey(
+      event.key,
+      tabs.map((tab) => tab.key),
+      activeTab,
+    );
+    if (!target) return;
     event.preventDefault();
-    setActiveTab(keys[target]);
-    document.getElementById(`settings-tab-${keys[target]}`)?.focus();
+    setActiveTab(target);
+    document.getElementById(`settings-tab-${target}`)?.focus();
   };
 
   return (

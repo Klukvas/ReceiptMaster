@@ -9,7 +9,12 @@ import { SettingsSection } from "./SettingsSection";
 import { SignoffUploader } from "./SignoffUploader";
 import { usePlan } from "../../hooks/usePlan";
 
-export const SignoffSettings = () => {
+export const SignoffSettings = ({
+  onChangeDesign,
+}: {
+  /** Opens the template choice, the only way to a design that adds the signature and stamp. */
+  onChangeDesign?: () => void;
+}) => {
   const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useSignoff();
   const { isSupported, styleName, supportingStyles } = useSignoffStyleSupport();
@@ -17,7 +22,9 @@ export const SignoffSettings = () => {
   // The style names come from the backend's list, so a new or retired style needs no text change.
   const styleList = (kind: "conjunction" | "disjunction") =>
     supportingStyles
-      ? formatStyleList(supportingStyles, kind, (name) => t("signoff.styleQuoted", { name }))
+      ? formatStyleList(supportingStyles, kind, (name) =>
+          t("signoff.styleQuoted", { name }),
+        )
       : "";
 
   return (
@@ -52,11 +59,25 @@ export const SignoffSettings = () => {
           className="mb-4 flex items-start gap-2 rounded-lg bg-[var(--color-warning-light)] px-3 py-2 text-sm text-warning-base"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <p>
-            {supportingStyles
-              ? t("signoff.styleUnsupported", { style: styleName, styles: styleList("disjunction") })
-              : t("signoff.styleUnsupportedGeneric", { style: styleName })}
-          </p>
+          <div className="space-y-1">
+            <p>
+              {supportingStyles
+                ? t("signoff.styleUnsupported", {
+                    style: styleName,
+                    styles: styleList("disjunction"),
+                  })
+                : t("signoff.styleUnsupportedGeneric", { style: styleName })}
+            </p>
+            {onChangeDesign && (
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2 pointer-coarse:min-h-11"
+                onClick={onChangeDesign}
+              >
+                {t("signoff.openDesign")}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {error ? (
@@ -72,8 +93,16 @@ export const SignoffSettings = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <SignoffUploader kind="signature" image={data.signature} isLocked={isLocked} />
-          <SignoffUploader kind="stamp" image={data.stamp} isLocked={isLocked} />
+          <SignoffUploader
+            kind="signature"
+            image={data.signature}
+            isLocked={isLocked}
+          />
+          <SignoffUploader
+            kind="stamp"
+            image={data.stamp}
+            isLocked={isLocked}
+          />
         </div>
       )}
     </SettingsSection>
