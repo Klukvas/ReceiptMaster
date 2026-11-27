@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   type DocumentConfig,
   type DocumentTemplate,
 } from "../../lib/document-config";
 import type { DocumentDraftModel } from "../../hooks/useDocumentDraft";
+import { designSaveTarget, type SaveTarget } from "../../hooks/useDocumentsSave";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { useDocumentTemplates } from "../../hooks/useDocumentTemplates";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -19,7 +20,12 @@ import {
 import { DocumentPreviewPanel } from "./DocumentPreviewPanel";
 import { DocumentPresets } from "./DocumentPresets";
 import { DocumentTextSection } from "./DocumentTextSection";
-import { DocumentLayoutContext, SectionHeadingContext } from "./document-layout";
+import {
+  DOCUMENT_GROUPS,
+  DocumentLayoutContext,
+  SectionHeadingContext,
+  type DocumentGroup,
+} from "./document-layout";
 import { TemplateCarouselModal } from "./TemplateCarouselModal";
 import { usePlan } from "../../hooks/usePlan";
 
@@ -29,6 +35,15 @@ type TemplateId = DocumentConfig["templateId"];
 /** As in DataTable: a configuration that arrives this fast never flashes the skeleton. */
 const LOADING_CUE_DELAY_MS = 200;
 
+const DIALOG_GROUP_ORDER: readonly DocumentGroup[] = [
+  "template",
+  "format",
+  "text",
+  "brand",
+  "business",
+  "presets",
+];
+
 export function DocumentEditor({
   model,
   documentOnly = false,
@@ -36,8 +51,17 @@ export function DocumentEditor({
   onCommit,
   commitLabel,
   isVisible = true,
+  visibleGroups,
+  saveTarget,
+  companyRequisites,
 }: {
   model: DocumentDraftModel;
+  /** On the settings page: the groups of the current sub-tab. All of them when left out. */
+  visibleGroups?: readonly DocumentGroup[];
+  /** What the Save bar saves when it is more than the design draft (the settings page). */
+  saveTarget?: SaveTarget;
+  /** The seller requisites card, shown under the business card (the settings page). */
+  companyRequisites?: ReactNode;
   /** False while the editor is mounted but hidden behind another tab; the preview then stays idle. */
   isVisible?: boolean;
   /** True in the per-document dialog: nothing is saved as a default, the action creates the document. */
@@ -58,19 +82,28 @@ export function DocumentEditor({
   const config = model.config;
   const isLoading = !config && !model.query.isError;
   const showSkeleton = useDelayedFlag(isLoading, LOADING_CUE_DELAY_MS);
+  const target = saveTarget ?? designSaveTarget(model);
   if (!config)
     return model.query.isError ? (
       <div role="status" className="rounded-xl bg-elevated p-6">
         <p>{t("document.loadFailed")}</p>
-        <Button onClick={() => model.query.refetch()}>{t("common.retry")}</Button>
+        <Button onClick={() => model.query.refetch()}>
+          {t("common.retry")}
+        </Button>
       </div>
     ) : (
       <div role="status">
         {/* The skeleton has the Documents page's layout; the per-document dialog keeps the line. */}
-        <span className={documentOnly ? "text-sm text-content-secondary" : "sr-only"}>
+        <span
+          className={
+            documentOnly ? "text-sm text-content-secondary" : "sr-only"
+          }
+        >
           {t("common.loading")}
         </span>
-        {showSkeleton && !documentOnly && <DocumentEditorSkeleton />}
+        {showSkeleton && !documentOnly && (
+          <DocumentEditorSkeleton groups={visibleGroups ?? DOCUMENT_GROUPS} />
+        )}
       </div>
     );
   const template = templates.data?.find(
@@ -115,36 +148,34 @@ export function DocumentEditor({
       config={config}
       onChange={model.update}
       template={template}
+      requisites={companyRequisites}
     />
   );
   const presetsGroup = <DocumentPresets key="presets" model={model} />;
+  const groupElements: Record<DocumentGroup, ReactNode> = {
+    business: businessGroup,
+    template: templateGroup,
+    brand: brandGroup,
+    text: textGroup,
+    format: formatGroup,
+    presets: presetsGroup,
+  };
   // On the settings page the order is how a document reads, top to bottom. In the dialog for one
   // order every group starts closed and only the preview is open: the first thing to see is the
   // document itself, and each group opens with one click. Template, language and texts lead.
-  const groups = documentOnly
-    ? [
-        templateGroup,
-        formatGroup,
-        textGroup,
-        brandGroup,
-        businessGroup,
-        presetsGroup,
-      ]
-    : [
-        businessGroup,
-        templateGroup,
-        brandGroup,
-        textGroup,
-        formatGroup,
-        presetsGroup,
-      ];
+  const groupOrder: readonly DocumentGroup[] = documentOnly
+    ? DIALOG_GROUP_ORDER
+    : DOCUMENT_GROUPS.filter(
+        (group) => !visibleGroups || visibleGroups.includes(group),
+      );
+  const groups = groupOrder.map((group) => groupElements[group]);
   return (
     <DocumentLayoutContext.Provider value={documentOnly ? "dialog" : "page"}>
       <SectionHeadingContext.Provider value={documentOnly ? "h3" : "h2"}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void (onCommit ? onCommit() : model.save());
+            void (onCommit ? onCommit() : target.save());
           }}
           className="space-y-5"
         >
@@ -170,13 +201,17 @@ export function DocumentEditor({
             >
               <p className="font-medium">{t("document.conflictTitle")}</p>
               <p>{t("document.conflictHelp")}</p>
-              <Button type="button" variant="outline" onClick={model.reloadSaved}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={model.reloadSaved}
+              >
                 {t("document.reloadSaved")}
               </Button>
             </div>
           )}
           <fieldset
-            disabled={model.busy}
+            disabled={target.isBusy}
             className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]"
           >
             <div className="min-w-0 space-y-3 lg:space-y-5">{groups}</div>
@@ -192,8 +227,11 @@ export function DocumentEditor({
             </div>
           </fieldset>
           {/* Nothing to save or explain: no permanent "Saved settings" bar over the form. */}
-          {(documentOnly || model.dirty || model.busy || model.error) && (
-            <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm">
+          {(documentOnly || target.isDirty || target.isBusy || model.error) && (
+            <div
+              data-sticky-save-bar
+              className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-elevated p-4 shadow-sm"
+            >
               {/* Next to Save, where the user is looking; a banner at the top of a long page is off-screen. */}
               {model.error && !model.isConflict ? (
                 <span role="alert" className="text-sm text-danger-base">
@@ -202,7 +240,7 @@ export function DocumentEditor({
               ) : (
                 <span role="status" className="text-sm text-content-secondary">
                   {t(
-                    model.dirty
+                    target.isDirty
                       ? "document.unsaved"
                       : documentOnly
                         ? "document.readyToCreate"
@@ -215,20 +253,20 @@ export function DocumentEditor({
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
-                  onClick={model.discard}
-                  disabled={model.busy || !model.dirty}
+                  onClick={target.discard}
+                  disabled={target.isBusy || !target.isDirty}
                 >
                   {t("document.discard")}
                 </Button>
                 <Button
                   type="submit"
                   className="w-full sm:w-auto"
-                  disabled={model.busy || (!documentOnly && !model.dirty)}
+                  disabled={target.isBusy || (!documentOnly && !target.isDirty)}
                 >
-                  {!model.busy && commitLabel
+                  {!target.isBusy && commitLabel
                     ? commitLabel
                     : t(
-                        model.busy
+                        target.isBusy
                           ? "common.saving"
                           : documentOnly
                             ? "document.generateDocument"

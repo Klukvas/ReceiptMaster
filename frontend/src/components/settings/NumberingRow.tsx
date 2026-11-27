@@ -16,6 +16,7 @@ import { useUpdateDocumentNumbering } from "../../hooks/useDocumentNumbering";
 import { useSettledValue } from "../../hooks/useSettledValue";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
+import { UNSAVED_FORM_KEYS } from "../../lib/unsaved-form-keys";
 import { Button } from "../ui/Button";
 import { FieldError } from "../ui/FieldError";
 
@@ -107,7 +108,7 @@ export function NumberingRow({
     form.includeYear !== setting.includeYear ||
     form.resetEveryYear !== setting.resetEveryYear ||
     startText !== "";
-  useUnsavedChangesGuard(isDirty, "numbering.discardConfirm");
+  useUnsavedChangesGuard(isDirty, UNSAVED_FORM_KEYS.numbering);
   const canSave = isDirty && Object.keys(clientErrors).length === 0 && !update.isPending;
 
   // A prefix the server would refuse is not shown as if it were a number the account will get.

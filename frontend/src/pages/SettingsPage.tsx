@@ -9,11 +9,13 @@ import {
   Loader2,
   AlertTriangle,
 } from "lucide-react";
-import { DocumentEditor } from "../components/settings/DocumentEditor";
 import { AutoReceiptSetting } from "../components/settings/AutoReceiptSetting";
-import { DocumentNumberingSettings } from "../components/settings/DocumentNumberingSettings";
-import { SignoffSettings } from "../components/settings/SignoffSettings";
-import { CompanyRequisitesCard } from "../components/settings/CompanyRequisitesCard";
+import { DocumentsTab } from "../components/settings/DocumentsTab";
+import { tabAfterKey } from "../lib/tab-keys";
+import {
+  DOCUMENTS_SECTIONS,
+  type DocumentsSection,
+} from "../components/settings/document-layout";
 import { useDocumentDraft } from "../hooks/useDocumentDraft";
 import { formatDateOnly } from "../lib/api";
 import { Button } from "../components/ui/Button";
@@ -44,12 +46,20 @@ const VALID_TABS: readonly SettingsTab[] = [
   "advanced",
 ] as const;
 
-// The three document tabs became one page; old links keep working.
-const LEGACY_TAB_ALIASES: Readonly<Record<string, SettingsTab>> = {
-  company: "documents",
-  receipt: "documents",
-  language: "documents",
+// The three document tabs became sub-tabs of Documents; old links (e.g. a requisites
+// link to ?tab=company&highlight=…) land on the matching sub-tab.
+const LEGACY_TAB_ALIASES: Readonly<Record<string, DocumentsSection>> = {
+  company: "company",
+  receipt: "design",
+  language: "design",
 };
+
+// Own keys only: the URL is user input, and "?tab=constructor" must not reach the prototype.
+const legacySectionOf = (tab: string): DocumentsSection | undefined =>
+  Object.hasOwn(LEGACY_TAB_ALIASES, tab) ? LEGACY_TAB_ALIASES[tab] : undefined;
+
+const isDocumentsSection = (value: string): value is DocumentsSection =>
+  (DOCUMENTS_SECTIONS as readonly string[]).includes(value);
 
 const SubscriptionTab = ({ isLandingTab }: { isLandingTab: boolean }) => {
   const { t } = useTranslation();
@@ -267,22 +277,31 @@ export const SettingsPage = () => {
   // H3: Validate tab query parameter against known values
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab") ?? "";
-  const aliasedTab = LEGACY_TAB_ALIASES[tabParam] ?? (tabParam as SettingsTab);
+  const legacySection = legacySectionOf(tabParam);
+  const aliasedTab = legacySection ? "documents" : (tabParam as SettingsTab);
   const activeTab: SettingsTab = VALID_TABS.includes(aliasedTab)
     ? aliasedTab
     : "documents";
+  const sectionParam = searchParams.get("section") ?? "";
+  // Another tab's URL has no section, so the sub-tab last open is kept here for the way back.
+  const [lastSection, setLastSection] = useState<DocumentsSection>("company");
+  const documentsSection: DocumentsSection = isDocumentsSection(sectionParam)
+    ? sectionParam
+    : (legacySection ?? lastSection);
+  if (activeTab === "documents" && documentsSection !== lastSection)
+    setLastSection(documentsSection);
   // Written back to the URL so reload keeps the tab; replace keeps Back from stepping
   // through every tab the user clicked.
   const setActiveTab = (tab: SettingsTab) =>
-    setSearchParams({ tab }, { replace: true });
+    setSearchParams(
+      tab === "documents" ? { tab, section: documentsSection } : { tab },
+      { replace: true },
+    );
+  const setDocumentsSection = (section: DocumentsSection) =>
+    setSearchParams({ tab: "documents", section }, { replace: true });
 
   // The provider's return link opens the page on this tab; a click on the tab does not count.
   const [isLandedOnSubscription] = useState(activeTab === "subscription");
-  const [hasOpenedDocuments, setHasOpenedDocuments] = useState(
-    activeTab === "documents",
-  );
-  if (activeTab === "documents" && !hasOpenedDocuments)
-    setHasOpenedDocuments(true);
 
   const tabListRef = useRef<HTMLDivElement>(null);
   const [hasHiddenTabs, setHasHiddenTabs] = useState(false);
@@ -331,22 +350,15 @@ export const SettingsPage = () => {
 
   // Roving tabindex: arrows, Home and End move between tabs, as in the ARIA tabs pattern.
   const handleTabKeyDown = (event: React.KeyboardEvent) => {
-    const keys = tabs.map((tab) => tab.key);
-    const current = keys.indexOf(activeTab);
-    const target =
-      event.key === "ArrowRight"
-        ? (current + 1) % keys.length
-        : event.key === "ArrowLeft"
-          ? (current - 1 + keys.length) % keys.length
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? keys.length - 1
-              : -1;
-    if (target === -1) return;
+    const target = tabAfterKey(
+      event.key,
+      tabs.map((tab) => tab.key),
+      activeTab,
+    );
+    if (!target) return;
     event.preventDefault();
-    setActiveTab(keys[target]);
-    document.getElementById(`settings-tab-${keys[target]}`)?.focus();
+    setActiveTab(target);
+    document.getElementById(`settings-tab-${target}`)?.focus();
   };
 
   return (
@@ -422,21 +434,15 @@ export const SettingsPage = () => {
         aria-labelledby={`settings-tab-${activeTab}`}
         className="space-y-5"
       >
+        {/* Only hidden on another tab, so the design draft and the cards' own drafts survive the trip. */}
         <div hidden={activeTab !== "documents"}>
-          <DocumentEditor
+          <DocumentsTab
             model={documentDraft}
+            section={documentsSection}
+            onSectionChange={setDocumentsSection}
             isVisible={activeTab === "documents"}
           />
         </div>
-
-        {/* Mounted on first visit and then only hidden, so a numbering draft survives a trip to another tab. */}
-        {hasOpenedDocuments && (
-          <div hidden={activeTab !== "documents"} className="space-y-5">
-            <CompanyRequisitesCard />
-            <DocumentNumberingSettings />
-            <SignoffSettings />
-          </div>
-        )}
 
         {activeTab === "subscription" && (
           <SubscriptionTab isLandingTab={isLandedOnSubscription} />

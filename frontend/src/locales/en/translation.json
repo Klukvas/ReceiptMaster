@@ -543,15 +543,15 @@
       "corporate": "Corporate"
     },
     "requisites": {
-      "title": "Requisites for documents",
-      "description": "Printed on invoices, acts of completed work, sales receipts and quotations. Saved separately from the document design.",
+      "title": "Tax, bank and signatory",
+      "description": "Printed on invoices, acts of completed work, sales receipts and quotations.",
       "taxIdKind": "Tax number kind",
       "taxIdKindAuto": "Detect by length",
       "taxIdKinds": {
         "edrpou": "EDRPOU (8 digits)",
         "rnokpp": "RNOKPP (10 digits)"
       },
-      "taxIdKindMismatch": "The saved number's length does not match this kind; it will be detected by length.",
+      "taxIdKindMismatch": "The number's length does not match this kind; it will be detected by length.",
       "legalForm": "Legal form",
       "legalFormPlaceholder": "Sole proprietor, LLC…",
       "bankName": "Bank name",
@@ -566,8 +566,6 @@
       "paymentTermDays": "Default payment term, days",
       "signatoryName": "Signatory name",
       "signatoryPosition": "Signatory position",
-      "save": "Save requisites",
-      "saved": "Requisites saved",
       "ibanNote": "This does not look like a Ukrainian IBAN (UA and 27 digits). It will not work for an invoice.",
       "taxIdNote": "Documents need an EDRPOU (8 digits) or an RNOKPP (10 digits).",
       "taxIdChecksumNote": "The check digit does not match — please verify the code.",
@@ -578,7 +576,14 @@
       },
       "discardConfirm": "Discard unsaved requisites changes?"
     },
-    "tabDocuments": "Documents"
+    "tabDocuments": "Documents",
+    "documentSections": {
+      "label": "Documents sections",
+      "company": "Company details",
+      "design": "Design",
+      "numbering": "Numbering",
+      "unsaved": "Unsaved changes"
+    }
   },
   "receipts": {
     "generatingReceipt": "Generating document...",
@@ -1283,6 +1288,7 @@
     "invalidFormatting": "Enter a valid time zone to see an example.",
     "presets": "Saved sets of settings",
     "presetsHelp": "Save the current settings under a name and apply them again later. Applying a set only fills in the form; nothing is saved until you press Save.",
+    "presetsIncludeCompany": "A set also keeps your company details and the customer fields, so using one changes them on Company details too.",
     "presetsKeptLocked": "Sets saved on a higher plan are kept. On your plan they cannot be applied or changed, only deleted.",
     "savedPresets": "Saved sets",
     "choosePreset": "Choose a set",
@@ -1317,6 +1323,7 @@
     "openPreview": "Open the preview in a new tab",
     "previewHelp": "Your document appears here and updates as you make changes.",
     "unsaved": "You have unsaved changes",
+    "unsavedOnOtherSections": "Unsaved changes on other sub-tabs:",
     "saved": "Saved settings",
     "discard": "Discard changes",
     "saveChanges": "Save changes",
@@ -1740,6 +1747,7 @@
       "signature": "The signature image is missing. New documents will be issued without the signature until you upload it again.",
       "stamp": "The stamp image is missing. New documents will be issued without the stamp until you upload it again."
     },
-    "notOnPlan": "Your plan does not include the signature and stamp. Images stored earlier are kept and can be deleted, but they are not printed on documents."
+    "notOnPlan": "Your plan does not include the signature and stamp. Images stored earlier are kept and can be deleted, but they are not printed on documents.",
+    "openDesign": "Change the design"
   }
 }

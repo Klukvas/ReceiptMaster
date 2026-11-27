@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import i18n from "../lib/i18n";
 
 /** Asked when a page holds unsaved edits of more than one kind (say, design and requisites). */
@@ -11,6 +11,28 @@ const GENERIC_CONFIRM_KEY = "common.discardUnsavedChanges";
  */
 const dirtyForms = new Map<symbol, string>();
 let detachListeners: (() => void) | null = null;
+
+/** The confirm keys of the dirty forms, rebuilt on every change so React sees a new snapshot. */
+let dirtyKeys: ReadonlySet<string> = new Set();
+const dirtyKeyListeners = new Set<() => void>();
+const publishDirtyKeys = () => {
+  dirtyKeys = new Set(dirtyForms.values());
+  dirtyKeyListeners.forEach((listener) => listener());
+};
+const subscribeToDirtyKeys = (listener: () => void) => {
+  dirtyKeyListeners.add(listener);
+  return () => {
+    dirtyKeyListeners.delete(listener);
+  };
+};
+
+/**
+ * The confirm keys of the forms that hold unsaved edits right now, e.g. to mark the sub-tab a
+ * hidden form with unsaved edits sits on.
+ */
+export function useDirtyFormKeys(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribeToDirtyKeys, () => dirtyKeys);
+}
 
 const confirmText = (): string => {
   const keys = new Set(dirtyForms.values());
@@ -96,9 +118,11 @@ export function useUnsavedChangesGuard(
     if (!isDirty) return;
     const form = Symbol("unsaved-form");
     dirtyForms.set(form, confirmKey);
+    publishDirtyKeys();
     if (!detachListeners) detachListeners = attachListeners();
     return () => {
       dirtyForms.delete(form);
+      publishDirtyKeys();
       if (dirtyForms.size === 0 && detachListeners) {
         detachListeners();
         detachListeners = null;

@@ -4,6 +4,7 @@ import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useTranslation } from "./useTranslation";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
+import { UNSAVED_FORM_KEYS } from "../lib/unsaved-form-keys";
 import { api } from "../lib/api";
 import {
   documentEnvelope,
@@ -114,15 +115,16 @@ export function useDocumentDraft(orderId?: string) {
     },
     [previewUrl],
   );
-  useUnsavedChangesGuard(dirty, "document.discardConfirm");
+  useUnsavedChangesGuard(dirty, UNSAVED_FORM_KEYS.design);
   const payload = (): DocumentDraft => {
     if (!config) throw new Error("Load settings first");
     if (config.title.mode === "custom" && !config.title.text.trim())
       throw new Error(t("document.titleRequired"));
     return { config, logoAction };
   };
-  const save = async () => {
-    if (!config || !saved || busy) return;
+  /** True once the draft is stored; on failure `error` says why. */
+  const save = async (): Promise<boolean> => {
+    if (!config || !saved || busy) return false;
     setBusy(true);
     setError("");
     setIsConflict(false);
@@ -147,9 +149,11 @@ export function useDocumentDraft(orderId?: string) {
       ]);
       // The save bar disappears once nothing is pending, so confirm the save here.
       toast.success(t("document.saved"));
+      return true;
     } catch (value) {
       setIsConflict(isDocumentRevisionConflict(value));
       setError(await localizedDocumentError(value, fieldLabel));
+      return false;
     } finally {
       setBusy(false);
     }
